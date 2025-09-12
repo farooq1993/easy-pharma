@@ -1,0 +1,295 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col">
+            <h1 class="mb-3 text-success">Welcome to Easy Pharma</h1>
+            <p class="lead">Your one-stop solution for all pharmaceutical needs.</p>
+        </div>
+    </div>
+</div>
+
+<!-- Analytics Dashboard Section -->
+<div class="container-fluid mt-4">
+    <!-- Dashboard Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2 class="mb-0">Dashboard Overview</h2>
+                <div>
+                    <div class="btn-group me-2">
+                        <button type="button" class="btn btn-outline-success active">Today</button>
+                        <button type="button" class="btn btn-outline-success">Week</button>
+                        <button type="button" class="btn btn-outline-success">Month</button>
+                    </div>
+                    <button class="btn btn-success"><i class="fas fa-download me-1"></i> Export Report</button>
+                </div>
+            </div>
+            <hr>
+        </div>
+    </div>
+
+    <!-- Metrics Cards -->
+    <div class="row mb-4">
+        <!-- <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Today's Revenue</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">$3,254</div>
+                            <div class="mt-2 text-success small"><i class="fas fa-arrow-up me-1"></i> 12% increase</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div> -->
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Total Customers</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">1,248</div>
+                            <div class="mt-2 text-success small"><i class="fas fa-arrow-up me-1"></i> 8% increase</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-users fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Prescriptions Processed</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">184</div>
+                            <div class="mt-2 text-danger small"><i class="fas fa-arrow-down me-1"></i> 3% decrease</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-prescription fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Low Stock Items</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">14</div>
+                            <div class="mt-2 text-warning small"><i class="fas fa-exclamation-triangle me-1"></i> Needs attention</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-notes-medical fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row mb-4">
+        <!-- Revenue Chart -->
+        <div class="col-xl-8 col-lg-7">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">Revenue Overview</h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-area">
+                        <canvas id="revenueChart" height="250"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Categories -->
+        <div class="col-xl-4 col-lg-5">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">Top Product Categories</h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-pie pt-4 pb-2">
+                        <canvas id="categoryChart" height="250"></canvas>
+                    </div>
+                    <div class="mt-4 text-center small">
+                        <span class="mr-2">
+                            <i class="fas fa-circle text-primary"></i> Prescription
+                        </span>
+                        <span class="mr-2">
+                            <i class="fas fa-circle text-success"></i> OTC
+                        </span>
+                        <span class="mr-2">
+                            <i class="fas fa-circle text-info"></i> Wellness
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Additional Charts Row -->
+    <div class="row">
+        <!-- Customer Traffic -->
+        <div class="col-xl-8 col-lg-7">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">Customer Traffic</h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-area">
+                        <canvas id="trafficChart" height="250"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Inventory Status -->
+        <div class="col-xl-4 col-lg-5">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Inventory Status</h6>
+                </div>
+                <div class="card-body">
+                    <h4 class="small font-weight-bold">Prescription Drugs <span class="float-right">85%</span></h4>
+                    <div class="progress mb-4">
+                        <div class="progress-bar bg-success" role="progressbar" style="width: 85%"></div>
+                    </div>
+                    <h4 class="small font-weight-bold">Over-the-Counter <span class="float-right">72%</span></h4>
+                    <div class="progress mb-4">
+                        <div class="progress-bar bg-info" role="progressbar" style="width: 72%"></div>
+                    </div>
+                    <h4 class="small font-weight-bold">Wellness Products <span class="float-right">63%</span></h4>
+                    <div class="progress mb-4">
+                        <div class="progress-bar bg-warning" role="progressbar" style="width: 63%"></div>
+                    </div>
+                    <h4 class="small font-weight-bold">Medical Supplies <span class="float-right">40%</span></h4>
+                    <div class="progress">
+                        <div class="progress-bar bg-danger" role="progressbar" style="width: 40%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Chart.js Scripts -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Revenue Chart
+        var revenueCtx = document.getElementById('revenueChart').getContext('2d');
+        var revenueChart = new Chart(revenueCtx, {
+            type: 'line',
+            data: {
+                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                datasets: [{
+                    label: 'Revenue',
+                    lineTension: 0.3,
+                    backgroundColor: 'rgba(25, 135, 84, 0.05)',
+                    borderColor: 'rgba(25, 135, 84, 1)',
+                    pointRadius: 3,
+                    pointBackgroundColor: 'rgba(25, 135, 84, 1)',
+                    pointBorderColor: 'rgba(25, 135, 84, 1)',
+                    pointHoverRadius: 3,
+                    pointHoverBackgroundColor: 'rgba(25, 135, 84, 1)',
+                    pointHoverBorderColor: 'rgba(25, 135, 84, 1)',
+                    pointHitRadius: 10,
+                    pointBorderWidth: 2,
+                    data: [15000, 17200, 15800, 18500, 19200, 18700, 21000, 23400, 22100, 24500, 26300, 28500],
+                }],
+            },
+            options: {
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return '$' + value;
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+
+        // Category Chart
+        var categoryCtx = document.getElementById('categoryChart').getContext('2d');
+        var categoryChart = new Chart(categoryCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Prescription', 'Over-the-Counter', 'Wellness', 'Supplies'],
+                datasets: [{
+                    data: [45, 30, 15, 10],
+                    backgroundColor: ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e'],
+                    hoverBackgroundColor: ['#2e59d9', '#17a673', '#2c9faf', '#dda20a'],
+                    hoverBorderColor: 'rgba(234, 236, 244, 1)',
+                }],
+            },
+            options: {
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                cutout: '70%'
+            }
+        });
+
+        // Traffic Chart
+        var trafficCtx = document.getElementById('trafficChart').getContext('2d');
+        var trafficChart = new Chart(trafficCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                datasets: [{
+                    label: 'Customer Count',
+                    backgroundColor: '#4e73df',
+                    hoverBackgroundColor: '#2e59d9',
+                    borderColor: '#4e73df',
+                    data: [120, 145, 132, 165, 158, 210, 184],
+                }],
+            },
+            options: {
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

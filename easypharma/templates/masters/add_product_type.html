@@ -1,0 +1,36 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Add Product Type</title>
+    <link href="{% static 'css/bootstrap.min.css' %}" rel="stylesheet">
+</head>
+<body>
+
+<div class="d-flex">
+    <!-- Sidebar -->
+    <div class="sidebar bg-light p-3" style="width: 250px; min-height: 100vh;">
+        {% include 'includes/sidebar.html' %}
+    </div>
+
+    <!-- Main Content -->
+    <div class="content flex-grow-1 p-4">
+        {% include 'includes/messages.html' %}
+        
+        <h2 class="text-primary">Add Product Type</h2>
+        <form method="POST" action="{% url 'add-product-type' %}">
+            {% csrf_token %}
+            <div class="row mt-5">
+                <div class="col-md-6 mb-3">
+                <label for="productTypeName" class="form-label">Name</label>
+                <input type="text" class="form-control" id="productTypeName" name="name" placeholder="Tablet" required>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-success">Save</button>
+        </form>
+    </div>
+</div>
+
+</body>
+</html>
