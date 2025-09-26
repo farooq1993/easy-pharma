@@ -1,1 +1,1 @@
-web:gunicorn pharmaproject.wsgi
+web: gunicorn pharmaproject.wsgi
