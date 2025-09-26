@@ -1,1 +1,2 @@
 web: python manage.py migrate && gunicorn pharmaProject.wsgi --bind 0.0.0.0:$PORT
+

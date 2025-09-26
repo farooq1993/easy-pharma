@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 import os
 from pathlib import Path
+from decouple import config
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -56,7 +58,7 @@ MIDDLEWARE = [
 
 if not DEBUG:
     STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-    
+
 ROOT_URLCONF = 'pharmaProject.urls'
 
 AUTH_USER_MODEL = 'easypharma.User'
@@ -82,13 +84,21 @@ WSGI_APPLICATION = 'pharmaProject.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# Database configuration
+if os.environ.get('DATABASE_URL'):
+    DATABASES = {
+        'default': dj_database_url.config(default=config('DATABASE_URL'))
     }
-}
+else:
+    # Fallback to SQLite for local development
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
+#switchyard.proxy.rlwy.net:21615
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
