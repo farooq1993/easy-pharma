@@ -3,156 +3,200 @@
 <head>
     {% load static %}
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Easy Pharma</title>
 
     <!-- ✅ Bootstrap CSS -->
     <link href="{% static 'css/bootstrap.min.css' %}" rel="stylesheet">
+    <link href="{% static 'css/customecss/sidebar.css' %}" rel="stylesheet">
     <!-- ✅ Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 
     <style>
-        /* Sidebar styling */
-        .sidebar {
-            height: 100vh;
-            background-color: #f8f9fa;
-        }
-        .sidebar .nav-link {
-            color: #333;
-        }
-        .sidebar .nav-link.active {
-            background-color: #0d6efd;
-            color: white;
-        }
-        /* Content fills the rest */
-        .content {
-            flex-grow: 1;
-        }
+        
     </style>
 </head>
 <body>
-<div class="d-flex">
+    <!-- Sidebar Toggle Button -->
+    <button class="sidebar-toggle d-none d-md-block" id="sidebarToggle">
+        <i class="bi bi-list"></i>
+    </button>
 
-    <!-- ✅ Sidebar (collapsible on small screens) -->
-    <div class="sidebar p-3 d-none d-md-block" id="sidebarMenu">
-        <h5 class="mb-3">Easy Pharma</h5>
-        <ul class="nav nav-pills flex-column mb-auto">
-            <li><a href="{% url 'home' %}" class="nav-link"><i class="bi bi-house-door-fill me-1"></i>Dashboard</a></li>
-            <li><a href="#" class="nav-link"><i class="bi bi-cart me-2"></i> Sale</a></li>
-            <li><a href="#" class="nav-link"><i class="bi bi-bag-check me-2"></i> Purchase</a></li>
-            <li><a href="#" class="nav-link"><i class="bi bi-person-plus me-2"></i> Create Supplier</a></li>
-            <li><a href="#" class="nav-link"><i class="bi bi-people me-2"></i> Show All Suppliers</a></li>
+    <div class="d-flex">
+        <!-- ✅ Desktop Sidebar -->
+        <div class="sidebar p-3 d-none d-md-block" id="sidebarMenu">
+            <h5 class="mb-3"><span class="sidebar-text">Easy Pharma</span></h5>
+            <ul class="nav nav-pills flex-column mb-auto">
+                <li>
+                    <a href="{% url 'home' %}" class="nav-link">
+                        <i class="bi bi-house-door-fill"></i>
+                        <span class="sidebar-text">Dashboard</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="nav-link">
+                        <i class="bi bi-cart"></i>
+                        <span class="sidebar-text">Sale</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="nav-link">
+                        <i class="bi bi-bag-check"></i>
+                        <span class="sidebar-text">Purchase</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="nav-link">
+                        <i class="bi bi-person-plus"></i>
+                        <span class="sidebar-text">Create Supplier</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" class="nav-link">
+                        <i class="bi bi-people"></i>
+                        <span class="sidebar-text">Show All Suppliers</span>
+                    </a>
+                </li>
 
-            <!-- ✅ Master Section -->
-            <li>
-                <a class="nav-link d-flex align-items-center" 
-                   data-bs-toggle="collapse" 
-                   data-bs-target="#masterMenu" 
-                   aria-expanded="false" 
-                   aria-controls="masterMenu">
-                    <i class="bi bi-box2-fill me-2"></i> Master
-                    <i class="bi bi-caret-down-fill ms-auto"></i>
-                </a>
-                <ul class="collapse nav flex-column ms-3" 
-                    id="masterMenu" 
-                    data-bs-parent="#sidebarMenu">
-                    <li><a href="#" class="nav-link">Product</a></li>
-                    <li><a href="{% url 'show-all-product-types' %}" class="nav-link">Product Type</a></li>
-                    <li><a href="{% url 'show-all-drug-schedule-types' %}" class="nav-link">Drug Schedule</a></li>
-                    <li><a href="#" class="nav-link">Supplier list</a></li>
-                    <li><a href="#" class="nav-link">Show All Companies</a></li>
-                </ul>
-            </li>
-
-            <!-- ✅ Reports Section -->
-            <li>
-                <a class="nav-link d-flex align-items-center" 
-                   data-bs-toggle="collapse" 
-                   data-bs-target="#reportsMenu" 
-                   aria-expanded="false" 
-                   aria-controls="reportsMenu">
-                    <i class="bi bi-bar-chart-line me-2"></i> Reports
-                    <i class="bi bi-caret-down-fill ms-auto"></i>
-                </a>
-                <ul class="collapse nav flex-column ms-3" 
-                    id="reportsMenu" 
-                    data-bs-parent="#sidebarMenu">
-                    <li><a href="#" class="nav-link">Sales Report</a></li>
-                    <li><a href="#" class="nav-link">Purchase Report</a></li>
-                    <li><a href="#" class="nav-link">Stock Report</a></li>
-                    <li><a href="#" class="nav-link">Drug Schedule wise Report</a></li>
-                </ul>
-            </li>
-        </ul>
-
-        {% if user.is_authenticated %}
-        <hr>
-        <a href="{% url 'logout' %}" class="nav-link"><i class="bi bi-box-arrow-right me-2"></i> Logout</a>
-        {% endif %}
-    </div>
-
-    <!-- ✅ Main Content -->
-    <div class="content w-100">
-
-        <!-- ✅ Collapsible Sidebar for Mobile -->
-        <div class="collapse d-md-none bg-light border-bottom" id="sidebarMenuMobile">
-            <ul class="nav nav-pills flex-column p-3">
-                <li><a href="#" class="nav-link active"><i class="bi bi-cart me-2"></i> Sale</a></li>
-                <li><a href="#" class="nav-link"><i class="bi bi-bag-check me-2"></i> Purchase</a></li>
-                <li><a href="#" class="nav-link"><i class="bi bi-person-plus me-2"></i> Create Supplier</a></li>
-                <li><a href="#" class="nav-link"><i class="bi bi-people me-2"></i> Show All Suppliers</a></li>
+                <!-- ✅ Master Section -->
                 <li>
                     <a class="nav-link d-flex align-items-center" 
                        data-bs-toggle="collapse" 
-                       data-bs-target="#masterMenuMobile" 
+                       data-bs-target="#masterMenu" 
                        aria-expanded="false" 
-                       aria-controls="masterMenuMobile">
-                        <i class="bi bi-box2-fill me-2"></i> Master
+                       aria-controls="masterMenu">
+                        <i class="bi bi-box2-fill"></i>
+                        <span class="sidebar-text">Master</span>
                         <i class="bi bi-caret-down-fill ms-auto"></i>
                     </a>
                     <ul class="collapse nav flex-column ms-3" 
-                        id="masterMenuMobile" 
-                        data-bs-parent="#sidebarMenuMobile">
-                        <li><a href="#" class="nav-link">Add Product</a></li>
-                        <li><a href="#" class="nav-link">Show All Products</a></li>
-                        <li><a href="#" class="nav-link">Add Category</a></li>
-                        <li><a href="#" class="nav-link">Show All Categories</a></li>
-                        <li><a href="#" class="nav-link">Add Company</a></li>
+                        id="masterMenu" 
+                        data-bs-parent="#sidebarMenu">
+                        <li><a href="#" class="nav-link">Product</a></li>
+                        <li><a href="{% url 'show-all-product-types' %}" class="nav-link">Product Type</a></li>
+                        <li><a href="{% url 'show-all-drug-schedule-types' %}" class="nav-link">Drug Schedule</a></li>
+                        <li><a href="#" class="nav-link">Supplier list</a></li>
                         <li><a href="#" class="nav-link">Show All Companies</a></li>
                     </ul>
                 </li>
+
+                <!-- ✅ Reports Section -->
                 <li>
                     <a class="nav-link d-flex align-items-center" 
                        data-bs-toggle="collapse" 
-                       data-bs-target="#reportsMenuMobile" 
+                       data-bs-target="#reportsMenu" 
                        aria-expanded="false" 
-                       aria-controls="reportsMenuMobile">
-                        <i class="bi bi-bar-chart-line me-2"></i> Reports
+                       aria-controls="reportsMenu">
+                        <i class="bi bi-bar-chart-line"></i>
+                        <span class="sidebar-text">Reports</span>
                         <i class="bi bi-caret-down-fill ms-auto"></i>
                     </a>
                     <ul class="collapse nav flex-column ms-3" 
-                        id="reportsMenuMobile" 
-                        data-bs-parent="#sidebarMenuMobile">
+                        id="reportsMenu" 
+                        data-bs-parent="#sidebarMenu">
                         <li><a href="#" class="nav-link">Sales Report</a></li>
                         <li><a href="#" class="nav-link">Purchase Report</a></li>
                         <li><a href="#" class="nav-link">Stock Report</a></li>
+                        <li><a href="#" class="nav-link">Drug Schedule wise Report</a></li>
                     </ul>
                 </li>
-                {% if user.is_authenticated %}
-                <hr>
-                <a href="{% url 'logout' %}" class="nav-link"><i class="bi bi-box-arrow-right me-2"></i> Logout</a>
-                {% endif %}
             </ul>
+
+            {% if user.is_authenticated %}
+            <hr>
+            <a href="{% url 'logout' %}" class="nav-link">
+                <i class="bi bi-box-arrow-right"></i>
+                <span class="sidebar-text">Logout</span>
+            </a>
+            {% endif %}
         </div>
 
-        <!-- ✅ Page Content -->
-        <main class="p-4">
-            {% block content %}
-            {% endblock %}
-        </main>
-    </div>
-</div>
+        <!-- ✅ Main Content -->
+        <div class="content w-100" id="mainContent">
 
-<!-- ✅ Bootstrap JS -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+            <!-- ✅ Mobile Sidebar -->
+            <div class="mobile-sidebar d-md-none" id="mobileSidebar">
+                <ul class="nav nav-pills flex-column p-3">
+                    <li>
+                        <a href="{% url 'home' %}" class="nav-link">
+                            <i class="bi bi-house-door-fill me-2"></i>Dashboard
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="nav-link">
+                            <i class="bi bi-cart me-2"></i> Sale
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="nav-link">
+                            <i class="bi bi-bag-check me-2"></i> Purchase
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="nav-link">
+                            <i class="bi bi-person-plus me-2"></i> Create Supplier
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="nav-link">
+                            <i class="bi bi-people me-2"></i> Show All Suppliers
+                        </a>
+                    </li>
+                    <li>
+                        <a class="nav-link d-flex align-items-center" 
+                           data-bs-toggle="collapse" 
+                           data-bs-target="#masterMenuMobile" 
+                           aria-expanded="false" 
+                           aria-controls="masterMenuMobile">
+                            <i class="bi bi-box2-fill me-2"></i> Master
+                            <i class="bi bi-caret-down-fill ms-auto"></i>
+                        </a>
+                        <ul class="collapse nav flex-column ms-3" 
+                            id="masterMenuMobile" 
+                            data-bs-parent="#mobileSidebar">
+                            <li><a href="#" class="nav-link">Product</a></li>
+                            <li><a href="{% url 'show-all-product-types' %}" class="nav-link">Product Type</a></li>
+                            <li><a href="{% url 'show-all-drug-schedule-types' %}" class="nav-link">Drug Schedule</a></li>
+                            <li><a href="#" class="nav-link">Supplier list</a></li>
+                            <li><a href="#" class="nav-link">Show All Companies</a></li>
+                        </ul>
+                    </li>
+                    <li>
+                        <a class="nav-link d-flex align-items-center" 
+                           data-bs-toggle="collapse" 
+                           data-bs-target="#reportsMenuMobile" 
+                           aria-expanded="false" 
+                           aria-controls="reportsMenuMobile">
+                            <i class="bi bi-bar-chart-line me-2"></i> Reports
+                            <i class="bi bi-caret-down-fill ms-auto"></i>
+                        </a>
+                        <ul class="collapse nav flex-column ms-3" 
+                            id="reportsMenuMobile" 
+                            data-bs-parent="#mobileSidebar">
+                            <li><a href="#" class="nav-link">Sales Report</a></li>
+                            <li><a href="#" class="nav-link">Purchase Report</a></li>
+                            <li><a href="#" class="nav-link">Stock Report</a></li>
+                            <li><a href="#" class="nav-link">Drug Schedule wise Report</a></li>
+                        </ul>
+                    </li>
+                    {% if user.is_authenticated %}
+                    <hr>
+                    <a href="{% url 'logout' %}" class="nav-link">
+                        <i class="bi bi-box-arrow-right me-2"></i> Logout
+                    </a>
+                    {% endif %}
+                </ul>
+            </div>
+
+            <!-- ✅ Page Content -->
+            <main class="p-4">
+                
+            </main>
+        </div>
+    </div>
+
+    <!-- ✅ Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{% static 'js/master/sidebar.js' %}"></script>
 </body>
 </html>
