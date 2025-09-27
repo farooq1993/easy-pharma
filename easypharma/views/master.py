@@ -3,6 +3,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.http import JsonResponse
 import json
+from django.core.paginator import Paginator
 
 from easypharma.models.Items import (DrugCompnay, ProductContent, 
                                      ProductSchedule,
@@ -114,25 +115,12 @@ class DrugScheduleTypeListView(View):
 
 
 class ProductCreate(View):
-    template_name = 'masters/product.html'
+    template_name = 'masters/products/product.html'
     http_method_names = ['get', 'post', 'patch', 'delete']
 
     def get(self, request, *args, **kwargs):
-        products = Products.objects.all().select_related(
-            'product_type', 'product_schedule', 'product_tax', 'product_content'
-        )
-        
-        
-        context = {
-            'products': products,
-            'product_types': ProductType.objects.all(),
-            'product_schedules': ProductSchedule.objects.all(),
-            'product_taxes': ProductTax.objects.all(),
-            'product_contents': ProductContent.objects.all(),
-            'compny_name': DrugCompnay.objects.all(),
-        }
-        return render(request, self.template_name, context)
-
+        return render(request, self.template_name)
+    
     def post(self, request, *args, **kwargs):
         try:
             product_name = request.POST.get("product_name")
@@ -167,3 +155,29 @@ class ProductCreate(View):
             messages.error(request, f"Error creating product: {str(e)}")
         
         return redirect("products")
+
+
+class ProductListView(View):
+    template_name = 'masters/products/product_list.html'
+    http_method_names = ['get', 'post', 'patch', 'delete']
+
+    def get(self, request, *args, **kwargs):
+        products_qs = Products.objects.all().select_related(
+            'product_type', 'product_schedule', 'product_tax', 'product_content'
+        )
+
+        # Pagination
+        paginator = Paginator(products_qs, 10)  
+        page_number = request.GET.get("page")
+        page_obj = paginator.get_page(page_number)
+
+        context = {
+            'products': page_obj,   
+            'page_obj': page_obj, 
+            'product_types': ProductType.objects.all(),
+            'product_schedules': ProductSchedule.objects.all(),
+            'product_taxes': ProductTax.objects.all(),
+            'product_contents': ProductContent.objects.all(),
+            'compny_name': DrugCompnay.objects.all(),
+        }
+        return render(request, self.template_name, context)

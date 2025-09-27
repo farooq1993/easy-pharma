@@ -112,97 +112,9 @@
             <button type="reset" class="btn btn-secondary">Reset</button>
         </form>
 
-        <h2 class="text-primary">All Products</h2>
-        <table class="table table-striped">
-            <thead class="table-dark">
-                <tr>
-                    <th>Sr No.</th>
-                    <th>Product Name</th>
-                    <th>Packing</th>
-                    <th>Type</th>
-                    <th>Schedule</th>
-                    <th>HSN Code</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for product in products %}
-                <tr id="row-{{ product.id }}">
-                    <td>{{ forloop.counter }}</td>
-                    <td>{{ product.product_name }}</td>
-                    <td>{{ product.product_packing|default:"-" }}</td>
-                    <td>{{ product.product_type.name|default:"-" }}</td>
-                    <td>{{ product.product_schedule.schedule_name|default:"-" }}</td>
-                    <td>{{ product.product_hsn_code }}</td>
-                    <td>
-                        <button type="button" onclick="enableEdit({{ product.id }})" class="btn btn-sm btn-primary">Edit</button>
-                        <button type="button" onclick="deleteProduct({{ product.id }})" class="btn btn-sm btn-danger">Delete</button>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="7" class="text-center">No products found.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
     </div>
 </div>
-<!-- Add before closing </body> -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap-select@1.13.14/dist/js/bootstrap-select.min.js"></script>
 
-
-<script>
-// ✅ Helper to get CSRF token from cookies
-function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== "") {
-        const cookies = document.cookie.split(";");
-        for (let cookie of cookies) {
-            cookie = cookie.trim();
-            if (cookie.startsWith(name + "=")) {
-                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                break;
-            }
-        }
-    }
-    return cookieValue;
-}
-
-// ✅ Delete product
-function deleteProduct(id) {
-    if (!confirm("Are you sure you want to delete this product?")) return;
-
-    fetch("/master/products/", {
-        method: "DELETE",
-        headers: {
-            "X-CSRFToken": getCookie("csrftoken"),
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ id: id }),
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert("Product deleted successfully.");
-            document.getElementById(`row-${id}`).remove();
-        } else {
-            alert("Error: " + (data.error || "Unable to delete"));
-        }
-    })
-    .catch(error => {
-        console.error("Error:", error);
-        alert("Error: " + error.message);
-    });
-}
-
-// ✅ Simple edit redirect (you can enhance this with inline editing later)
-function enableEdit(id) {
-    if (confirm("Edit product? This will redirect to edit page.")) {
-        window.location.href = `/master/products/edit/${id}/`;
-    }
-}
-</script>
 
 </body>
 </html>
