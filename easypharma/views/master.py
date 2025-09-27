@@ -4,7 +4,10 @@ from django.contrib import messages
 from django.http import JsonResponse
 import json
 
-from easypharma.models.Items import ProductSchedule, ProductType
+from easypharma.models.Items import (ProductContent, 
+                                     ProductSchedule,
+                                     ProductTax, ProductType, Products)
+
 
 class ProductTypeListView(View):
     template_name = "masters/show_all_product_types.html"
@@ -108,4 +111,56 @@ class DrugScheduleTypeListView(View):
         
         except ProductSchedule.DoesNotExist:
             return JsonResponse({"error": "Not found"}, status=404)
-    
+
+
+class ProductCreate(View):
+    template_name = 'masters/product.html'
+    http_method_names = ['get', 'post', 'patch', 'delete']
+
+    def get(self, request, *args, **kwargs):
+        products = Products.objects.all().select_related(
+            'product_type', 'product_schedule', 'product_tax', 'product_content'
+        )
+        
+        
+        context = {
+            'products': products,
+            'product_types': ProductType.objects.all(),
+            'product_schedules': ProductSchedule.objects.all(),
+            'product_taxes': ProductTax.objects.all(),
+            'product_contents': ProductContent.objects.all(),
+        }
+        return render(request, self.template_name, context)
+
+    def post(self, request, *args, **kwargs):
+        try:
+            product_name = request.POST.get("product_name")
+            product_packing = request.POST.get("product_packing")
+            product_type_id = request.POST.get("product_type")
+            product_schedule_id = request.POST.get("product_schedule")
+            product_tax_id = request.POST.get("product_tax")
+            product_hsn_code = request.POST.get("product_hsn_code")
+            product_content_id = request.POST.get("product_content")
+            
+            # Validate required fields
+            if not product_name or not product_hsn_code:
+                messages.error(request, "Product Name and HSN Code are required.")
+                return redirect("products")
+            
+            # Create product
+            product = Products.objects.create(
+                product_name=product_name,
+                product_packing=product_packing or None,
+                product_type_id=product_type_id or None,
+                product_schedule_id=product_schedule_id or None,
+                product_tax_id=product_tax_id or None,
+                product_hsn_code=product_hsn_code,
+                product_content_id=product_content_id or None
+            )
+            
+            messages.success(request, f"Product '{product_name}' added successfully.")
+            
+        except Exception as e:
+            messages.error(request, f"Error creating product: {str(e)}")
+        
+        return redirect("products")
