@@ -14,7 +14,9 @@ def create_user(request):
         user_type = request.POST.get('user_type')
         password = request.POST.get('password')
 
-        user = User.objects.create(username=username, user_type=user_type, password=password)
+        user = User(username=username, user_type=user_type, password=password)
+        user.set_password(password)
+        user.save()
         messages.success(request, 'User has created successfully!')
         return redirect('/createuser')
     return render(request, 'accounts/createuser.html')
