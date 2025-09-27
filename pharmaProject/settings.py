@@ -29,6 +29,9 @@ SECRET_KEY = config('DJANGO_SECRET_KEY', default='insecure-key-change-me')
 DEBUG = config('DJANGO_DEBUG', default=False, cast=bool)
 # DEBUG = True
 
+# Detect if we're running on Railway
+ON_RAILWAY = os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('DATABASE_URL', '').startswith('postgresql://')
+
 ALLOWED_HOSTS = ["127.0.0.1", "easy-pharma-production.up.railway.app"]
 
 CSRF_TRUSTED_ORIGINS = [
@@ -88,14 +91,23 @@ WSGI_APPLICATION = 'pharmaProject.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-# Database Configuration - Simplified
-DATABASES = {
-    'default': dj_database_url.config(
-        default=config('DATABASE_URL', default='sqlite:///db.sqlite3'),
-        conn_max_age=600,
-        ssl_require=True
-    )
-}
+if ON_RAILWAY:
+    # Production database (Railway)
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=config('DATABASE_URL'),
+            conn_max_age=600,
+            ssl_require=True
+        )
+    }
+else:
+    # Local development database
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 #switchyard.proxy.rlwy.net:21615
 
