@@ -30,7 +30,10 @@ DEBUG = True
 
 ALLOWED_HOSTS = ["127.0.0.1", "easy-pharma-production.up.railway.app"]
 
-CSRF_TRUSTED_ORIGIN = ['https://easy-pharma-production.up.railway.app']
+CSRF_TRUSTED_ORIGINS = [
+    'https://easy-pharma-production.up.railway.app',
+    'https://*.railway.app',
+]
 
 
 # Application definition
