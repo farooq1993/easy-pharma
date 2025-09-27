@@ -97,6 +97,16 @@
                         {% endfor %}
                     </select>
                 </div>
+
+                <div class="col-md-6 mb-3">
+                    <label for="productContent" class="form-label">Product Company</label>
+                    <select class="form-select" id="productContent" name="compny_name">
+                        <option value="">Select Product Company</option>
+                        {% for company in compny_name %}
+                            <option value="{{ company.id }}">{{ company.company_name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
             </div>
             <button type="submit" class="btn btn-success">Save Product</button>
             <button type="reset" class="btn btn-secondary">Reset</button>

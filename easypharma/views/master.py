@@ -4,7 +4,7 @@ from django.contrib import messages
 from django.http import JsonResponse
 import json
 
-from easypharma.models.Items import (ProductContent, 
+from easypharma.models.Items import (DrugCompnay, ProductContent, 
                                      ProductSchedule,
                                      ProductTax, ProductType, Products)
 
@@ -129,6 +129,7 @@ class ProductCreate(View):
             'product_schedules': ProductSchedule.objects.all(),
             'product_taxes': ProductTax.objects.all(),
             'product_contents': ProductContent.objects.all(),
+            'compny_name': DrugCompnay.objects.all(),
         }
         return render(request, self.template_name, context)
 
@@ -141,6 +142,7 @@ class ProductCreate(View):
             product_tax_id = request.POST.get("product_tax")
             product_hsn_code = request.POST.get("product_hsn_code")
             product_content_id = request.POST.get("product_content")
+            compny_name_id = request.POST.get("compny_name")
             
             # Validate required fields
             if not product_name or not product_hsn_code:
@@ -155,7 +157,8 @@ class ProductCreate(View):
                 product_schedule_id=product_schedule_id or None,
                 product_tax_id=product_tax_id or None,
                 product_hsn_code=product_hsn_code,
-                product_content_id=product_content_id or None
+                product_content_id=product_content_id or None,
+                compny_name = compny_name_id or None
             )
             
             messages.success(request, f"Product '{product_name}' added successfully.")
