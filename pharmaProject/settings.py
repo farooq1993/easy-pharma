@@ -32,9 +32,10 @@ DEBUG = config('DJANGO_DEBUG', default=False, cast=bool)
 # Detect if we're running on Railway
 ON_RAILWAY = os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('DATABASE_URL', '').startswith('postgresql://')
 
-ALLOWED_HOSTS = ["127.0.0.1", "easy-pharma-production.up.railway.app",".easy-pharma-production.up.railway.app",".railway.app",]
+ALLOWED_HOSTS = ["127.0.0.1", ".vercel.app", "easy-pharma-production.up.railway.app",".easy-pharma-production.up.railway.app",".railway.app",]
 
 CSRF_TRUSTED_ORIGINS = [
+    'https://*.vercel.app',
     'https://easy-pharma-production.up.railway.app',
     'https://*.easy-pharma-production.up.railway.app',
     'https://*.railway.app',
