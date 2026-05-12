@@ -8,13 +8,24 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'pharmaProject.settings')
 # Initialize Django
 django.setup()
 
-# Auto-run migrations on Vercel startup
+# Auto-run tasks on Vercel startup
 try:
-    print("Checking for database migrations...")
+    print("Running migrations...")
     call_command('migrate', '--noinput')
-    print("Migrations completed successfully.")
+    
+    print("Collecting static files for CSS...")
+    call_command('collectstatic', '--noinput', '--clear')
+    
+    # Create Default Admin User
+    from easypharma.models import User
+    if not User.objects.filter(username='admin').exists():
+        User.objects.create_superuser('admin', 'admin@example.com', 'admin123', user_type='admin')
+        print("Default admin user created: admin / admin123")
+    else:
+        print("Admin user already exists.")
+        
 except Exception as e:
-    print(f"Migration error on startup: {e}")
+    print(f"Startup error: {e}")
 
 application = get_wsgi_application()
 app = application
