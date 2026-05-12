@@ -13,13 +13,10 @@ try:
     print("Running migrations...")
     call_command('migrate', '--noinput')
     
-    print("Collecting static files for CSS...")
-    call_command('collectstatic', '--noinput', '--clear')
-    
     # Create Default Admin User
     from easypharma.models import User
     if not User.objects.filter(username='admin').exists():
-        User.objects.create_superuser('admin', 'admin@example.com', 'admin123', user_type='admin')
+        User.objects.create_superuser(username='admin', password='admin123')
         print("Default admin user created: admin / admin123")
     else:
         print("Admin user already exists.")
