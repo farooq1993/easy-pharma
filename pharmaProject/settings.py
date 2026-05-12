@@ -100,24 +100,23 @@ WSGI_APPLICATION = 'pharmaProject.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-if ON_RAILWAY:
-    # Production database (Railway) - PostgreSQL
-    default_db = dj_database_url.config(
-        default=config('DATABASE_URL'),
-        conn_max_age=600,
-        ssl_require=True
-    )
-    
+DATABASE_URL = os.environ.get('DATABASE_URL')
+
+if DATABASE_URL:
+    # Production database (Railway/Vercel/Neon) - PostgreSQL
     DATABASES = {
-        'default': default_db  # Main database for tenant management
+        'default': dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=600,
+            ssl_require=True
+        )
     }
-    
 else:
     # Local development - SQLite
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',  # Main database for tenant info
+            'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
 

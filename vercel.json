@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "buildCommand": "sh build.sh",
   "builds": [
     {
       "src": "pharmaProject/wsgi.py",
