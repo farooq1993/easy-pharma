@@ -25,6 +25,7 @@ class MasterCRUDView(View):
             'product-content': ProductContent,
             'drug-company': DrugCompany,
             'drug-supplier': Supplier,
+            'pharmacy-link': apps.get_model('tenants', 'Tenant'),
         }
         return models_map.get(master_type)
 
@@ -36,6 +37,7 @@ class MasterCRUDView(View):
             'product-content': 'Product Contents',
             'drug-company': 'Drug Companies',
             'drug-supplier': 'Suppliers',
+            'pharmacy-link': 'Firm/Pharmacy Details',
         }
         fields = {
             'product-type': [{'name': 'name', 'label': 'Type Name', 'type': 'text'}],
@@ -55,11 +57,19 @@ class MasterCRUDView(View):
                 {'name': 'gst_number', 'label': 'GST Number', 'type': 'text'},
                 {'name': 'dl_number', 'label': 'DL Number', 'type': 'text'}
             ],
+            'pharmacy-link': [
+                {'name': 'pharmacy_name', 'label': 'Pharmacy Name', 'type': 'text', 'readonly': True},
+                {'name': 'phone', 'label': 'Phone Number', 'type': 'text'},
+                {'name': 'license_number', 'label': 'License Number (DL)', 'type': 'text'},
+                {'name': 'gst_number', 'label': 'GST Number', 'type': 'text'},
+                {'name': 'address', 'label': 'Address', 'type': 'text'}
+            ],
         }
         return {
             'title': titles.get(master_type, 'Master'),
             'fields': fields.get(master_type, []),
-            'master_type': master_type
+            'master_type': master_type,
+            'hide_add_button': master_type == 'pharmacy-link'
         }
 
     def get(self, request, master_type):
@@ -67,7 +77,11 @@ class MasterCRUDView(View):
         if not model:
             return redirect('home')
         
-        items = model.objects.filter(tenant=request.tenant).order_by('id')
+        if master_type == 'pharmacy-link':
+            items = model.objects.filter(id=request.tenant.id)
+        else:
+            items = model.objects.filter(tenant=request.tenant).order_by('id')
+            
         context = self.get_context_data(master_type)
         context['items'] = items
         return render(request, 'masters/generic_master.html', context)

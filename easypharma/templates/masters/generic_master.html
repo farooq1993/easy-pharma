@@ -8,11 +8,13 @@
             <h2 class="fw-bold mb-0">{{ title }}</h2>
             <p class="text-muted small">Manage your {{ title|lower }} master data.</p>
         </div>
+        {% if not hide_add_button %}
         <div class="col-auto">
             <button class="btn btn-success shadow-sm px-4" data-bs-toggle="modal" data-bs-target="#addModal">
                 <i class="fas fa-plus me-2"></i> Add New
             </button>
         </div>
+        {% endif %}
     </div>
 
     {% include 'includes/messages.html' %}
@@ -37,7 +39,11 @@
                             {% for field in fields %}
                             <td>
                                 <span class="field-display" data-field="{{ field.name }}">{{ item|getattr:field.name }}</span>
-                                <input type="{{ field.type }}" class="form-control form-control-sm d-none field-input" data-field="{{ field.name }}" value="{{ item|getattr:field.name }}">
+                                <input type="{{ field.type }}" 
+                                       class="form-control form-control-sm d-none field-input" 
+                                       data-field="{{ field.name }}" 
+                                       value="{{ item|getattr:field.name }}"
+                                       {% if field.readonly %}readonly{% endif %}>
                             </td>
                             {% endfor %}
                             <td class="text-end pe-4">
@@ -48,9 +54,11 @@
                                     <button class="btn btn-sm btn-success border-0 d-none save-btn" onclick="saveItem({{ item.id }})">
                                         <i class="fas fa-check"></i>
                                     </button>
+                                    {% if not hide_add_button %}
                                     <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteItem({{ item.id }})">
                                         <i class="fas fa-trash"></i>
                                     </button>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>

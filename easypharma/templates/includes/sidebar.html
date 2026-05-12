@@ -47,18 +47,18 @@
             </ul>
         </li>
 
-        <!-- System Admin Only Section -->
-        {% if user.is_superuser %}
+        <!-- Administration Section -->
         <li class="mt-3">
             <h6 class="sidebar-text text-uppercase small opacity-75 ps-3 mb-2" style="color: #e7e1cb;">Administration</h6>
         </li>
+
+        <!-- Pharmacy Profile Management -->
         <li>
-            <a href="{% url 'register_pharmacy' %}" class="nav-link text-warning fw-bold">
-                <i class="bi bi-plus-circle-dotted"></i>
-                <span class="sidebar-text">Register Pharmacy</span>
+            <a href="{% url 'master-crud' 'pharmacy-link' %}" class="nav-link text-info fw-bold">
+                <i class="bi bi-building"></i>
+                <span class="sidebar-text">Firm Details</span>
             </a>
         </li>
-        {% endif %}
 
         <li class="mt-3">
             <h6 class="sidebar-text text-uppercase small opacity-75 ps-3 mb-2" style="color: #e7e1cb;">Inventory</h6>
@@ -129,9 +129,7 @@
         <ul class="nav nav-pills flex-column p-3">
             <li><a href="{% url 'home' %}" class="nav-link"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a></li>
             <li><a href="{% url 'pos' %}" class="nav-link"><i class="bi bi-cart-plus-fill me-2"></i>Sale (POS)</a></li>
-            {% if user.is_superuser %}
-            <li><a href="{% url 'register_pharmacy' %}" class="nav-link text-warning"><i class="bi bi-plus-circle-dotted me-2"></i>Register Pharmacy</a></li>
-            {% endif %}
+            <li><a href="{% url 'master-crud' 'pharmacy-link' %}" class="nav-link text-info"><i class="bi bi-building me-2"></i>Firm Details</a></li>
             <hr class="text-white opacity-25">
             <li><a href="{% url 'logout' %}" class="nav-link text-danger"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
         </ul>
