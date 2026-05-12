@@ -1,17 +1,25 @@
 #!/bin/bash
 
-echo "Building the project..."
-python3.12 -m pip install -r requirements.txt
+# Exit on error
+set -e
 
-echo "Running Migrations..."
-python3.12 manage.py makemigrations --noinput
-python3.12 manage.py migrate --noinput
+echo "--- STARTING VERCEL BUILD ---"
 
-echo "Collecting Static Files..."
-python3.12 manage.py collectstatic --noinput --clear
+# Install dependencies
+echo "Installing requirements..."
+pip install -r requirements.txt
 
-echo "Creating Superuser..."
-python3.12 manage.py shell <<EOF
+# Run migrations
+echo "Running database migrations..."
+python manage.py migrate --noinput
+
+# Collect static files
+echo "Collecting static files..."
+python manage.py collectstatic --noinput --clear
+
+# Create superuser if env vars exist
+echo "Checking for superuser creation..."
+python manage.py shell <<EOF
 from easypharma.models import User
 import os
 username = os.environ.get('ADMIN_USERNAME')
@@ -23,5 +31,7 @@ if username and password:
     else:
         print(f'Superuser "{username}" already exists.')
 else:
-    print('ADMIN_USERNAME or ADMIN_PASSWORD not set. Skipping superuser creation.')
+    print('ADMIN_USERNAME or ADMIN_PASSWORD not set. Skipping.')
 EOF
+
+echo "--- VERCEL BUILD COMPLETE ---"
