@@ -32,10 +32,11 @@ DEBUG = config('DJANGO_DEBUG', default=False, cast=bool)
 # Detect if we're running on Railway
 ON_RAILWAY = os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('DATABASE_URL', '').startswith('postgresql://')
 
-ALLOWED_HOSTS = ["127.0.0.1", "easy-pharma-production.up.railway.app"]
+ALLOWED_HOSTS = ["127.0.0.1", "easy-pharma-production.up.railway.app",".easy-pharma-production.up.railway.app",".railway.app",]
 
 CSRF_TRUSTED_ORIGINS = [
     'https://easy-pharma-production.up.railway.app',
+    'https://*.easy-pharma-production.up.railway.app',
     'https://*.railway.app',
 ]
 
@@ -50,6 +51,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'easypharma',
+    'tenants',
+    
 ]
 
 MIDDLEWARE = [
@@ -60,6 +63,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'tenants.middleware.TenantMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
@@ -69,6 +73,9 @@ if not DEBUG:
 ROOT_URLCONF = 'pharmaProject.urls'
 
 AUTH_USER_MODEL = 'easypharma.User'
+
+LOGIN_REDIRECT_URL = 'home'
+LOGIN_URL = 'login/'
 
 TEMPLATES = [
     {
@@ -80,6 +87,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'tenants.context_processors.tenant_context',
             ],
         },
     },
@@ -92,22 +100,40 @@ WSGI_APPLICATION = 'pharmaProject.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 if ON_RAILWAY:
-    # Production database (Railway)
+    # Production database (Railway) - PostgreSQL
+    default_db = dj_database_url.config(
+        default=config('DATABASE_URL'),
+        conn_max_age=600,
+        ssl_require=True
+    )
+    
     DATABASES = {
-        'default': dj_database_url.config(
-            default=config('DATABASE_URL'),
-            conn_max_age=600,
-            ssl_require=True
-        )
+        'default': default_db  # Main database for tenant management
     }
+    
 else:
-    # Local development database
+    # Local development - SQLite
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',  # Main database for tenant info
         }
     }
+
+# Multi-tenancy settings - ADD THIS SECTION
+DATABASE_ROUTERS = ['tenants.db_router.TenantRouter']
+
+MULTI_TENANCY_CONFIG = {
+    'enabled': True,
+    'strategy': 'database' if ON_RAILWAY else 'schema',  # Different strategies for dev/prod
+    'main_database': 'default',
+    'tenant_model': 'tenants.Tenant',
+}
+
+# Tenant-specific settings
+TENANT_COOKIE_NAME = 'tenant_id'
+TENANT_HEADER_NAME = 'X-Tenant-ID'
+TENANT_PARAM_NAME = 'tenant'
 
 #switchyard.proxy.rlwy.net:21615
 

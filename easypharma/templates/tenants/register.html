@@ -1,0 +1,58 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow-lg border-0 rounded-4">
+                <div class="card-body p-5">
+                    <div class="text-center mb-5">
+                        <h2 class="fw-bold text-success">Register Your Pharmacy</h2>
+                        <p class="text-muted">Start managing your medical store with Easy Pharma SAAS</p>
+                    </div>
+
+                    <form method="POST">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Pharmacy Name</label>
+                            <input type="text" name="pharmacy_name" class="form-control py-2" placeholder="e.g. Apollo Pharmacy" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Desired Subdomain</label>
+                            <div class="input-group">
+                                <input type="text" name="subdomain" class="form-control py-2" placeholder="e.g. apollo" required>
+                                <span class="input-group-text">.easypharma.com</span>
+                            </div>
+                            <small class="text-muted">This will be your unique access URL.</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Address</label>
+                            <textarea name="address" class="form-control" rows="3" placeholder="Full pharmacy address..." required></textarea>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">Phone Number</label>
+                                <input type="text" name="phone" class="form-control py-2" placeholder="+1234567890" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">License Number</label>
+                                <input type="text" name="license_number" class="form-control py-2" placeholder="DL-12345" required>
+                            </div>
+                        </div>
+
+                        <div class="d-grid mt-4">
+                            <button type="submit" class="btn btn-success btn-lg py-3 fw-bold rounded-3">
+                                <i class="fas fa-rocket me-2"></i> LAUNCH MY PHARMACY
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,91 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row align-items-center mb-4">
+        <div class="col">
+            <h2 class="fw-bold mb-0">Sales Invoices</h2>
+            <p class="text-muted small">View and manage all customer billing records.</p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'pos' %}" class="btn btn-success px-4 shadow-sm fw-bold">
+                <i class="fas fa-plus me-2"></i> NEW BILL
+            </a>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light text-muted small text-uppercase">
+                        <tr>
+                            <th class="ps-4">Date</th>
+                            <th>Bill No.</th>
+                            <th>Patient / Phone</th>
+                            <th>Doctor</th>
+                            <th>Amount</th>
+                            <th>GST/Tax</th>
+                            <th>Grand Total</th>
+                            <th class="text-end pe-4">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for invoice in invoices %}
+                        <tr id="invoice-{{ invoice.id }}">
+                            <td class="ps-4 small">{{ invoice.created_at|date:"d M Y H:i" }}</td>
+                            <td><span class="badge bg-light text-dark border">#{{ invoice.invoice_number }}</span></td>
+                            <td>
+                                <div class="fw-bold small">{{ invoice.patient_name|default:"Walk-in Customer" }}</div>
+                                <div class="text-muted x-small">{{ invoice.patient_phone }}</div>
+                            </td>
+                            <td class="small">{{ invoice.doctor_name|default:"-" }}</td>
+                            <td class="small">{{ invoice.sub_total }}</td>
+                            <td class="small text-primary">{{ invoice.tax_amount }}</td>
+                            <td class="fw-bold text-success">{{ invoice.total_amount }}</td>
+                            <td class="text-end pe-4">
+                                <div class="btn-group">
+                                    <a href="{% url 'pos_print' invoice.id %}" target="_blank" class="btn btn-sm btn-outline-primary border-0" title="Print Bill">
+                                        <i class="fas fa-print"></i>
+                                    </a>
+                                    <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteInvoice({{ invoice.id }})">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center py-5 text-muted">No sales records found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function deleteInvoice(id) {
+    if (!confirm('Are you sure? This will delete the bill and RETURN the items back to stock.')) return;
+
+    const response = await fetch(`/pos/delete/${id}/`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json'
+        }
+    });
+
+    const result = await response.json();
+    if (result.success) {
+        document.getElementById(`invoice-${id}`).remove();
+        alert('Bill deleted and items returned to stock.');
+    } else {
+        alert('Error: ' + result.error);
+    }
+}
+</script>
+{% endblock %}

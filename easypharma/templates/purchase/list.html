@@ -1,0 +1,94 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row align-items-center mb-4">
+        <div class="col">
+            <h2 class="fw-bold mb-0">Purchase Invoices</h2>
+            <p class="text-muted small">View and manage all your pharmaceutical stock purchases.</p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'purchase_entry' %}" class="btn btn-success px-4 shadow-sm">
+                <i class="fas fa-plus me-2"></i> NEW PURCHASE
+            </a>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light text-muted small text-uppercase">
+                        <tr>
+                            <th class="ps-4">Date</th>
+                            <th>Invoice No.</th>
+                            <th>Supplier</th>
+                            <th>Sub Total</th>
+                            <th>Tax</th>
+                            <th>Discount</th>
+                            <th>Total Amount</th>
+                            <th class="text-end pe-4">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for invoice in invoices %}
+                        <tr id="invoice-{{ invoice.id }}">
+                            <td class="ps-4">
+                                <div class="fw-bold small">{{ invoice.purchase_date|default:invoice.created_at|date:"d M Y" }}</div>
+                            </td>
+                            <td><span class="badge bg-light text-dark border">#{{ invoice.invoice_number }}</span></td>
+                            <td class="small fw-bold">{{ invoice.supplier.name }}</td>
+                            <td>{{ invoice.sub_total }}</td>
+                            <td class="text-primary">{{ invoice.tax_amount }}</td>
+                            <td class="text-danger">{{ invoice.discount_amount }}</td>
+                            <td class="fw-bold text-success">{{ invoice.total_amount }}</td>
+                            <td class="text-end pe-4">
+                                <div class="btn-group">
+                                    <button class="btn btn-sm btn-outline-primary border-0" title="Edit (Coming Soon)">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteInvoice({{ invoice.id }})">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center py-5">
+                                <div class="opacity-25 mb-3"><i class="fas fa-file-invoice" style="font-size: 3rem;"></i></div>
+                                <p class="text-muted">No purchase invoices found.</p>
+                                <a href="{% url 'purchase_entry' %}" class="btn btn-sm btn-success">Record your first purchase</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function deleteInvoice(id) {
+    if (!confirm('Are you sure? This will delete the invoice and REVERT the stock levels. This action cannot be undone.')) return;
+
+    const response = await fetch(`/delete/${id}/`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json'
+        }
+    });
+
+    const result = await response.json();
+    if (result.success) {
+        document.getElementById(`invoice-${id}`).remove();
+        alert('Invoice deleted and stock reverted.');
+    } else {
+        alert('Error: ' + result.error);
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,298 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row align-items-center mb-4">
+        <div class="col">
+            <h2 class="fw-bold mb-0">Purchase Entry</h2>
+            <p class="text-muted small">Record retail stock with automatic unit conversion and tax calculation.</p>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-success px-4 shadow-sm fw-bold" onclick="savePurchase()">
+                <i class="fas fa-check-circle me-2"></i> COMPLETE PURCHASE
+            </button>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Purchase Header -->
+        <div class="col-12">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body p-4">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-uppercase">Supplier</label>
+                            <select id="supplierSelect" class="form-select py-2 shadow-sm border-0 bg-light">
+                                <option value="">Select Supplier</option>
+                                {% for supplier in suppliers %}
+                                <option value="{{ supplier.id }}">{{ supplier.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-uppercase">Invoice Number</label>
+                            <input type="text" id="invoiceNumber" class="form-control py-2 shadow-sm border-0 bg-light" placeholder="e.g. INV-9921">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-uppercase">Purchase Date</label>
+                            <input type="date" id="purchaseDate" class="form-control py-2 shadow-sm border-0 bg-light" value="{{ today|date:'Y-m-d' }}">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Product Add Form -->
+        <div class="col-12">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-body p-4">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-uppercase d-flex justify-content-between">
+                                Product Name
+                                <a href="#" class="text-primary x-small fw-bold" data-bs-toggle="modal" data-bs-target="#quickAddModal">+ NEW</a>
+                            </label>
+                            <input type="text" id="productSearch" class="form-control py-2 border-0 bg-light" placeholder="Type to search...">
+                            <div id="searchResults" class="list-group position-absolute shadow-lg d-none" style="z-index: 1050; width: 25%; max-height: 250px; overflow-y: auto;"></div>
+                            <div id="productInfo" class="x-small text-primary mt-1 fw-bold"></div>
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label small fw-bold text-uppercase">Batch</label>
+                            <input type="text" id="itemBatch" class="form-control py-2 border-0 bg-light" placeholder="No.">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold text-uppercase">Expiry</label>
+                            <input type="month" id="itemExpiry" class="form-control py-2 border-0 bg-light">
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label small fw-bold text-uppercase">Qty (Packs)</label>
+                            <input type="number" id="itemQty" class="form-control py-2 border-0 bg-light" value="1">
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label small fw-bold text-uppercase">Cost/Pack</label>
+                            <input type="number" id="itemPrice" class="form-control py-2 border-0 bg-light" placeholder="0.00">
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label small fw-bold text-uppercase">Tax %</label>
+                            <input type="number" id="itemTax" class="form-control py-2 border-0 bg-light" value="0" readonly>
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label small fw-bold text-uppercase">MRP/Pack</label>
+                            <input type="number" id="itemMrp" class="form-control py-2 border-0 bg-light" placeholder="0.00">
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-primary w-100 py-2 fw-bold shadow-sm" onclick="addItem()">
+                                <i class="fas fa-plus me-1"></i> ADD ITEM
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Purchase Table -->
+        <div class="col-lg-9">
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" id="purchaseTable">
+                            <thead class="bg-light text-muted small text-uppercase">
+                                <tr>
+                                    <th class="ps-4">Product</th>
+                                    <th>Batch</th>
+                                    <th>Expiry</th>
+                                    <th>Qty</th>
+                                    <th>Units</th>
+                                    <th>Cost</th>
+                                    <th>Tax</th>
+                                    <th>Total</th>
+                                    <th class="text-end pe-4">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Calculation Sidebar -->
+        <div class="col-lg-3">
+            <div class="card border-0 shadow-sm rounded-4 sticky-top" style="top: 20px;">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-4">Order Summary</h5>
+                    <div class="d-flex justify-content-between mb-3"><span class="text-muted small">Sub Total</span><span class="fw-bold" id="summarySubTotal">0.00</span></div>
+                    <div class="d-flex justify-content-between mb-3"><span class="text-muted small">Total Tax</span><span class="fw-bold text-primary" id="summaryTax">0.00</span></div>
+                    <div class="mb-3">
+                        <label class="form-label small text-muted">Discount Amount</label>
+                        <input type="number" class="form-control border-0 bg-light" id="summaryDiscount" value="0" onchange="calculateSummary()">
+                    </div>
+                    <hr class="opacity-10">
+                    <div class="d-flex justify-content-between align-items-center"><span class="h6 fw-bold mb-0">Grand Total</span><span class="h4 fw-bold text-success mb-0" id="summaryGrandTotal">0.00</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Add Modal -->
+<div class="modal fade" id="quickAddModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold">Quick Add Product</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Medicine Name</label>
+                    <input type="text" id="quickName" class="form-control bg-light border-0 py-2">
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label small fw-bold">Packing</label>
+                        <input type="text" id="quickPacking" class="form-control bg-light border-0 py-2">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-bold">Conv. Factor</label>
+                        <input type="number" id="quickConv" class="form-control bg-light border-0 py-2" value="1">
+                    </div>
+                </div>
+                <div class="mb-0">
+                    <label class="form-label small fw-bold">Tax Rate</label>
+                    <select id="quickTax" class="form-select bg-light border-0 py-2">
+                        {% for tax in product_taxes %}
+                        <option value="{{ tax.id }}">{{ tax.tax_name }} ({{ tax.tax_rate }}%)</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-primary rounded-3 px-4 shadow-sm" onclick="saveQuickProduct()">Save Medicine</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let items = [];
+let selectedProduct = null;
+
+// Product Search
+document.getElementById('productSearch').addEventListener('input', async (e) => {
+    const query = e.target.value;
+    if (query.length < 1) { document.getElementById('searchResults').classList.add('d-none'); return; }
+    const response = await fetch(`/api/products/search/?q=${query}`);
+    const data = await response.json();
+    const results = document.getElementById('searchResults');
+    results.innerHTML = '';
+    data.forEach(p => {
+        const item = document.createElement('button');
+        item.className = 'list-group-item list-group-item-action border-0 py-2';
+        item.innerHTML = `<div class="fw-bold small">${p.name}</div><div class="text-muted x-small">${p.packing || ''} | Tax: ${p.tax_rate}%</div>`;
+        item.onclick = () => {
+            selectedProduct = p; document.getElementById('productSearch').value = p.name;
+            document.getElementById('itemTax').value = p.tax_rate;
+            document.getElementById('productInfo').innerText = `Retail Multiplier: x${p.conversion_factor}`;
+            results.classList.add('d-none');
+        };
+        results.appendChild(item);
+    });
+    results.classList.remove('d-none');
+});
+
+async function saveQuickProduct() {
+    const data = {
+        name: document.getElementById('quickName').value,
+        packing: document.getElementById('quickPacking').value,
+        conversion_factor: document.getElementById('quickConv').value,
+        tax_id: document.getElementById('quickTax').value
+    };
+    if (!data.name) return alert('Name is required');
+    const response = await fetch('/api/products/quick-add/', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+        body: JSON.stringify(data)
+    });
+    const result = await response.json();
+    if (result.success) {
+        bootstrap.Modal.getInstance(document.getElementById('quickAddModal')).hide();
+        document.getElementById('productSearch').value = result.name;
+        document.getElementById('productSearch').dispatchEvent(new Event('input'));
+    } else { alert('Error: ' + result.error); }
+}
+
+function addItem() {
+    if (!selectedProduct) return alert('Please select a product');
+    const batch = document.getElementById('itemBatch').value;
+    const expiry = document.getElementById('itemExpiry').value;
+    const qty = parseFloat(document.getElementById('itemQty').value);
+    const price = parseFloat(document.getElementById('itemPrice').value);
+    const taxPerc = parseFloat(document.getElementById('itemTax').value) || 0;
+    const mrp = parseFloat(document.getElementById('itemMrp').value);
+    if (!batch || !expiry || isNaN(qty) || isNaN(price)) return alert('Fill all required fields');
+
+    const subTotal = qty * price;
+    const taxAmount = (subTotal * taxPerc) / 100;
+    const totalWithTax = subTotal + taxAmount;
+    const totalUnits = qty * selectedProduct.conversion_factor;
+
+    items.push({
+        product_id: selectedProduct.id, name: selectedProduct.name, batch_number: batch, expiry_date: expiry + "-01",
+        quantity: qty, total_units: totalUnits, purchase_price: price, tax_percentage: taxPerc,
+        tax_amount: taxAmount, mrp: mrp || price, sale_price: (mrp || price) / selectedProduct.conversion_factor, total: totalWithTax
+    });
+    renderTable(); resetInputs();
+}
+
+function renderTable() {
+    const tbody = document.querySelector('#purchaseTable tbody');
+    tbody.innerHTML = '';
+    items.forEach((item, index) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td class="ps-4 fw-bold small">${item.name}</td><td><span class="badge bg-light text-dark">${item.batch_number}</span></td>
+            <td class="small">${item.expiry_date}</td><td>${item.quantity} Packs</td><td class="fw-bold text-success">${item.total_units} Units</td>
+            <td>${item.purchase_price.toFixed(2)}</td><td class="text-primary small">${item.tax_amount.toFixed(2)}</td><td class="fw-bold">${item.total.toFixed(2)}</td>
+            <td class="text-end pe-4"><button class="btn btn-sm text-danger" onclick="removeItem(${index})"><i class="fas fa-times"></i></button></td>`;
+        tbody.appendChild(tr);
+    });
+    calculateSummary();
+}
+
+function resetInputs() {
+    selectedProduct = null; document.getElementById('productSearch').value = ''; document.getElementById('itemBatch').value = '';
+    document.getElementById('itemQty').value = '1'; document.getElementById('itemPrice').value = ''; document.getElementById('itemTax').value = '0';
+    document.getElementById('itemMrp').value = ''; document.getElementById('productInfo').innerText = '';
+}
+
+function calculateSummary() {
+    const subTotal = items.reduce((sum, item) => sum + (item.quantity * item.purchase_price), 0);
+    const totalTax = items.reduce((sum, item) => sum + item.tax_amount, 0);
+    const discount = parseFloat(document.getElementById('summaryDiscount').value) || 0;
+    const grandTotal = (subTotal + totalTax) - discount;
+    document.getElementById('summarySubTotal').innerText = subTotal.toFixed(2);
+    document.getElementById('summaryTax').innerText = totalTax.toFixed(2);
+    document.getElementById('summaryGrandTotal').innerText = grandTotal.toFixed(2);
+}
+
+function removeItem(index) { items.splice(index, 1); renderTable(); }
+
+async function savePurchase() {
+    const supplierId = document.getElementById('supplierSelect').value;
+    const invNo = document.getElementById('invoiceNumber').value;
+    if (!supplierId || !invNo || items.length === 0) return alert('Missing required data');
+    const data = {
+        supplier_id: supplierId, invoice_number: invNo, purchase_date: document.getElementById('purchaseDate').value,
+        items: items, sub_total: parseFloat(document.getElementById('summarySubTotal').innerText),
+        tax_amount: parseFloat(document.getElementById('summaryTax').innerText),
+        discount_amount: parseFloat(document.getElementById('summaryDiscount').value) || 0,
+        total_amount: parseFloat(document.getElementById('summaryGrandTotal').innerText)
+    };
+    const response = await fetch('/entry/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' }, body: JSON.stringify(data) });
+    const result = await response.json();
+    if (result.success) { alert('Stock received!'); window.location.reload(); } else { alert('Error: ' + result.error); }
+}
+</script>
+
+<style>.x-small { font-size: 0.75rem; } .sticky-top { z-index: 1020; }</style>
+{% endblock %}

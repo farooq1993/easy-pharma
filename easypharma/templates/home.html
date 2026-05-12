@@ -12,94 +12,76 @@
 </div>
 
 <!-- Analytics Dashboard Section -->
-<div class="container-fluid mt-4">
+<div class="container-fluid mt-2">
     <!-- Dashboard Header -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center">
-                <h2 class="mb-0">Dashboard Overview</h2>
-                <div>
-                    <div class="btn-group me-2">
-                        <button type="button" class="btn btn-outline-success active">Today</button>
-                        <button type="button" class="btn btn-outline-success">Week</button>
-                        <button type="button" class="btn btn-outline-success">Month</button>
-                    </div>
-                    <button class="btn btn-success"><i class="fas fa-download me-1"></i> Export Report</button>
-                </div>
+    <div class="row mb-4 align-items-center">
+        <div class="col-md-6">
+            <h2 class="fw-bold mb-0">Dashboard Overview</h2>
+            <p class="text-muted small">Welcome back! Here's what's happening today.</p>
+        </div>
+        <div class="col-md-6 text-md-end mt-3 mt-md-0">
+            <div class="btn-group shadow-sm">
+                <button type="button" class="btn btn-white border active">Today</button>
+                <button type="button" class="btn btn-white border">Week</button>
+                <button type="button" class="btn btn-white border">Month</button>
             </div>
-            <hr>
+            <button class="btn btn-success ms-2 shadow-sm"><i class="fas fa-download me-1"></i> Report</button>
         </div>
     </div>
 
     <!-- Metrics Cards -->
-    <div class="row mb-4">
-        <!-- <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-primary h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                Today's Revenue</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">$3,254</div>
-                            <div class="mt-2 text-success small"><i class="fas fa-arrow-up me-1"></i> 12% increase</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
-                        </div>
+    <div class="row g-4 mb-4">
+        <div class="col-sm-6 col-xl-3">
+            <div class="card p-3 border-0 shadow-sm" style="border-left: 5px solid #4e73df !important;">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1 small">Today's Revenue</div>
+                        <div class="h4 mb-0 fw-bold text-dark">${{ today_revenue }}</div>
                     </div>
-                </div>
-            </div>
-        </div> -->
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-success h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                Total Customers</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">1,248</div>
-                            <div class="mt-2 text-success small"><i class="fas fa-arrow-up me-1"></i> 8% increase</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-users fa-2x text-gray-300"></i>
-                        </div>
+                    <div class="bg-primary bg-opacity-10 p-3 rounded-3">
+                        <i class="fas fa-dollar-sign text-primary fa-lg"></i>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-info h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-                                Prescriptions Processed</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">184</div>
-                            <div class="mt-2 text-danger small"><i class="fas fa-arrow-down me-1"></i> 3% decrease</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-prescription fa-2x text-gray-300"></i>
-                        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card p-3 border-0 shadow-sm" style="border-left: 5px solid #1cc88a !important;">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1 small">Total Customers</div>
+                        <div class="h4 mb-0 fw-bold text-dark">{{ total_customers }}</div>
+                    </div>
+                    <div class="bg-success bg-opacity-10 p-3 rounded-3">
+                        <i class="fas fa-users text-success fa-lg"></i>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-warning h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                Low Stock Items</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">14</div>
-                            <div class="mt-2 text-warning small"><i class="fas fa-exclamation-triangle me-1"></i> Needs attention</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-notes-medical fa-2x text-gray-300"></i>
-                        </div>
+        <div class="col-sm-6 col-xl-3">
+            <div class="card p-3 border-0 shadow-sm" style="border-left: 5px solid #36b9cc !important;">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1 small">Bills Generated</div>
+                        <div class="h4 mb-0 fw-bold text-dark">{{ prescriptions_count }}</div>
+                    </div>
+                    <div class="bg-info bg-opacity-10 p-3 rounded-3">
+                        <i class="fas fa-file-invoice text-info fa-lg"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-sm-6 col-xl-3">
+            <div class="card p-3 border-0 shadow-sm" style="border-left: 5px solid #f6c23e !important;">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1 small">Low Stock</div>
+                        <div class="h4 mb-0 fw-bold text-dark">{{ low_stock_count }}</div>
+                    </div>
+                    <div class="bg-warning bg-opacity-10 p-3 rounded-3">
+                        <i class="fas fa-exclamation-triangle text-warning fa-lg"></i>
                     </div>
                 </div>
             </div>
@@ -107,84 +89,42 @@
     </div>
 
     <!-- Charts Row -->
-    <div class="row mb-4">
+    <div class="row g-4 mb-4">
         <!-- Revenue Chart -->
-        <div class="col-xl-8 col-lg-7">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                    <h6 class="m-0 font-weight-bold text-primary">Revenue Overview</h6>
+        <div class="col-xl-8">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0 py-3">
+                    <h6 class="m-0 fw-bold text-dark">Revenue Overview</h6>
                 </div>
                 <div class="card-body">
-                    <div class="chart-area">
-                        <canvas id="revenueChart" height="250"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Top Categories -->
-        <div class="col-xl-4 col-lg-5">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                    <h6 class="m-0 font-weight-bold text-primary">Top Product Categories</h6>
-                </div>
-                <div class="card-body">
-                    <div class="chart-pie pt-4 pb-2">
-                        <canvas id="categoryChart" height="250"></canvas>
-                    </div>
-                    <div class="mt-4 text-center small">
-                        <span class="mr-2">
-                            <i class="fas fa-circle text-primary"></i> Prescription
-                        </span>
-                        <span class="mr-2">
-                            <i class="fas fa-circle text-success"></i> OTC
-                        </span>
-                        <span class="mr-2">
-                            <i class="fas fa-circle text-info"></i> Wellness
-                        </span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Additional Charts Row -->
-    <div class="row">
-        <!-- Customer Traffic -->
-        <div class="col-xl-8 col-lg-7">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                    <h6 class="m-0 font-weight-bold text-primary">Customer Traffic</h6>
-                </div>
-                <div class="card-body">
-                    <div class="chart-area">
-                        <canvas id="trafficChart" height="250"></canvas>
+                    <div style="height: 300px;">
+                        <canvas id="revenueChart"></canvas>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- Inventory Status -->
-        <div class="col-xl-4 col-lg-5">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Inventory Status</h6>
+        <div class="col-xl-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0 py-3">
+                    <h6 class="m-0 fw-bold text-dark">Inventory Health</h6>
                 </div>
                 <div class="card-body">
-                    <h4 class="small font-weight-bold">Prescription Drugs <span class="float-right">85%</span></h4>
-                    <div class="progress mb-4">
+                    <h4 class="small fw-bold">Prescription Drugs <span class="float-end">85%</span></h4>
+                    <div class="progress mb-4" style="height: 8px;">
                         <div class="progress-bar bg-success" role="progressbar" style="width: 85%"></div>
                     </div>
-                    <h4 class="small font-weight-bold">Over-the-Counter <span class="float-right">72%</span></h4>
-                    <div class="progress mb-4">
+                    <h4 class="small fw-bold">Over-the-Counter <span class="float-end">72%</span></h4>
+                    <div class="progress mb-4" style="height: 8px;">
                         <div class="progress-bar bg-info" role="progressbar" style="width: 72%"></div>
                     </div>
-                    <h4 class="small font-weight-bold">Wellness Products <span class="float-right">63%</span></h4>
-                    <div class="progress mb-4">
+                    <h4 class="small fw-bold">Wellness Products <span class="float-end">63%</span></h4>
+                    <div class="progress mb-4" style="height: 8px;">
                         <div class="progress-bar bg-warning" role="progressbar" style="width: 63%"></div>
                     </div>
-                    <h4 class="small font-weight-bold">Medical Supplies <span class="float-right">40%</span></h4>
-                    <div class="progress">
+                    <h4 class="small fw-bold">Supplies <span class="float-end">40%</span></h4>
+                    <div class="progress" style="height: 8px;">
                         <div class="progress-bar bg-danger" role="progressbar" style="width: 40%"></div>
                     </div>
                 </div>

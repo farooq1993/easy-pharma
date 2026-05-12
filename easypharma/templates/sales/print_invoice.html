@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Invoice #{{ invoice.invoice_number }}</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; margin: 0; padding: 20px; font-size: 14px; }
+        .invoice-container { max-width: 800px; margin: auto; border: 1px solid #eee; padding: 30px; border-radius: 10px; }
+        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #28a745; pb-20; margin-bottom: 20px; padding-bottom: 15px; }
+        .pharmacy-info h2 { color: #28a745; margin: 0; }
+        .pharmacy-info p { margin: 2px 0; font-size: 12px; }
+        .invoice-details { text-align: right; }
+        .invoice-details h3 { margin: 0; color: #555; }
+        .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; background: #f9f9f9; padding: 15px; border-radius: 8px; }
+        .details-grid p { margin: 5px 0; }
+        .details-grid b { color: #555; font-size: 11px; text-uppercase: uppercase; display: block; margin-bottom: 2px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+        th { background: #f8f9fa; border-bottom: 2px solid #dee2e6; padding: 12px; text-align: left; font-size: 12px; color: #666; }
+        td { padding: 12px; border-bottom: 1px solid #eee; }
+        .totals { width: 300px; margin-left: auto; }
+        .totals-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
+        .grand-total { font-size: 20px; font-weight: bold; color: #28a745; border-bottom: none; }
+        .footer { text-align: center; margin-top: 50px; font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 20px; }
+        @media print {
+            .no-print { display: none; }
+            body { padding: 0; }
+            .invoice-container { border: none; }
+        }
+    </style>
+</head>
+<body onload="window.print()">
+    <div class="no-print" style="text-align: center; margin-bottom: 20px;">
+        <button onclick="window.print()" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">Print Again</button>
+        <button onclick="window.close()" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">Close</button>
+    </div>
+
+    <div class="invoice-container">
+        <div class="header">
+            <div class="pharmacy-info">
+                <h2>{{ invoice.tenant.pharmacy_name }}</h2>
+                <p>Address: {{ invoice.tenant.address|default:"-" }}</p>
+                <p>Phone: {{ invoice.tenant.phone|default:"-" }}</p>
+                <p>DL No: {{ invoice.tenant.license_number|default:"-" }} | GST: {{ invoice.tenant.gst_number|default:"-" }}</p>
+            </div>
+            <div class="invoice-details">
+                <h3>RETAIL INVOICE</h3>
+                <p>No: <b>{{ invoice.invoice_number }}</b></p>
+                <p>Date: {{ invoice.created_at|date:"d M Y H:i" }}</p>
+            </div>
+        </div>
+
+        <div class="details-grid">
+            <div>
+                <b>PATIENT NAME</b>
+                <p>{{ invoice.patient_name|default:"Cash Customer" }}</p>
+                <b>MOBILE NUMBER</b>
+                <p>{{ invoice.patient_phone|default:"-" }}</p>
+            </div>
+            <div>
+                <b>REFERRED BY (DR.)</b>
+                <p>{{ invoice.doctor_name|default:"Self" }}</p>
+                <b>PAYMENT MODE</b>
+                <p>{{ invoice.payment_mode }}</p>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 40%">Medicine Name</th>
+                    <th>Batch</th>
+                    <th>Exp</th>
+                    <th>Qty</th>
+                    <th>Price</th>
+                    <th style="text-align: right">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in invoice.items.all %}
+                <tr>
+                    <td>
+                        <b>{{ item.product.product_name }}</b>
+                        <div style="font-size: 10px; color: #888;">{{ item.product.product_packing }}</div>
+                    </td>
+                    <td>{{ item.batch_number }}</td>
+                    <td>{{ item.expiry_date|date:"m/y" }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td>{{ item.unit_price }}</td>
+                    <td style="text-align: right">{{ item.total_amount }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="totals">
+            <div class="totals-row">
+                <span>Sub Total:</span>
+                <span>{{ invoice.sub_total }}</span>
+            </div>
+            <div class="totals-row">
+                <span>GST/Tax Amount:</span>
+                <span>{{ invoice.tax_amount }}</span>
+            </div>
+            <div class="totals-row">
+                <span>Discount:</span>
+                <span>- {{ invoice.discount_amount }}</span>
+            </div>
+            <div class="totals-row grand-total">
+                <span>Net Payable:</span>
+                <span>{{ invoice.total_amount }}</span>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Thank you for choosing {{ invoice.tenant.pharmacy_name }}!</p>
+            <p>Subject to terms and conditions. Not for resale.</p>
+        </div>
+    </div>
+</body>
+</html>
