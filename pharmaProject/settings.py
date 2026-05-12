@@ -103,14 +103,13 @@ WSGI_APPLICATION = 'pharmaProject.wsgi.application'
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 if DATABASE_URL:
-    # Production database (Railway/Vercel/Neon) - PostgreSQL
     DATABASES = {
-        'default': dj_database_url.config(
-            default=DATABASE_URL,
-            conn_max_age=600,
-            ssl_require=True
-        )
+        'default': dj_database_url.parse(DATABASE_URL)
     }
+    DATABASES['default']['CONN_MAX_AGE'] = 600
+    # Neon/Postgres often requires SSL
+    if 'sslmode' not in DATABASE_URL:
+        DATABASES['default']['OPTIONS'] = {'sslmode': 'require'}
 else:
     # Local development - SQLite
     DATABASES = {
