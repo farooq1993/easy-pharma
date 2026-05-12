@@ -100,9 +100,16 @@ WSGI_APPLICATION = 'pharmaProject.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASE_URL = os.environ.get('DATABASE_URL')
+# Database detection
+DATABASE_URL = (
+    os.environ.get('DATABASE_URL') or 
+    os.environ.get('POSTGRES_URL') or 
+    os.environ.get('pharma_DATABASE_URL') or 
+    os.environ.get('pharma_POSTGRES_URL')
+)
 
 if DATABASE_URL:
+    print(f"DATABASE DETECTED") # Debug log for Vercel
     DATABASES = {
         'default': dj_database_url.parse(DATABASE_URL)
     }
@@ -111,6 +118,7 @@ if DATABASE_URL:
     if 'sslmode' not in DATABASE_URL:
         DATABASES['default']['OPTIONS'] = {'sslmode': 'require'}
 else:
+    print("NO DATABASE DETECTED! Falling back to SQLite")
     # Local development - SQLite
     DATABASES = {
         'default': {
