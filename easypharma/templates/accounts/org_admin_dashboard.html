@@ -1,0 +1,121 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Organization Admin Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <h1 class="h2">Organization Admin Panel</h1>
+            <p class="text-muted">Manage all registered pharmacies</p>
+        </div>
+        <div class="col-md-6 text-end">
+            <a href="{% url 'register_pharmacy' %}" class="btn btn-primary btn-lg">
+                <i class="bi bi-plus-lg"></i> Register New Pharmacy
+            </a>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Total Pharmacies</h5>
+                    <h2 class="text-primary">{{ total_pharmacies }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Active Pharmacies</h5>
+                    <h2 class="text-success">{{ tenants|length }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Users Managed</h5>
+                    <h2 class="text-info">{{ total_users }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pharmacies Table -->
+    <div class="card">
+        <div class="card-header bg-dark text-white">
+            <h5 class="mb-0">Registered Pharmacies</h5>
+        </div>
+        <div class="card-body">
+            {% if tenants %}
+            <div class="table-responsive">
+                <table class="table table-hover table-striped">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Pharmacy Name</th>
+                            <th>Subdomain</th>
+                            <th>Owner</th>
+                            <th>License</th>
+                            <th>GST Number</th>
+                            <th>Status</th>
+                            <th>Registration Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tenant in tenants %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td><strong>{{ tenant.pharmacy_name }}</strong></td>
+                            <td><code>{{ tenant.subdomain }}</code></td>
+                            <td>{{ tenant.owner.username }}</td>
+                            <td>{{ tenant.license_number }}</td>
+                            <td>{{ tenant.gst_number|default:"N/A" }}</td>
+                            <td>
+                                {% if tenant.is_active %}
+                                    <span class="badge bg-success">Active</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ tenant.created_at|date:"M d, Y" }}</td>
+                            <td>
+                                <a href="{% url 'pharmacy_detail' tenant.id %}" class="btn btn-sm btn-info">
+                                    <i class="bi bi-eye"></i> View
+                                </a>
+                                <a href="{% url 'regenerate_access_key' tenant.id %}" class="btn btn-sm btn-warning" onclick="return confirm('Regenerate access key?')">
+                                    <i class="bi bi-arrow-clockwise"></i> Renew Key
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> No pharmacies registered yet.
+                <a href="{% url 'register_pharmacy' %}">Register the first pharmacy</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+    .card {
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        border-radius: 0.5rem;
+    }
+    
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    }
+</style>
+{% endblock %}

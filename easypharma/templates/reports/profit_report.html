@@ -1,0 +1,189 @@
+{% extends 'includes/base.html' %}
+{% load static %}
+
+{% block title %}Profit Report{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1 class="h2">
+                <i class="bi bi-graph-up"></i> Profit Report
+            </h1>
+            <p class="text-muted">Date-wise profit analysis</p>
+        </div>
+        <div class="col-md-4">
+            <form method="GET" class="d-flex gap-2">
+                <input type="date" name="start_date" class="form-control" value="{{ start_date|date:'Y-m-d' }}">
+                <input type="date" name="end_date" class="form-control" value="{{ end_date|date:'Y-m-d' }}">
+                <button type="submit" class="btn btn-primary">Filter</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Summary Period -->
+    <div class="alert alert-info">
+        <strong>Period:</strong> {{ start_date|date:"d M, Y" }} to {{ end_date|date:"d M, Y" }}
+    </div>
+
+    <!-- Key Metrics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">Total Revenue</h6>
+                    <h3 class="text-success">₹{{ total_revenue|floatformat:2 }}</h3>
+                    <small class="text-muted">Sales Revenue</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">Total Cost</h6>
+                    <h3 class="text-danger">₹{{ total_cost|floatformat:2 }}</h3>
+                    <small class="text-muted">Purchase Cost</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">Net Profit</h6>
+                    <h3 class="text-primary">₹{{ total_profit|floatformat:2 }}</h3>
+                    <small class="text-muted">Revenue - Cost</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">Profit Margin</h6>
+                    <h3 class="text-info">{{ profit_margin }}%</h3>
+                    <small class="text-muted">Profit / Revenue</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Daily Profit Chart -->
+    <div class="card">
+        <div class="card-header bg-dark text-white">
+            <h5 class="mb-0">Daily Profit Trend</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Date</th>
+                            <th class="text-end">Revenue</th>
+                            <th class="text-end">Cost</th>
+                            <th class="text-end">Profit</th>
+                            <th class="text-end">Tax Paid</th>
+                            <th class="text-end">Profit Margin</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for day in daily_profit %}
+                        <tr>
+                            <td>
+                                <strong>{{ day.date|date:"d M, Y" }}</strong>
+                                <br>
+                                <small class="text-muted">{{ day.date|date:"l" }}</small>
+                            </td>
+                            <td class="text-end text-success">₹{{ day.revenue|floatformat:2 }}</td>
+                            <td class="text-end text-danger">₹{{ day.cost|floatformat:2 }}</td>
+                            <td class="text-end">
+                                <strong class="{% if day.profit >= 0 %}text-primary{% else %}text-danger{% endif %}">
+                                    ₹{{ day.profit|floatformat:2 }}
+                                </strong>
+                            </td>
+                            <td class="text-end">₹{{ day.tax|floatformat:2 }}</td>
+                            <td class="text-end">
+                                {% if day.revenue > 0 %}
+                                    {% widthratio day.profit day.revenue 100 %}%
+                                {% else %}
+                                    0%
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Statistics -->
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Revenue Analysis</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Total Revenue:</span>
+                        <strong>₹{{ total_revenue|floatformat:2 }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Average Daily Revenue:</span>
+                        <strong>₹{% if daily_profit|length > 0 %}{% widthratio total_revenue daily_profit|length 1 %}{% else %}0.00{% endif %}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Max Daily Revenue:</span>
+                        <strong class="text-success">
+                            ₹
+                            {% for day in daily_profit %}
+                                {% if forloop.first or day.revenue > max_revenue %}
+                                    {{ day.revenue|floatformat:2 }}
+                                {% endif %}
+                            {% endfor %}
+                        </strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">Profit Analysis</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Total Profit:</span>
+                        <strong class="text-success">₹{{ total_profit|floatformat:2 }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Average Daily Profit:</span>
+                        <strong>
+                            ₹{% if daily_profit|length > 0 %}
+                                {% widthratio total_profit daily_profit|length 1 %}
+                            {% else %}
+                                0.00
+                            {% endif %}
+                        </strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Profit Margin:</span>
+                        <strong class="text-primary">{{ profit_margin }}%</strong>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span>Days in Range:</span>
+                        <strong>{{ daily_profit|length }}</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .card {
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        border-radius: 0.5rem;
+    }
+</style>
+{% endblock %}

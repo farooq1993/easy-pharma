@@ -1,0 +1,225 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Register New Pharmacy{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-lg">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0">
+                        <i class="bi bi-hospital"></i> Register New Pharmacy
+                    </h3>
+                </div>
+                
+                <div class="card-body p-4">
+                    <p class="text-muted mb-4">
+                        Fill in the pharmacy details and create an owner account. 
+                        An access key will be automatically generated for integration.
+                    </p>
+
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <form method="POST" class="needs-validation" novalidate>
+                        {% csrf_token %}
+
+                        <!-- Pharmacy Information Section -->
+                        <div class="mb-4">
+                            <h5 class="border-bottom pb-2 mb-3">Pharmacy Information</h5>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="pharmacy_name" class="form-label">
+                                        <strong>Pharmacy Name</strong>
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="text" class="form-control" id="pharmacy_name" name="pharmacy_name" 
+                                           placeholder="e.g., Alpha Pharmacy" required>
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label for="subdomain" class="form-label">
+                                        <strong>Subdomain</strong>
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="subdomain" name="subdomain" 
+                                               placeholder="e.g., alpha-pharmacy" required>
+                                        <span class="input-group-text">.pharmaproject.in</span>
+                                    </div>
+                                    <small class="text-muted">URL-friendly name (lowercase, hyphens allowed)</small>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="address" class="form-label">
+                                    <strong>Address</strong>
+                                    <span class="text-danger">*</span>
+                                </label>
+                                <textarea class="form-control" id="address" name="address" rows="2" 
+                                          placeholder="Complete address" required></textarea>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="phone" class="form-label">
+                                        <strong>Phone Number</strong>
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="tel" class="form-control" id="phone" name="phone" 
+                                           placeholder="e.g., +91-9876543210" required>
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label for="license_number" class="form-label">
+                                        <strong>License Number</strong>
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="text" class="form-control" id="license_number" name="license_number" 
+                                           placeholder="e.g., REG/2024/001" required>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="gst_number" class="form-label">
+                                    <strong>GST Number</strong>
+                                    <span class="text-muted">(Optional)</span>
+                                </label>
+                                <input type="text" class="form-control" id="gst_number" name="gst_number" 
+                                       placeholder="e.g., 27AAPCU1234H1Z0">
+                                <small class="text-muted">Format: 2 digits state code + 10 digit unique ID</small>
+                            </div>
+                        </div>
+
+                        <!-- Owner Account Section -->
+                        <div class="mb-4">
+                            <h5 class="border-bottom pb-2 mb-3">Owner Account</h5>
+                            
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="owner_username" class="form-label">
+                                        <strong>Username</strong>
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="text" class="form-control" id="owner_username" name="owner_username" 
+                                           placeholder="e.g., alphapharma_admin" required>
+                                    <small class="text-muted">Must be unique across the system</small>
+                                </div>
+                                
+                                <div class="col-md-6 mb-3">
+                                    <label for="owner_email" class="form-label">
+                                        <strong>Email</strong>
+                                        <span class="text-muted">(Optional)</span>
+                                    </label>
+                                    <input type="email" class="form-control" id="owner_email" name="owner_email" 
+                                           placeholder="e.g., admin@alphapharma.in">
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="owner_password" class="form-label">
+                                    <strong>Password</strong>
+                                    <span class="text-danger">*</span>
+                                </label>
+                                <input type="password" class="form-control" id="owner_password" name="owner_password" 
+                                       placeholder="Set a strong password" required>
+                                <small class="text-muted">
+                                    Password should contain uppercase, lowercase, numbers, and special characters
+                                </small>
+                            </div>
+
+                            <div class="alert alert-info">
+                                <i class="bi bi-lightbulb"></i>
+                                <strong>Note:</strong> An access key will be automatically generated after registration.
+                                This key will be used for integrating with the pharmacy's systems.
+                            </div>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{% url 'org_admin_dashboard' %}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Back
+                            </a>
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-check-circle"></i> Register Pharmacy
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Information Card -->
+            <div class="card mt-4 bg-light">
+                <div class="card-body">
+                    <h6 class="card-title">
+                        <i class="bi bi-info-circle text-info"></i> What happens after registration?
+                    </h6>
+                    <ul class="mb-0">
+                        <li>A unique access key will be generated for this pharmacy</li>
+                        <li>The owner can log in and start adding inventory</li>
+                        <li>The pharmacy data will be isolated in its own database</li>
+                        <li>You can manage this pharmacy from the admin dashboard</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .card {
+        border-radius: 0.5rem;
+        border: none;
+    }
+    
+    .form-control:focus {
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    }
+    
+    .btn-primary {
+        transition: all 0.3s ease;
+    }
+    
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 0.5rem 1rem rgba(13, 110, 253, 0.3);
+    }
+</style>
+
+<script>
+    // Form validation
+    (function() {
+        'use strict';
+        window.addEventListener('load', function() {
+            var forms = document.querySelectorAll('.needs-validation');
+            Array.prototype.slice.call(forms).forEach(function(form) {
+                form.addEventListener('submit', function(event) {
+                    if (!form.checkValidity()) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                    }
+                    form.classList.add('was-validated');
+                }, false);
+            });
+        }, false);
+    })();
+
+    // Auto-generate subdomain from pharmacy name
+    document.getElementById('pharmacy_name').addEventListener('change', function() {
+        var subdomain = this.value.toLowerCase()
+            .replace(/\s+/g, '-')
+            .replace(/[^\w-]/g, '');
+        document.getElementById('subdomain').value = subdomain;
+    });
+</script>
+{% endblock %}

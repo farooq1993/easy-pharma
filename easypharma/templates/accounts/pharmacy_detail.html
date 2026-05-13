@@ -1,0 +1,249 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Pharmacy Details - {{ tenant.pharmacy_name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1 class="h2">
+                <i class="bi bi-hospital"></i> {{ tenant.pharmacy_name }}
+            </h1>
+            <p class="text-muted">Subdomain: <code>{{ tenant.subdomain }}</code></p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="{% url 'org_admin_dashboard' %}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Back
+            </a>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row">
+        <!-- Main Details -->
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">Pharmacy Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Pharmacy Name:</strong>
+                            <p>{{ tenant.pharmacy_name }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Subdomain:</strong>
+                            <p><code>{{ tenant.subdomain }}</code></p>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>License Number:</strong>
+                            <p>{{ tenant.license_number }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>GST Number:</strong>
+                            <p>{{ tenant.gst_number|default:"Not provided" }}</p>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <strong>Address:</strong>
+                        <p>{{ tenant.address }}</p>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Phone:</strong>
+                            <p>{{ tenant.phone }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Registration Date:</strong>
+                            <p>{{ tenant.created_at|date:"d M, Y H:i" }}</p>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <strong>Status:</strong>
+                        <p>
+                            {% if tenant.is_active %}
+                                <span class="badge bg-success badge-lg">Active</span>
+                            {% else %}
+                                <span class="badge bg-danger badge-lg">Inactive</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Owner Information -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Owner Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Owner Username:</strong>
+                            <p>{{ tenant.owner.username }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>User Type:</strong>
+                            <p><span class="badge bg-primary">{{ tenant.owner.get_user_type_display }}</span></p>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Owner Active:</strong>
+                        <p>
+                            {% if tenant.owner.is_active %}
+                                <span class="badge bg-success">Yes</span>
+                            {% else %}
+                                <span class="badge bg-warning">No</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Database Information -->
+            <div class="card">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0">Database Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <strong>Database Name:</strong>
+                            <p><code>{{ tenant.database_name }}</code></p>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Schema Name:</strong>
+                            <p><code>{{ tenant.schema_name }}</code></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar Stats & Actions -->
+        <div class="col-lg-4">
+            <!-- Statistics -->
+            <div class="card mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">Statistics</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <strong>Total Users:</strong>
+                            <span class="badge bg-primary badge-pill">{{ users_count }}</span>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <strong>Total Sales:</strong>
+                            <span class="badge bg-success badge-pill">{{ sales_count }}</span>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <strong>Total Revenue:</strong>
+                            <strong class="text-success">₹{{ total_sales }}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Access Key -->
+            <div class="card mb-4 border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        <i class="bi bi-key"></i> Access Key
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small">Used for system integration and API access</p>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control font-monospace" id="access_key" 
+                               value="{{ tenant.access_key }}" readonly>
+                        <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard()">
+                            <i class="bi bi-clipboard"></i>
+                        </button>
+                    </div>
+                    <form method="POST" action="{% url 'regenerate_access_key' tenant.id %}" style="display: inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-warning btn-sm w-100" 
+                                onclick="return confirm('Regenerate access key? Old key will no longer work.')">
+                            <i class="bi bi-arrow-clockwise"></i> Regenerate Key
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <form method="POST" action="{% url 'deactivate_pharmacy' tenant.id %}" style="display: inline;">
+                            {% csrf_token %}
+                            {% if tenant.is_active %}
+                                <button type="submit" class="btn btn-danger" 
+                                        onclick="return confirm('Deactivate this pharmacy?')">
+                                    <i class="bi bi-x-circle"></i> Deactivate Pharmacy
+                                </button>
+                            {% else %}
+                                <button type="submit" class="btn btn-success">
+                                    <i class="bi bi-check-circle"></i> Activate Pharmacy
+                                </button>
+                            {% endif %}
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function copyToClipboard() {
+        var copyText = document.getElementById("access_key");
+        copyText.select();
+        document.execCommand("copy");
+        
+        // Show feedback
+        var btn = event.target.closest('button');
+        var originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check"></i> Copied!';
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+        }, 2000);
+    }
+</script>
+
+<style>
+    .badge-lg {
+        padding: 0.5rem 1rem;
+        font-size: 1rem;
+    }
+    
+    .card {
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        border-radius: 0.5rem;
+    }
+</style>
+{% endblock %}

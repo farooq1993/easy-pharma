@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Half-Yearly Sale Report{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1 class="h2">
+                <i class="bi bi-calendar-month"></i> {{ half_label }}
+            </h1>
+            <p class="text-muted">Sales analysis for the period</p>
+        </div>
+        <div class="col-md-4">
+            <form method="GET" class="d-flex gap-2">
+                <select name="half" class="form-select">
+                    <option value="H1" {% if half == "H1" %}selected{% endif %}>H1 (Jan-Jun)</option>
+                    <option value="H2" {% if half == "H2" %}selected{% endif %}>H2 (Jul-Dec)</option>
+                </select>
+                <input type="number" name="year" class="form-control" value="{{ year }}" min="2020" max="2100">
+                <button type="submit" class="btn btn-primary">Filter</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Key Metrics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">Total Transactions</h6>
+                    <h3 class="text-primary">{{ h_stats.total_sales|default:"0" }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">Total Revenue</h6>
+                    <h3 class="text-success">₹{{ h_stats.total_amount|default:"0"|floatformat:2 }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">Total Tax</h6>
+                    <h3 class="text-info">₹{{ h_stats.total_tax|default:"0"|floatformat:2 }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h6 class="card-title text-muted">Avg per Transaction</h6>
+                    <h3 class="text-warning">
+                        ₹{{ h_stats.avg_amount|floatformat:2 }}
+                    </h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Monthly Breakdown -->
+    <div class="card mb-4">
+        <div class="card-header bg-dark text-white">
+            <h5 class="mb-0">Monthly Breakdown</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Month</th>
+                            <th class="text-center">Transactions</th>
+                            <th class="text-end">Subtotal</th>
+                            <th class="text-end">Tax</th>
+                            <th class="text-end">Discount</th>
+                            <th class="text-end">Total</th>
+                            <th class="text-end">Avg Sale</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for month in monthly_data %}
+                        <tr>
+                            <td><strong>{{ month.month }}</strong></td>
+                            <td class="text-center">
+                                <span class="badge bg-info">{{ month.sales_count }}</span>
+                            </td>
+                            <td class="text-end">₹{{ month.total|floatformat:2 }}</td>
+                            <td class="text-end">₹{{ month.tax|floatformat:2 }}</td>
+                            <td class="text-end">₹{{ month.discount|floatformat:2 }}</td>
+                            <td class="text-end">
+                                <strong class="text-success">₹{{ month.total|floatformat:2 }}</strong>
+                            </td>
+                            <td class="text-end">
+                                {% if month.sales_count > 0 %}
+                                    ₹{{ month.avg_sale|floatformat:2 }}
+                                {% else %}
+                                    ₹0.00
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Customers -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">Top 10 Customers</h5>
+                </div>
+                <div class="card-body">
+                    {% if top_customers %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Customer Name</th>
+                                    <th class="text-center">Purchases</th>
+                                    <th class="text-end">Total Amount</th>
+                                    <th class="text-end">Avg per Purchase</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for customer in top_customers %}
+                                <tr>
+                                    <td>{{ forloop.counter }}</td>
+                                    <td>{{ customer.customer__name|default:"Unknown" }}</td>
+                                    <td class="text-center"><span class="badge bg-primary">{{ customer.purchases }}</span></td>
+                                    <td class="text-end"><strong>₹{{ customer.amount|floatformat:2 }}</strong></td>
+                                    <td class="text-end">₹{{ customer.avg_amount|floatformat:2 }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center">No customer data available</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .card {
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        border-radius: 0.5rem;
+    }
+</style>
+{% endblock %}

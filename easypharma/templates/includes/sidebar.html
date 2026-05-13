@@ -60,6 +60,24 @@
             </a>
         </li>
 
+        <!-- Organization Admin Panel (For System Admins) -->
+        {% if user.user_type == 'admin' %}
+        <li>
+            <a class="nav-link d-flex align-items-center text-warning" 
+               data-bs-toggle="collapse" 
+               data-bs-target="#orgAdminMenu" 
+               aria-expanded="false">
+                <i class="bi bi-shield-lock"></i>
+                <span class="sidebar-text">SaaS Admin</span>
+                <i class="bi bi-caret-down-fill ms-auto"></i>
+            </a>
+            <ul class="collapse nav flex-column ms-3" id="orgAdminMenu">
+                <li><a href="{% url 'org_admin_dashboard' %}" class="nav-link small">Dashboard</a></li>
+                <li><a href="{% url 'register_pharmacy' %}" class="nav-link small">Register Pharmacy</a></li>
+            </ul>
+        </li>
+        {% endif %}
+
         <li class="mt-3">
             <h6 class="sidebar-text text-uppercase small opacity-75 ps-3 mb-2" style="color: #e7e1cb;">Inventory</h6>
         </li>
@@ -92,7 +110,10 @@
                 <i class="bi bi-caret-down-fill ms-auto"></i>
             </a>
             <ul class="collapse nav flex-column ms-3" id="reportsMenu">
-                <li><a href="#" class="nav-link small">Sales Report</a></li>
+                <li><a href="{% url 'daily_sale_report' %}" class="nav-link small">Daily Sale Report</a></li>
+                <li><a href="{% url 'half_yearly_report' %}" class="nav-link small">Half-Yearly Report</a></li>
+                <li><a href="{% url 'profit_report' %}" class="nav-link small">Profit Report</a></li>
+                <li><a href="{% url 'gst_report' %}" class="nav-link small">GST Report</a></li>
                 <li><a href="{% url 'stock_report' %}" class="nav-link small">Stock Report</a></li>
             </ul>
         </li>

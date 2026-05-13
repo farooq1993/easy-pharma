@@ -3,6 +3,7 @@ from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from easypharma.models.Items import Products
 from easypharma.models.purchase_invoice import Supplier, PurchaseInvoice, PurchaseItem
+from easypharma.models.stock import StockBatch
 from django.db import transaction
 import json
 
@@ -61,7 +62,7 @@ class PurchaseEntryView(View):
                 if invoice_id:
                     invoice = PurchaseInvoice.objects.get(id=invoice_id, tenant=request.tenant)
                     for item in invoice.items.all():
-                        from easypharma.models.stock import StockBatch
+                        
                         batch = StockBatch.objects.filter(
                             tenant=request.tenant, product=item.product, batch_number=item.batch_number
                         ).first()

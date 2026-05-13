@@ -16,6 +16,7 @@ class Tenant(models.Model):
     phone = models.CharField(max_length=20)
     license_number = models.CharField(max_length=100)
     gst_number = models.CharField(max_length=50, null=True, blank=True)
+    access_key = models.CharField(max_length=100, blank=True, unique=True, null=True)
     
     def __str__(self):
         return f"{self.pharmacy_name} ({self.subdomain})"
@@ -25,6 +26,9 @@ class Tenant(models.Model):
             self.database_name = f"tenant_{self.subdomain}"
         if not self.schema_name:
             self.schema_name = f"schema_{self.subdomain}"
+        if not self.access_key:
+            import uuid
+            self.access_key = str(uuid.uuid4()).upper()[:12] # Generate a 12-char key
         super().save(*args, **kwargs)
 
 class TenantAwareModel(models.Model):
