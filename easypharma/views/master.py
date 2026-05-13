@@ -129,30 +129,48 @@ class MasterCRUDView(View):
 # Keep Product views as they are more complex (file uploads, select2, etc.)
 class ProductCreate(View):
     template_name = 'masters/products/product.html'
-    def get(self, request):
+    def get(self, request, product_id=None):
+        product = None
+        if product_id:
+            product = get_object_or_404(Products, id=product_id, tenant=request.tenant)
+            
+        from django.db.models import Q
         context = {
-            'product_types': ProductType.objects.filter(tenant=request.tenant),
-            'product_schedules': ProductSchedule.objects.filter(tenant=request.tenant),
-            'product_taxes': ProductTax.objects.filter(tenant=request.tenant),
-            'product_contents': ProductContent.objects.filter(tenant=request.tenant),
-            'drug_companies': DrugCompany.objects.filter(tenant=request.tenant),
+            'product': product,
+            'product_types': ProductType.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
+            'product_schedules': ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
+            'product_taxes': ProductTax.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
+            'product_contents': ProductContent.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
+            'drug_companies': DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
         }
         return render(request, self.template_name, context)
     
-    def post(self, request):
+    def post(self, request, product_id=None):
         try:
-            Products.objects.create(
-                tenant=request.tenant,
-                product_name=request.POST.get("product_name"),
-                product_packing=request.POST.get("product_packing"),
-                product_type_id=request.POST.get("product_type") or None,
-                product_schedule_id=request.POST.get("product_schedule") or None,
-                product_tax_id=request.POST.get("product_tax") or None,
-                product_hsn_code=request.POST.get("product_hsn_code"),
-                product_content_id=request.POST.get("product_content") or None,
-                compny_name_id = request.POST.get("compny_name") or None
-            )
-            messages.success(request, "Product added successfully.")
+            if product_id:
+                product = get_object_or_404(Products, id=product_id, tenant=request.tenant)
+            else:
+                product = Products(tenant=request.tenant)
+
+            product.product_name = request.POST.get("product_name")
+            product.product_packing = request.POST.get("product_packing")
+            product.product_type_id = request.POST.get("product_type") or None
+            product.product_schedule_id = request.POST.get("product_schedule") or None
+            product.product_tax_id = request.POST.get("product_tax") or None
+            product.product_hsn_code = request.POST.get("product_hsn_code")
+            product.product_content_id = request.POST.get("product_content") or None
+            product.compny_name_id = request.POST.get("compny_name") or None
+            
+            # Ensure conversion factor is at least 1 and handled correctly if empty
+            try:
+                conv_val = request.POST.get("conversion_factor")
+                product.conversion_factor = int(conv_val) if conv_val and int(conv_val) > 0 else 1
+            except (ValueError, TypeError):
+                product.conversion_factor = 1
+                
+            product.save()
+            
+            messages.success(request, f"Product {'updated' if product_id else 'added'} successfully.")
         except Exception as e:
             messages.error(request, f"Error: {str(e)}")
         return redirect('all-products')
@@ -181,3 +199,12 @@ class ProductListView(View):
         paginator = Paginator(products, 10)
         page = request.GET.get('page')
         return render(request, self.template_name, {'products': paginator.get_page(page)})
+
+    def delete(self, request):
+        try:
+            data = json.loads(request.body)
+            product = get_object_or_404(Products, id=data.get('id'), tenant=request.tenant)
+            product.delete()
+            return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})

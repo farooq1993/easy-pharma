@@ -57,17 +57,18 @@
                             <div id="searchResults" class="list-group position-absolute shadow-lg d-none" style="z-index: 1050; width: 25%; max-height: 250px; overflow-y: auto;"></div>
                             <div id="productInfo" class="x-small text-primary mt-1 fw-bold"></div>
                         </div>
-                        <div class="col-md-1">
+                        <div class="col-md-2">
                             <label class="form-label small fw-bold text-uppercase">Batch</label>
                             <input type="text" id="itemBatch" class="form-control py-2 border-0 bg-light" placeholder="No.">
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-md-1">
                             <label class="form-label small fw-bold text-uppercase">Expiry</label>
                             <input type="month" id="itemExpiry" class="form-control py-2 border-0 bg-light">
                         </div>
                         <div class="col-md-1">
                             <label class="form-label small fw-bold text-uppercase">Qty (Packs)</label>
-                            <input type="number" id="itemQty" class="form-control py-2 border-0 bg-light" value="1">
+                            <input type="number" id="itemQty" class="form-control py-2 border-0 bg-light" value="1" oninput="updateUnitPreview()">
+                            <div id="unitPreview" class="x-small text-success mt-1 fw-bold"></div>
                         </div>
                         <div class="col-md-1">
                             <label class="form-label small fw-bold text-uppercase">Cost/Pack</label>
@@ -99,8 +100,8 @@
                         <table class="table table-hover align-middle mb-0" id="purchaseTable">
                             <thead class="bg-light text-muted small text-uppercase">
                                 <tr>
-                                    <th class="ps-4">Product</th>
-                                    <th>Batch</th>
+                                    <th class="ps-4" style="width: 25%;">Product</th>
+                                    <th style="width: 15%;">Batch</th>
                                     <th>Expiry</th>
                                     <th>Qty</th>
                                     <th>Units</th>
@@ -123,10 +124,11 @@
                 <div class="card-body p-4">
                     <h5 class="fw-bold mb-4">Order Summary</h5>
                     <div class="d-flex justify-content-between mb-3"><span class="text-muted small">Sub Total</span><span class="fw-bold" id="summarySubTotal">0.00</span></div>
-                    <div class="d-flex justify-content-between mb-3"><span class="text-muted small">Total Tax</span><span class="fw-bold text-primary" id="summaryTax">0.00</span></div>
+                    <div id="gstBifurcationSection"></div>
+                    <div class="d-flex justify-content-between mb-3 border-top pt-2"><span class="text-muted small">Total GST</span><span class="fw-bold text-primary" id="summaryTax">0.00</span></div>
                     <div class="mb-3">
                         <label class="form-label small text-muted">Discount Amount</label>
-                        <input type="number" class="form-control border-0 bg-light" id="summaryDiscount" value="0" onchange="calculateSummary()">
+                        <input type="number" class="form-control border-0 bg-light" id="summaryDiscount" value="0" oninput="calculateSummary()">
                     </div>
                     <hr class="opacity-10">
                     <div class="d-flex justify-content-between align-items-center"><span class="h6 fw-bold mb-0">Grand Total</span><span class="h4 fw-bold text-success mb-0" id="summaryGrandTotal">0.00</span></div>
@@ -178,6 +180,25 @@
 <script>
 let items = [];
 let selectedProduct = null;
+const editData = {{ edit_data|safe|default:'null' }};
+
+window.onload = () => {
+    if (editData) {
+        document.getElementById('supplierSelect').value = editData.supplier_id;
+        document.getElementById('invoiceNumber').value = editData.invoice_number;
+        document.getElementById('purchaseDate').value = editData.purchase_date;
+        document.getElementById('summaryDiscount').value = editData.discount_amount;
+        items = editData.items;
+        renderTable();
+    }
+};
+
+function updateUnitPreview() {
+    if (!selectedProduct) return;
+    const qty = parseFloat(document.getElementById('itemQty').value) || 0;
+    const units = qty * selectedProduct.conversion_factor;
+    document.getElementById('unitPreview').innerText = `${units} Units`;
+}
 
 // Product Search
 document.getElementById('productSearch').addEventListener('input', async (e) => {
@@ -189,12 +210,21 @@ document.getElementById('productSearch').addEventListener('input', async (e) => 
     results.innerHTML = '';
     data.forEach(p => {
         const item = document.createElement('button');
-        item.className = 'list-group-item list-group-item-action border-0 py-2';
-        item.innerHTML = `<div class="fw-bold small">${p.name}</div><div class="text-muted x-small">${p.packing || ''} | Tax: ${p.tax_rate}%</div>`;
+        item.className = 'list-group-item list-group-item-action border-0 py-3 border-bottom';
+        item.innerHTML = `<div class="d-flex justify-content-between align-items-center">
+            <div>
+                <div class="fw-bold text-dark">${p.name}</div>
+                <div class="text-muted x-small">${p.packing || ''} | Conversion: <b>x${p.conversion_factor}</b></div>
+            </div>
+            <div class="text-end">
+                <span class="badge bg-primary-soft text-primary small">Tax: ${p.tax_rate}%</span>
+            </div>
+        </div>`;
         item.onclick = () => {
             selectedProduct = p; document.getElementById('productSearch').value = p.name;
             document.getElementById('itemTax').value = p.tax_rate;
-            document.getElementById('productInfo').innerText = `Retail Multiplier: x${p.conversion_factor}`;
+            document.getElementById('productInfo').innerHTML = `<i class="fas fa-info-circle me-1"></i> Packing: ${p.packing} | Factor: <b>${p.conversion_factor}</b>`;
+            updateUnitPreview();
             results.classList.add('d-none');
         };
         results.appendChild(item);
@@ -263,11 +293,32 @@ function resetInputs() {
     selectedProduct = null; document.getElementById('productSearch').value = ''; document.getElementById('itemBatch').value = '';
     document.getElementById('itemQty').value = '1'; document.getElementById('itemPrice').value = ''; document.getElementById('itemTax').value = '0';
     document.getElementById('itemMrp').value = ''; document.getElementById('productInfo').innerText = '';
+    document.getElementById('unitPreview').innerText = '';
 }
 
 function calculateSummary() {
     const subTotal = items.reduce((sum, item) => sum + (item.quantity * item.purchase_price), 0);
     const totalTax = items.reduce((sum, item) => sum + item.tax_amount, 0);
+    
+    // GST Bifurcation
+    const gstGroups = {};
+    items.forEach(item => {
+        const rate = item.tax_percentage;
+        if (!gstGroups[rate]) gstGroups[rate] = 0;
+        gstGroups[rate] += item.tax_amount;
+    });
+
+    const bifurcationDiv = document.getElementById('gstBifurcationSection');
+    bifurcationDiv.innerHTML = '';
+    Object.keys(gstGroups).sort((a, b) => a - b).forEach(rate => {
+        if (gstGroups[rate] > 0) {
+            const row = document.createElement('div');
+            row.className = 'd-flex justify-content-between mb-2 x-small text-muted';
+            row.innerHTML = `<span>GST ${rate}%</span><span>${gstGroups[rate].toFixed(2)}</span>`;
+            bifurcationDiv.appendChild(row);
+        }
+    });
+
     const discount = parseFloat(document.getElementById('summaryDiscount').value) || 0;
     const grandTotal = (subTotal + totalTax) - discount;
     document.getElementById('summarySubTotal').innerText = subTotal.toFixed(2);
@@ -288,11 +339,25 @@ async function savePurchase() {
         discount_amount: parseFloat(document.getElementById('summaryDiscount').value) || 0,
         total_amount: parseFloat(document.getElementById('summaryGrandTotal').innerText)
     };
-    const response = await fetch('/entry/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' }, body: JSON.stringify(data) });
+    const url = editData ? `/edit/${editData.id}/` : '/entry/';
+    const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' }, body: JSON.stringify(data) });
     const result = await response.json();
     if (result.success) { alert('Stock received!'); window.location.reload(); } else { alert('Error: ' + result.error); }
 }
 </script>
 
-<style>.x-small { font-size: 0.75rem; } .sticky-top { z-index: 1020; }</style>
+<style>
+    .x-small { font-size: 0.75rem; } 
+    .sticky-top { z-index: 1020; }
+    .bg-primary-soft { background-color: rgba(13, 110, 253, 0.1); }
+    #searchResults {
+        border-radius: 12px;
+        border: 1px solid #eee;
+        overflow: hidden;
+        margin-top: 5px;
+    }
+    .list-group-item-action:hover {
+        background-color: #f8f9fa;
+    }
+</style>
 {% endblock %}

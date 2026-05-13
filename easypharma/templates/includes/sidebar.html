@@ -96,6 +96,24 @@
                 <li><a href="{% url 'stock_report' %}" class="nav-link small">Stock Report</a></li>
             </ul>
         </li>
+
+        <li class="mt-3">
+            <h6 class="sidebar-text text-uppercase small opacity-75 ps-3 mb-2" style="color: #e7e1cb;">Settings</h6>
+        </li>
+        <li>
+            <a class="nav-link d-flex align-items-center" 
+               data-bs-toggle="collapse" 
+               data-bs-target="#utilityMenu" 
+               aria-expanded="false">
+                <i class="bi bi-tools"></i>
+                <span class="sidebar-text">Utility</span>
+                <i class="bi bi-caret-down-fill ms-auto"></i>
+            </a>
+            <ul class="collapse nav flex-column ms-3" id="utilityMenu">
+                <li><a href="{% url 'utility_home' %}" class="nav-link small">General Settings</a></li>
+                <li><a href="{% url 'printing_setup' %}" class="nav-link small">Printing Setup</a></li>
+            </ul>
+        </li>
     </ul>
 
     {% if user.is_authenticated %}

@@ -1,0 +1,53 @@
+{% extends "includes/base.html" %}
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row g-4">
+        <div class="col-md-8">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-header bg-white border-0 py-3">
+                    <h5 class="fw-bold mb-0 text-primary">Master Expiry Report (Next 6 Months)</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="bg-light text-muted small">
+                                <tr>
+                                    <th class="ps-4">Medicine Name</th>
+                                    <th>Batch No</th>
+                                    <th>Expiry Date</th>
+                                    <th>Stock</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for batch in expiring_batches %}
+                                <tr>
+                                    <td class="ps-4 fw-bold">{{ batch.product.product_name }}</td>
+                                    <td><span class="badge bg-light text-dark border">{{ batch.batch_number }}</span></td>
+                                    <td class="text-danger fw-bold">{{ batch.expiry_date|date:"M Y" }}</td>
+                                    <td>{{ batch.current_quantity }} Units</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary">Return Stock</button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 mb-4">
+                <div class="card-body">
+                    <h6 class="fw-bold text-muted mb-3">Utility Stats</h6>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Near Expiry Items</span>
+                        <span class="badge bg-danger rounded-pill">{{ expiring_batches|length }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -56,12 +56,17 @@ class POSView(View):
                 for item in data.get('items', []):
                     product = Products.objects.get(id=item['product_id'], tenant=request.tenant)
                     
-                    # Deduct from first available batch (FIFO)
-                    batch = StockBatch.objects.filter(
-                        tenant=request.tenant, 
-                        product=product,
-                        current_quantity__gt=0
-                    ).order_by('expiry_date').first()
+                    # Deduct from SPECIFIC batch selected in POS
+                    batch_id = item.get('batch_id')
+                    if batch_id:
+                        batch = StockBatch.objects.get(id=batch_id, tenant=request.tenant)
+                    else:
+                        # Fallback to FIFO if no batch_id (should not happen with new UI)
+                        batch = StockBatch.objects.filter(
+                            tenant=request.tenant, 
+                            product=product,
+                            current_quantity__gt=0
+                        ).order_by('expiry_date').first()
                     
                     if not batch:
                         raise Exception(f"No stock available for {product.product_name}")
@@ -147,28 +152,37 @@ class ProductSearchAPI(View):
         
         data = []
         for p in products:
-            batch = p.batches.filter(current_quantity__gt=0).order_by('expiry_date').first()
+            # Get ALL batches for this product that have stock
+            batches = p.batches.filter(current_quantity__gt=0).order_by('expiry_date')
             
-            # Ensure price is per individual unit
-            unit_price = 0
-            if batch:
+            if not batches.exists():
+                continue
+                
+            batch_list = []
+            for batch in batches:
+                # Ensure price is per individual unit
                 unit_price = float(batch.sale_price)
-                # If the stored sale_price seems to be a pack price (i.e. > mrp/factor), adjust it
-                # or just always calculate from batch.mrp / p.conversion_factor for safety
                 if p.conversion_factor > 1:
-                    # In retail, we usually sell at MRP/factor
                     unit_price = float(batch.mrp) / p.conversion_factor
+                elif unit_price == 0 and batch.mrp:
+                    unit_price = float(batch.mrp)
+                
+                batch_list.append({
+                    'batch_id': batch.id,
+                    'batch_no': batch.batch_number,
+                    'expiry': batch.expiry_date.strftime('%m/%y'),
+                    'stock': batch.current_quantity,
+                    'price': unit_price,
+                    'mrp_pack': float(batch.mrp)
+                })
             
             data.append({
                 'id': p.id,
                 'name': p.product_name,
                 'packing': p.product_packing,
-                'price': unit_price,
-                'stock': batch.current_quantity if batch else 0,
-                'batch_no': batch.batch_number if batch else 'N/A',
-                'expiry': batch.expiry_date.strftime('%m/%y') if batch else 'N/A',
                 'tax_rate': p.product_tax.tax_rate if p.product_tax else 0,
-                'conversion_factor': p.conversion_factor
+                'conversion_factor': p.conversion_factor,
+                'batches': batch_list
             })
             
         return JsonResponse(data, safe=False)

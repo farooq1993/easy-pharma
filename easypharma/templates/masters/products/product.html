@@ -5,8 +5,8 @@
 <div class="container-fluid">
     <div class="row align-items-center mb-4">
         <div class="col">
-            <h2 class="fw-bold mb-0">Add New Product</h2>
-            <p class="text-muted small">Fill in the details to add a new medicine to your inventory.</p>
+            <h2 class="fw-bold mb-0">{% if product %}Edit Product{% else %}Add New Product{% endif %}</h2>
+            <p class="text-muted small">{% if product %}Modify the details of {{ product.product_name }}{% else %}Fill in the details to add a new medicine to your inventory.{% endif %}</p>
         </div>
         <div class="col-auto">
             <a href="{% url 'all-products' %}" class="btn btn-outline-secondary">
@@ -25,13 +25,19 @@
                     <!-- Product Name -->
                     <div class="col-md-6">
                         <label for="productName" class="form-label fw-bold small text-uppercase">Product Name *</label>
-                        <input type="text" class="form-control py-2" id="productName" name="product_name" placeholder="Enter product name" required>
+                        <input type="text" class="form-control py-2" id="productName" name="product_name" value="{{ product.product_name|default:'' }}" placeholder="Enter product name" required>
                     </div>
 
                     <!-- Product Packing -->
-                    <div class="col-md-6">
+                    <div class="col-md-3">
                         <label for="productPacking" class="form-label fw-bold small text-uppercase">Product Packing</label>
-                        <input type="text" class="form-control py-2" id="productPacking" name="product_packing" placeholder="e.g., 10 tablets, 100ml bottle">
+                        <input type="text" class="form-control py-2" id="productPacking" name="product_packing" value="{{ product.product_packing|default:'' }}" placeholder="e.g., 10 tablets">
+                    </div>
+
+                    <!-- Conversion Factor -->
+                    <div class="col-md-3">
+                        <label for="conversionFactor" class="form-label fw-bold small text-uppercase">Conv. Factor (Units/Pack)</label>
+                        <input type="number" class="form-control py-2" id="conversionFactor" name="conversion_factor" value="{{ product.conversion_factor|default:'1' }}" required>
                     </div>
 
                     <!-- Product Type -->
@@ -40,7 +46,7 @@
                         <select class="form-select py-2" id="productType" name="product_type">
                             <option value="">Select Product Type</option>
                             {% for type in product_types %}
-                                <option value="{{ type.id }}">{{ type.name }}</option>
+                                <option value="{{ type.id }}" {% if product.product_type_id == type.id %}selected{% endif %}>{{ type.name }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -51,7 +57,7 @@
                         <select class="form-select py-2" id="productSchedule" name="product_schedule">
                             <option value="">Select Product Schedule</option>
                             {% for schedule in product_schedules %}
-                                <option value="{{ schedule.id }}">{{ schedule.schedule_name }}</option>
+                                <option value="{{ schedule.id }}" {% if product.product_schedule_id == schedule.id %}selected{% endif %}>{{ schedule.schedule_name }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -62,7 +68,7 @@
                         <select class="form-select py-2" id="productTax" name="product_tax">
                             <option value="">Select Product Tax</option>
                             {% for tax in product_taxes %}
-                                <option value="{{ tax.id }}">{{ tax.tax_name }} ({{ tax.tax_rate }}%)</option>
+                                <option value="{{ tax.id }}" {% if product.product_tax_id == tax.id %}selected{% endif %}>{{ tax.tax_name }} ({{ tax.tax_rate }}%)</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -70,7 +76,7 @@
                     <!-- HSN Code -->
                     <div class="col-md-6">
                         <label for="productHsnCode" class="form-label fw-bold small text-uppercase">HSN Code *</label>
-                        <input type="text" class="form-control py-2" id="productHsnCode" name="product_hsn_code" placeholder="Enter HSN code" required>
+                        <input type="text" class="form-control py-2" id="productHsnCode" name="product_hsn_code" value="{{ product.product_hsn_code|default:'' }}" placeholder="Enter HSN code" required>
                     </div>
 
                     <!-- Product Content -->
@@ -79,7 +85,7 @@
                         <select class="form-select py-2" id="productContent" name="product_content">
                             <option value="">Select Product Content</option>
                             {% for content in product_contents %}
-                                <option value="{{ content.id }}">{{ content.content_name }}</option>
+                                <option value="{{ content.id }}" {% if product.product_content_id == content.id %}selected{% endif %}>{{ content.content_name }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -90,7 +96,7 @@
                         <select class="form-select py-2" id="productCompany" name="compny_name">
                             <option value="">Select Product Company</option>
                             {% for company in drug_companies %}
-                                <option value="{{ company.id }}">{{ company.company_name }}</option>
+                                <option value="{{ company.id }}" {% if product.compny_name_id == company.id %}selected{% endif %}>{{ company.company_name }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -98,9 +104,9 @@
 
                 <div class="mt-5 d-flex gap-2">
                     <button type="submit" class="btn btn-success btn-lg px-5 fw-bold shadow-sm">
-                        <i class="fas fa-save me-2"></i> SAVE PRODUCT
+                        <i class="fas fa-save me-2"></i> {% if product %}UPDATE PRODUCT{% else %}SAVE PRODUCT{% endif %}
                     </button>
-                    <button type="reset" class="btn btn-light btn-lg px-4 border">RESET</button>
+                    <a href="{% url 'all-products' %}" class="btn btn-light btn-lg px-4 border">CANCEL</a>
                 </div>
             </form>
         </div>

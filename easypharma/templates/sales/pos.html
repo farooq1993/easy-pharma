@@ -13,16 +13,18 @@
                     </h5>
                     <div class="d-flex align-items-center w-60">
                         <div class="position-relative w-100 me-2">
-                            <input type="text" id="productSearch" class="form-control py-2 ps-4 rounded-pill border-0 bg-light shadow-sm" placeholder="Search medicine (Press / to focus)...">
-                            <i class="fas fa-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted x-small"></i>
-                            <div id="searchResults" class="list-group position-absolute w-100 shadow-lg d-none mt-1" style="z-index: 1050; max-height: 350px; overflow-y: auto;"></div>
+                            <input type="text" id="productSearch"
+                                class="form-control py-2 ps-4 rounded-pill border-0 bg-light shadow-sm"
+                                placeholder="Search medicine (Press / to focus)...">
+                            <i
+                                class="fas fa-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted x-small"></i>
+                            <div id="searchResults" class="list-group position-absolute w-100 shadow-lg d-none mt-1"
+                                style="z-index: 1050; max-height: 350px; overflow-y: auto;"></div>
                         </div>
-                        <button class="btn btn-primary btn-sm rounded-pill px-3 shadow-sm flex-shrink-0" data-bs-toggle="modal" data-bs-target="#quickAddModal">
-                            <i class="fas fa-plus"></i> NEW
-                        </button>
+
                     </div>
                 </div>
-                
+
                 <div class="card-body p-0">
                     <div class="table-responsive" style="min-height: 500px;">
                         <table class="table table-hover align-middle mb-0" id="posTable">
@@ -39,7 +41,7 @@
                             </thead>
                             <tbody></tbody>
                         </table>
-                        
+
                         <!-- Empty State -->
                         <div id="emptyState" class="text-center py-5">
                             <div class="mb-3 opacity-25"><i class="fas fa-keyboard" style="font-size: 4rem;"></i></div>
@@ -53,7 +55,8 @@
                         <button class="btn btn-sm btn-outline-danger border-0 small" onclick="clearCart()">
                             <i class="fas fa-trash-alt me-1"></i> Clear Cart
                         </button>
-                        <span class="text-muted x-small pt-1">Shortcuts: <b>Enter</b> in Qty to Search next | <b>F8</b> to Complete Bill</span>
+                        <span class="text-muted x-small pt-1">Shortcuts: <b>Enter</b> in Qty to Search next | <b>F8</b>
+                            to Complete Bill</span>
                     </div>
                 </div>
             </div>
@@ -66,11 +69,14 @@
                     <div class="mb-4">
                         <h6 class="fw-bold mb-3 small text-uppercase text-muted border-bottom pb-2">Patient Details</h6>
                         <div class="mb-2">
-                            <input type="text" id="patientName" class="form-control border-0 bg-light py-2" placeholder="Patient Name (Tab to Next)">
+                            <input type="text" id="patientName" class="form-control border-0 bg-light py-2"
+                                placeholder="Patient Name (Tab to Next)">
                         </div>
                         <div class="row g-2 mb-2">
-                            <div class="col-6"><input type="text" id="patientPhone" class="form-control border-0 bg-light py-2" placeholder="Mobile"></div>
-                            <div class="col-6"><input type="text" id="doctorName" class="form-control border-0 bg-light py-2" placeholder="Dr. Name"></div>
+                            <div class="col-6"><input type="text" id="patientPhone"
+                                    class="form-control border-0 bg-light py-2" placeholder="Mobile"></div>
+                            <div class="col-6"><input type="text" id="doctorName"
+                                    class="form-control border-0 bg-light py-2" placeholder="Dr. Name"></div>
                         </div>
                     </div>
 
@@ -86,7 +92,9 @@
                             </div>
                             <div class="d-flex justify-content-between mb-2">
                                 <span class="text-muted small">Discount</span>
-                                <input type="number" class="form-control form-control-sm w-25 text-end border-0 bg-white shadow-sm" id="summaryDiscount" value="0" onchange="calculateGrandTotal()">
+                                <input type="number"
+                                    class="form-control form-control-sm w-25 text-end border-0 bg-white shadow-sm"
+                                    id="summaryDiscount" value="0" onchange="calculateGrandTotal()">
                             </div>
                             <hr class="opacity-10">
                             <div class="d-flex justify-content-between align-items-center">
@@ -98,17 +106,22 @@
                         <div class="payment-modes mb-4">
                             <div class="row g-2">
                                 <div class="col-6">
-                                    <input type="radio" class="btn-check" name="paymentMethod" id="payCash" value="Cash" checked>
-                                    <label class="btn btn-outline-light text-dark w-100 py-2 rounded-3 border" for="payCash">Cash</label>
+                                    <input type="radio" class="btn-check" name="paymentMethod" id="payCash" value="Cash"
+                                        checked>
+                                    <label class="btn btn-outline-light text-dark w-100 py-2 rounded-3 border"
+                                        for="payCash">Cash</label>
                                 </div>
                                 <div class="col-6">
-                                    <input type="radio" class="btn-check" name="paymentMethod" id="payCard" value="Card">
-                                    <label class="btn btn-outline-light text-dark w-100 py-2 rounded-3 border" for="payCard">Card/UPI</label>
+                                    <input type="radio" class="btn-check" name="paymentMethod" id="payCard"
+                                        value="Card">
+                                    <label class="btn btn-outline-light text-dark w-100 py-2 rounded-3 border"
+                                        for="payCard">Card/UPI</label>
                                 </div>
                             </div>
                         </div>
 
-                        <button class="btn btn-success btn-lg w-100 py-3 fw-bold rounded-4 shadow-sm" onclick="completeOrder()">
+                        <button class="btn btn-success btn-lg w-100 py-3 fw-bold rounded-4 shadow-sm"
+                            onclick="completeOrder()">
                             <i class="fas fa-check-circle me-2"></i> COMPLETE & PRINT
                         </button>
                     </div>
@@ -129,16 +142,19 @@
             <div class="modal-body p-4">
                 <div class="mb-3">
                     <label class="form-label small fw-bold">Medicine Name</label>
-                    <input type="text" id="quickName" class="form-control bg-light border-0 py-2" placeholder="e.g. Paracetamol 500mg">
+                    <input type="text" id="quickName" class="form-control bg-light border-0 py-2"
+                        placeholder="e.g. Paracetamol 500mg">
                 </div>
                 <div class="row g-2 mb-3">
                     <div class="col-6">
                         <label class="form-label small fw-bold">Packing</label>
-                        <input type="text" id="quickPacking" class="form-control bg-light border-0 py-2" placeholder="e.g. 10 Tabs">
+                        <input type="text" id="quickPacking" class="form-control bg-light border-0 py-2"
+                            placeholder="e.g. 10 Tabs">
                     </div>
                     <div class="col-6">
                         <label class="form-label small fw-bold">Conv. Factor</label>
-                        <input type="number" id="quickConv" class="form-control bg-light border-0 py-2" value="1" title="Tablets per strip">
+                        <input type="number" id="quickConv" class="form-control bg-light border-0 py-2" value="1"
+                            title="Tablets per strip">
                     </div>
                 </div>
                 <div class="mb-0">
@@ -152,153 +168,263 @@
             </div>
             <div class="modal-footer border-0 pt-0">
                 <button type="button" class="btn btn-light rounded-3 px-4" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary rounded-3 px-4 shadow-sm" onclick="saveQuickProduct()">Save Medicine</button>
+                <button type="button" class="btn btn-primary rounded-3 px-4 shadow-sm" onclick="saveQuickProduct()">Save
+                    Medicine</button>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-let cart = [];
-let searchSelectedIndex = -1;
+    let cart = [];
+    let searchSelectedIndex = -1;
 
-// Keyboard Shortcuts
-document.addEventListener('keydown', (e) => {
-    if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
-        e.preventDefault(); document.getElementById('productSearch').focus();
-    }
-    if (e.key === 'F8') { e.preventDefault(); completeOrder(); }
-});
+    // Keyboard Shortcuts
+    document.addEventListener('keydown', (e) => {
+        const results = document.querySelectorAll('.batch-item');
+        
+        if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
+            e.preventDefault(); document.getElementById('productSearch').focus();
+        }
+        
+        if (e.key === 'ArrowDown' && !resultsDiv.classList.contains('d-none')) {
+            e.preventDefault();
+            searchSelectedIndex = Math.min(searchSelectedIndex + 1, results.length - 1);
+            updateSearchSelection();
+        }
+        
+        if (e.key === 'ArrowUp' && !resultsDiv.classList.contains('d-none')) {
+            e.preventDefault();
+            searchSelectedIndex = Math.max(searchSelectedIndex - 1, 0);
+            updateSearchSelection();
+        }
 
-// Product Search
-const searchInput = document.getElementById('productSearch');
-const resultsDiv = document.getElementById('searchResults');
+        if (e.key === 'Enter' && searchSelectedIndex > -1 && !resultsDiv.classList.contains('d-none')) {
+            e.preventDefault();
+            results[searchSelectedIndex].querySelector('.add-btn').click();
+        }
 
-searchInput.addEventListener('input', async (e) => {
-    const query = e.target.value;
-    if (query.length < 1) { resultsDiv.classList.add('d-none'); return; }
-
-    const response = await fetch(`/api/products/search/?q=${query}`);
-    const data = await response.json();
-    resultsDiv.innerHTML = ''; searchSelectedIndex = -1;
-    if (data.length === 0) {
-        resultsDiv.innerHTML = '<div class="p-3 text-center text-muted small">No items found. <button class="btn btn-link btn-sm" data-bs-toggle="modal" data-bs-target="#quickAddModal">Add New?</button></div>';
-    }
-    data.forEach(p => {
-        const item = document.createElement('button');
-        item.className = 'list-group-item list-group-item-action border-0 py-3 search-result-item';
-        item.innerHTML = `<div class="d-flex justify-content-between align-items-center">
-            <div><div class="fw-bold text-dark">${p.name}</div><div class="text-muted x-small">${p.packing || ''} | Batch: <span class="text-primary">${p.batch_no}</span></div></div>
-            <div class="text-end"><div class="fw-bold text-success">${p.price.toFixed(2)}</div><div class="badge bg-light text-dark small border">${p.stock} Units</div></div></div>`;
-        item.onclick = () => addToCart(p);
-        resultsDiv.appendChild(item);
+        if (e.key === 'F8') { e.preventDefault(); completeOrder(); }
     });
-    resultsDiv.classList.remove('d-none');
-});
 
-function addToCart(product) {
-    if (product.stock <= 0) return alert('Out of stock!');
-    const existing = cart.find(item => item.id === product.id);
-    if (existing) { existing.quantity++; } else {
-        cart.push({ id: product.id, name: product.name, batch_no: product.batch_no, expiry: product.expiry, price: product.price, tax_rate: product.tax_rate, quantity: 1, max_stock: product.stock });
+    function updateSearchSelection() {
+        const results = document.querySelectorAll('.batch-item');
+        results.forEach((el, idx) => {
+            if (idx === searchSelectedIndex) {
+                el.classList.add('selected-batch');
+                el.scrollIntoView({ block: 'nearest' });
+            } else {
+                el.classList.remove('selected-batch');
+            }
+        });
     }
-    searchInput.value = ''; resultsDiv.classList.add('d-none'); renderCart();
-    const lastRowIndex = cart.findIndex(item => item.id === product.id);
-    const qtyInput = document.querySelectorAll('.qty-input')[lastRowIndex];
-    qtyInput.focus(); qtyInput.select();
-}
 
-function renderCart() {
-    const tbody = document.querySelector('#posTable tbody');
-    const emptyState = document.getElementById('emptyState');
-    tbody.innerHTML = '';
-    if (cart.length === 0) { emptyState.classList.remove('d-none'); } else {
-        emptyState.classList.add('d-none');
-        cart.forEach((item, index) => {
-            const taxAmount = (item.price * item.quantity * item.tax_rate) / 100;
-            const total = (item.price * item.quantity) + taxAmount;
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td class="ps-4"><div class="fw-bold text-dark small">${item.name}</div></td>
+    // Product Search
+    const searchInput = document.getElementById('productSearch');
+    const resultsDiv = document.getElementById('searchResults');
+
+    searchInput.addEventListener('input', async (e) => {
+        const query = e.target.value;
+        if (query.length < 1) { resultsDiv.classList.add('d-none'); return; }
+
+        const response = await fetch(`/api/products/search/?q=${query}`);
+        const data = await response.json();
+        resultsDiv.innerHTML = ''; searchSelectedIndex = -1;
+        let batchIndex = 0;
+        if (data.length === 0) {
+            resultsDiv.innerHTML = '<div class="p-3 text-center text-muted small">No items found. <button class="btn btn-link btn-sm" data-bs-toggle="modal" data-bs-target="#quickAddModal">Add New?</button></div>';
+        }
+        data.forEach(product => {
+            const productGroup = document.createElement('div');
+            productGroup.className = 'list-group-item p-3 border-bottom bg-white';
+            
+            let batchesHtml = '';
+            product.batches.forEach(b => {
+                batchesHtml += `
+                <div class="d-flex justify-content-between align-items-center mt-2 p-2 rounded bg-light border-start border-4 border-primary batch-item" data-batch-index="${batchIndex++}">
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="badge bg-white text-dark border x-small">B: ${b.batch_no}</span>
+                            <span class="text-muted x-small">Exp: ${b.expiry}</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="fw-bold text-primary">₹${b.price.toFixed(2)}</span>
+                            <span class="badge bg-success text-white x-small">${b.stock} left</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary btn-sm ms-3 px-3 rounded-pill fw-bold add-btn" 
+                        onclick='addToCart({
+                            id: ${product.id}, 
+                            batch_id: ${b.batch_id}, 
+                            name: "${product.name}", 
+                            batch_no: "${b.batch_no}", 
+                            expiry: "${b.expiry}", 
+                            price: ${b.price}, 
+                            tax_rate: ${product.tax_rate}, 
+                            stock: ${b.stock}
+                        })'>+ ADD</button>
+                </div>`;
+            });
+
+            productGroup.innerHTML = `
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <div class="fw-bold text-dark h6 mb-0">${product.name}</div>
+                        <div class="text-muted x-small">Packing: ${product.packing || '1'} | Factor: ${product.conversion_factor}</div>
+                    </div>
+                    <span class="badge bg-info-soft text-info x-small">${product.batches.length} Batch(es)</span>
+                </div>
+                <div class="batch-list">${batchesHtml}</div>
+            `;
+            resultsDiv.appendChild(productGroup);
+        });
+        resultsDiv.classList.remove('d-none');
+    });
+
+    function addToCart(product) {
+        if (product.stock <= 0) return alert('Out of stock!');
+        // Unique key is product_id + batch_id to support multiple batches of same product
+        const existing = cart.find(item => item.id === product.id && item.batch_id === product.batch_id);
+        if (existing) { existing.quantity++; } else {
+            cart.push({ 
+                id: product.id, 
+                batch_id: product.batch_id,
+                name: product.name, 
+                batch_no: product.batch_no, 
+                expiry: product.expiry, 
+                price: product.price, 
+                tax_rate: product.tax_rate, 
+                quantity: 1, 
+                max_stock: product.stock 
+            });
+        }
+        searchInput.value = ''; resultsDiv.classList.add('d-none'); renderCart();
+        const lastRowIndex = cart.findIndex(item => item.id === product.id && item.batch_id === product.batch_id);
+        const qtyInput = document.querySelectorAll('.qty-input')[lastRowIndex];
+        qtyInput.focus(); qtyInput.select();
+    }
+
+    function renderCart() {
+        const tbody = document.querySelector('#posTable tbody');
+        const emptyState = document.getElementById('emptyState');
+        tbody.innerHTML = '';
+        if (cart.length === 0) { emptyState.classList.remove('d-none'); } else {
+            emptyState.classList.add('d-none');
+            cart.forEach((item, index) => {
+                const taxAmount = (item.price * item.quantity * item.tax_rate) / 100;
+                const total = (item.price * item.quantity) + taxAmount;
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td class="ps-4"><div class="fw-bold text-dark small">${item.name}</div></td>
                 <td><div class="badge bg-light text-muted x-small">B: ${item.batch_no}</div></td>
                 <td class="small">${item.price.toFixed(2)}</td>
                 <td><input type="number" class="form-control form-control-sm border-0 bg-light text-center fw-bold qty-input" value="${item.quantity}" oninput="updateQty(${index}, this.value)" onkeydown="if(event.key==='Enter'){ document.getElementById('productSearch').focus(); }" style="width: 70px;"></td>
                 <td class="text-primary small">${taxAmount.toFixed(2)} <span class="text-muted x-small">(${item.tax_rate}%)</span></td>
                 <td class="fw-bold small">${total.toFixed(2)}</td>
                 <td class="text-end pe-4"><button class="btn btn-sm text-danger border-0" onclick="removeFromCart(${index})"><i class="fas fa-times"></i></button></td>`;
-            tbody.appendChild(tr);
+                tbody.appendChild(tr);
+            });
+        }
+        calculateGrandTotal();
+    }
+
+    async function saveQuickProduct() {
+        const data = {
+            name: document.getElementById('quickName').value,
+            packing: document.getElementById('quickPacking').value,
+            conversion_factor: document.getElementById('quickConv').value,
+            tax_id: document.getElementById('quickTax').value
+        };
+        if (!data.name) return alert('Name is required');
+        const response = await fetch('/api/products/quick-add/', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+            body: JSON.stringify(data)
         });
+        const result = await response.json();
+        if (result.success) {
+            bootstrap.Modal.getInstance(document.getElementById('quickAddModal')).hide();
+            document.getElementById('productSearch').value = result.name;
+            document.getElementById('productSearch').dispatchEvent(new Event('input'));
+        } else { alert('Error: ' + result.error); }
     }
-    calculateGrandTotal();
-}
 
-async function saveQuickProduct() {
-    const data = {
-        name: document.getElementById('quickName').value,
-        packing: document.getElementById('quickPacking').value,
-        conversion_factor: document.getElementById('quickConv').value,
-        tax_id: document.getElementById('quickTax').value
-    };
-    if (!data.name) return alert('Name is required');
-    const response = await fetch('/api/products/quick-add/', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
-        body: JSON.stringify(data)
-    });
-    const result = await response.json();
-    if (result.success) {
-        bootstrap.Modal.getInstance(document.getElementById('quickAddModal')).hide();
-        document.getElementById('productSearch').value = result.name;
-        document.getElementById('productSearch').dispatchEvent(new Event('input'));
-    } else { alert('Error: ' + result.error); }
-}
-
-function updateQty(index, val) {
-    const item = cart[index]; const newQty = parseInt(val) || 0;
-    if (newQty > 0 && newQty <= item.max_stock) { item.quantity = newQty; } else if (newQty > item.max_stock) { item.quantity = item.max_stock; alert('Stock limit reached'); }
-    calculateGrandTotal(); renderCart();
-}
-
-function calculateGrandTotal() {
-    const subTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const totalTax = cart.reduce((sum, item) => sum + (item.price * item.quantity * item.tax_rate / 100), 0);
-    const discount = parseFloat(document.getElementById('summaryDiscount').value) || 0;
-    const grandTotal = (subTotal + totalTax) - discount;
-    document.getElementById('summarySubTotal').innerText = subTotal.toFixed(2);
-    document.getElementById('summaryTax').innerText = totalTax.toFixed(2);
-    document.getElementById('summaryGrandTotal').innerText = grandTotal.toFixed(2);
-}
-
-function clearCart() { if (confirm('Clear all?')) { cart = []; renderCart(); } }
-function removeFromCart(index) { cart.splice(index, 1); renderCart(); }
-
-async function completeOrder() {
-    if (cart.length === 0) return alert('Bill is empty');
-    const data = {
-        patient_name: document.getElementById('patientName').value,
-        patient_phone: document.getElementById('patientPhone').value,
-        doctor_name: document.getElementById('doctorName').value,
-        payment_mode: document.querySelector('input[name="paymentMethod"]:checked').value,
-        items: cart.map(item => ({ product_id: item.id, quantity: item.quantity, price: item.price, total: (item.price * item.quantity) * (1 + item.tax_rate/100) })),
-        sub_total: parseFloat(document.getElementById('summarySubTotal').innerText),
-        tax_amount: parseFloat(document.getElementById('summaryTax').innerText),
-        discount_amount: parseFloat(document.getElementById('summaryDiscount').value) || 0,
-        total_amount: parseFloat(document.getElementById('summaryGrandTotal').innerText)
-    };
-    const response = await fetch('/pos/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' }, body: JSON.stringify(data) });
-    const result = await response.json();
-    if (result.success) {
-        // Open print window
-        window.open(`/pos/print/${result.invoice_id}/`, '_blank');
-        alert('Bill generated successfully!');
-        window.location.reload();
-    } else {
-        alert('Error: ' + result.error);
+    function updateQty(index, val) {
+        const item = cart[index]; const newQty = parseInt(val) || 0;
+        if (newQty > 0 && newQty <= item.max_stock) { item.quantity = newQty; } else if (newQty > item.max_stock) { item.quantity = item.max_stock; alert('Stock limit reached'); }
+        calculateGrandTotal(); renderCart();
     }
-}
+
+    function calculateGrandTotal() {
+        const subTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const totalTax = cart.reduce((sum, item) => sum + (item.price * item.quantity * item.tax_rate / 100), 0);
+        const discount = parseFloat(document.getElementById('summaryDiscount').value) || 0;
+        const grandTotal = (subTotal + totalTax) - discount;
+        document.getElementById('summarySubTotal').innerText = subTotal.toFixed(2);
+        document.getElementById('summaryTax').innerText = totalTax.toFixed(2);
+        document.getElementById('summaryGrandTotal').innerText = grandTotal.toFixed(2);
+    }
+
+    function clearCart() { if (confirm('Clear all?')) { cart = []; renderCart(); } }
+    function removeFromCart(index) { cart.splice(index, 1); renderCart(); }
+
+    async function completeOrder() {
+        if (cart.length === 0) return alert('Bill is empty');
+        const data = {
+            patient_name: document.getElementById('patientName').value,
+            patient_phone: document.getElementById('patientPhone').value,
+            doctor_name: document.getElementById('doctorName').value,
+            payment_mode: document.querySelector('input[name="paymentMethod"]:checked').value,
+            items: cart.map(item => ({ 
+                product_id: item.id, 
+                batch_id: item.batch_id,
+                quantity: item.quantity, 
+                price: item.price, 
+                total: (item.price * item.quantity) * (1 + item.tax_rate / 100) 
+            })),
+            sub_total: parseFloat(document.getElementById('summarySubTotal').innerText),
+            tax_amount: parseFloat(document.getElementById('summaryTax').innerText),
+            discount_amount: parseFloat(document.getElementById('summaryDiscount').value) || 0,
+            total_amount: parseFloat(document.getElementById('summaryGrandTotal').innerText)
+        };
+        const response = await fetch('/pos/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' }, body: JSON.stringify(data) });
+        const result = await response.json();
+        if (result.success) {
+            // Open print window
+            window.open(`/pos/print/${result.invoice_id}/`, '_blank');
+            alert('Bill generated successfully!');
+            window.location.reload();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    }
 </script>
 
 <style>
-    .x-small { font-size: 0.65rem; }
-    .w-60 { width: 60%; }
+    .x-small {
+        font-size: 0.65rem;
+    }
+
+    .w-60 {
+        width: 60%;
+    }
+
     .bg-success-soft { background-color: rgba(25, 135, 84, 0.1); }
+    .bg-primary-soft { background-color: rgba(13, 110, 253, 0.1); }
+    .bg-info-soft { background-color: rgba(13, 202, 240, 0.1); }
+    #searchResults {
+        border-radius: 15px;
+        border: 1px solid #dee2e6;
+        overflow: hidden;
+        margin-top: 8px;
+        background: white;
+    }
+    .batch-list {
+        max-height: 200px;
+        overflow-y: auto;
+    }
+    .selected-batch {
+        background-color: #e9ecef !important;
+        border-color: #0d6efd !important;
+        box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
+    }
 </style>
 {% endblock %}

@@ -28,8 +28,16 @@
         <div class="col-md-4">
             <div class="card border-0 shadow-sm rounded-4 bg-success text-white">
                 <div class="card-body p-4">
-                    <div class="small opacity-75 text-uppercase fw-bold">Items in Stock</div>
-                    <div class="h2 fw-bold mb-0">{% widthratio summary|length 1 1 %}+</div>
+                    <div class="small opacity-75 text-uppercase fw-bold">Active Batches</div>
+                    <div class="h2 fw-bold mb-0">{{ stocks|length }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 bg-info text-white">
+                <div class="card-body p-4">
+                    <div class="small opacity-75 text-uppercase fw-bold">Total Stock Value</div>
+                    <div class="h2 fw-bold mb-0">₹ {{ total_value|floatformat:2 }}</div>
                 </div>
             </div>
         </div>
@@ -68,7 +76,7 @@
                             <td class="fw-bold text-success">{{ stock.current_quantity }}</td>
                             <td>{{ stock.sale_price }}</td>
                             <td class="text-end pe-4">
-                                {% if stock.current_quantity < 10 %}
+                                {% if stock.current_quantity <= stock.product.conversion_factor %}
                                 <span class="badge bg-warning text-dark">Low Stock</span>
                                 {% else %}
                                 <span class="badge bg-success-soft text-success">Available</span>

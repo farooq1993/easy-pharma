@@ -45,9 +45,9 @@
                             <td class="fw-bold text-success">{{ invoice.total_amount }}</td>
                             <td class="text-end pe-4">
                                 <div class="btn-group">
-                                    <button class="btn btn-sm btn-outline-primary border-0" title="Edit (Coming Soon)">
+                                    <a href="{% url 'purchase_edit' invoice.id %}" class="btn btn-sm btn-outline-primary border-0" title="Edit">
                                         <i class="fas fa-edit"></i>
-                                    </button>
+                                    </a>
                                     <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteInvoice({{ invoice.id }})">
                                         <i class="fas fa-trash-alt"></i>
                                     </button>

@@ -8,6 +8,7 @@ urlpatterns = [
     
     # Specific Product URLs
     path('products/add/', ProductCreate.as_view(), name='products'),
+    path('products/edit/<int:product_id>/', ProductCreate.as_view(), name='product_edit'),
     path('products/all/', ProductListView.as_view(), name='all-products'),
     path('api/products/quick-add/', QuickProductAPI.as_view(), name='quick_product_api'),
     
