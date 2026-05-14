@@ -1,0 +1,348 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ filing.get_form_type_display }} - GST Filing{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-9">
+            <div>
+                <h2 class="fw-bold mb-0">{{ filing.get_form_type_display }}</h2>
+                <p class="text-muted">{{ filing.period_start|date:"F d, Y" }} - {{ filing.period_end|date:"F d, Y" }}</p>
+            </div>
+        </div>
+        <div class="col-md-3 text-end">
+            <a href="{% url 'gst_filing_list' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-list"></i> Back to List
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Main Details -->
+        <div class="col-md-8">
+            <!-- Status Card -->
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-muted small mb-1">Status</h6>
+                            <div>
+                                {% if filing.status == 'draft' %}
+                                    <span class="badge bg-secondary p-2">Draft</span>
+                                {% elif filing.status == 'prepared' %}
+                                    <span class="badge bg-info p-2">Prepared</span>
+                                {% elif filing.status == 'filed' %}
+                                    <span class="badge bg-success p-2">Filed</span>
+                                {% elif filing.status == 'accepted' %}
+                                    <span class="badge bg-success p-2">Accepted</span>
+                                {% elif filing.status == 'rejected' %}
+                                    <span class="badge bg-danger p-2">Rejected</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted small mb-1">Due Date</h6>
+                            <div>
+                                <strong>{{ filing.due_date|date:"d M Y" }}</strong>
+                                {% if filing.is_overdue %}
+                                    <small class="text-danger d-block"><i class="fas fa-exclamation-circle"></i> Overdue</small>
+                                {% elif filing.days_until_due %}
+                                    <small class="text-warning d-block"><i class="fas fa-clock"></i> {{ filing.days_until_due }} days until due</small>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Financial Details -->
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-light border-0">
+                    <h5 class="mb-0">Financial Summary</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-6 border-end">
+                            <h6 class="text-muted small mb-2">Total Taxable Supply</h6>
+                            <h4 class="fw-bold text-success">₹{{ filing.total_taxable_supply|floatformat:2 }}</h4>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted small mb-2">Net GST Payable</h6>
+                            <h4 class="fw-bold text-primary">₹{{ filing.net_gst_payable|floatformat:2 }}</h4>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p class="mb-2">
+                                <small class="text-muted">GST Payable:</small>
+                                <strong>₹{{ filing.total_gst_payable|floatformat:2 }}</strong>
+                            </p>
+                            <p class="mb-0">
+                                <small class="text-muted">Input Tax Credit:</small>
+                                <strong>₹{{ filing.total_gst_input_credit|floatformat:2 }}</strong>
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            {% if filing.penalty_amount %}
+                            <p class="mb-2">
+                                <small class="text-muted">Penalty:</small>
+                                <strong class="text-danger">₹{{ filing.penalty_amount|floatformat:2 }}</strong>
+                            </p>
+                            {% endif %}
+                            {% if filing.interest_amount %}
+                            <p class="mb-0">
+                                <small class="text-muted">Interest:</small>
+                                <strong class="text-danger">₹{{ filing.interest_amount|floatformat:2 }}</strong>
+                            </p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filing Details -->
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-light border-0">
+                    <h5 class="mb-0">Filing Information</h5>
+                </div>
+                <div class="card-body">
+                    {% if filing.filed_on %}
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <h6 class="text-muted small">Filed On</h6>
+                            <p class="mb-0">{{ filing.filed_on|date:"d M Y H:i" }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted small">Acknowledgement Number</h6>
+                            <p class="mb-0">{{ filing.acknowledgement_number|default:"-" }}</p>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <h6 class="text-muted small">Reference Number</h6>
+                            <p class="mb-0">{{ filing.reference_number|default:"-" }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% if filing.remarks %}
+                    <div class="row">
+                        <div class="col-md-12">
+                            <h6 class="text-muted small">Remarks</h6>
+                            <p class="mb-0">{{ filing.remarks }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Return Details -->
+            {% if return_details %}
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light border-0 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Return Details</h5>
+                    {% if filing.status != 'accepted' %}
+                    <a href="{% url 'gst_return_edit' filing.id %}" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-edit"></i> Edit
+                    </a>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <!-- Regular Return -->
+                    {% if return_details.gst_filing.form_type in 'gstr-1,gstr-3b,gstr-9' %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <tr class="border-bottom">
+                                <td><strong>Intrastate Supply</strong></td>
+                                <td class="text-end">₹{{ return_details.intrastate_supply|floatformat:2 }}</td>
+                            </tr>
+                            <tr class="border-bottom">
+                                <td><strong>Interstate Supply</strong></td>
+                                <td class="text-end">₹{{ return_details.interstate_supply|floatformat:2 }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Tax Distribution</strong></td>
+                                <td></td>
+                            </tr>
+                            <tr>
+                                <td>CGST (5%)</td>
+                                <td class="text-end">₹{{ return_details.cgst_5pct|floatformat:2 }}</td>
+                            </tr>
+                            <tr>
+                                <td>SGST (5%)</td>
+                                <td class="text-end">₹{{ return_details.sgst_5pct|floatformat:2 }}</td>
+                            </tr>
+                            <tr>
+                                <td>IGST (5%)</td>
+                                <td class="text-end">₹{{ return_details.igst_5pct|floatformat:2 }}</td>
+                            </tr>
+                            <tr>
+                                <td>CGST (12%)</td>
+                                <td class="text-end">₹{{ return_details.cgst_12pct|floatformat:2 }}</td>
+                            </tr>
+                            <tr>
+                                <td>SGST (12%)</td>
+                                <td class="text-end">₹{{ return_details.sgst_12pct|floatformat:2 }}</td>
+                            </tr>
+                            <tr>
+                                <td>IGST (12%)</td>
+                                <td class="text-end">₹{{ return_details.igst_12pct|floatformat:2 }}</td>
+                            </tr>
+                            <tr>
+                                <td>CGST (18%)</td>
+                                <td class="text-end">₹{{ return_details.cgst_18pct|floatformat:2 }}</td>
+                            </tr>
+                            <tr>
+                                <td>SGST (18%)</td>
+                                <td class="text-end">₹{{ return_details.sgst_18pct|floatformat:2 }}</td>
+                            </tr>
+                            <tr>
+                                <td>IGST (18%)</td>
+                                <td class="text-end">₹{{ return_details.igst_18pct|floatformat:2 }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    {% else %}
+                    <!-- Composition Return -->
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <tr>
+                                <td><strong>Total Turnover</strong></td>
+                                <td class="text-end">₹{{ return_details.total_turnover|floatformat:2 }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Tax Rate</strong></td>
+                                <td class="text-end">{{ return_details.composition_tax_rate }}%</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Tax Liability</strong></td>
+                                <td class="text-end">₹{{ return_details.composition_tax_liability|floatformat:2 }}</td>
+                            </tr>
+                            <tr>
+                                <td>Supplies within State</td>
+                                <td class="text-end">₹{{ return_details.supplies_within_state|floatformat:2 }}</td>
+                            </tr>
+                            <tr>
+                                <td>Supplies outside State</td>
+                                <td class="text-end">₹{{ return_details.supplies_outside_state|floatformat:2 }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-md-4">
+            <!-- Quick Actions -->
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-light border-0">
+                    <h5 class="mb-0">Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        {% if filing.status in 'draft,prepared' %}
+                        <button class="btn btn-success" onclick="markFiled()">
+                            <i class="fas fa-check"></i> Mark as Filed
+                        </button>
+                        {% endif %}
+                        {% if filing.status != 'accepted' %}
+                        <a href="{% url 'gst_filing_edit' filing.id %}" class="btn btn-primary">
+                            <i class="fas fa-edit"></i> Edit Filing
+                        </a>
+                        {% endif %}
+                        <a href="{% url 'gst_filing_list' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-list"></i> View All Filings
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Important Dates -->
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-light border-0">
+                    <h5 class="mb-0">Important Dates</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-2">
+                        <small class="text-muted">Created</small><br>
+                        <strong>{{ filing.created_at|date:"d M Y H:i" }}</strong>
+                    </p>
+                    <p class="mb-2">
+                        <small class="text-muted">Last Updated</small><br>
+                        <strong>{{ filing.updated_at|date:"d M Y H:i" }}</strong>
+                    </p>
+                    <p class="mb-0">
+                        <small class="text-muted">Due Date</small><br>
+                        <strong>{{ filing.due_date|date:"d M Y" }}</strong>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Reminders -->
+            {% if reminders %}
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light border-0">
+                    <h5 class="mb-0">Reminders</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        {% for reminder in reminders %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="mb-1">{{ reminder.get_reminder_type_display }}</h6>
+                                    <small class="text-muted">{{ reminder.reminder_date|date:"d M Y" }}</small>
+                                </div>
+                                {% if reminder.is_notified %}
+                                <span class="badge bg-success">Notified</span>
+                                {% else %}
+                                <span class="badge bg-warning">Pending</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function markFiled() {
+    const acknowledgement = prompt('Enter Acknowledgement Number:');
+    const reference = prompt('Enter Reference Number (optional):');
+    
+    if (acknowledgement !== null) {
+        fetch('{% url "gst_api" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                action: 'mark_filed',
+                filing_id: {{ filing.id }},
+                acknowledgement_number: acknowledgement,
+                reference_number: reference
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Filing marked as filed successfully!');
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        });
+    }
+}
+</script>
+{% endblock %}

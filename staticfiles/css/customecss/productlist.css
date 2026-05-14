@@ -1,0 +1,47 @@
+ body {
+     background-color: #f8f9fa;
+ }
+
+ .sidebar {
+     width: 250px;
+     min-height: 100vh;
+     position: fixed;
+     background: #fff;
+     border-right: 1px solid #ddd;
+ }
+
+ .main-content {
+     margin-left: 300px;
+     padding: 2rem;
+     width: 120rem;
+ }
+
+ .table th {
+     background-color: #343a40;
+     color: #fff;
+     position: sticky;
+     top: 0;
+     z-index: 1;
+ }
+
+ .table td,
+ .table th {
+     vertical-align: middle;
+ }
+
+ .action-buttons .btn {
+     margin: 0 2px;
+ }
+
+ .search-box .form-control {
+     border-right: 0;
+ }
+
+ .search-box .btn {
+     border-left: 0;
+ }
+
+ .pagination .page-link {
+     border-radius: 50% !important;
+     margin: 0 3px;
+ }

@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+{% extends 'includes/base.html' %}
 {% load static %}
 
 {% block title %}Daily Sale Report{% endblock %}
@@ -153,7 +153,15 @@
                         {% for sale in sales %}
                         <tr>
                             <td><strong>{{ sale.invoice_number }}</strong></td>
-                            <td>{{ sale.patient_name|default:sale.customer.name|default:"N/A" }}</td>
+                            <td>
+                                {% if sale.patient_name %}
+                                    {{ sale.patient_name }}
+                                {% elif sale.customer %}
+                                    {{ sale.customer.name }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </td>
                             <td><span class="badge bg-info">{{ sale.items.count }}</span></td>
                             <td>₹{{ sale.sub_total|floatformat:2 }}</td>
                             <td>₹{{ sale.tax_amount|floatformat:2 }}</td>

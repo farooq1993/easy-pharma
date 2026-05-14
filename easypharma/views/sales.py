@@ -1,14 +1,17 @@
 from django.views import View
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.contrib import messages
-from easypharma.models.Items import Products
-from easypharma.models.sales import SaleInvoice, SaleItem, Customer
 from django.db import transaction
+from django.db.models import F, Q
+from easypharma.models.Items import Products
+from easypharma.models.sales import SaleInvoice, SaleItem, Customer, SalesReturn, SalesReturnItem
 import json
 from datetime import datetime
+from urllib.parse import quote_plus
 
 from easypharma.models.Items import Products, ProductTax
+from easypharma.models.doctor import DoctorModel
 
 class POSView(View):
     template_name = 'sales/pos.html'
@@ -17,10 +20,12 @@ class POSView(View):
         products = Products.objects.filter(tenant=request.tenant)
         customers = Customer.objects.filter(tenant=request.tenant)
         product_taxes = ProductTax.objects.filter(tenant=request.tenant)
+        default_doctor = DoctorModel.objects.filter(tenant=request.tenant, is_default=True).first()
         return render(request, self.template_name, {
             'products': products,
             'customers': customers,
-            'product_taxes': product_taxes
+            'product_taxes': product_taxes,
+            'default_doctor': default_doctor
         })
 
     def post(self, request):
@@ -186,3 +191,164 @@ class ProductSearchAPI(View):
             })
             
         return JsonResponse(data, safe=False)
+
+
+class SalesReturnView(View):
+    template_name = 'sales/sales_return.html'
+
+    def get(self, request):
+        customers = Customer.objects.filter(tenant=request.tenant).order_by('name')
+        customer_id = request.GET.get('customer_id')
+        customer_name = request.GET.get('customer_name', '').strip()
+        invoice_id = request.GET.get('invoice_id')
+        
+        context = {
+            'customers': customers,
+            'selected_customer': None,
+            'selected_customer_name': None,
+            'invoices': [],
+            'selected_invoice': None,
+            'sale_items': [],
+            'returns': SalesReturn.objects.filter(tenant=request.tenant).order_by('-return_at')[:10]  # Recent returns
+        }
+        
+        if customer_id:
+            try:
+                customer = Customer.objects.get(id=customer_id, tenant=request.tenant)
+                context['selected_customer'] = customer
+                context['selected_customer_name'] = customer.name
+                context['invoices'] = SaleInvoice.objects.filter(
+                    tenant=request.tenant
+                ).filter(
+                    Q(customer=customer) |
+                    Q(patient_name__iexact=customer.name) |
+                    Q(patient_phone__icontains=customer.phone)
+                ).order_by('-created_at')
+            except Customer.DoesNotExist:
+                messages.error(request, 'Customer not found.')
+        elif customer_name:
+            context['selected_customer_name'] = customer_name
+            context['invoices'] = SaleInvoice.objects.filter(
+                tenant=request.tenant
+            ).filter(
+                Q(patient_name__iexact=customer_name) |
+                Q(patient_name__icontains=customer_name) |
+                Q(patient_phone__icontains=customer_name)
+            ).order_by('-created_at')
+            if not context['invoices']:
+                messages.error(request, 'No invoices found for this customer name.')
+        
+        if invoice_id:
+            try:
+                invoice = SaleInvoice.objects.get(id=invoice_id, tenant=request.tenant)
+                context['selected_invoice'] = invoice
+                context['sale_items'] = invoice.items.all().select_related('product')
+            except SaleInvoice.DoesNotExist:
+                messages.error(request, 'Invoice not found.')
+        
+        return render(request, self.template_name, context)
+
+    def post(self, request):
+        action = request.POST.get('action')
+        
+        if action == 'select_customer':
+            customer_id = request.POST.get('customer_id')
+            customer_name = request.POST.get('customer_name', '').strip()
+            if customer_id:
+                return redirect(f"{request.path}?customer_id={customer_id}")
+            if customer_name:
+                customer = Customer.objects.filter(
+                    tenant=request.tenant
+                ).filter(
+                    Q(name__iexact=customer_name) |
+                    Q(name__icontains=customer_name) |
+                    Q(phone__icontains=customer_name)
+                ).first()
+                if customer:
+                    return redirect(f"{request.path}?customer_id={customer.id}")
+                return redirect(f"{request.path}?customer_name={quote_plus(customer_name)}")
+            messages.error(request, 'Please select a valid customer from the list.')
+            return redirect('pos_returns')
+        
+        elif action == 'select_invoice':
+            customer_id = request.POST.get('customer_id')
+            customer_name = request.POST.get('customer_name', '').strip()
+            invoice_id = request.POST.get('invoice_id')
+            if invoice_id:
+                if customer_id:
+                    return redirect(f"{request.path}?customer_id={customer_id}&invoice_id={invoice_id}")
+                if customer_name:
+                    return redirect(f"{request.path}?customer_name={quote_plus(customer_name)}&invoice_id={invoice_id}")
+                return redirect(f"{request.path}?invoice_id={invoice_id}")
+            else:
+                messages.error(request, 'Please select an invoice.')
+                if customer_id:
+                    return redirect(f"{request.path}?customer_id={customer_id}")
+                if customer_name:
+                    return redirect(f"{request.path}?customer_name={quote_plus(customer_name)}")
+                return redirect('pos_returns')
+        
+        elif action == 'process_return':
+            invoice_id = request.POST.get('invoice_id')
+            return_items = request.POST.getlist('return_items[]')
+            return_quantities = request.POST.getlist('return_quantities[]')
+            return_reasons = request.POST.getlist('return_reasons[]')
+            
+            if not invoice_id:
+                messages.error(request, 'Invoice not found.')
+                return redirect('pos_returns')
+            
+            invoice = get_object_or_404(SaleInvoice, id=invoice_id, tenant=request.tenant)
+            
+            if not return_items:
+                messages.error(request, 'Please select items to return.')
+                return redirect(request.META.get('HTTP_REFERER', 'pos_returns'))
+            
+            try:
+                with transaction.atomic():
+                    # Create sales return record
+                    return_record = SalesReturn.objects.create(
+                        tenant=request.tenant,
+                        sale_invoice=invoice,
+                        return_qty=0  # Will be calculated from items
+                    )
+                    
+                    total_returned_qty = 0
+                    from easypharma.models.stock import StockBatch
+                    
+                    for i, item_id in enumerate(return_items):
+                        sale_item = SaleItem.objects.get(id=item_id, sale_invoice=invoice)
+                        qty_to_return = int(return_quantities[i])
+                        reason = return_reasons[i] if i < len(return_reasons) else ''
+                        
+                        if qty_to_return > 0 and qty_to_return <= sale_item.quantity:
+                            # Create return item record
+                            SalesReturnItem.objects.create(
+                                tenant=request.tenant,
+                                sales_return=return_record,
+                                sale_item=sale_item,
+                                returned_quantity=qty_to_return,
+                                return_reason=reason
+                            )
+                            
+                            # Restore stock
+                            StockBatch.objects.filter(
+                                tenant=request.tenant,
+                                product=sale_item.product,
+                                batch_number=sale_item.batch_number
+                            ).update(current_quantity=F('current_quantity') + qty_to_return)
+                            
+                            total_returned_qty += qty_to_return
+                    
+                    # Update total return quantity
+                    return_record.return_qty = total_returned_qty
+                    return_record.save()
+                    
+                    messages.success(request, f"Sales return created ({return_record.return_inv_no}). {total_returned_qty} items returned and stock restored.")
+                    
+            except Exception as e:
+                messages.error(request, f"Unable to process return: {e}")
+            
+            return redirect('pos_returns')
+        
+        return redirect('pos_returns')

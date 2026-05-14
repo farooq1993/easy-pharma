@@ -28,6 +28,7 @@ class PurchaseEntryView(View):
                         'batch_number': item.batch_number,
                         'expiry_date': item.expiry_date.strftime('%Y-%m'),
                         'quantity': item.quantity,
+                        'free_quantity': item.free_quantity,
                         'total_units': (item.quantity + item.free_quantity) * item.product.conversion_factor,
                         'purchase_price': float(item.purchase_price),
                         'tax_percentage': float(item.tax_percentage),
@@ -46,7 +47,8 @@ class PurchaseEntryView(View):
                 }
             except PurchaseInvoice.DoesNotExist:
                 return redirect('purchase_list')
-
+        edit_data = json.dumps(edit_data) if edit_data else None
+        
         return render(request, self.template_name, {
             'suppliers': suppliers,
             'products': products,
@@ -81,7 +83,9 @@ class PurchaseEntryView(View):
                 invoice.purchase_date = data['purchase_date']
                 invoice.sub_total = data['sub_total']
                 invoice.tax_amount = data['tax_amount']
-                invoice.discount_amount = data['discount_amount']
+                invoice.discount_percentage = data.get('discount_percentage', 0)
+                invoice.discount_amount = data.get('discount_amount', 0)
+                invoice.payment_mode = data.get('payment_mode', 'Cash')
                 invoice.total_amount = data['total_amount']
                 invoice.save()
                 

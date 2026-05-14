@@ -1,0 +1,107 @@
+:root {
+    --sidebar-bg: #9052b9; /* Purple background */
+    --sidebar-hover: #68d12b; /* Green for hover */
+    --sidebar-active: #0d6efd; /* Blue for active */
+    --sidebar-text: #e7e1cb; /* Cream text */
+    --sidebar-width: 280px;
+    --sidebar-collapsed-width: 0px; /* Hide on toggle for full focus */
+}
+
+body {
+    overflow-x: hidden;
+    background-color: #f8f9fa;
+}
+
+/* Sidebar styling */
+.sidebar {
+    height: 100vh;
+    background-color: var(--sidebar-bg);
+    width: var(--sidebar-width);
+    transition: all 0.3s ease;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1000;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+    overflow-y: auto;
+}
+
+.sidebar.collapsed {
+    left: calc(var(--sidebar-width) * -1);
+}
+
+.sidebar .nav-link {
+    color: var(--sidebar-text);
+    border-radius: 8px;
+    margin-bottom: 5px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    text-decoration: none;
+}
+
+.sidebar .nav-link:hover {
+    background-color: var(--sidebar-hover);
+    color: #fff;
+}
+
+.sidebar .nav-link.active {
+    background-color: rgba(255, 255, 255, 0.15);
+    border-left: 4px solid var(--sidebar-hover);
+    color: white;
+}
+
+.sidebar .nav-link i {
+    margin-right: 15px;
+    font-size: 1.2rem;
+    min-width: 25px;
+    text-align: center;
+}
+
+.sidebar h5 {
+    padding: 20px 10px;
+    text-align: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 20px;
+}
+
+/* Toggle button */
+.sidebar-toggle {
+    position: fixed;
+    top: 20px;
+    left: calc(var(--sidebar-width) - 20px);
+    z-index: 1001;
+    background-color: #fff;
+    color: var(--sidebar-bg);
+    border: 1px solid #ddd;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.sidebar.collapsed + .sidebar-toggle {
+    left: 20px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .sidebar {
+        display: none;
+    }
+    .sidebar-toggle {
+        display: none;
+    }
+}
+
+/* Mobile sidebar override */
+.mobile-sidebar {
+    background-color: var(--sidebar-bg);
+    z-index: 1000;
+}
