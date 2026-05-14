@@ -1,0 +1,206 @@
+{% extends 'includes/base.html' %}
+
+{% block title %}{% if form.instance.id %}Edit{% else %}Create{% endif %} GST Filing{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2 class="fw-bold mb-0">{% if form.instance.id %}Edit{% else %}Create{% endif %} GST Filing</h2>
+            <p class="text-muted">{{ form.instance.get_form_type_display|default:"New filing" }}</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="{% url 'gst_filing_list' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Back to List
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <form method="post" class="needs-validation" novalidate>
+                        {% csrf_token %}
+
+                        <div class="row mb-3">
+                            <label class="col-md-4 col-form-label">Form Type <span class="text-danger">*</span></label>
+                            <div class="col-md-8">
+                                {{ form.form_type }}
+                                <small class="text-muted d-block mt-1">
+                                    <i class="fas fa-info-circle"></i>
+                                    Regular Scheme: GSTR-1, GSTR-3B, GSTR-9 (Monthly)<br>
+                                    Composition Scheme: CMP-08 (Quarterly), GSTR-4 (Annual)
+                                </small>
+                                {% if form.form_type.errors %}
+                                <div class="invalid-feedback d-block">{{ form.form_type.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <label class="col-md-4 col-form-label">Period Start <span class="text-danger">*</span></label>
+                            <div class="col-md-8">
+                                {{ form.period_start }}
+                                {% if form.period_start.errors %}
+                                <div class="invalid-feedback d-block">{{ form.period_start.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <label class="col-md-4 col-form-label">Period End <span class="text-danger">*</span></label>
+                            <div class="col-md-8">
+                                {{ form.period_end }}
+                                {% if form.period_end.errors %}
+                                <div class="invalid-feedback d-block">{{ form.period_end.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <label class="col-md-4 col-form-label">Due Date <span class="text-danger">*</span></label>
+                            <div class="col-md-8">
+                                {{ form.due_date }}
+                                <small class="text-muted d-block mt-1">
+                                    <i class="fas fa-info-circle"></i>
+                                    Monthly: 11th of next month | Quarterly: 18th of next month
+                                </small>
+                                {% if form.due_date.errors %}
+                                <div class="invalid-feedback d-block">{{ form.due_date.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        {% if form.instance.id %}
+                        <div class="row mb-3">
+                            <label class="col-md-4 col-form-label">Status</label>
+                            <div class="col-md-8">
+                                {{ form.status }}
+                                {% if form.status.errors %}
+                                <div class="invalid-feedback d-block">{{ form.status.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <label class="col-md-4 col-form-label">Filed On</label>
+                            <div class="col-md-8">
+                                {{ form.filed_on }}
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <label class="col-md-4 col-form-label">Acknowledgement Number</label>
+                            <div class="col-md-8">
+                                {{ form.acknowledgement_number }}
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Form Style Alert -->
+                        <div class="alert alert-info border-0">
+                            <h6 class="mb-2"><i class="fas fa-lightbulb"></i> Filing Guidelines</h6>
+                            <ul class="ms-3 mb-0">
+                                <li><strong>GSTR-1:</strong> Monthly outward supplies - Due on 11th</li>
+                                <li><strong>GSTR-3B:</strong> Monthly return - Due on 20th</li>
+                                <li><strong>GSTR-9:</strong> Annual return - Due on 31st December</li>
+                                <li><strong>CMP-08:</strong> Quarterly return (Composition) - Due on 18th</li>
+                                <li><strong>GSTR-4:</strong> Annual return (Composition) - Due on 31st December</li>
+                            </ul>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="fas fa-save"></i> {% if form.instance.id %}Update{% else %}Create{% endif %} Filing
+                            </button>
+                            <a href="{% url 'gst_filing_list' %}" class="btn btn-outline-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info Sidebar -->
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-light border-0">
+                    <h5 class="mb-0">Filing Deadlines</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h6><span class="badge bg-info">GSTR-1</span></h6>
+                        <small class="text-muted">Outward supplies - 11th of next month</small>
+                    </div>
+                    <div class="mb-3">
+                        <h6><span class="badge bg-info">GSTR-3B</span></h6>
+                        <small class="text-muted">Monthly return - 20th of next month</small>
+                    </div>
+                    <div class="mb-3">
+                        <h6><span class="badge bg-info">GSTR-9</span></h6>
+                        <small class="text-muted">Annual return - 31st December</small>
+                    </div>
+                    <div class="mb-3">
+                        <h6><span class="badge bg-warning">CMP-08</span></h6>
+                        <small class="text-muted">Quarterly return - 18th of next month</small>
+                    </div>
+                    <div>
+                        <h6><span class="badge bg-warning">GSTR-4</span></h6>
+                        <small class="text-muted">Annual return - 31st December</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light border-0">
+                    <h5 class="mb-0">Current Configuration</h5>
+                </div>
+                <div class="card-body">
+                    {% if gst_config %}
+                    <p class="mb-2">
+                        <small class="text-muted">Scheme</small><br>
+                        <strong>
+                            {% if gst_config.scheme == 'regular' %}
+                            Regular
+                            {% else %}
+                            Composition
+                            {% endif %}
+                        </strong>
+                    </p>
+                    <p class="mb-2">
+                        <small class="text-muted">GST Number</small><br>
+                        <strong>{{ gst_config.gst_number }}</strong>
+                    </p>
+                    <p class="mb-0">
+                        <small class="text-muted">Filing Frequency</small><br>
+                        <strong>{{ gst_config.get_filing_frequency_display }}</strong>
+                    </p>
+                    {% else %}
+                    <p class="text-muted"><i class="fas fa-exclamation-circle"></i> GST not configured</p>
+                    <a href="{% url 'gst_config' %}" class="btn btn-sm btn-primary w-100">Configure GST</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+input[type="date"], select, textarea {
+    border-color: #dee2e6;
+}
+</style>
+
+<script>
+// Form validation
+document.querySelector('form').addEventListener('submit', function(e) {
+    if (!this.checkValidity()) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    this.classList.add('was-validated');
+});
+</script>
+{% endblock %}

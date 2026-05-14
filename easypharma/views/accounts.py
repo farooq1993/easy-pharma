@@ -4,12 +4,14 @@ from django.contrib.auth.decorators import login_required, permission_required
 from django.views.decorators.http import require_http_methods
 from easypharma.models import User
 from django.contrib import messages
-from easypharma.models.sales import SaleInvoice, Customer
+from easypharma.models.sales import SaleInvoice, Customer, SaleItem
 from easypharma.models.Items import Products
-from django.db.models import Sum
-from datetime import date
+from django.db.models import Sum, Count, Q, F, DecimalField
+from django.db.models.functions import TruncDate
+from datetime import date, timedelta
 from tenants.models import Tenant
 import uuid
+import json
 
 def home_view(request):
     today = date.today()
@@ -22,7 +24,6 @@ def home_view(request):
     prescriptions_count = SaleInvoice.objects.filter(tenant=request.tenant, created_at__date=today).count()
     
     # Expiry Alert (within 90 days)
-    from datetime import timedelta
     from easypharma.models.stock import StockBatch
     expiry_limit = today + timedelta(days=90)
     near_expiry_batches = StockBatch.objects.filter(
@@ -36,13 +37,112 @@ def home_view(request):
     from django.db.models import Sum as DbSum
     low_stock_count = StockBatch.objects.filter(tenant=request.tenant).values('product').annotate(total=DbSum('current_quantity')).filter(total__lt=50).count()
     
+    # Monthly Revenue Trend (Last 12 months)
+    revenue_trend = []
+    labels_revenue = []
+    for i in range(11, -1, -1):
+        month_start = today.replace(day=1) - timedelta(days=i*30)
+        month_start = month_start.replace(day=1)
+        month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+        
+        monthly_revenue = SaleInvoice.objects.filter(
+            tenant=request.tenant,
+            created_at__date__gte=month_start,
+            created_at__date__lte=month_end
+        ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+        
+        revenue_trend.append(float(monthly_revenue))
+        labels_revenue.append(month_start.strftime('%b'))
+    
+    # Sales by Payment Method (Last 30 days)
+    thirty_days_ago = today - timedelta(days=30)
+    payment_methods = SaleInvoice.objects.filter(
+        tenant=request.tenant,
+        created_at__date__gte=thirty_days_ago
+    ).values('payment_mode').annotate(count=Count('id'), total=Sum('total_amount'))
+    
+    payment_labels = []
+    payment_data = []
+    payment_colors = {'Cash': '#1cc88a', 'Card': '#4e73df', 'UPI': '#36b9cc', 'Credit': '#f6c23e'}
+    for method in payment_methods:
+        payment_labels.append(method['payment_mode'])
+        payment_data.append(float(method['total'] or 0))
+    
+    # Daily Sales for Last 7 days
+    daily_sales = []
+    daily_labels = []
+    for i in range(6, -1, -1):
+        day = today - timedelta(days=i)
+        day_revenue = SaleInvoice.objects.filter(
+            tenant=request.tenant,
+            created_at__date=day
+        ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+        daily_sales.append(float(day_revenue))
+        daily_labels.append(day.strftime('%a'))
+    
+    # Top 5 Selling Products
+    top_products = SaleItem.objects.filter(
+        tenant=request.tenant,
+        sale_invoice__created_at__date__gte=thirty_days_ago
+    ).values('product__product_name').annotate(
+        total_qty=Sum('quantity'),
+        total_revenue=Sum('total_amount')
+    ).order_by('-total_qty')[:5]
+    
+    top_product_names = [p['product__product_name'][:15] for p in top_products]
+    top_product_qty = [p['total_qty'] for p in top_products]
+    
+    # Total Inventory Value
+    inventory_value = StockBatch.objects.filter(
+        tenant=request.tenant
+    ).aggregate(
+        total_value=Sum(F('current_quantity') * F('purchase_price'), output_field=DecimalField())
+    )['total_value'] or 0
+    
+    # Customer Growth (Last 7 days)
+    new_customers_week = Customer.objects.filter(
+        tenant=request.tenant,
+        created_at__date__gte=today - timedelta(days=7)
+    ).count()
+    
+    # Total Sales (Last 30 days)
+    total_sales_30 = SaleInvoice.objects.filter(
+        tenant=request.tenant,
+        created_at__date__gte=thirty_days_ago
+    ).count()
+    
+    # Month to Date Revenue
+    month_start = today.replace(day=1)
+    mtd_revenue = SaleInvoice.objects.filter(
+        tenant=request.tenant,
+        created_at__date__gte=month_start,
+        created_at__date__lte=today
+    ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+    
     context = {
         'today_revenue': today_revenue,
         'total_customers': total_customers,
         'low_stock_count': low_stock_count,
         'prescriptions_count': prescriptions_count,
         'near_expiry_batches': near_expiry_batches,
-        'pharmacy_name': request.tenant.pharmacy_name if request.tenant else "Pharmacy App"
+        'pharmacy_name': request.tenant.pharmacy_name if request.tenant else "Pharmacy App",
+        
+        # Chart data
+        'revenue_trend': json.dumps(revenue_trend),
+        'labels_revenue': json.dumps(labels_revenue),
+        'daily_sales': json.dumps(daily_sales),
+        'daily_labels': json.dumps(daily_labels),
+        'payment_labels': json.dumps(payment_labels),
+        'payment_data': json.dumps(payment_data),
+        'payment_colors': json.dumps(list(payment_colors.values())[:len(payment_labels)]),
+        'top_product_names': json.dumps(top_product_names),
+        'top_product_qty': json.dumps(top_product_qty),
+        
+        # Additional metrics
+        'inventory_value': inventory_value,
+        'new_customers_week': new_customers_week,
+        'total_sales_30': total_sales_30,
+        'mtd_revenue': mtd_revenue,
     }
     return render(request, "home.html", context)
 
@@ -66,6 +166,8 @@ def login_view(request):
         user = authenticate(request, username=username, password=password)
         if user:
             login(request, user)
+            if getattr(user, 'user_type', '') == 'admin':
+                return redirect('org_admin_dashboard')
             return redirect("home")
         else:
             return render(request, "accounts/login.html")

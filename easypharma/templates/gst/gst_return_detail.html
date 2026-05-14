@@ -1,0 +1,195 @@
+{% extends 'base.html' %}
+
+{% block title %}GST Return - {{ filing.get_form_type_display }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2 class="fw-bold mb-0">{{ filing.get_form_type_display }} - Return Details</h2>
+            <p class="text-muted">{{ filing.period_start|date:"F d, Y" }} - {{ filing.period_end|date:"F d, Y" }}</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="{% url 'gst_filing_detail' filing.id %}" class="btn btn-outline-secondary me-2">
+                <i class="fas fa-arrow-left"></i> Back
+            </a>
+            {% if filing.status != 'accepted' %}
+            <a href="{% url 'gst_return_edit' filing.id %}" class="btn btn-primary">
+                <i class="fas fa-edit"></i> Edit
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row">
+        {% if filing.form_type in 'gstr-1,gstr-3b,gstr-9' %}
+        <!-- Regular Scheme Return -->
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-light border-0">
+                    <h5 class="mb-0">Supply Details</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tr>
+                            <td><strong>Intrastate Supply</strong></td>
+                            <td class="text-end">₹{{ return_details.intrastate_supply|floatformat:2|default:"0.00" }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Interstate Supply</strong></td>
+                            <td class="text-end">₹{{ return_details.interstate_supply|floatformat:2|default:"0.00" }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Exempt Supply</strong></td>
+                            <td class="text-end">₹{{ return_details.exempt_supply|floatformat:2|default:"0.00" }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Zero Rated Supply</strong></td>
+                            <td class="text-end">₹{{ return_details.zero_rated_supply|floatformat:2|default:"0.00" }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-light border-0">
+                    <h5 class="mb-0">Tax Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h6 class="small text-muted mb-2">5% Tax Rate</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <td class="small">CGST</td>
+                                <td class="text-end">₹{{ return_details.cgst_5pct|floatformat:2|default:"0.00" }}</td>
+                            </tr>
+                            <tr>
+                                <td class="small">SGST</td>
+                                <td class="text-end">₹{{ return_details.sgst_5pct|floatformat:2|default:"0.00" }}</td>
+                            </tr>
+                            <tr>
+                                <td class="small">IGST</td>
+                                <td class="text-end">₹{{ return_details.igst_5pct|floatformat:2|default:"0.00" }}</td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <div class="mb-3">
+                        <h6 class="small text-muted mb-2">12% Tax Rate</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <td class="small">CGST</td>
+                                <td class="text-end">₹{{ return_details.cgst_12pct|floatformat:2|default:"0.00" }}</td>
+                            </tr>
+                            <tr>
+                                <td class="small">SGST</td>
+                                <td class="text-end">₹{{ return_details.sgst_12pct|floatformat:2|default:"0.00" }}</td>
+                            </tr>
+                            <tr>
+                                <td class="small">IGST</td>
+                                <td class="text-end">₹{{ return_details.igst_12pct|floatformat:2|default:"0.00" }}</td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <div class="mb-3">
+                        <h6 class="small text-muted mb-2">18% Tax Rate</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <td class="small">CGST</td>
+                                <td class="text-end">₹{{ return_details.cgst_18pct|floatformat:2|default:"0.00" }}</td>
+                            </tr>
+                            <tr>
+                                <td class="small">SGST</td>
+                                <td class="text-end">₹{{ return_details.sgst_18pct|floatformat:2|default:"0.00" }}</td>
+                            </tr>
+                            <tr>
+                                <td class="small">IGST</td>
+                                <td class="text-end">₹{{ return_details.igst_18pct|floatformat:2|default:"0.00" }}</td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <div class="mb-0">
+                        <h6 class="small text-muted mb-2">28% Tax Rate</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <td class="small">CGST</td>
+                                <td class="text-end">₹{{ return_details.cgst_28pct|floatformat:2|default:"0.00" }}</td>
+                            </tr>
+                            <tr>
+                                <td class="small">SGST</td>
+                                <td class="text-end">₹{{ return_details.sgst_28pct|floatformat:2|default:"0.00" }}</td>
+                            </tr>
+                            <tr>
+                                <td class="small">IGST</td>
+                                <td class="text-end">₹{{ return_details.igst_28pct|floatformat:2|default:"0.00" }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% else %}
+        <!-- Composition Scheme Return -->
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light border-0">
+                    <h5 class="mb-0">Composition Return Summary</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tr class="border-bottom">
+                            <td><strong>Total Turnover</strong></td>
+                            <td class="text-end"><strong>₹{{ return_details.total_turnover|floatformat:2 }}</strong></td>
+                        </tr>
+                        <tr class="border-bottom">
+                            <td><strong>Tax Rate</strong></td>
+                            <td class="text-end"><strong>{{ return_details.composition_tax_rate }}%</strong></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Tax Liability</strong></td>
+                            <td class="text-end"><strong class="text-danger">₹{{ return_details.composition_tax_liability|floatformat:2 }}</strong></td>
+                        </tr>
+                        <tr>
+                            <td>Supplies within State</td>
+                            <td class="text-end">₹{{ return_details.supplies_within_state|floatformat:2|default:"0.00" }}</td>
+                        </tr>
+                        <tr>
+                            <td>Supplies outside State</td>
+                            <td class="text-end">₹{{ return_details.supplies_outside_state|floatformat:2|default:"0.00" }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light border-0">
+                    <h5 class="mb-0">Composition Scheme Details</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <h6 class="mb-2"><i class="fas fa-info-circle"></i> Key Points</h6>
+                        <ul class="mb-0 ms-3">
+                            <li>Applicable for pharmacies with turnover up to ₹40 Lakhs</li>
+                            <li>Fixed tax rate of 1% on turnover</li>
+                            <li>No Input Tax Credit allowed</li>
+                            <li>Cannot make B2B supplies</li>
+                            <li>No inter-state supplies allowed (beyond ₹20 Lakhs)</li>
+                            <li>File CMP-08 quarterly by 18th of next month</li>
+                            <li>File GSTR-4 annually by 31st December</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

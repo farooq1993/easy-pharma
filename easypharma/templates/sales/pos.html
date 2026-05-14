@@ -3,26 +3,31 @@
 
 {% block content %}
 <div class="py-2">
+    <!-- Search Bar Row -->
+    <div class="row g-3 mb-3">
+        <div class="col-12">
+            <div class="position-relative">
+                <input type="text" id="productSearch"
+                    class="form-control py-3 ps-5 rounded-pill border-0 bg-light shadow-md"
+                    placeholder="🔍 Search medicine (Press / to focus)..."
+                    style="font-size: 1rem; min-height: 50px; border: 2px solid transparent; transition: all 0.3s;">
+                <i
+                    class="fas fa-search position-absolute top-50 start-0 translate-middle-y ms-4 text-muted"></i>
+                <span class="position-absolute top-50 end-0 translate-middle-y me-4 text-muted x-small fw-bold">Press <kbd>↓</kbd> | <kbd>↑</kbd> | <kbd>↵</kbd> to Add</span>
+                <div id="searchResults" class="list-group position-absolute w-100 shadow-lg d-none mt-2"
+                    style="z-index: 1050; max-height: 400px; overflow-y: auto;"></div>
+            </div>
+        </div>
+    </div>
+
     <div class="row g-3">
         <!-- Main POS Area -->
         <div class="col-lg-8">
             <div class="card border-0 shadow-sm rounded-4 h-100">
-                <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                <div class="card-header bg-white border-0 py-3">
                     <h5 class="fw-bold mb-0 text-success">
                         <i class="fas fa-prescription me-2"></i> Pharmacy POS
                     </h5>
-                    <div class="d-flex align-items-center w-60">
-                        <div class="position-relative w-100 me-2">
-                            <input type="text" id="productSearch"
-                                class="form-control py-2 ps-4 rounded-pill border-0 bg-light shadow-sm"
-                                placeholder="Search medicine (Press / to focus)...">
-                            <i
-                                class="fas fa-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted x-small"></i>
-                            <div id="searchResults" class="list-group position-absolute w-100 shadow-lg d-none mt-1"
-                                style="z-index: 1050; max-height: 350px; overflow-y: auto;"></div>
-                        </div>
-
-                    </div>
                 </div>
 
                 <div class="card-body p-0">
@@ -46,17 +51,27 @@
                         <div id="emptyState" class="text-center py-5">
                             <div class="mb-3 opacity-25"><i class="fas fa-keyboard" style="font-size: 4rem;"></i></div>
                             <h5 class="text-muted fw-bold">Ready for Billing</h5>
-                            <p class="text-muted small">Type <b>/</b> or use the search bar to find medicines</p>
+                            <p class="text-muted small mb-3">Type <b>/</b> or use the search bar to find medicines</p>
+                            <div class="alert alert-info small mx-4" role="alert">
+                                <strong>💡 Quick Tip:</strong> Type product name → Press <kbd>↓</kbd> to select → Press <kbd>↵</kbd> to add → Enter Qty → Press <kbd>↵</kbd> to add next item
+                            </div>
                         </div>
                     </div>
                 </div>
                 <div class="card-footer bg-white border-0 py-3">
-                    <div class="d-flex justify-content-between">
-                        <button class="btn btn-sm btn-outline-danger border-0 small" onclick="clearCart()">
-                            <i class="fas fa-trash-alt me-1"></i> Clear Cart
-                        </button>
-                        <span class="text-muted x-small pt-1">Shortcuts: <b>Enter</b> in Qty to Search next | <b>F8</b>
-                            to Complete Bill</span>
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div>
+                            <button class="btn btn-sm btn-outline-danger border-0 small" onclick="clearCart()">
+                                <i class="fas fa-trash-alt me-1"></i> Clear Cart
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary border-0 small ms-2" data-bs-toggle="modal" data-bs-target="#workflowModal">
+                                <i class="fas fa-keyboard me-1"></i> Shortcuts
+                            </button>
+                        </div>
+                        <div class="d-flex gap-2 align-items-center">
+                            <span class="badge bg-success" id="cartItemCount">0 items</span>
+                            <span class="text-muted x-small">Total: <strong id="cartTotal">0.00</strong></span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -76,7 +91,8 @@
                             <div class="col-6"><input type="text" id="patientPhone"
                                     class="form-control border-0 bg-light py-2" placeholder="Mobile"></div>
                             <div class="col-6"><input type="text" id="doctorName"
-                                    class="form-control border-0 bg-light py-2" placeholder="Dr. Name"></div>
+                                    class="form-control border-0 bg-light py-2" placeholder="Dr. Name"
+                                    value="{% if default_doctor %}{{ default_doctor.name }}{% endif %}"></div>
                         </div>
                     </div>
 
@@ -124,6 +140,63 @@
                             onclick="completeOrder()">
                             <i class="fas fa-check-circle me-2"></i> COMPLETE & PRINT
                         </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Workflow Help Modal -->
+<div class="modal fade" id="workflowModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-0 bg-light rounded-top-4">
+                <h5 class="modal-title fw-bold">
+                    <i class="fas fa-keyboard me-2 text-primary"></i> POS Keyboard Shortcuts & Workflow
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <h6 class="fw-bold mb-3 text-primary">
+                            <i class="fas fa-arrow-right me-2"></i> Add Items Workflow
+                        </h6>
+                        <ol class="small">
+                            <li class="mb-2">Press <kbd>/</kbd> or click search box</li>
+                            <li class="mb-2">Type medicine name (autocomplete)</li>
+                            <li class="mb-2">Press <kbd>↓</kbd> or <kbd>↑</kbd> to navigate batches</li>
+                            <li class="mb-2">Press <kbd>↵ Enter</kbd> to add selected batch</li>
+                            <li class="mb-2">Enter quantity in table row</li>
+                            <li class="mb-2">Press <kbd>↵ Enter</kbd> to search next item</li>
+                            <li class="mb-2">Repeat steps 2-6 for more items</li>
+                        </ol>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="fw-bold mb-3 text-success">
+                            <i class="fas fa-keyboard me-2"></i> Quick Keys
+                        </h6>
+                        <div class="small">
+                            <div class="mb-3 p-2 bg-light rounded">
+                                <div><kbd>/</kbd> → Focus search</div>
+                            </div>
+                            <div class="mb-3 p-2 bg-light rounded">
+                                <div><kbd>↓</kbd> → Next batch in results</div>
+                            </div>
+                            <div class="mb-3 p-2 bg-light rounded">
+                                <div><kbd>↑</kbd> → Previous batch</div>
+                            </div>
+                            <div class="mb-3 p-2 bg-light rounded">
+                                <div><kbd>↵</kbd> → Add item / Go to search</div>
+                            </div>
+                            <div class="mb-3 p-2 bg-light rounded">
+                                <div><kbd>Esc</kbd> → Focus search from qty field</div>
+                            </div>
+                            <div class="p-2 bg-light rounded">
+                                <div><kbd>F8</kbd> → Complete billing</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -308,23 +381,73 @@
         const tbody = document.querySelector('#posTable tbody');
         const emptyState = document.getElementById('emptyState');
         tbody.innerHTML = '';
-        if (cart.length === 0) { emptyState.classList.remove('d-none'); } else {
+        if (cart.length === 0) { 
+            emptyState.classList.remove('d-none'); 
+        } else {
             emptyState.classList.add('d-none');
             cart.forEach((item, index) => {
                 const taxAmount = (item.price * item.quantity * item.tax_rate) / 100;
                 const total = (item.price * item.quantity) + taxAmount;
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td class="ps-4"><div class="fw-bold text-dark small">${item.name}</div></td>
-                <td><div class="badge bg-light text-muted x-small">B: ${item.batch_no}</div></td>
-                <td class="small">${item.price.toFixed(2)}</td>
-                <td><input type="number" class="form-control form-control-sm border-0 bg-light text-center fw-bold qty-input" value="${item.quantity}" oninput="updateQty(${index}, this.value)" onkeydown="if(event.key==='Enter'){ document.getElementById('productSearch').focus(); }" style="width: 70px;"></td>
-                <td class="text-primary small">${taxAmount.toFixed(2)} <span class="text-muted x-small">(${item.tax_rate}%)</span></td>
-                <td class="fw-bold small">${total.toFixed(2)}</td>
-                <td class="text-end pe-4"><button class="btn btn-sm text-danger border-0" onclick="removeFromCart(${index})"><i class="fas fa-times"></i></button></td>`;
+                tr.className = 'cart-row';
+                tr.innerHTML = `
+                    <td class="ps-4">
+                        <div class="fw-bold text-dark small">${item.name}</div>
+                        <div class="text-muted x-small">Exp: ${item.expiry}</div>
+                    </td>
+                    <td>
+                        <div class="badge bg-light text-muted x-small">B: ${item.batch_no}</div>
+                    </td>
+                    <td class="small">₹${item.price.toFixed(2)}</td>
+                    <td>
+                        <input type="number" 
+                            class="form-control form-control-sm border-0 bg-light text-center fw-bold qty-input" 
+                            value="${item.quantity}" 
+                            data-index="${index}"
+                            min="1"
+                            max="${item.max_stock}"
+                            oninput="updateQty(${index}, this.value)" 
+                            onkeydown="handleQtyKeydown(event, ${index})"
+                            style="width: 70px; cursor: text; border: 1px solid #dee2e6 !important;">
+                    </td>
+                    <td class="text-primary small">
+                        ₹${taxAmount.toFixed(2)} 
+                        <span class="text-muted x-small">(${item.tax_rate}%)</span>
+                    </td>
+                    <td class="fw-bold small">₹${total.toFixed(2)}</td>
+                    <td class="text-end pe-4">
+                        <button class="btn btn-sm text-danger border-0" 
+                            onclick="removeFromCart(${index})" 
+                            title="Delete row">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </td>
+                `;
                 tbody.appendChild(tr);
             });
+            // Auto-focus on last qty field
+            setTimeout(() => {
+                const lastQtyInput = tbody.querySelector('.qty-input:last-child');
+                if (lastQtyInput) {
+                    lastQtyInput.focus();
+                    lastQtyInput.select();
+                }
+            }, 50);
         }
         calculateGrandTotal();
+    }
+
+    function handleQtyKeydown(event, index) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            // Clear search and focus on it for next item
+            document.getElementById('productSearch').value = '';
+            document.getElementById('productSearch').focus();
+            document.getElementById('searchResults').classList.add('d-none');
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            document.getElementById('productSearch').focus();
+        }
     }
 
     async function saveQuickProduct() {
@@ -361,6 +484,11 @@
         document.getElementById('summarySubTotal').innerText = subTotal.toFixed(2);
         document.getElementById('summaryTax').innerText = totalTax.toFixed(2);
         document.getElementById('summaryGrandTotal').innerText = grandTotal.toFixed(2);
+        
+        // Update footer counters
+        const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+        document.getElementById('cartItemCount').innerText = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;
+        document.getElementById('cartTotal').innerText = grandTotal.toFixed(2);
     }
 
     function clearCart() { if (confirm('Clear all?')) { cart = []; renderCart(); } }
@@ -410,6 +538,7 @@
     .bg-success-soft { background-color: rgba(25, 135, 84, 0.1); }
     .bg-primary-soft { background-color: rgba(13, 110, 253, 0.1); }
     .bg-info-soft { background-color: rgba(13, 202, 240, 0.1); }
+    
     #searchResults {
         border-radius: 15px;
         border: 1px solid #dee2e6;
@@ -417,14 +546,70 @@
         margin-top: 8px;
         background: white;
     }
+    
     .batch-list {
         max-height: 200px;
         overflow-y: auto;
     }
+    
     .selected-batch {
         background-color: #e9ecef !important;
         border-color: #0d6efd !important;
         box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
+    }
+    
+    /* Enhanced POS Cart Styling */
+    .cart-row {
+        transition: all 0.2s ease;
+        border-left: 3px solid transparent;
+    }
+    
+    .cart-row:hover {
+        background-color: #f8f9fa;
+        border-left-color: #28a745;
+    }
+    
+    .qty-input {
+        font-weight: 600;
+        transition: all 0.2s;
+    }
+    
+    .qty-input:focus {
+        background-color: #fff !important;
+        border-color: #0d6efd !important;
+        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    }
+    
+    #productSearch:focus {
+        background-color: #ffffff !important;
+        border: 2px solid #28a745 !important;
+        box-shadow: 0 0 0 0.3rem rgba(40, 167, 69, 0.15);
+        padding-left: 3rem;
+    }
+    
+    .batch-item {
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .batch-item:hover {
+        background-color: #f1f3f5 !important;
+        transform: translateX(5px);
+    }
+    
+    kbd {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 3px;
+        padding: 2px 6px;
+        font-size: 0.75rem;
+        font-family: monospace;
+        display: inline-block;
+        box-shadow: 0 1px 0 rgba(0,0,0,0.1);
+    }
+    
+    .alert-info {
+        border-radius: 12px;
     }
 </style>
 {% endblock %}

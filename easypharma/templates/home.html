@@ -6,7 +6,7 @@
     <div class="row">
         <div class="col">
             <h1 class="mb-3 text-success">Welcome to Easy Pharma</h1>
-            <p class="lead">Your one-stop solution for all pharmaceutical needs.</p>
+            <p class="lead">Your pharmaceutical management dashboard with comprehensive analytics.</p>
         </div>
     </div>
 </div>
@@ -16,79 +16,141 @@
     <!-- Dashboard Header -->
     <div class="row mb-4 align-items-center">
         <div class="col-md-6">
-            <h2 class="fw-bold mb-0">Dashboard Overview</h2>
-            <p class="text-muted small">Welcome back! Here's what's happening today.</p>
+            <h2 class="fw-bold mb-0"><i class="fas fa-chart-line me-2"></i>Dashboard Overview</h2>
+            <p class="text-muted small">Real-time analytics to optimize your pharmacy business.</p>
         </div>
         <div class="col-md-6 text-md-end mt-3 mt-md-0">
-            <div class="btn-group shadow-sm">
-                <button type="button" class="btn btn-white border active">Today</button>
-                <button type="button" class="btn btn-white border">Week</button>
-                <button type="button" class="btn btn-white border">Month</button>
-            </div>
-            <button class="btn btn-success ms-2 shadow-sm"><i class="fas fa-download me-1"></i> Report</button>
+            <button class="btn btn-success ms-2 shadow-sm"><i class="fas fa-download me-1"></i> Export Report</button>
         </div>
     </div>
 
-    <!-- Metrics Cards -->
+    <!-- Key Metrics Cards Row 1 -->
     <div class="row g-4 mb-4">
-        <div class="col-sm-6 col-xl-3">
-            <div class="card p-3 border-0 shadow-sm" style="border-left: 5px solid #4e73df !important;">
+        <div class="col-sm-6 col-lg-3">
+            <div class="card p-3 border-0 shadow-sm h-100" style="border-left: 5px solid #4e73df !important;">
                 <div class="d-flex align-items-center">
                     <div class="flex-grow-1">
                         <div class="text-xs font-weight-bold text-primary text-uppercase mb-1 small">Today's Revenue</div>
-                        <div class="h4 mb-0 fw-bold text-dark">${{ today_revenue }}</div>
+                        <div class="h4 mb-0 fw-bold text-dark">${{ today_revenue|floatformat:2 }}</div>
+                        <p class="text-success small mt-2"><i class="fas fa-arrow-up"></i> Real-time</p>
                     </div>
                     <div class="bg-primary bg-opacity-10 p-3 rounded-3">
-                        <i class="fas fa-dollar-sign text-primary fa-lg"></i>
+                        <i class="fas fa-dollar-sign text-primary fa-2x"></i>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="col-sm-6 col-xl-3">
-            <div class="card p-3 border-0 shadow-sm" style="border-left: 5px solid #1cc88a !important;">
+        <div class="col-sm-6 col-lg-3">
+            <div class="card p-3 border-0 shadow-sm h-100" style="border-left: 5px solid #1cc88a !important;">
                 <div class="d-flex align-items-center">
                     <div class="flex-grow-1">
-                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1 small">Total Customers</div>
-                        <div class="h4 mb-0 fw-bold text-dark">{{ total_customers }}</div>
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1 small">Month to Date</div>
+                        <div class="h4 mb-0 fw-bold text-dark">${{ mtd_revenue|floatformat:2 }}</div>
+                        <p class="text-muted small mt-2">{{ total_sales_30 }} Transactions</p>
                     </div>
                     <div class="bg-success bg-opacity-10 p-3 rounded-3">
-                        <i class="fas fa-users text-success fa-lg"></i>
+                        <i class="fas fa-chart-pie text-success fa-2x"></i>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="col-sm-6 col-xl-3">
-            <div class="card p-3 border-0 shadow-sm" style="border-left: 5px solid #36b9cc !important;">
+        <div class="col-sm-6 col-lg-3">
+            <div class="card p-3 border-0 shadow-sm h-100" style="border-left: 5px solid #36b9cc !important;">
                 <div class="d-flex align-items-center">
                     <div class="flex-grow-1">
-                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1 small">Bills Generated</div>
-                        <div class="h4 mb-0 fw-bold text-dark">{{ prescriptions_count }}</div>
+                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1 small">Total Customers</div>
+                        <div class="h4 mb-0 fw-bold text-dark">{{ total_customers }}</div>
+                        <p class="text-success small mt-2"><i class="fas fa-plus"></i> {{ new_customers_week }} This Week</p>
                     </div>
                     <div class="bg-info bg-opacity-10 p-3 rounded-3">
-                        <i class="fas fa-file-invoice text-info fa-lg"></i>
+                        <i class="fas fa-users text-info fa-2x"></i>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="col-sm-6 col-xl-3">
-            <div class="card p-3 border-0 shadow-sm" style="border-left: 5px solid #f6c23e !important;">
+        <div class="col-sm-6 col-lg-3">
+            <div class="card p-3 border-0 shadow-sm h-100" style="border-left: 5px solid #f6c23e !important;">
                 <div class="d-flex align-items-center">
                     <div class="flex-grow-1">
-                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1 small">Low Stock</div>
-                        <div class="h4 mb-0 fw-bold text-dark">{{ low_stock_count }}</div>
+                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1 small">Inventory Value</div>
+                        <div class="h4 mb-0 fw-bold text-dark">${{ inventory_value|floatformat:2 }}</div>
+                        <p class="text-danger small mt-2"><i class="fas fa-triangle-exclamation"></i> {{ low_stock_count }} Low Stock</p>
                     </div>
                     <div class="bg-warning bg-opacity-10 p-3 rounded-3">
-                        <i class="fas fa-exclamation-triangle text-warning fa-lg"></i>
+                        <i class="fas fa-boxes-stacked text-warning fa-2x"></i>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Expiry Alerts & Charts Row -->
+    <!-- Charts Row 1: Revenue Trends -->
+    <div class="row g-4 mb-4">
+        <!-- Monthly Revenue Trend -->
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 fw-bold text-dark"><i class="fas fa-chart-line me-2 text-primary"></i>Revenue Trend (12 Months)</h6>
+                    <span class="badge bg-primary">Yearly</span>
+                </div>
+                <div class="card-body">
+                    <div style="height: 300px;">
+                        <canvas id="revenueChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment Methods -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0 py-3">
+                    <h6 class="m-0 fw-bold text-dark"><i class="fas fa-wallet me-2 text-success"></i>Payment Methods</h6>
+                </div>
+                <div class="card-body text-center">
+                    <div style="height: 280px;">
+                        <canvas id="paymentChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row 2: Daily Sales & Top Products -->
+    <div class="row g-4 mb-4">
+        <!-- Daily Sales -->
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0 py-3">
+                    <h6 class="m-0 fw-bold text-dark"><i class="fas fa-calendar-days me-2 text-info"></i>Daily Sales (Last 7 Days)</h6>
+                </div>
+                <div class="card-body">
+                    <div style="height: 280px;">
+                        <canvas id="dailySalesChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Selling Products -->
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0 py-3">
+                    <h6 class="m-0 fw-bold text-dark"><i class="fas fa-star me-2 text-warning"></i>Top 5 Selling Products</h6>
+                </div>
+                <div class="card-body">
+                    <div style="height: 280px;">
+                        <canvas id="topProductsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alerts & Inventory Health Row -->
     <div class="row g-4 mb-4">
         <!-- Expiry Alerts -->
         <div class="col-xl-6">
@@ -122,7 +184,7 @@
                                 </tr>
                                 {% empty %}
                                 <tr>
-                                    <td colspan="5" class="text-center py-4 text-muted">No items expiring soon. Good job!</td>
+                                    <td colspan="5" class="text-center py-4 text-muted">✓ No items expiring soon. Great inventory management!</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -132,28 +194,77 @@
             </div>
         </div>
 
-        <!-- Inventory Health -->
+        <!-- Quick Stats -->
         <div class="col-xl-6">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header bg-white border-0 py-3">
-                    <h6 class="m-0 fw-bold text-dark">Inventory Health</h6>
+                    <h6 class="m-0 fw-bold text-dark"><i class="fas fa-chart-bar me-2"></i>Business Metrics</h6>
                 </div>
                 <div class="card-body">
-                    <h4 class="small fw-bold">Prescription Drugs <span class="float-end">85%</span></h4>
-                    <div class="progress mb-4" style="height: 8px;">
-                        <div class="progress-bar bg-success" role="progressbar" style="width: 85%"></div>
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="small fw-bold">Today's Transactions</span>
+                            <span class="badge bg-primary">{{ prescriptions_count }}</span>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar bg-primary" style="width: 75%"></div>
+                        </div>
                     </div>
-                    <h4 class="small fw-bold">Over-the-Counter <span class="float-end">72%</span></h4>
-                    <div class="progress mb-4" style="height: 8px;">
-                        <div class="progress-bar bg-info" role="progressbar" style="width: 72%"></div>
+                    
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="small fw-bold">Inventory Stock Levels</span>
+                            <span class="badge bg-success">Good</span>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar bg-success" style="width: 85%"></div>
+                        </div>
                     </div>
-                    <h4 class="small fw-bold">Wellness Products <span class="float-end">63%</span></h4>
-                    <div class="progress mb-4" style="height: 8px;">
-                        <div class="progress-bar bg-warning" role="progressbar" style="width: 63%"></div>
+                    
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="small fw-bold">Customer Satisfaction</span>
+                            <span class="badge bg-info">Very Good</span>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar bg-info" style="width: 92%"></div>
+                        </div>
                     </div>
-                    <h4 class="small fw-bold">Supplies <span class="float-end">40%</span></h4>
-                    <div class="progress" style="height: 8px;">
-                        <div class="progress-bar bg-danger" role="progressbar" style="width: 40%"></div>
+                    
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="small fw-bold">Payment Processing</span>
+                            <span class="badge bg-warning">{{ payment_labels|length }} Methods</span>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div class="progress-bar bg-warning" style="width: 100%"></div>
+                        </div>
+                    </div>
+
+                    <hr>
+                    
+                    <div class="row text-center small">
+                        <div class="col-4">
+                            <div class="mb-2">
+                                <i class="fas fa-arrow-up text-success fa-lg"></i>
+                            </div>
+                            <p class="mb-0"><strong>+{{ new_customers_week }}</strong></p>
+                            <p class="text-muted small">New Customers</p>
+                        </div>
+                        <div class="col-4">
+                            <div class="mb-2">
+                                <i class="fas fa-shopping-cart text-primary fa-lg"></i>
+                            </div>
+                            <p class="mb-0"><strong>{{ total_sales_30 }}</strong></p>
+                            <p class="text-muted small">Sales (30 Days)</p>
+                        </div>
+                        <div class="col-4">
+                            <div class="mb-2">
+                                <i class="fas fa-exclamation-circle text-danger fa-lg"></i>
+                            </div>
+                            <p class="mb-0"><strong>{{ low_stock_count }}</strong></p>
+                            <p class="text-muted small">Low Stock Items</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -161,103 +272,237 @@
     </div>
 </div>
 
-<!-- Chart.js Scripts -->
+<!-- Chart.js Library -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+
+<!-- Analytics Charts Scripts -->
 <script>
+    // Parse data from Django context
+    const revenueData = {{ revenue_trend|safe }};
+    const revenueLabels = {{ labels_revenue|safe }};
+    const dailySalesData = {{ daily_sales|safe }};
+    const dailyLabels = {{ daily_labels|safe }};
+    const paymentLabels = {{ payment_labels|safe }};
+    const paymentData = {{ payment_data|safe }};
+    const paymentColors = {{ payment_colors|safe }};
+    const topProductNames = {{ top_product_names|safe }};
+    const topProductQty = {{ top_product_qty|safe }};
+
     document.addEventListener('DOMContentLoaded', function() {
-        // Revenue Chart
-        var revenueCtx = document.getElementById('revenueChart').getContext('2d');
-        var revenueChart = new Chart(revenueCtx, {
-            type: 'line',
-            data: {
-                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-                datasets: [{
-                    label: 'Revenue',
-                    lineTension: 0.3,
-                    backgroundColor: 'rgba(25, 135, 84, 0.05)',
-                    borderColor: 'rgba(25, 135, 84, 1)',
-                    pointRadius: 3,
-                    pointBackgroundColor: 'rgba(25, 135, 84, 1)',
-                    pointBorderColor: 'rgba(25, 135, 84, 1)',
-                    pointHoverRadius: 3,
-                    pointHoverBackgroundColor: 'rgba(25, 135, 84, 1)',
-                    pointHoverBorderColor: 'rgba(25, 135, 84, 1)',
-                    pointHitRadius: 10,
-                    pointBorderWidth: 2,
-                    data: [15000, 17200, 15800, 18500, 19200, 18700, 21000, 23400, 22100, 24500, 26300, 28500],
-                }],
-            },
-            options: {
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            callback: function(value) {
-                                return '$' + value;
+        
+        // 1. Revenue Trend Chart (Line Chart)
+        const revenueCtx = document.getElementById('revenueChart');
+        if (revenueCtx) {
+            new Chart(revenueCtx, {
+                type: 'line',
+                data: {
+                    labels: revenueLabels,
+                    datasets: [{
+                        label: 'Monthly Revenue ($)',
+                        lineTension: 0.4,
+                        backgroundColor: 'rgba(78, 115, 223, 0.1)',
+                        borderColor: 'rgb(78, 115, 223)',
+                        pointRadius: 4,
+                        pointBackgroundColor: 'rgb(78, 115, 223)',
+                        pointBorderColor: '#fff',
+                        pointHoverRadius: 6,
+                        pointBorderWidth: 2,
+                        data: revenueData,
+                        fill: true,
+                        borderWidth: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value.toLocaleString();
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            labels: {
+                                usePointStyle: true,
+                                padding: 15
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            padding: 12,
+                            cornerRadius: 6,
+                            callbacks: {
+                                label: function(context) {
+                                    return 'Revenue: $' + context.parsed.y.toLocaleString();
+                                }
                             }
                         }
                     }
+                }
+            });
+        }
+
+        // 2. Payment Methods Chart (Pie/Doughnut Chart)
+        const paymentCtx = document.getElementById('paymentChart');
+        if (paymentCtx && paymentLabels.length > 0) {
+            new Chart(paymentCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: paymentLabels,
+                    datasets: [{
+                        data: paymentData,
+                        backgroundColor: paymentColors.length > 0 ? paymentColors : [
+                            '#4e73df', '#1cc88a', '#36b9cc', '#f6c23e'
+                        ],
+                        hoverBackgroundColor: [
+                            '#2e59d9', '#17a673', '#2c9faf', '#dda20a'
+                        ],
+                        borderColor: '#fff',
+                        borderWidth: 2
+                    }]
                 },
-                plugins: {
-                    legend: {
-                        display: false
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                padding: 15,
+                                usePointStyle: true
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.label + ': $' + context.parsed.toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    cutout: '65%'
+                }
+            });
+        }
+
+        // 3. Daily Sales Chart (Bar Chart)
+        const dailySalesCtx = document.getElementById('dailySalesChart');
+        if (dailySalesCtx) {
+            new Chart(dailySalesCtx, {
+                type: 'bar',
+                data: {
+                    labels: dailyLabels,
+                    datasets: [{
+                        label: 'Daily Revenue ($)',
+                        backgroundColor: '#36b9cc',
+                        hoverBackgroundColor: '#2c9faf',
+                        borderColor: '#36b9cc',
+                        borderWidth: 1,
+                        data: dailySalesData
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '$' + value.toLocaleString();
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return 'Revenue: $' + context.parsed.y.toLocaleString();
+                                }
+                            }
+                        }
                     }
                 }
-            }
-        });
+            });
+        }
 
-        // Category Chart
-        var categoryCtx = document.getElementById('categoryChart').getContext('2d');
-        var categoryChart = new Chart(categoryCtx, {
-            type: 'doughnut',
-            data: {
-                labels: ['Prescription', 'Over-the-Counter', 'Wellness', 'Supplies'],
-                datasets: [{
-                    data: [45, 30, 15, 10],
-                    backgroundColor: ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e'],
-                    hoverBackgroundColor: ['#2e59d9', '#17a673', '#2c9faf', '#dda20a'],
-                    hoverBorderColor: 'rgba(234, 236, 244, 1)',
-                }],
-            },
-            options: {
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: false
-                    }
+        // 4. Top Products Chart (Horizontal Bar Chart)
+        const topProductsCtx = document.getElementById('topProductsChart');
+        if (topProductsCtx && topProductNames.length > 0) {
+            new Chart(topProductsCtx, {
+                type: 'bar',
+                data: {
+                    labels: topProductNames,
+                    datasets: [{
+                        label: 'Units Sold',
+                        backgroundColor: [
+                            '#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74c3c'
+                        ].slice(0, topProductNames.length),
+                        hoverBackgroundColor: [
+                            '#2e59d9', '#17a673', '#2c9faf', '#dda20a', '#c0392b'
+                        ].slice(0, topProductNames.length),
+                        borderWidth: 0,
+                        data: topProductQty
+                    }]
                 },
-                cutout: '70%'
-            }
-        });
-
-        // Traffic Chart
-        var trafficCtx = document.getElementById('trafficChart').getContext('2d');
-        var trafficChart = new Chart(trafficCtx, {
-            type: 'bar',
-            data: {
-                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-                datasets: [{
-                    label: 'Customer Count',
-                    backgroundColor: '#4e73df',
-                    hoverBackgroundColor: '#2e59d9',
-                    borderColor: '#4e73df',
-                    data: [120, 145, 132, 165, 158, 210, 184],
-                }],
-            },
-            options: {
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: false
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            }
+                        },
+                        y: {
+                            grid: {
+                                display: false
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return 'Units: ' + context.parsed.x;
+                                }
+                            }
+                        }
                     }
                 }
-            }
-        });
+            });
+        }
     });
 </script>
 {% endblock %}

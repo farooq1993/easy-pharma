@@ -1,0 +1,241 @@
+{% extends 'base.html' %}
+{% load custom_filters %}
+
+{% block title %}GST Filing Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2 class="fw-bold mb-0">GST Filing Dashboard</h2>
+            <p class="text-muted">Manage GST filings and track compliance deadlines</p>
+        </div>
+        <div class="col-md-4 text-end">
+            {% if gst_config %}
+                <a href="{% url 'gst_config' %}" class="btn btn-outline-primary me-2">
+                    <i class="fas fa-cog"></i> Configuration
+                </a>
+                <a href="{% url 'gst_filing_create' %}" class="btn btn-success">
+                    <i class="fas fa-plus"></i> New Filing
+                </a>
+            {% else %}
+                <a href="{% url 'gst_config' %}" class="btn btn-primary">
+                    <i class="fas fa-wrench"></i> Setup GST
+                </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- GST Configuration Status -->
+    {% if gst_config %}
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <h6 class="text-muted small">Scheme</h6>
+                            <p class="fw-bold mb-0">
+                                {% if gst_config.scheme == 'regular' %}
+                                    <span class="badge bg-info">Regular Scheme</span>
+                                {% else %}
+                                    <span class="badge bg-warning">Composition Scheme</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="col-md-4">
+                            <h6 class="text-muted small">GST Number</h6>
+                            <p class="fw-bold mb-0">{{ gst_config.gst_number }}</p>
+                        </div>
+                        <div class="col-md-4">
+                            <h6 class="text-muted small">Filing Frequency</h6>
+                            <p class="fw-bold mb-0">{{ gst_config.get_filing_frequency_display }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm bg-light">
+                <div class="card-body text-center">
+                    <h3 class="text-primary mb-1">{{ total_filings }}</h3>
+                    <p class="text-muted small mb-0">Total Filings</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm bg-light">
+                <div class="card-body text-center">
+                    <h3 class="text-success mb-1">{{ filed_filings }}</h3>
+                    <p class="text-muted small mb-0">Filed</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm bg-light">
+                <div class="card-body text-center">
+                    <h3 class="text-warning mb-1">{{ pending_filings }}</h3>
+                    <p class="text-muted small mb-0">Pending</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm bg-light">
+                <div class="card-body text-center">
+                    <h3 class="text-danger mb-1">{{ rejected_filings }}</h3>
+                    <p class="text-muted small mb-0">Rejected</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upcoming Filings -->
+    {% if upcoming_filings %}
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light border-0">
+                    <h5 class="mb-0"><i class="fas fa-clock text-warning"></i> Upcoming Filings</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        {% for filing in upcoming_filings %}
+                        <a href="{% url 'gst_filing_detail' filing.id %}" class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">{{ filing.get_form_type_display }}</h6>
+                                <small class="text-warning fw-bold">Due: {{ filing.due_date|date:"d M Y" }}</small>
+                            </div>
+                            <small class="text-muted">{{ filing.period_start|date:"M d" }} - {{ filing.period_end|date:"M d, Y" }}</small>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Overdue Filings -->
+        {% if overdue_filings %}
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm border-danger">
+                <div class="card-header bg-danger bg-opacity-10 border-0">
+                    <h5 class="mb-0 text-danger"><i class="fas fa-exclamation-circle"></i> Overdue Filings</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        {% for filing in overdue_filings %}
+                        <a href="{% url 'gst_filing_detail' filing.id %}" class="list-group-item list-group-item-action border-danger">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1 text-danger">{{ filing.get_form_type_display }}</h6>
+                                <small class="text-danger fw-bold">Due: {{ filing.due_date|date:"d M Y" }}</small>
+                            </div>
+                            <small class="text-muted">{{ filing.period_start|date:"M d" }} - {{ filing.period_end|date:"M d, Y" }}</small>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- All Filings Table -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light border-0">
+                    <h5 class="mb-0"><i class="fas fa-list"></i> All GST Filings</h5>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Form Type</th>
+                                <th>Period</th>
+                                <th>Due Date</th>
+                                <th>Status</th>
+                                <th>Filed On</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for filing in filings %}
+                            <tr>
+                                <td>
+                                    <span class="badge bg-info">{{ filing.get_form_type_display }}</span>
+                                </td>
+                                <td>
+                                    {{ filing.period_start|date:"d M Y" }} - {{ filing.period_end|date:"d M Y" }}
+                                </td>
+                                <td>
+                                    {{ filing.due_date|date:"d M Y" }}
+                                    {% if filing.is_overdue %}
+                                        <span class="badge bg-danger">Overdue</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if filing.status == 'draft' %}
+                                        <span class="badge bg-secondary">Draft</span>
+                                    {% elif filing.status == 'prepared' %}
+                                        <span class="badge bg-info">Prepared</span>
+                                    {% elif filing.status == 'filed' %}
+                                        <span class="badge bg-success">Filed</span>
+                                    {% elif filing.status == 'accepted' %}
+                                        <span class="badge bg-success">Accepted</span>
+                                    {% elif filing.status == 'rejected' %}
+                                        <span class="badge bg-danger">Rejected</span>
+                                    {% else %}
+                                        <span class="badge bg-warning">{{ filing.get_status_display }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if filing.filed_on %}
+                                        {{ filing.filed_on|date:"d M Y" }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <a href="{% url 'gst_filing_detail' filing.id %}" class="btn btn-outline-primary" title="View">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        {% if filing.status != 'accepted' %}
+                                        <a href="{% url 'gst_filing_edit' filing.id %}" class="btn btn-outline-secondary" title="Edit">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">No filings found</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- No Configuration Alert -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="alert alert-warning border-0" role="alert">
+                <h4 class="alert-heading"><i class="fas fa-exclamation-triangle"></i> GST Not Configured</h4>
+                <p>Please configure your GST details to start tracking GST filings.</p>
+                <a href="{% url 'gst_config' %}" class="btn btn-warning btn-sm">Configure GST Now</a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

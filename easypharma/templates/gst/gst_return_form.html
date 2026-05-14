@@ -1,0 +1,243 @@
+{% extends 'base.html' %}
+
+{% block title %}GST Return Details - {{ filing.get_form_type_display }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-9">
+            <h2 class="fw-bold mb-0">{{ filing.get_form_type_display }} Return Details</h2>
+            <p class="text-muted">{{ filing.period_start|date:"F d, Y" }} - {{ filing.period_end|date:"F d, Y" }}</p>
+        </div>
+        <div class="col-md-3 text-end">
+            <a href="{% url 'gst_filing_detail' filing.id %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Filing
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-light border-0">
+                    <h5 class="mb-0">
+                        {% if filing.form_type in 'gstr-1,gstr-3b,gstr-9' %}
+                            Regular Return Details
+                        {% else %}
+                            Composition Return Details
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="returnForm" method="post">
+                        {% csrf_token %}
+
+                        {% if filing.form_type in 'gstr-1,gstr-3b,gstr-9' %}
+                        <!-- Regular Scheme Return -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <h6 class="mb-3">Supply Details</h6>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Intrastate Supply (SGST)</label>
+                                    <input type="number" class="form-control" name="intrastate_supply" step="0.01"
+                                        value="{{ return_details.intrastate_supply|default:0 }}" placeholder="Enter amount">
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Interstate Supply (IGST)</label>
+                                    <input type="number" class="form-control" name="interstate_supply" step="0.01"
+                                        value="{{ return_details.interstate_supply|default:0 }}" placeholder="Enter amount">
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Exempt Supply</label>
+                                    <input type="number" class="form-control" name="exempt_supply" step="0.01"
+                                        value="{{ return_details.exempt_supply|default:0 }}" placeholder="Enter amount">
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Zero Rated Supply</label>
+                                    <input type="number" class="form-control" name="zero_rated_supply" step="0.01"
+                                        value="{{ return_details.zero_rated_supply|default:0 }}" placeholder="Enter amount">
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <h6 class="mb-3">Tax Breakdown</h6>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Tax Rate 5%</label>
+                                    <div class="input-group mb-2">
+                                        <span class="input-group-text">CGST</span>
+                                        <input type="number" class="form-control" name="cgst_5pct" step="0.01"
+                                            value="{{ return_details.cgst_5pct|default:0 }}">
+                                    </div>
+                                    <div class="input-group mb-2">
+                                        <span class="input-group-text">SGST</span>
+                                        <input type="number" class="form-control" name="sgst_5pct" step="0.01"
+                                            value="{{ return_details.sgst_5pct|default:0 }}">
+                                    </div>
+                                    <div class="input-group">
+                                        <span class="input-group-text">IGST</span>
+                                        <input type="number" class="form-control" name="igst_5pct" step="0.01"
+                                            value="{{ return_details.igst_5pct|default:0 }}">
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Tax Rate 12%</label>
+                                    <div class="input-group mb-2">
+                                        <span class="input-group-text">CGST</span>
+                                        <input type="number" class="form-control" name="cgst_12pct" step="0.01"
+                                            value="{{ return_details.cgst_12pct|default:0 }}">
+                                    </div>
+                                    <div class="input-group mb-2">
+                                        <span class="input-group-text">SGST</span>
+                                        <input type="number" class="form-control" name="sgst_12pct" step="0.01"
+                                            value="{{ return_details.sgst_12pct|default:0 }}">
+                                    </div>
+                                    <div class="input-group">
+                                        <span class="input-group-text">IGST</span>
+                                        <input type="number" class="form-control" name="igst_12pct" step="0.01"
+                                            value="{{ return_details.igst_12pct|default:0 }}">
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Tax Rate 18%</label>
+                                    <div class="input-group mb-2">
+                                        <span class="input-group-text">CGST</span>
+                                        <input type="number" class="form-control" name="cgst_18pct" step="0.01"
+                                            value="{{ return_details.cgst_18pct|default:0 }}">
+                                    </div>
+                                    <div class="input-group mb-2">
+                                        <span class="input-group-text">SGST</span>
+                                        <input type="number" class="form-control" name="sgst_18pct" step="0.01"
+                                            value="{{ return_details.sgst_18pct|default:0 }}">
+                                    </div>
+                                    <div class="input-group">
+                                        <span class="input-group-text">IGST</span>
+                                        <input type="number" class="form-control" name="igst_18pct" step="0.01"
+                                            value="{{ return_details.igst_18pct|default:0 }}">
+                                    </div>
+                                </div>
+
+                                <div class="mb-0">
+                                    <label class="form-label">Tax Rate 28%</label>
+                                    <div class="input-group mb-2">
+                                        <span class="input-group-text">CGST</span>
+                                        <input type="number" class="form-control" name="cgst_28pct" step="0.01"
+                                            value="{{ return_details.cgst_28pct|default:0 }}">
+                                    </div>
+                                    <div class="input-group mb-2">
+                                        <span class="input-group-text">SGST</span>
+                                        <input type="number" class="form-control" name="sgst_28pct" step="0.01"
+                                            value="{{ return_details.sgst_28pct|default:0 }}">
+                                    </div>
+                                    <div class="input-group">
+                                        <span class="input-group-text">IGST</span>
+                                        <input type="number" class="form-control" name="igst_28pct" step="0.01"
+                                            value="{{ return_details.igst_28pct|default:0 }}">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {% else %}
+                        <!-- Composition Scheme Return -->
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Total Turnover</label>
+                                    <input type="number" class="form-control" name="total_turnover" step="0.01"
+                                        value="{{ return_details.total_turnover|default:0 }}" placeholder="Enter total turnover" required>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Composition Tax Rate (%)</label>
+                                    <input type="number" class="form-control" name="composition_tax_rate" step="0.01"
+                                        value="{{ return_details.composition_tax_rate|default:1 }}" placeholder="Usually 1%" required>
+                                    <small class="text-muted">Typically 1% for pharmacies under composition scheme</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Composition Tax Liability</label>
+                                    <input type="number" class="form-control" name="composition_tax_liability" step="0.01"
+                                        value="{{ return_details.composition_tax_liability|default:0 }}" placeholder="Tax to be paid" required>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Supplies within State</label>
+                                    <input type="number" class="form-control" name="supplies_within_state" step="0.01"
+                                        value="{{ return_details.supplies_within_state|default:0 }}" placeholder="Enter amount">
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Supplies outside State</label>
+                                    <input type="number" class="form-control" name="supplies_outside_state" step="0.01"
+                                        value="{{ return_details.supplies_outside_state|default:0 }}" placeholder="Enter amount">
+                                </div>
+
+                                <div class="alert alert-info">
+                                    <small>
+                                        <strong>Composition Scheme:</strong><br>
+                                        • No Input Tax Credit (ITC)<br>
+                                        • No B2B supplies allowed<br>
+                                        • 1% tax rate for pharmacies<br>
+                                        • Can't make inter-state supplies
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Submit Buttons -->
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <button type="button" class="btn btn-outline-secondary" onclick="history.back()">
+                                <i class="fas fa-times"></i> Cancel
+                            </button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Save Return Details
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('returnForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const data = Object.fromEntries(formData);
+    
+    try {
+        const response = await fetch('{% url "gst_return_edit" filing.id %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+            alert('Return details saved successfully!');
+            window.location.href = '{% url "gst_filing_detail" filing.id %}';
+        } else {
+            alert('Error: ' + result.error);
+        }
+    } catch (error) {
+        alert('Error saving return details: ' + error);
+    }
+});
+</script>
+{% endblock %}

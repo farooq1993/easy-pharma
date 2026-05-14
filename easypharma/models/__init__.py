@@ -3,3 +3,4 @@ from .Items import DrugCompany, ProductType, ProductSchedule, ProductTax, Produc
 from .purchase_invoice import Supplier, PurchaseInvoice, PurchaseItem
 from .sales import Customer, SaleInvoice, SaleItem
 from .stock import StockBatch
+from .gst import GSTScheme, GSTConfiguration, GSTFiling, GSTReturn, GSTCompositionReturn, GSTReminder

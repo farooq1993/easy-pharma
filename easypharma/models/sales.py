@@ -2,6 +2,7 @@ from django.db import models
 from tenants.models import TenantAwareModel
 from easypharma.models.Items import Products
 from django.conf import settings
+from django.db import transaction
 
 class Customer(TenantAwareModel):
     name = models.CharField(max_length=200)
@@ -45,3 +46,71 @@ class SaleItem(TenantAwareModel):
 
     def __str__(self):
         return f"{self.product.product_name} - {self.quantity}"
+
+
+class SalesReturn(TenantAwareModel):
+    return_inv_no = models.CharField(max_length=50, unique=True)
+    sale_invoice = models.ForeignKey(SaleInvoice, on_delete=models.CASCADE, related_name='sales_return')
+    return_qty = models.IntegerField()
+    return_at = models.DateTimeField(auto_now_add=True)
+
+
+    def save(self, *args, **kwargs):
+
+        if not self.return_inv_no:
+
+            with transaction.atomic():
+
+                last_return = (
+                    SalesReturn.objects
+                    .select_for_update()
+                    .filter(tenant=self.tenant)
+                    .order_by('-id')
+                    .first()
+                )
+
+                if last_return and last_return.return_inv_no:
+
+                    try:
+                        last_number = int(
+                            last_return.return_inv_no.split('-')[-1]
+                        )
+
+                    except (ValueError, IndexError):
+                        last_number = 0
+
+                else:
+                    last_number = 0
+
+                new_number = last_number + 1
+
+                self.return_inv_no = (
+                    f"SR-{self.tenant.id}-{new_number:04d}"
+                )
+
+                super().save(*args, **kwargs)
+
+        else:
+            super().save(*args, **kwargs)
+    
+
+    def __str__(self):
+        return self.sale_invoice.customer
+
+
+class SalesReturnItem(TenantAwareModel):
+    sales_return = models.ForeignKey(SalesReturn, on_delete=models.CASCADE, related_name='return_items')
+    sale_item = models.ForeignKey(SaleItem, on_delete=models.CASCADE)
+    returned_quantity = models.PositiveIntegerField()
+    return_reason = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Return of {self.returned_quantity} x {self.sale_item.product.product_name}"
+
+    def save(self, *args, **kwargs):
+        # Ensure returned quantity doesn't exceed sold quantity
+        if self.returned_quantity > self.sale_item.quantity:
+            raise ValueError("Returned quantity cannot exceed sold quantity")
+        super().save(*args, **kwargs)
+    

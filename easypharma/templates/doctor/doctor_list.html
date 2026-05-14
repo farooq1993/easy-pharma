@@ -1,0 +1,237 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row align-items-center mb-4">
+        <div class="col">
+            <h2 class="fw-bold mb-0">Doctors</h2>
+            <p class="text-muted small">Manage doctor information for prescriptions.</p>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-success shadow-sm px-4" data-bs-toggle="modal" data-bs-target="#addDoctorModal">
+                <i class="fas fa-plus me-2"></i> Add Doctor
+            </button>
+        </div>
+    </div>
+
+    {% include 'includes/messages.html' %}
+
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light text-muted small text-uppercase">
+                        <tr>
+                            <th class="ps-4">#</th>
+                            <th>Name</th>
+                            <th>Phone</th>
+                            <th>Email</th>
+                            <th>Specialization</th>
+                            <th>Default</th>
+                            <th class="text-end pe-4">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for doctor in doctors %}
+                        <tr id="doctor-row-{{ doctor.id }}">
+                            <td class="ps-4 text-muted">{{ forloop.counter }}</td>
+                            <td>
+                                <span class="doctor-name">{{ doctor.name }}</span>
+                                <input type="text" class="form-control form-control-sm d-none doctor-name-input" value="{{ doctor.name }}">
+                            </td>
+                            <td>
+                                <span class="doctor-phone">{{ doctor.phone|default:"-" }}</span>
+                                <input type="text" class="form-control form-control-sm d-none doctor-phone-input" value="{{ doctor.phone }}">
+                            </td>
+                            <td>
+                                <span class="doctor-email">{{ doctor.email|default:"-" }}</span>
+                                <input type="email" class="form-control form-control-sm d-none doctor-email-input" value="{{ doctor.email }}">
+                            </td>
+                            <td>
+                                <span class="doctor-specialization">{{ doctor.specialization|default:"-" }}</span>
+                                <input type="text" class="form-control form-control-sm d-none doctor-specialization-input" value="{{ doctor.specialization }}">
+                            </td>
+                            <td>
+                                {% if doctor.is_default %}
+                                    <span class="badge bg-success">Default</span>
+                                {% else %}
+                                    <span class="text-muted">No</span>
+                                {% endif %}
+                                <input type="checkbox" class="doctor-default d-none" {% if doctor.is_default %}checked{% endif %}>
+                            </td>
+                            <td class="text-end pe-4">
+                                <div class="btn-group">
+                                    <button class="btn btn-sm btn-outline-primary border-0 edit-btn" onclick="toggleEdit({{ doctor.id }})">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-success border-0 d-none save-btn" onclick="saveDoctor({{ doctor.id }})">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteDoctor({{ doctor.id }}, '{{ doctor.name }}')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">
+                                No doctors found. Click "Add Doctor" to create one.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Doctor Modal -->
+<div class="modal fade" id="addDoctorModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 rounded-4 shadow">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold">Add Doctor</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="addDoctorForm">
+                {% csrf_token %}
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label small text-uppercase fw-bold">Name *</label>
+                        <input type="text" name="name" class="form-control py-2" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-uppercase fw-bold">Phone</label>
+                        <input type="text" name="phone" class="form-control py-2">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-uppercase fw-bold">Email</label>
+                        <input type="email" name="email" class="form-control py-2">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small text-uppercase fw-bold">Specialization</label>
+                        <input type="text" name="specialization" class="form-control py-2">
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input type="checkbox" name="is_default" class="form-check-input" id="isDefault">
+                            <label class="form-check-label" for="isDefault">Set as default doctor</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success px-4">Save Doctor</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleEdit(id) {
+    const row = document.getElementById(`doctor-row-${id}`);
+    const displayElements = row.querySelectorAll('.doctor-name, .doctor-phone, .doctor-email, .doctor-specialization, .edit-btn, .save-btn');
+    const inputElements = row.querySelectorAll('.doctor-name-input, .doctor-phone-input, .doctor-email-input, .doctor-specialization-input, .doctor-default');
+    const badgeElement = row.querySelector('.badge, .text-muted');
+
+    displayElements.forEach(el => el.classList.toggle('d-none'));
+    inputElements.forEach(el => el.classList.toggle('d-none'));
+    if (badgeElement) badgeElement.classList.toggle('d-none');
+}
+
+async function saveDoctor(id) {
+    const row = document.getElementById(`doctor-row-${id}`);
+    const data = {
+        id: id,
+        name: row.querySelector('.doctor-name-input').value,
+        phone: row.querySelector('.doctor-phone-input').value,
+        email: row.querySelector('.doctor-email-input').value,
+        specialization: row.querySelector('.doctor-specialization-input').value,
+        is_default: row.querySelector('.doctor-default').checked
+    };
+
+    try {
+        const response = await fetch('/doctor/api/', {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            // Refresh the page to update default doctor status for all rows
+            location.reload();
+        } else {
+            alert('Failed to save changes');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Something went wrong');
+    }
+}
+
+async function deleteDoctor(id, name) {
+    if (!confirm(`Are you sure you want to delete doctor "${name}"?`)) return;
+
+    try {
+        const response = await fetch('/doctor/api/', {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({ id: id })
+        });
+
+        if (response.ok) {
+            document.getElementById(`doctor-row-${id}`).remove();
+        } else {
+            alert('Failed to delete doctor');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Something went wrong');
+    }
+}
+
+// Handle add doctor form
+document.getElementById('addDoctorForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const formData = new FormData(this);
+    const data = {
+        name: formData.get('name'),
+        phone: formData.get('phone'),
+        email: formData.get('email'),
+        specialization: formData.get('specialization'),
+        is_default: formData.get('is_default') === 'on'
+    };
+
+    try {
+        const response = await fetch('/doctor/api/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify(data)
+        });
+
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('Failed to add doctor');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Something went wrong');
+    }
+});
+</script>
+{% endblock %}

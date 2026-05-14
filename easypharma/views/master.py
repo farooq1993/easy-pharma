@@ -104,7 +104,12 @@ class MasterCRUDView(View):
         try:
             data = json.loads(request.body)
             model = self.get_model(master_type)
-            item = get_object_or_404(model, id=data.get('id'), tenant=request.tenant)
+            if master_type == 'pharmacy-link':
+                item = request.tenant
+                if item.id != data.get('id'):
+                    return JsonResponse({'error': 'Invalid tenant id'}, status=400)
+            else:
+                item = get_object_or_404(model, id=data.get('id'), tenant=request.tenant)
             
             for field in self.get_context_data(master_type)['fields']:
                 if field['name'] in data:
@@ -119,7 +124,12 @@ class MasterCRUDView(View):
         try:
             data = json.loads(request.body)
             model = self.get_model(master_type)
-            item = get_object_or_404(model, id=data.get('id'), tenant=request.tenant)
+            if master_type == 'pharmacy-link':
+                item = request.tenant
+                if item.id != data.get('id'):
+                    return JsonResponse({'error': 'Invalid tenant id'}, status=400)
+            else:
+                item = get_object_or_404(model, id=data.get('id'), tenant=request.tenant)
             item.delete()
             return JsonResponse({'success': True})
         except Exception as e:

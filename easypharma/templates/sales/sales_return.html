@@ -1,0 +1,196 @@
+﻿{% extends "includes/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row align-items-center mb-4">
+        <div class="col">
+            <h2 class="fw-bold mb-0">Sales Returns</h2>
+            <p class="text-muted small">Process customer returns by selecting items from their invoices.</p>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Customer Selection -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="mb-0">Step 1: Select Customer</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="select_customer">
+                        <div class="mb-3">
+                            <label for="customer_name" class="form-label">Customer Name</label>
+                            <input type="text" class="form-control" id="customer_name" name="customer_name"
+                                   list="customerList" placeholder="Type customer name..." autocomplete="off"
+                                   value="{% if selected_customer %}{{ selected_customer.name }}{% endif %}" required>
+                            <input type="hidden" id="customer_id" name="customer_id"
+                                   value="{% if selected_customer %}{{ selected_customer.id }}{% endif %}">
+                            <datalist id="customerList">
+                                {% for customer in customers %}
+                                <option value="{{ customer.name }}{% if customer.phone %} ({{ customer.phone }}){% endif %}" data-id="{{ customer.id }}"></option>
+                                {% endfor %}
+                            </datalist>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Find Invoices</button>
+                    </form>
+                    <script>
+                        (function() {
+                            const customerInput = document.getElementById('customer_name');
+                            const customerIdInput = document.getElementById('customer_id');
+                            const options = Array.from(document.querySelectorAll('#customerList option'));
+
+                            customerInput.addEventListener('input', function() {
+                                const value = this.value;
+                                const match = options.find(opt => opt.value === value);
+                                customerIdInput.value = match ? match.dataset.id : '';
+                            });
+                        })();
+                    </script>
+                </div>
+            </div>
+        </div>
+
+        <!-- Invoice Selection -->
+        {% if selected_customer or selected_customer_name %}
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="mb-0">Step 2: Select Invoice</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="select_invoice">
+                        <input type="hidden" name="customer_id" value="{% if selected_customer %}{{ selected_customer.id }}{% endif %}">
+                        <input type="hidden" name="customer_name" value="{% if selected_customer_name %}{{ selected_customer_name }}{% endif %}">
+                        <div class="mb-3">
+                            <label class="form-label">Customer: <strong>{% if selected_customer %}{{ selected_customer.name }}{% else %}{{ selected_customer_name }}{% endif %}</strong></label>
+                        </div>
+                        <div class="mb-3">
+                            <label for="invoice_id" class="form-label">Invoice</label>
+                            <select class="form-select" id="invoice_id" name="invoice_id" required>
+                                <option value="">Choose invoice...</option>
+                                {% for invoice in invoices %}
+                                <option value="{{ invoice.id }}">
+                                    #{{ invoice.invoice_number }} - {{ invoice.created_at|date:"M d, Y" }} - ₹{{ invoice.total_amount }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Select Items</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Item Return Form -->
+        {% if selected_invoice %}
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="mb-0">Step 3: Return Items</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="process_return">
+                        <input type="hidden" name="invoice_id" value="{{ selected_invoice.id }}">
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Invoice: <strong>#{{ selected_invoice.invoice_number }}</strong></label>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Items to Return:</label>
+                            {% for item in sale_items %}
+                            <div class="border rounded p-3 mb-2">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <strong>{{ item.product.product_name }}</strong><br>
+                                        <small class="text-muted">
+                                            Batch: {{ item.batch_number }} | 
+                                            Sold: {{ item.quantity }} | 
+                                            Price: ₹{{ item.unit_price }}
+                                        </small>
+                                    </div>
+                                </div>
+                                <div class="row mt-2">
+                                    <div class="col-6">
+                                        <label class="form-label small">Return Qty</label>
+                                        <input type="number" class="form-control form-control-sm" 
+                                               name="return_quantities[]" min="0" max="{{ item.quantity }}" value="0">
+                                        <input type="hidden" name="return_items[]" value="{{ item.id }}">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small">Reason (Optional)</label>
+                                        <input type="text" class="form-control form-control-sm" 
+                                               name="return_reasons[]" placeholder="e.g., damaged, wrong item">
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <button type="submit" class="btn btn-success w-100">Process Return</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Return History -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-header bg-white border-bottom">
+                    <h5 class="mb-0">Recent Return History</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead class="bg-light text-muted small text-uppercase">
+                                <tr>
+                                    <th>Return No.</th>
+                                    <th>Invoice</th>
+                                    <th>Customer</th>
+                                    <th>Items Returned</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for ret in returns %}
+                                <tr>
+                                    <td><span class="badge bg-secondary">{{ ret.return_inv_no }}</span></td>
+                                    <td>#{{ ret.sale_invoice.invoice_number }}</td>
+                                    <td>{{ ret.sale_invoice.customer.name|default:"Walk-in" }}</td>
+                                    <td>{{ ret.return_qty }}</td>
+                                    <td>{{ ret.return_at|date:"M d, Y H:i" }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center py-4 text-muted">No return records found.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-submit invoice selection  
+document.getElementById('invoice_id')?.addEventListener('change', function() {
+    if (this.value) {
+        this.form.submit();
+    }
+});
+</script>
+{% endblock %}
