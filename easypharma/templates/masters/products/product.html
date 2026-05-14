@@ -42,7 +42,10 @@
 
                     <!-- Product Type -->
                     <div class="col-md-6">
-                        <label for="productType" class="form-label fw-bold small text-uppercase">Product Type</label>
+                        <label for="productType" class="form-label fw-bold small text-uppercase w-100 d-flex justify-content-between">
+                            <span>Product Type</span>
+                            <a href="#" onclick="openQuickAdd('product-type', 'productType', 'Product Type', 'name'); return false;" class="text-success text-decoration-none text-lowercase" title="Add new product type"><i class="fas fa-plus"></i> add new</a>
+                        </label>
                         <select class="form-select py-2" id="productType" name="product_type">
                             <option value="">Select Product Type</option>
                             {% for type in product_types %}
@@ -53,7 +56,10 @@
 
                     <!-- Product Schedule -->
                     <div class="col-md-6">
-                        <label for="productSchedule" class="form-label fw-bold small text-uppercase">Product Schedule</label>
+                        <label for="productSchedule" class="form-label fw-bold small text-uppercase w-100 d-flex justify-content-between">
+                            <span>Product Schedule</span>
+                            <a href="#" onclick="openQuickAdd('drug-schedule', 'productSchedule', 'Product Schedule', 'schedule_name'); return false;" class="text-success text-decoration-none text-lowercase" title="Add new product schedule"><i class="fas fa-plus"></i> add new</a>
+                        </label>
                         <select class="form-select py-2" id="productSchedule" name="product_schedule">
                             <option value="">Select Product Schedule</option>
                             {% for schedule in product_schedules %}
@@ -81,7 +87,10 @@
 
                     <!-- Product Content -->
                     <div class="col-md-6">
-                        <label for="productContent" class="form-label fw-bold small text-uppercase">Product Content</label>
+                        <label for="productContent" class="form-label fw-bold small text-uppercase w-100 d-flex justify-content-between">
+                            <span>Product Content</span>
+                            <a href="#" onclick="openQuickAdd('product-content', 'productContent', 'Product Content', 'content_name'); return false;" class="text-success text-decoration-none text-lowercase" title="Add new product content"><i class="fas fa-plus"></i> add new</a>
+                        </label>
                         <select class="form-select py-2" id="productContent" name="product_content">
                             <option value="">Select Product Content</option>
                             {% for content in product_contents %}
@@ -92,7 +101,10 @@
 
                     <!-- Product Company -->
                     <div class="col-md-6">
-                        <label for="productCompany" class="form-label fw-bold small text-uppercase">Product Company</label>
+                        <label for="productCompany" class="form-label fw-bold small text-uppercase w-100 d-flex justify-content-between">
+                            <span>Product Company</span>
+                            <a href="#" onclick="openQuickAdd('drug-company', 'productCompany', 'Product Company', 'company_name'); return false;" class="text-success text-decoration-none text-lowercase" title="Add new product company"><i class="fas fa-plus"></i> add new</a>
+                        </label>
                         <select class="form-select py-2" id="productCompany" name="compny_name">
                             <option value="">Select Product Company</option>
                             {% for company in drug_companies %}
@@ -112,4 +124,124 @@
         </div>
     </div>
 </div>
+
+<!-- Generic Quick Add Modal -->
+<div class="modal fade" id="quickAddModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold" id="quickAddTitle">Add New</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="quickAddForm" onsubmit="event.preventDefault(); submitQuickAdd();">
+            <input type="hidden" id="qaMasterType">
+            <input type="hidden" id="qaSelectId">
+            <input type="hidden" id="qaFieldName">
+            
+            <div class="mb-3">
+                <label id="qaNameLabel" class="form-label fw-bold small text-uppercase">Name *</label>
+                <input type="text" class="form-control py-2" id="qaNameInput" required>
+            </div>
+            
+            <div class="mb-3" id="qaShortNameContainer" style="display: none;">
+                <label class="form-label fw-bold small text-uppercase">Short Name</label>
+                <input type="text" class="form-control py-2" id="qaShortNameInput">
+            </div>
+        </form>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-light px-4" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success px-4" onclick="submitQuickAdd()" id="qaSaveBtn">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let qaModal;
+
+document.addEventListener('DOMContentLoaded', function() {
+    qaModal = new bootstrap.Modal(document.getElementById('quickAddModal'));
+    
+    // Auto focus input when modal opens
+    document.getElementById('quickAddModal').addEventListener('shown.bs.modal', function () {
+        document.getElementById('qaNameInput').focus();
+    });
+});
+
+function openQuickAdd(masterType, selectId, title, fieldName) {
+    document.getElementById('qaMasterType').value = masterType;
+    document.getElementById('qaSelectId').value = selectId;
+    document.getElementById('qaFieldName').value = fieldName;
+    document.getElementById('quickAddTitle').innerText = 'Add ' + title;
+    document.getElementById('qaNameLabel').innerText = title + ' Name *';
+    document.getElementById('qaNameInput').value = '';
+    
+    if (masterType === 'drug-company') {
+        document.getElementById('qaShortNameContainer').style.display = 'block';
+        document.getElementById('qaShortNameInput').value = '';
+    } else {
+        document.getElementById('qaShortNameContainer').style.display = 'none';
+    }
+    
+    qaModal.show();
+}
+
+function submitQuickAdd() {
+    const masterType = document.getElementById('qaMasterType').value;
+    const selectId = document.getElementById('qaSelectId').value;
+    const fieldName = document.getElementById('qaFieldName').value;
+    const nameVal = document.getElementById('qaNameInput').value.trim();
+    
+    if (!nameVal) {
+        alert('Please enter a name');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append(fieldName, nameVal);
+    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+    
+    if (masterType === 'drug-company') {
+        formData.append('sht_name', document.getElementById('qaShortNameInput').value.trim());
+    }
+    
+    const saveBtn = document.getElementById('qaSaveBtn');
+    const originalText = saveBtn.innerText;
+    saveBtn.innerText = 'Saving...';
+    saveBtn.disabled = true;
+    
+    fetch('/type/' + masterType + '/', {
+        method: 'POST',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        saveBtn.innerText = originalText;
+        saveBtn.disabled = false;
+        
+        if (data.success) {
+            const select = document.getElementById(selectId);
+            const option = new Option(data.name, data.id, true, true);
+            select.add(option);
+            
+            qaModal.hide();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        saveBtn.innerText = originalText;
+        saveBtn.disabled = false;
+        alert('An error occurred while saving.');
+        console.error(error);
+    });
+}
+</script>
 {% endblock %}

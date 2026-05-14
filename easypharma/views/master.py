@@ -93,9 +93,14 @@ class MasterCRUDView(View):
         
         data = {field['name']: request.POST.get(field['name']) for field in self.get_context_data(master_type)['fields']}
         try:
-            model.objects.create(tenant=request.tenant, **data)
+            instance = model.objects.create(tenant=request.tenant, **data)
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                first_field = self.get_context_data(master_type)['fields'][0]['name']
+                return JsonResponse({'success': True, 'id': instance.id, 'name': getattr(instance, first_field)})
             messages.success(request, f"{master_type.replace('-', ' ').title()} added successfully.")
         except Exception as e:
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': str(e)})
             messages.error(request, f"Error: {str(e)}")
             
         return redirect('master-crud', master_type=master_type)
@@ -200,15 +205,42 @@ class QuickProductAPI(View):
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
 
+class ProductMasterSearchAPI(View):
+    def get(self, request):
+        query = request.GET.get('q', '')
+        products = Products.objects.filter(
+            tenant=request.tenant,
+            product_name__icontains=query
+        ).select_related('product_tax')[:20]
+        
+        data = []
+        for p in products:
+            data.append({
+                'id': p.id,
+                'name': p.product_name,
+                'packing': p.product_packing or '',
+                'conversion_factor': p.conversion_factor,
+                'tax_rate': p.product_tax.tax_rate if p.product_tax else 0
+            })
+        return JsonResponse(data, safe=False)
+
 class ProductListView(View):
     template_name = 'masters/products/product_list.html'
     def get(self, request):
         products = Products.objects.filter(tenant=request.tenant).select_related(
             'product_type', 'product_schedule', 'product_tax', 'product_content', 'compny_name'
-        )
-        paginator = Paginator(products, 10)
+        ).order_by('-id')
+        paginator = Paginator(products, 20)
         page = request.GET.get('page')
-        return render(request, self.template_name, {'products': paginator.get_page(page)})
+        page_obj = paginator.get_page(page)
+        
+        context = {
+            'products': page_obj,
+            'page_obj': page_obj,
+            'product_types': ProductType.objects.filter(tenant=request.tenant),
+            'product_schedules': ProductSchedule.objects.filter(tenant=request.tenant)
+        }
+        return render(request, self.template_name, context)
 
     def delete(self, request):
         try:

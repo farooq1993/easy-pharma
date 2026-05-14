@@ -14,10 +14,41 @@ import uuid
 import json
 
 def home_view(request):
+    period = request.GET.get('period', 'today')
     today = date.today()
     if not request.tenant:
         messages.warning(request, "No pharmacy linked to your account. Please assign one in Admin.")
     
+    # Determine date range based on period
+    if period == 'month':
+        start_date = today.replace(day=1)
+        period_label = 'This Month'
+    elif period == 'year':
+        start_date = today.replace(month=1, day=1)
+        period_label = 'This Year'
+    else:
+        start_date = today
+        period_label = 'Today'
+
+    # Period Stats
+    period_revenue = SaleInvoice.objects.filter(
+        tenant=request.tenant, 
+        created_at__date__gte=start_date,
+        created_at__date__lte=today
+    ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+
+    period_transactions = SaleInvoice.objects.filter(
+        tenant=request.tenant, 
+        created_at__date__gte=start_date,
+        created_at__date__lte=today
+    ).count()
+
+    new_customers_period = Customer.objects.filter(
+        tenant=request.tenant,
+        created_at__date__gte=start_date,
+        created_at__date__lte=today
+    ).count()
+
     # Basic Stats
     today_revenue = SaleInvoice.objects.filter(tenant=request.tenant, created_at__date=today).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     total_customers = Customer.objects.filter(tenant=request.tenant).count()
@@ -41,18 +72,18 @@ def home_view(request):
     revenue_trend = []
     labels_revenue = []
     for i in range(11, -1, -1):
-        month_start = today.replace(day=1) - timedelta(days=i*30)
-        month_start = month_start.replace(day=1)
-        month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+        month_start_trend = today.replace(day=1) - timedelta(days=i*30)
+        month_start_trend = month_start_trend.replace(day=1)
+        month_end_trend = (month_start_trend + timedelta(days=32)).replace(day=1) - timedelta(days=1)
         
         monthly_revenue = SaleInvoice.objects.filter(
             tenant=request.tenant,
-            created_at__date__gte=month_start,
-            created_at__date__lte=month_end
+            created_at__date__gte=month_start_trend,
+            created_at__date__lte=month_end_trend
         ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
         
         revenue_trend.append(float(monthly_revenue))
-        labels_revenue.append(month_start.strftime('%b'))
+        labels_revenue.append(month_start_trend.strftime('%b'))
     
     # Sales by Payment Method (Last 30 days)
     thirty_days_ago = today - timedelta(days=30)
@@ -120,6 +151,11 @@ def home_view(request):
     ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     
     context = {
+        'period': period,
+        'period_label': period_label,
+        'period_revenue': period_revenue,
+        'period_transactions': period_transactions,
+        'new_customers_period': new_customers_period,
         'today_revenue': today_revenue,
         'total_customers': total_customers,
         'low_stock_count': low_stock_count,

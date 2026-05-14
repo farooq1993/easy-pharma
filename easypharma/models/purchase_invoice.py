@@ -21,9 +21,11 @@ class PurchaseInvoice(TenantAwareModel):
     supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, null=True, blank=True)
     invoice_number = models.CharField(max_length=100)
     purchase_date = models.DateField(null=True, blank=True)
+    payment_mode = models.CharField(max_length=20, default='Cash', choices=[('Cash', 'Cash'), ('Credit', 'Credit')])
     
     sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    discount_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     

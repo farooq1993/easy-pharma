@@ -69,7 +69,7 @@
         <div class="card shadow-sm">
             <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
                 <h5 class="mb-0"><i class="fas fa-list"></i> All Products</h5>
-                <span class="badge bg-light text-dark">Total: {{ page_obj.paginator.count }}</span>
+                <span class="badge bg-light text-dark" id="productCount">Total: {{ page_obj.paginator.count }}</span>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -87,8 +87,8 @@
                         </thead>
                         <tbody>
                             {% for product in products %}
-                            <tr id="row-{{ product.id }}">
-                                <td class="text-center">{{ forloop.counter }}</td>
+                            <tr id="row-{{ product.id }}" class="product-row">
+                                <td class="text-center">{{ forloop.counter0|add:page_obj.start_index }}</td>
                                 <td>
                                     <strong>{{ product.product_name }}</strong>
                                     {% if not product.product_packing and not product.product_type and not product.product_schedule %}
