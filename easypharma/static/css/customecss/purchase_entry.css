@@ -134,7 +134,7 @@ body {
     display: grid;
     grid-template-columns: minmax(180px, 2fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(80px, 0.8fr) minmax(80px, 0.8fr) minmax(100px, 1fr) minmax(85px, 0.7fr) minmax(100px, 1fr) auto;
     gap: 12px;
-    align-items: end;
+    align-items: start;
 }
 
 @media (max-width: 1300px) {
