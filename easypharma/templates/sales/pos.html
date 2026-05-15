@@ -3,6 +3,12 @@
 
 {% block content %}
 <div class="py-2">
+    <div id="universalLoader" class="universal-loader d-none" role="status" aria-live="polite" aria-busy="false">
+        <div class="loader-spinner">
+            <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+            <div class="loader-text">Please wait...</div>
+        </div>
+    </div>
     <!-- Search Bar Row -->
     <div class="row g-3 mb-3">
         <div class="col-12">
@@ -106,11 +112,16 @@
                                 <span class="text-muted small">GST Total</span>
                                 <span class="fw-bold text-primary small" id="summaryTax">0.00</span>
                             </div>
-                            <div class="d-flex justify-content-between mb-2">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
                                 <span class="text-muted small">Discount</span>
-                                <input type="number"
-                                    class="form-control form-control-sm w-25 text-end border-0 bg-white shadow-sm"
-                                    id="summaryDiscount" value="0" onchange="calculateGrandTotal()">
+                                <div class="d-flex gap-2 align-items-center">
+                                    <input type="number"
+                                        class="form-control form-control-sm w-25 text-end border-0 bg-white shadow-sm"
+                                        id="summaryDiscount" value="0" oninput="calculateDiscount('amt')">
+                                    <input type="number"
+                                        class="form-control form-control-sm w-25 text-end border-0 bg-white shadow-sm"
+                                        id="summaryDiscountPerc" value="0" placeholder="%" oninput="calculateDiscount('perc')">
+                                </div>
                             </div>
                             <hr class="opacity-10">
                             <div class="d-flex justify-content-between align-items-center">
@@ -251,6 +262,7 @@
 <script>
     let cart = [];
     let searchSelectedIndex = -1;
+    const editData = {{ edit_data|default:'null'|safe }};
 
     // Keyboard Shortcuts
     document.addEventListener('keydown', (e) => {
@@ -279,6 +291,34 @@
 
         if (e.key === 'F8') { e.preventDefault(); completeOrder(); }
     });
+
+    function populateEditData(data) {
+        if (!data) return;
+        document.getElementById('patientName').value = data.patient_name || '';
+        document.getElementById('patientPhone').value = data.patient_phone || '';
+        document.getElementById('doctorName').value = data.doctor_name || '';
+        if (data.payment_mode) {
+            const paymentOption = document.querySelector(`input[name="paymentMethod"][value="${data.payment_mode}"]`);
+            if (paymentOption) paymentOption.checked = true;
+        }
+        document.getElementById('summaryDiscount').value = parseFloat(data.discount_amount || 0).toFixed(2);
+        document.getElementById('summaryDiscountPerc').value = parseFloat(data.discount_percentage || 0).toFixed(2);
+        cart = data.items.map(item => ({
+            id: item.product_id,
+            batch_id: item.batch_id,
+            batch_number: item.batch_number,
+            expiry: item.expiry_date ? item.expiry_date.substring(0, 7) : '',
+            name: item.product_name,
+            price: item.price,
+            quantity: item.quantity,
+            tax_rate: item.tax_rate,
+            total: item.total,
+            discount_percentage: item.discount_percentage || 0,
+            max_stock: 9999
+        }));
+        renderCart();
+        calculateDiscount('amt');
+    }
 
     function updateSearchSelection() {
         const results = document.querySelectorAll('.batch-item');
@@ -491,12 +531,54 @@
         document.getElementById('cartTotal').innerText = grandTotal.toFixed(2);
     }
 
+    function calculateDiscount(changed) {
+        const subTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const totalTax = cart.reduce((sum, item) => sum + (item.price * item.quantity * item.tax_rate / 100), 0);
+        const gross = subTotal + totalTax;
+        let amount = parseFloat(document.getElementById('summaryDiscount').value) || 0;
+        let percent = parseFloat(document.getElementById('summaryDiscountPerc').value) || 0;
+
+        if (changed === 'perc') {
+            amount = gross * percent / 100;
+            document.getElementById('summaryDiscount').value = amount.toFixed(2);
+        } else {
+            percent = gross > 0 ? (amount / gross) * 100 : 0;
+            document.getElementById('summaryDiscountPerc').value = percent.toFixed(2);
+        }
+
+        calculateGrandTotal();
+    }
+
+    function showLoader(message = 'Please wait...') {
+        const loader = document.getElementById('universalLoader');
+        if (!loader) return;
+        loader.querySelector('.loader-text').innerText = message;
+        loader.classList.remove('d-none');
+        loader.setAttribute('aria-busy', 'true');
+    }
+
+    function hideLoader() {
+        const loader = document.getElementById('universalLoader');
+        if (!loader) return;
+        loader.classList.add('d-none');
+        loader.setAttribute('aria-busy', 'false');
+    }
+
     function clearCart() { if (confirm('Clear all?')) { cart = []; renderCart(); } }
+
+    if (editData) {
+        populateEditData(editData);
+    }
     function removeFromCart(index) { cart.splice(index, 1); renderCart(); }
 
     async function completeOrder() {
         if (cart.length === 0) return alert('Bill is empty');
+        const checkoutBtn = document.querySelector('.btn-success.btn-lg');
+        if (checkoutBtn) { checkoutBtn.disabled = true; }
+        showLoader('Generating bill...');
+
         const data = {
+            invoice_id: editData?.invoice_id || null,
             patient_name: document.getElementById('patientName').value,
             patient_phone: document.getElementById('patientPhone').value,
             doctor_name: document.getElementById('doctorName').value,
@@ -513,15 +595,22 @@
             discount_amount: parseFloat(document.getElementById('summaryDiscount').value) || 0,
             total_amount: parseFloat(document.getElementById('summaryGrandTotal').innerText)
         };
-        const response = await fetch('/pos/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' }, body: JSON.stringify(data) });
-        const result = await response.json();
-        if (result.success) {
-            // Open print window
-            window.open(`/pos/print/${result.invoice_id}/`, '_blank');
-            alert('Bill generated successfully!');
-            window.location.reload();
-        } else {
-            alert('Error: ' + result.error);
+
+        try {
+            const response = await fetch('/pos/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' }, body: JSON.stringify(data) });
+            const result = await response.json();
+            if (result.success) {
+                window.open(`/pos/print/${result.invoice_id}/`, '_blank');
+                alert('Bill generated successfully!');
+                window.location.reload();
+            } else {
+                alert('Error: ' + result.error);
+            }
+        } catch (err) {
+            alert('Error: ' + err.message);
+        } finally {
+            hideLoader();
+            if (checkoutBtn) { checkoutBtn.disabled = false; }
         }
     }
 </script>
@@ -556,6 +645,32 @@
         background-color: #e9ecef !important;
         border-color: #0d6efd !important;
         box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
+    }
+    .universal-loader {
+        position: fixed;
+        inset: 0;
+        z-index: 2000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255,255,255,0.88);
+        backdrop-filter: blur(2px);
+    }
+    .universal-loader.d-none {
+        display: none !important;
+    }
+    .loader-spinner {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1rem 1.25rem;
+        background: #ffffff;
+        border-radius: 0.75rem;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.12);
+    }
+    .loader-text {
+        font-weight: 600;
+        color: #212529;
     }
     
     /* Enhanced POS Cart Styling */

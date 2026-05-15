@@ -8,6 +8,12 @@
 <link rel="stylesheet" href="{% static 'css/customecss/purchase_entry.css'%}">
 
 <div class="container-fluid py-3 px-4">
+    <div id="universalLoader" class="universal-loader d-none" role="status" aria-live="polite" aria-busy="false">
+        <div class="loader-spinner">
+            <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+            <div class="loader-text">Please wait...</div>
+        </div>
+    </div>
     <!-- Header -->
     <div class="page-header">
         <div>
@@ -120,7 +126,7 @@
     let items = [];
     let selectedProduct = null;
     let currentBatchHistory = [];   // store fetched batches for current product
-    const editData = null;  // for edit mode (not used in this demo but safe)
+    const editData = {{ edit_data|default:'null'|safe }};  // edit mode data from server
     let csrfToken = '{{ csrf_token }}';
 
     function showToast(msg, type = 'success') {
@@ -131,6 +137,21 @@
         setTimeout(() => toast.classList.remove('show'), 2800);
     }
 
+    function showLoader(message = 'Please wait...') {
+        const loader = document.getElementById('universalLoader');
+        if (!loader) return;
+        loader.querySelector('.loader-text').innerText = message;
+        loader.classList.remove('d-none');
+        loader.setAttribute('aria-busy', 'true');
+    }
+
+    function hideLoader() {
+        const loader = document.getElementById('universalLoader');
+        if (!loader) return;
+        loader.classList.add('d-none');
+        loader.setAttribute('aria-busy', 'false');
+    }
+
     // Update unit preview based on selected product
     function updateUnitPreview() {
         if (!selectedProduct) { document.getElementById('unitPreview').innerText = ''; return; }
@@ -138,6 +159,19 @@
         let free = parseFloat(document.getElementById('itemFreeQty').value) || 0;
         let units = (qty + free) * (selectedProduct.conversion_factor || 1);
         document.getElementById('unitPreview').innerHTML = `<i class="fas fa-cubes"></i> Total units: ${units} units`;
+    }
+
+    function populateEditData(data) {
+        if (!data) return;
+        document.getElementById('supplierSelect').value = data.supplier_id || '';
+        document.getElementById('invoiceNumber').value = data.invoice_number || '';
+        document.getElementById('purchaseDate').value = data.purchase_date || '';
+        document.getElementById('summaryDiscount').value = parseFloat(data.discount_amount || 0).toFixed(2);
+        document.getElementById('summaryDiscountPerc').value = parseFloat(data.discount_percentage || 0).toFixed(2);
+        if (data.payment_mode) document.getElementById('summaryPaymentMode').value = data.payment_mode;
+        items = data.items || [];
+        renderTable();
+        calculateDiscount('amt');
     }
 
     // Fetch batch history for selected product (previous purchases, current stock)
@@ -281,6 +315,13 @@
         ['itemQty', 'itemFreeQty'].forEach(id => {
             document.getElementById(id).addEventListener('input', () => updateUnitPreview());
         });
+
+        document.getElementById('summaryDiscount').addEventListener('input', () => calculateDiscount('amt'));
+        document.getElementById('summaryDiscountPerc').addEventListener('input', () => calculateDiscount('perc'));
+
+        if (editData) {
+            populateEditData(editData);
+        }
     });
 
     async function addItem() {
@@ -390,19 +431,40 @@
         if(!supplier) return showToast('Select supplier','error');
         if(!invNo) return showToast('Enter invoice number','error');
         if(items.length===0) return showToast('Add at least one item','error');
+
+        const saveBtn = document.querySelector('.btn-complete');
+        if(saveBtn) { saveBtn.disabled = true; saveBtn.classList.add('disabled'); }
+        showLoader('Saving purchase...');
+
         const data = {
-            supplier_id: supplier, invoice_number: invNo, purchase_date: document.getElementById('purchaseDate').value,
-            items: items, sub_total: parseFloat(document.getElementById('summarySubTotal').innerText.replace('₹','')),
+            supplier_id: supplier,
+            invoice_number: invNo,
+            purchase_date: document.getElementById('purchaseDate').value,
+            items: items,
+            sub_total: parseFloat(document.getElementById('summarySubTotal').innerText.replace('₹','')),
             tax_amount: parseFloat(document.getElementById('summaryTax').innerText.replace('₹','')),
-            discount_percentage: parseFloat(document.getElementById('summaryDiscountPerc').value)||0,
-            discount_amount: parseFloat(document.getElementById('summaryDiscount').value)||0,
+            discount_percentage: parseFloat(document.getElementById('summaryDiscountPerc').value) || 0,
+            discount_amount: parseFloat(document.getElementById('summaryDiscount').value) || 0,
             payment_mode: document.getElementById('summaryPaymentMode').value,
             total_amount: parseFloat(document.getElementById('summaryGrandTotal').innerText.replace('₹',''))
         };
-        const response = await fetch('/entry/', { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken}, body:JSON.stringify(data) });
-        const result = await response.json();
-        if(result.success) { showToast('Purchase saved!'); setTimeout(()=> location.reload(),1500); }
-        else showToast('Error: '+ (result.error||'server'),'error');
+        const endpoint = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
+
+        try {
+            const response = await fetch(endpoint, { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken}, body:JSON.stringify(data) });
+            const result = await response.json();
+            if(result.success) {
+                showToast('Purchase saved!');
+                setTimeout(()=> location.reload(), 1500);
+            } else {
+                showToast('Error: '+ (result.error||'server'),'error');
+            }
+        } catch (err) {
+            showToast('Error: ' + err.message, 'error');
+        } finally {
+            hideLoader();
+            if(saveBtn) { saveBtn.disabled = false; saveBtn.classList.remove('disabled'); }
+        }
     }
 
     window.saveQuickProduct = async function() {
@@ -417,5 +479,34 @@
     window.calculateDiscount = calculateDiscount;
     window.updateUnitPreview = updateUnitPreview;
 </script>
+
+<style>
+    .universal-loader {
+        position: fixed;
+        inset: 0;
+        z-index: 2000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.88);
+        backdrop-filter: blur(2px);
+    }
+    .universal-loader.d-none {
+        display: none !important;
+    }
+    .loader-spinner {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1rem 1.25rem;
+        background: #ffffff;
+        border-radius: 0.75rem;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.12);
+    }
+    .loader-text {
+        font-weight: 600;
+        color: #212529;
+    }
+</style>
 
 {% endblock %}

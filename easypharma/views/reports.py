@@ -1,13 +1,17 @@
+import logging
+
 from django.views import View
 from django.shortcuts import render
 from easypharma.models.stock import StockBatch
-from easypharma.models.Items import Products
+from easypharma.models.Items import Products, ProductSchedule
 from easypharma.models.purchase_invoice import PurchaseInvoice, PurchaseItem
 from easypharma.models.sales import SaleInvoice, SaleItem
 from django.db.models import Sum, F, DecimalField, ExpressionWrapper, Q, Count
 from django.utils.timezone import now
 from datetime import datetime, timedelta
 from decimal import Decimal
+
+logger = logging.getLogger('easypharma.reports')
 
 class StockReportView(View):
     template_name = 'reports/stock_report.html'
@@ -46,6 +50,7 @@ class DailySaleReportView(View):
     template_name = 'reports/daily_sale_report.html'
 
     def get(self, request):
+        selected_schedule = request.GET.get('schedule', 'all')
         # Get date from request or use today
         date_str = request.GET.get('date', now().date())
         if isinstance(date_str, str):
@@ -56,11 +61,16 @@ class DailySaleReportView(View):
         else:
             date_obj = date_str
 
+        logger.debug('DailySaleReportView.get date=%s schedule=%s tenant=%s user=%s', date_obj, selected_schedule, request.tenant, request.user)
+
         # Get sales for the day
         sales = SaleInvoice.objects.filter(
             tenant=request.tenant,
             created_at__date=date_obj
         ).select_related('customer', 'user')
+
+        if selected_schedule and selected_schedule.lower() != 'all':
+            sales = sales.filter(items__product__product_schedule__schedule_name=selected_schedule).distinct()
 
         # Calculate totals
         daily_stats = sales.aggregate(
@@ -81,10 +91,16 @@ class DailySaleReportView(View):
         top_products = SaleItem.objects.filter(
             tenant=request.tenant,
             sale_invoice__created_at__date=date_obj
-        ).values('product__product_name').annotate(
+        )
+        if selected_schedule and selected_schedule.lower() != 'all':
+            top_products = top_products.filter(product__product_schedule__schedule_name=selected_schedule)
+
+        top_products = top_products.values('product__product_name').annotate(
             qty_sold=Sum('quantity'),
             total_revenue=Sum('total_amount')
         ).order_by('-total_revenue')[:10]
+
+        report_schedules = ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('schedule_name')
 
         context = {
             'date': date_obj,
@@ -92,6 +108,8 @@ class DailySaleReportView(View):
             'daily_stats': daily_stats,
             'payment_breakdown': payment_breakdown,
             'top_products': top_products,
+            'report_schedules': report_schedules,
+            'selected_schedule': selected_schedule,
         }
         return render(request, self.template_name, context)
 
@@ -101,55 +119,86 @@ class HalfYearlySaleReportView(View):
     template_name = 'reports/half_yearly_report.html'
 
     def get(self, request):
-        # Get half year from request (H1=Jan-Jun, H2=Jul-Dec) or current half
+        selected_schedule = request.GET.get('schedule', 'all')
+        # Determine whether a custom date range is requested
+        start_date_str = request.GET.get('start_date')
+        end_date_str = request.GET.get('end_date')
+        date_range_label = None
+
+        start_date = None
+        end_date = None
+        if start_date_str and end_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+                if start_date > end_date:
+                    start_date, end_date = end_date, start_date
+                date_range_label = f"{start_date.strftime('%d %b %Y')} - {end_date.strftime('%d %b %Y')}"
+            except ValueError:
+                start_date = None
+                end_date = None
+
         half = request.GET.get('half', 'current')
         year = int(request.GET.get('year', now().year))
 
         today = now().date()
         current_month = today.month
 
-        # Determine which half
-        if half == 'H1' or (half == 'current' and current_month <= 6):
-            start_month = 1
-            end_month = 6
-            half_label = f"H1 {year} (Jan - Jun)"
-        else:
-            start_month = 7
-            end_month = 12
-            half_label = f"H2 {year} (Jul - Dec)"
+        if start_date is None or end_date is None:
+            if half == 'H1' or (half == 'current' and current_month <= 6):
+                start_month = 1
+                end_month = 6
+                half_label = f"H1 {year} (Jan - Jun)"
+            else:
+                start_month = 7
+                end_month = 12
+                half_label = f"H2 {year} (Jul - Dec)"
 
-        # Filter sales for the half year
+            start_date = datetime(year, start_month, 1).date()
+            last_day = datetime(year, end_month, 1).replace(day=28) + timedelta(days=4)
+            last_day = last_day.replace(day=1) - timedelta(days=1)
+            end_date = last_day.date()
+        else:
+            half_label = date_range_label
+
+        logger.debug('HalfYearlySaleReportView.get start_date=%s end_date=%s schedule=%s tenant=%s user=%s', start_date, end_date, selected_schedule, request.tenant, request.user)
+
         sales = SaleInvoice.objects.filter(
             tenant=request.tenant,
-            created_at__year=year,
-            created_at__month__gte=start_month,
-            created_at__month__lte=end_month
+            created_at__date__gte=start_date,
+            created_at__date__lte=end_date
         )
+        if selected_schedule and selected_schedule.lower() != 'all':
+            sales = sales.filter(items__product__product_schedule__schedule_name=selected_schedule).distinct()
 
-        # Monthly breakdown
         monthly_data = []
-        for month in range(start_month, end_month + 1):
-            month_sales = sales.filter(created_at__month=month)
-            month_name = datetime(year, month, 1).strftime('%B')
-            
+        current_month_date = datetime(start_date.year, start_date.month, 1).date()
+        while current_month_date <= end_date:
+            month_sales = sales.filter(
+                created_at__year=current_month_date.year,
+                created_at__month=current_month_date.month
+            )
+            month_name = current_month_date.strftime('%B')
+
             stats = month_sales.aggregate(
                 total=Sum('total_amount'),
                 count=Count('id'),
                 tax=Sum('tax_amount'),
                 discount=Sum('discount_amount')
             )
-            
+
             avg_sale = stats['total'] / stats['count'] if stats['count'] and stats['count'] > 0 else Decimal('0')
-            
             monthly_data.append({
                 'month': month_name,
-                'month_num': month,
+                'month_num': current_month_date.month,
                 'sales_count': stats['count'] or 0,
                 'total': stats['total'] or Decimal('0'),
                 'tax': stats['tax'] or Decimal('0'),
                 'discount': stats['discount'] or Decimal('0'),
                 'avg_sale': avg_sale,
             })
+            next_month = current_month_date.replace(day=28) + timedelta(days=4)
+            current_month_date = next_month.replace(day=1)
 
         # Half year totals
         h_stats = sales.aggregate(
@@ -176,13 +225,36 @@ class HalfYearlySaleReportView(View):
         for customer in top_customers:
             customer['avg_amount'] = customer['amount'] / customer['purchases'] if customer['purchases'] > 0 else 0
 
+        # Sale details for each matching invoice (useful for patient/date-level review)
+        sale_details = sales.select_related('customer').order_by('-created_at')
+
+        # Product-level summary for selected schedule / half-year period
+        product_summary = SaleItem.objects.filter(
+            tenant=request.tenant,
+            sale_invoice__in=sales
+        ).values(
+            'product__product_name',
+            'product__product_schedule__schedule_name'
+        ).annotate(
+            quantity_sold=Sum('quantity'),
+            revenue=Sum('total_amount')
+        ).order_by('-quantity_sold')
+
+        report_schedules = ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('schedule_name')
+
         context = {
             'half_label': half_label,
             'half': half,
             'year': year,
+            'start_date': start_date,
+            'end_date': end_date,
             'monthly_data': monthly_data,
             'h_stats': h_stats,
             'top_customers': top_customers,
+            'sale_details': sale_details,
+            'product_summary': product_summary,
+            'report_schedules': report_schedules,
+            'selected_schedule': selected_schedule,
         }
         return render(request, self.template_name, context)
 

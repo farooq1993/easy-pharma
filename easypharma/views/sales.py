@@ -16,16 +16,63 @@ from easypharma.models.doctor import DoctorModel
 class POSView(View):
     template_name = 'sales/pos.html'
 
-    def get(self, request):
+    def get(self, request, invoice_id=None):
         products = Products.objects.filter(tenant=request.tenant)
         customers = Customer.objects.filter(tenant=request.tenant)
         product_taxes = ProductTax.objects.filter(tenant=request.tenant)
         default_doctor = DoctorModel.objects.filter(tenant=request.tenant, is_default=True).first()
+
+        edit_invoice = None
+        edit_data = None
+        if invoice_id:
+            try:
+                edit_invoice = SaleInvoice.objects.get(id=invoice_id, tenant=request.tenant)
+                items = []
+                for item in edit_invoice.items.all().select_related('product'):
+                    # find batch id if available for the same product and batch
+                    from easypharma.models.stock import StockBatch
+                    batch = StockBatch.objects.filter(
+                        tenant=request.tenant,
+                        product=item.product,
+                        batch_number=item.batch_number
+                    ).first()
+                    items.append({
+                        'product_id': item.product.id,
+                        'batch_id': batch.id if batch else None,
+                        'product_name': item.product.product_name,
+                        'batch_number': item.batch_number,
+                        'expiry_date': item.expiry_date.strftime('%Y-%m-%d') if item.expiry_date else '',
+                        'quantity': item.quantity,
+                        'price': float(item.unit_price),
+                        'tax_rate': float(item.tax_percentage),
+                        'total': float(item.total_amount),
+                        'discount_percentage': float(item.discount_percentage or 0)
+                    })
+
+                gross_amount = float(edit_invoice.sub_total or 0) + float(edit_invoice.tax_amount or 0)
+                discount_amount = float(edit_invoice.discount_amount or 0)
+                discount_percentage = gross_amount > 0 and (discount_amount / gross_amount) * 100 or 0
+
+                edit_data = {
+                    'invoice_id': edit_invoice.id,
+                    'invoice_number': edit_invoice.invoice_number,
+                    'patient_name': edit_invoice.patient_name,
+                    'patient_phone': edit_invoice.patient_phone,
+                    'doctor_name': edit_invoice.doctor_name,
+                    'payment_mode': edit_invoice.payment_mode,
+                    'discount_amount': discount_amount,
+                    'discount_percentage': discount_percentage,
+                    'items': items
+                }
+            except SaleInvoice.DoesNotExist:
+                edit_data = None
+
         return render(request, self.template_name, {
             'products': products,
             'customers': customers,
             'product_taxes': product_taxes,
-            'default_doctor': default_doctor
+            'default_doctor': default_doctor,
+            'edit_data': edit_data
         })
 
     def post(self, request):
@@ -42,20 +89,39 @@ class POSView(View):
                 count = SaleInvoice.objects.filter(tenant=request.tenant).count()
                 invoice_no = f"INV-{tenant_id}-{count + 1}"
                 
-                # Create Sale Invoice
-                invoice = SaleInvoice.objects.create(
-                    tenant=request.tenant,
-                    user=request.user,
-                    invoice_number=invoice_no,
-                    patient_name=data.get('patient_name'),
-                    patient_phone=data.get('patient_phone'),
-                    doctor_name=data.get('doctor_name'),
-                    sub_total=data['sub_total'],
-                    tax_amount=data['tax_amount'],
-                    discount_amount=data['discount_amount'],
-                    total_amount=data['total_amount'],
-                    payment_mode=data['payment_mode']
-                )
+                invoice_id = data.get('invoice_id')
+                if invoice_id:
+                    invoice = SaleInvoice.objects.get(id=invoice_id, tenant=request.tenant)
+                    # revert stock from previous items before editing
+                    for old_item in invoice.items.all():
+                        from easypharma.models.stock import StockBatch
+                        batch = StockBatch.objects.filter(
+                            tenant=request.tenant,
+                            product=old_item.product,
+                            batch_number=old_item.batch_number
+                        ).first()
+                        if batch:
+                            batch.current_quantity += old_item.quantity
+                            batch.save()
+                    invoice.items.all().delete()
+                else:
+                    invoice = SaleInvoice(
+                        tenant=request.tenant,
+                        user=request.user,
+                        invoice_number=invoice_no
+                    )
+
+                invoice.patient_name = data.get('patient_name')
+                invoice.patient_phone = data.get('patient_phone')
+                invoice.doctor_name = data.get('doctor_name')
+                invoice.sub_total = data['sub_total']
+                invoice.tax_amount = data['tax_amount']
+                invoice.discount_amount = data['discount_amount']
+                invoice.total_amount = data['total_amount']
+                invoice.payment_mode = data['payment_mode']
+                if data.get('invoice_number'):
+                    invoice.invoice_number = data['invoice_number']
+                invoice.save()
                 
                 # Create Sale Items & Deduct Stock
                 for item in data.get('items', []):

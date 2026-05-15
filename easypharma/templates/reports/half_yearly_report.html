@@ -14,12 +14,26 @@
             <p class="text-muted">Sales analysis for the period</p>
         </div>
         <div class="col-md-4">
-            <form method="GET" class="d-flex gap-2">
-                <select name="half" class="form-select">
-                    <option value="H1" {% if half == "H1" %}selected{% endif %}>H1 (Jan-Jun)</option>
-                    <option value="H2" {% if half == "H2" %}selected{% endif %}>H2 (Jul-Dec)</option>
+            <form method="GET" class="d-flex gap-2 flex-wrap">
+                <div class="d-flex gap-2">
+                    <select name="half" class="form-select">
+                        <option value="H1" {% if half == "H1" %}selected{% endif %}>H1 (Jan-Jun)</option>
+                        <option value="H2" {% if half == "H2" %}selected{% endif %}>H2 (Jul-Dec)</option>
+                    </select>
+                    <input type="number" name="year" class="form-control" value="{{ year }}" min="2020" max="2100">
+                </div>
+                <div class="d-flex gap-2">
+                    <input type="date" name="start_date" class="form-control" value="{{ start_date|default:'' }}" placeholder="Start Date">
+                    <input type="date" name="end_date" class="form-control" value="{{ end_date|default:'' }}" placeholder="End Date">
+                </div>
+                <select name="schedule" class="form-select">
+                    <option value="all" {% if selected_schedule == 'all' %}selected{% endif %}>All Drug Types</option>
+                    <option value="H1" {% if selected_schedule == 'H1' %}selected{% endif %}>H1</option>
+                    <option value="Narcotic" {% if selected_schedule == 'Narcotic' %}selected{% endif %}>Narcotic</option>
+                    {% for schedule in report_schedules %}
+                        <option value="{{ schedule.schedule_name }}" {% if selected_schedule == schedule.schedule_name %}selected{% endif %}>{{ schedule.schedule_name }}</option>
+                    {% endfor %}
                 </select>
-                <input type="number" name="year" class="form-control" value="{{ year }}" min="2020" max="2100">
                 <button type="submit" class="btn btn-primary">Filter</button>
             </form>
         </div>
@@ -110,7 +124,96 @@
         </div>
     </div>
 
-    <!-- Top Customers -->
+    <!-- Product Summary -->
+    <div class="card mb-4">
+        <div class="card-header bg-dark text-white">
+            <h5 class="mb-0">Product Summary</h5>
+        </div>
+        <div class="card-body">
+            {% if product_summary %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Product</th>
+                            <th>Schedule</th>
+                            <th class="text-end">Quantity Sold</th>
+                            <th class="text-end">Revenue</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in product_summary %}
+                        <tr>
+                            <td>{{ item.product__product_name }}</td>
+                            <td>{{ item.product__product_schedule__schedule_name|default:'N/A' }}</td>
+                            <td class="text-end">{{ item.quantity_sold }}</td>
+                            <td class="text-end">₹{{ item.revenue|floatformat:2 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+                <p class="text-muted">No product sale details found for this range.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Sale Details -->
+    <div class="card mb-4">
+        <div class="card-header bg-dark text-white">
+            <h5 class="mb-0">Sale Details</h5>
+        </div>
+        <div class="card-body">
+            {% if sale_details %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Invoice #</th>
+                            <th>Date</th>
+                            <th>Patient / Customer</th>
+                            <th>Doctor</th>
+                            <th class="text-end">Total</th>
+                            <th class="text-end">Schedule</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sale in sale_details %}
+                        <tr>
+                            <td><strong>{{ sale.invoice_number }}</strong></td>
+                            <td>{{ sale.created_at|date:'d M Y' }}</td>
+                            <td>
+                                {% if sale.patient_name %}
+                                    {{ sale.patient_name }}
+                                {% elif sale.customer %}
+                                    {{ sale.customer.name }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </td>
+                            <td>{{ sale.doctor_name|default:'-' }}</td>
+                            <td class="text-end">₹{{ sale.total_amount|floatformat:2 }}</td>
+                            <td class="text-end">
+                                {% with sale.items.all|first as first_item %}
+                                    {% if first_item and first_item.product.product_schedule %}
+                                        {{ first_item.product.product_schedule.schedule_name }}
+                                    {% else %}
+                                        All
+                                    {% endif %}
+                                {% endwith %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+                <p class="text-muted">No sale transaction details available for this selection.</p>
+            {% endif %}
+        </div>
+    </div>
+
     <div class="row">
         <div class="col-md-12">
             <div class="card">

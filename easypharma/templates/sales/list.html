@@ -49,6 +49,9 @@
                                     <a href="{% url 'pos_print' invoice.id %}" target="_blank" class="btn btn-sm btn-outline-primary border-0" title="Print Bill">
                                         <i class="fas fa-print"></i>
                                     </a>
+                                    <a href="{% url 'pos_edit' invoice.id %}" class="btn btn-sm btn-outline-secondary border-0" title="Edit Bill">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
                                     <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteInvoice({{ invoice.id }})">
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
