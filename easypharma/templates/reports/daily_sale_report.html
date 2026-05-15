@@ -16,6 +16,14 @@
         <div class="col-md-4">
             <form method="GET" class="d-flex gap-2">
                 <input type="date" name="date" class="form-control" value="{{ date|date:'Y-m-d' }}">
+                <select name="schedule" class="form-select">
+                    <option value="all" {% if selected_schedule == 'all' %}selected{% endif %}>All Drug Types</option>
+                    <option value="H1" {% if selected_schedule == 'H1' %}selected{% endif %}>H1</option>
+                    <option value="Narcotic" {% if selected_schedule == 'Narcotic' %}selected{% endif %}>Narcotic</option>
+                    {% for schedule in report_schedules %}
+                        <option value="{{ schedule.schedule_name }}" {% if selected_schedule == schedule.schedule_name %}selected{% endif %}>{{ schedule.schedule_name }}</option>
+                    {% endfor %}
+                </select>
                 <button type="submit" class="btn btn-primary">
                     <i class="bi bi-search"></i> Filter
                 </button>

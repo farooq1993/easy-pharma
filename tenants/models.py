@@ -16,6 +16,7 @@ class Tenant(models.Model):
     phone = models.CharField(max_length=20)
     license_number = models.CharField(max_length=100)
     gst_number = models.CharField(max_length=50, null=True, blank=True)
+    invoice_message = models.TextField(null=True, blank=True)
     access_key = models.CharField(max_length=100, blank=True, unique=True, null=True)
     
     def __str__(self):

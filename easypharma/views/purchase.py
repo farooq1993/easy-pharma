@@ -5,6 +5,7 @@ from easypharma.models.Items import Products
 from easypharma.models.purchase_invoice import Supplier, PurchaseInvoice, PurchaseItem
 from easypharma.models.stock import StockBatch
 from django.db import transaction
+from django.utils.timezone import now
 import json
 
 class PurchaseEntryView(View):
@@ -43,7 +44,9 @@ class PurchaseEntryView(View):
                     'invoice_number': invoice.invoice_number,
                     'purchase_date': invoice.purchase_date.strftime('%Y-%m-%d') if invoice.purchase_date else '',
                     'items': items,
-                    'discount_amount': float(invoice.discount_amount)
+                    'discount_amount': float(invoice.discount_amount),
+                    'discount_percentage': float(invoice.discount_percentage or 0),
+                    'payment_mode': invoice.payment_mode
                 }
             except PurchaseInvoice.DoesNotExist:
                 return redirect('purchase_list')
@@ -53,7 +56,8 @@ class PurchaseEntryView(View):
             'suppliers': suppliers,
             'products': products,
             'product_taxes': product_taxes,
-            'edit_data': edit_data
+            'edit_data': edit_data,
+            'today': now().date()
         })
 
     def post(self, request, invoice_id=None):
