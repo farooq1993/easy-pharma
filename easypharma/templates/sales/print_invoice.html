@@ -1,134 +1,453 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Invoice #{{ invoice.invoice_number }}</title>
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333; margin: 0; padding: 20px; font-size: 14px; }
-        .invoice-container { max-width: 800px; margin: auto; border: 1px solid #eee; padding: 30px; border-radius: 10px; }
-        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #28a745; pb-20; margin-bottom: 20px; padding-bottom: 15px; }
-        .pharmacy-info h2 { color: #28a745; margin: 0; }
-        .pharmacy-info p { margin: 2px 0; font-size: 12px; }
-        .invoice-details { text-align: right; }
-        body { font-family: 'Courier New', Courier, monospace; color: #000; margin: 0; padding: 20px; font-size: 12px; line-height: 1.35; }
-        .invoice-container { max-width: 800px; margin: auto; padding: 15px; }
-        .header { display: block; border-bottom: 1px dashed #000; margin-bottom: 15px; padding-bottom: 10px; }
-        .pharmacy-info h2 { color: #000; margin: 0 0 6px; font-size: 18px; text-transform: uppercase; }
-        .pharmacy-info p { margin: 2px 0; font-size: 11px; }
-        .invoice-details { text-align: right; font-size: 12px; }
-        .invoice-details h3 { margin: 0; color: #000; font-size: 16px; }
-        .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px; }
-        .details-grid p { margin: 3px 0; font-size: 11px; }
-        .details-grid b { color: #000; font-size: 11px; text-transform: uppercase; display: block; margin-bottom: 2px; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 11px; }
-        th, td { border: 1px solid #000; padding: 6px 8px; vertical-align: top; }
-        th { text-align: left; }
-        .totals { width: 100%; max-width: 320px; margin-left: auto; margin-bottom: 15px; }
-        .totals-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #000; }
-        .grand-total { font-size: 14px; font-weight: bold; color: #000; border-bottom: none; }
-        .invoice-note { margin: 12px 0; padding: 8px; border: 1px dashed #000; white-space: pre-wrap; font-size: 11px; }
-        .signature-block { display: flex; justify-content: space-between; margin-top: 20px; }
-        .signature-line { width: 200px; border-top: 1px solid #000; margin-top: 40px; }
-        .signature-text { font-size: 11px; text-align: center; margin-top: 4px; }
-        .footer { text-align: center; margin-top: 25px; font-size: 10px; color: #000; border-top: 1px dashed #000; padding-top: 10px; }
-        @media print {
-            .no-print { display: none; }
-            body { padding: 0; }
-            .invoice-container { border: none; }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Invoice #{{ invoice.invoice_number }}</title>
+  <style>
+    /* ── Page & Font ── */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    :root {
+      --font-main: 'Inter', 'Segoe UI', Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-main);
+      color: #1a1a2e;
+      background: #f0f2f8;
+      font-size: 12px;
+    }
+
+    /* ── Print Action Bar (no-print) ── */
+    .action-bar {
+      background: linear-gradient(135deg, #2d3048, #4a4f7a);
+      color: #fff;
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .action-bar-title { font-size: 13px; font-weight: 600; }
+    .action-bar-title small { font-size: 10px; opacity: .7; display: block; }
+    .action-btn {
+      padding: 8px 18px;
+      border: none;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .2s;
+    }
+    .action-btn:hover { opacity: .85; }
+    .btn-print { background: #22c55e; color: #fff; }
+    .btn-close-w { background: rgba(255,255,255,.15); color: #fff; }
+
+    /* ── Outer Wrapper ── */
+    .page-wrapper {
+      max-width: 860px;
+      margin: 24px auto;
+      background: #fff;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 8px 40px rgba(0,0,0,.12);
+    }
+
+    /* ── Invoice Content ── */
+    .invoice-body {
+      padding: {{ ps.margin_top|default:10 }}mm {{ ps.margin_sides|default:10 }}mm;
+    }
+
+    /* ── Header ── */
+    .inv-header {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding-bottom: 14px;
+      border-bottom: 2px solid #e5e7ef;
+      margin-bottom: 12px;
+    }
+    .inv-logo img {
+      max-height: 70px;
+      max-width: 160px;
+      object-fit: contain;
+    }
+    .inv-pharmacy-info { flex: 1; text-align: center; }
+    .inv-pharmacy-info h1 {
+      font-size: 20px;
+      font-weight: 800;
+      color: #1a1a2e;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .inv-pharmacy-info p {
+      font-size: 11px;
+      color: #4b5563;
+      margin: 2px 0;
+    }
+
+    /* ── Invoice Title Strip ── */
+    .inv-title-strip {
+      background: #f3f4f6;
+      border-radius: 8px;
+      text-align: center;
+      padding: 8px 16px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .inv-title-strip h2 {
+      font-size: 14px;
+      font-weight: 700;
+      color: #1a1a2e;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+    }
+    .inv-title-strip .inv-meta {
+      font-size: 11px;
+      color: #6b7280;
+    }
+    .inv-title-strip .inv-meta b { color: #1a1a2e; }
+
+    /* ── Patient Info Grid ── */
+    .patient-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 24px;
+      padding: 12px 14px;
+      background: #fafbff;
+      border: 1px solid #e8eaf0;
+      border-radius: 10px;
+      margin-bottom: 14px;
+    }
+    .patient-field label {
+      display: block;
+      font-size: 9.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: #9ca3af;
+      margin-bottom: 2px;
+    }
+    .patient-field p {
+      font-size: 12px;
+      font-weight: 600;
+      color: #1a1a2e;
+    }
+
+    /* ── Optional: invoice message ── */
+    .inv-message {
+      padding: 8px 12px;
+      border-left: 3px solid #5c67f2;
+      background: #f5f6ff;
+      border-radius: 0 6px 6px 0;
+      font-size: 11px;
+      color: #4b5563;
+      margin-bottom: 14px;
+    }
+
+    /* ── Items Table ── */
+    .items-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 14px;
+      font-size: 11.5px;
+    }
+    .items-table thead tr {
+      background: #1a1a2e;
+      color: #fff;
+    }
+    .items-table th {
+      padding: 8px 10px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 10.5px;
+      letter-spacing: .3px;
+    }
+    .items-table th:last-child { text-align: right; }
+    .items-table tbody tr { border-bottom: 1px solid #f0f2f5; }
+    .items-table tbody tr:nth-child(even) { background: #fafbff; }
+    .items-table td { padding: 7px 10px; vertical-align: middle; }
+    .items-table td:last-child { text-align: right; font-weight: 600; }
+    .med-name { font-weight: 600; color: #1a1a2e; }
+    .med-pack { font-size: 9.5px; color: #9ca3af; margin-top: 1px; }
+
+    /* ── Totals Block ── */
+    .totals-wrap {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 18px;
+    }
+    .totals-box {
+      width: 280px;
+      border: 1px solid #e5e7ef;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 14px;
+      font-size: 11.5px;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .total-row:last-child { border-bottom: none; }
+    .total-row.grand {
+      background: #1a1a2e;
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+    }
+    .total-row span:last-child { font-weight: 600; }
+
+    /* ── Signature Block ── */
+    .sig-block {
+      display: flex;
+      justify-content: flex-end;
+      gap: 40px;
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px dashed #d1d5db;
+    }
+    .sig-area {
+      text-align: center;
+      min-width: 140px;
+    }
+    .sig-line {
+      width: 100%;
+      border-top: 1px solid #6b7280;
+      margin-top: 36px;
+    }
+    .sig-label {
+      font-size: 10px;
+      color: #6b7280;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+    .sig-name {
+      font-size: 10px;
+      color: #374151;
+      margin-top: 2px;
+    }
+
+    /* ── Footer ── */
+    .inv-footer {
+      text-align: center;
+      margin-top: 18px;
+      padding-top: 12px;
+      border-top: 2px solid #e5e7ef;
+    }
+    .inv-footer p {
+      font-size: 10.5px;
+      color: #6b7280;
+      margin: 2px 0;
+    }
+    .inv-footer p.footer-main {
+      font-weight: 600;
+      color: #374151;
+      font-size: 11px;
+    }
+
+    /* ── @media print ── */
+    @media print {
+      body { background: #fff; font-size: 11px; }
+      .action-bar { display: none !important; }
+      .page-wrapper {
+        max-width: 100%;
+        margin: 0;
+        border-radius: 0;
+        box-shadow: none;
+      }
+      @page {
+        size: {{ ps.paper_size|default:'A4' }};
+        margin: {{ ps.margin_top|default:10 }}mm {{ ps.margin_sides|default:10 }}mm;
+      }
+    }
+  </style>
 </head>
 <body onload="window.print()">
-    <div class="no-print" style="text-align: center; margin-bottom: 20px;">
-        <button onclick="window.print()" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">Print Again</button>
-        <button onclick="window.close()" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">Close</button>
+
+  <!-- ── Action Bar (no-print) ── -->
+  <div class="action-bar no-print">
+    <div class="action-bar-title">
+      Invoice #{{ invoice.invoice_number }}
+      <small>{{ invoice.tenant.pharmacy_name }}</small>
     </div>
+    <div style="display:flex; gap:8px;">
+      <button class="action-btn btn-print" onclick="window.print()">
+        🖨 Print
+      </button>
+      <button class="action-btn btn-close-w" onclick="window.close()">
+        ✕ Close
+      </button>
+    </div>
+  </div>
 
-    <div class="invoice-container">
-        <div class="header">
-            <div class="pharmacy-info">
-                <h2>{{ invoice.tenant.pharmacy_name }}</h2>
-                <p>Address: {{ invoice.tenant.address|default:"-" }}</p>
-                <p>Phone: {{ invoice.tenant.phone|default:"-" }}</p>
-                <p>DL No: {{ invoice.tenant.license_number|default:"-" }} | GST: {{ invoice.tenant.gst_number|default:"-" }}</p>
-            </div>
-            <div class="invoice-details">
-                <h3>RETAIL INVOICE</h3>
-                <p>No: <b>{{ invoice.invoice_number }}</b></p>
-                <p>Date: {{ invoice.created_at|date:"d M Y H:i" }}</p>
-            </div>
-        </div>
+  <!-- ── Invoice ── -->
+  <div class="page-wrapper">
+    <div class="invoice-body">
 
-        <div class="details-grid">
-            <div>
-                <b>PATIENT NAME</b>
-                <p>{{ invoice.patient_name|default:"Cash Customer" }}</p>
-                <b>MOBILE NUMBER</b>
-                <p>{{ invoice.patient_phone|default:"-" }}</p>
-            </div>
-            <div>
-                <b>REFERRED BY (DR.)</b>
-                <p>{{ invoice.doctor_name|default:"Self" }}</p>
-                <b>PAYMENT MODE</b>
-                <p>{{ invoice.payment_mode }}</p>
-            </div>
-        </div>
-        {% if invoice.tenant.invoice_message %}
-        <div class="invoice-note">
-            {{ invoice.tenant.invoice_message }}
+      <!-- Header -->
+      <div class="inv-header">
+        {% if ps.show_logo and ps.logo_base64 %}
+        <div class="inv-logo">
+          <img src="{{ ps.logo_base64 }}" alt="{{ invoice.tenant.pharmacy_name }} logo">
         </div>
         {% endif %}
 
-        <table>
-            <thead>
-                <tr>
-                    <th style="width: 40%">Medicine Name</th>
-                    <th>Batch</th>
-                    <th>Exp</th>
-                    <th>Qty</th>
-                    <th>Price</th>
-                    <th style="text-align: right">Amount</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in invoice.items.all %}
-                <tr>
-                    <td>
-                        <b>{{ item.product.product_name }}</b>
-                        <div style="font-size: 10px; color: #888;">{{ item.product.product_packing }}</div>
-                    </td>
-                    <td>{{ item.batch_number }}</td>
-                    <td>{{ item.expiry_date|date:"m/y" }}</td>
-                    <td>{{ item.quantity }}</td>
-                    <td>{{ item.unit_price }}</td>
-                    <td style="text-align: right">{{ item.total_amount }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-
-        <div class="totals">
-            <div class="totals-row">
-                <span>Sub Total:</span>
-                <span>{{ invoice.sub_total }}</span>
-            </div>
-            <div class="totals-row">
-                <span>GST/Tax Amount:</span>
-                <span>{{ invoice.tax_amount }}</span>
-            </div>
-            <div class="totals-row">
-                <span>Discount:</span>
-                <span>- {{ invoice.discount_amount }}</span>
-            </div>
-            <div class="totals-row grand-total">
-                <span>Net Payable:</span>
-                <span>{{ invoice.total_amount }}</span>
-            </div>
+        <div class="inv-pharmacy-info">
+          <h1>{{ invoice.tenant.pharmacy_name }}</h1>
+          {% if invoice.tenant.address %}
+          <p>{{ invoice.tenant.address }}</p>
+          {% endif %}
+          {% if invoice.tenant.phone %}
+          <p>Phone: {{ invoice.tenant.phone }}</p>
+          {% endif %}
+          {% if ps.show_dl_details and invoice.tenant.license_number %}
+          <p>DL No: {{ invoice.tenant.license_number }}
+            {% if ps.show_gst_details and invoice.tenant.gst_number %}
+             &nbsp;|&nbsp; GST: {{ invoice.tenant.gst_number }}
+            {% endif %}
+          </p>
+          {% elif ps.show_gst_details and invoice.tenant.gst_number %}
+          <p>GST: {{ invoice.tenant.gst_number }}</p>
+          {% endif %}
+          {% if ps.custom_header %}
+          <p style="margin-top:4px; font-style:italic; color:#6b7280; font-size:10.5px;">{{ ps.custom_header }}</p>
+          {% endif %}
         </div>
+      </div>
 
-        <div class="footer">
-            <p>Thank you for choosing {{ invoice.tenant.pharmacy_name }}!</p>
-            <p>Subject to terms and conditions. Not for resale.</p>
+      <!-- Title Strip -->
+      <div class="inv-title-strip">
+        <h2>Retail Invoice</h2>
+        <div class="inv-meta">
+          No: <b>{{ invoice.invoice_number }}</b>
+          &nbsp;&nbsp;|&nbsp;&nbsp;
+          Date: <b>{{ invoice.created_at|date:"d M Y, H:i" }}</b>
         </div>
+      </div>
+
+      <!-- Optional Invoice Message -->
+      {% if invoice.tenant.invoice_message %}
+      <div class="inv-message">{{ invoice.tenant.invoice_message }}</div>
+      {% endif %}
+
+      <!-- Patient Info -->
+      <div class="patient-grid">
+        <div class="patient-field">
+          <label>Patient Name</label>
+          <p>{{ invoice.patient_name|default:"Cash Customer" }}</p>
+        </div>
+        <div class="patient-field">
+          <label>Referred By (Dr.)</label>
+          <p>{{ invoice.doctor_name|default:"Self" }}</p>
+        </div>
+        <div class="patient-field">
+          <label>Address</label>
+          <p>{{ invoice.patient_address|default:"—" }}</p>
+        </div>
+        <div class="patient-field">
+          <label>Payment Mode</label>
+          <p>{{ invoice.payment_mode }}</p>
+        </div>
+        <div class="patient-field">
+          <label>Mobile Number</label>
+          <p>{{ invoice.patient_phone|default:"—" }}</p>
+        </div>
+      </div>
+
+      <!-- Items Table -->
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th style="width:38%">Medicine Name</th>
+            <th>Batch No.</th>
+            <th>Expiry</th>
+            <th>Qty</th>
+            <th>Unit Price</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in invoice.items.all %}
+          <tr>
+            <td>
+              <div class="med-name">{{ item.product.product_name }}</div>
+              <div class="med-pack">{{ item.product.product_packing }}</div>
+            </td>
+            <td>{{ item.batch_number }}</td>
+            <td>{{ item.expiry_date|date:"m/y" }}</td>
+            <td>{{ item.quantity }}</td>
+            <td>{{ item.unit_price }}</td>
+            <td>{{ item.total_amount }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <!-- Totals -->
+      <div class="totals-wrap">
+        <div class="totals-box">
+          <div class="total-row">
+            <span>Sub Total</span>
+            <span>₹ {{ invoice.sub_total }}</span>
+          </div>
+          <div class="total-row">
+            <span>GST / Tax</span>
+            <span>₹ {{ invoice.tax_amount }}</span>
+          </div>
+          <div class="total-row">
+            <span>Discount</span>
+            <span>- ₹ {{ invoice.discount_amount }}</span>
+          </div>
+          <div class="total-row grand">
+            <span>Net Payable</span>
+            <span>₹ {{ invoice.total_amount }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Signatures -->
+      {% if ps.show_customer_signature or ps.show_pharmacist_signature %}
+      <div class="sig-block">
+        {% if ps.show_customer_signature %}
+        <div class="sig-area">
+          <div class="sig-line"></div>
+          <div class="sig-label">Customer Signature</div>
+        </div>
+        {% endif %}
+        {% if ps.show_pharmacist_signature %}
+        <div class="sig-area">
+          <div class="sig-line"></div>
+          <div class="sig-label">Pharmacist Signature</div>
+          <div class="sig-name">{{ invoice.user.get_full_name|default:invoice.user.username }}</div>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <!-- Footer -->
+      <div class="inv-footer">
+        <p class="footer-main">
+          {% if ps.custom_footer %}
+            {{ ps.custom_footer }}
+          {% else %}
+            Thank you for choosing {{ invoice.tenant.pharmacy_name }}!
+          {% endif %}
+        </p>
+        <p>Subject to terms &amp; conditions &nbsp;·&nbsp; Not for resale</p>
+      </div>
+
     </div>
+  </div>
+
 </body>
 </html>

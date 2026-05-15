@@ -15,11 +15,11 @@
             <div class="position-relative">
                 <input type="text" id="productSearch"
                     class="form-control py-3 ps-5 rounded-pill border-0 bg-light shadow-md"
-                    placeholder="🔍 Search medicine (Press / to focus)..."
+                    placeholder="🔍 Search by medicine name (Press / to focus)..."
                     style="font-size: 1rem; min-height: 50px; border: 2px solid transparent; transition: all 0.3s;">
-                <i
-                    class="fas fa-search position-absolute top-50 start-0 translate-middle-y ms-4 text-muted"></i>
-                <span class="position-absolute top-50 end-0 translate-middle-y me-4 text-muted x-small fw-bold">Press <kbd>↓</kbd> | <kbd>↑</kbd> | <kbd>↵</kbd> to Add</span>
+                <i class="fas fa-search position-absolute top-50 start-0 translate-middle-y ms-4 text-muted"></i>
+                <span class="position-absolute top-50 end-0 translate-middle-y me-4 text-muted x-small fw-bold">Press
+                    <kbd>↓</kbd> | <kbd>↑</kbd> | <kbd>↵</kbd> to Add</span>
                 <div id="searchResults" class="list-group position-absolute w-100 shadow-lg d-none mt-2"
                     style="z-index: 1050; max-height: 400px; overflow-y: auto;"></div>
             </div>
@@ -59,7 +59,8 @@
                             <h5 class="text-muted fw-bold">Ready for Billing</h5>
                             <p class="text-muted small mb-3">Type <b>/</b> or use the search bar to find medicines</p>
                             <div class="alert alert-info small mx-4" role="alert">
-                                <strong>💡 Quick Tip:</strong> Type product name → Press <kbd>↓</kbd> to select → Press <kbd>↵</kbd> to add → Enter Qty → Press <kbd>↵</kbd> to add next item
+                                <strong>💡 Quick Tip:</strong> Type product name → Press <kbd>↓</kbd> to select → Press
+                                <kbd>↵</kbd> to add → Enter Qty → Press <kbd>↵</kbd> to add next item
                             </div>
                         </div>
                     </div>
@@ -70,7 +71,8 @@
                             <button class="btn btn-sm btn-outline-danger border-0 small" onclick="clearCart()">
                                 <i class="fas fa-trash-alt me-1"></i> Clear Cart
                             </button>
-                            <button class="btn btn-sm btn-outline-secondary border-0 small ms-2" data-bs-toggle="modal" data-bs-target="#workflowModal">
+                            <button class="btn btn-sm btn-outline-secondary border-0 small ms-2" data-bs-toggle="modal"
+                                data-bs-target="#workflowModal">
                                 <i class="fas fa-keyboard me-1"></i> Shortcuts
                             </button>
                         </div>
@@ -92,6 +94,10 @@
                         <div class="mb-2">
                             <input type="text" id="patientName" class="form-control border-0 bg-light py-2"
                                 placeholder="Patient Name (Tab to Next)">
+                        </div>
+                        <div class="mb-2">
+                            <input type="text" id="patientAddress" class="form-control border-0 bg-light py-2"
+                                placeholder="Patient Address">
                         </div>
                         <div class="row g-2 mb-2">
                             <div class="col-6"><input type="text" id="patientPhone"
@@ -120,7 +126,8 @@
                                         id="summaryDiscount" value="0" oninput="calculateDiscount('amt')">
                                     <input type="number"
                                         class="form-control form-control-sm w-25 text-end border-0 bg-white shadow-sm"
-                                        id="summaryDiscountPerc" value="0" placeholder="%" oninput="calculateDiscount('perc')">
+                                        id="summaryDiscountPerc" value="0" placeholder="%"
+                                        oninput="calculateDiscount('perc')">
                                 </div>
                             </div>
                             <hr class="opacity-10">
@@ -158,7 +165,33 @@
     </div>
 </div>
 
-<!-- Workflow Help Modal -->
+<!-- Substitute Modal -->
+<div class="modal fade" id="substituteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-0 pb-0" style="background:linear-gradient(135deg,#fff5f0,#fff);">
+                <div>
+                    <h5 class="modal-title fw-bold text-warning"><i class="fas fa-exchange-alt me-2"></i>Drug Substitutes</h5>
+                    <p class="text-muted small mb-0" id="subModalSubtitle">Same composition available in stock</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div id="substituteLoader" class="text-center py-4">
+                    <div class="spinner-border text-warning" role="status"></div>
+                    <div class="mt-2 text-muted small">Searching substitutes...</div>
+                </div>
+                <div id="substituteList" class="d-none"></div>
+                <div id="substituteEmpty" class="d-none text-center py-4">
+                    <i class="fas fa-search" style="font-size:2rem;color:#ccc;"></i>
+                    <p class="text-muted mt-2">No substitutes found with stock available.</p>
+                    <small class="text-muted">Ensure products have same drug content assigned in masters.</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="workflowModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content border-0 shadow-lg rounded-4">
@@ -267,17 +300,17 @@
     // Keyboard Shortcuts
     document.addEventListener('keydown', (e) => {
         const results = document.querySelectorAll('.batch-item');
-        
+
         if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
             e.preventDefault(); document.getElementById('productSearch').focus();
         }
-        
+
         if (e.key === 'ArrowDown' && !resultsDiv.classList.contains('d-none')) {
             e.preventDefault();
             searchSelectedIndex = Math.min(searchSelectedIndex + 1, results.length - 1);
             updateSearchSelection();
         }
-        
+
         if (e.key === 'ArrowUp' && !resultsDiv.classList.contains('d-none')) {
             e.preventDefault();
             searchSelectedIndex = Math.max(searchSelectedIndex - 1, 0);
@@ -295,6 +328,7 @@
     function populateEditData(data) {
         if (!data) return;
         document.getElementById('patientName').value = data.patient_name || '';
+        document.getElementById('patientAddress').value = data.patient_address || '';
         document.getElementById('patientPhone').value = data.patient_phone || '';
         document.getElementById('doctorName').value = data.doctor_name || '';
         if (data.payment_mode) {
@@ -337,20 +371,53 @@
     const resultsDiv = document.getElementById('searchResults');
 
     searchInput.addEventListener('input', async (e) => {
-        const query = e.target.value;
+        const query = e.target.value.trim();
         if (query.length < 1) { resultsDiv.classList.add('d-none'); return; }
 
-        const response = await fetch(`/api/products/search/?q=${query}`);
+        const response = await fetch(`/api/products/search/?q=${encodeURIComponent(query)}`);
         const data = await response.json();
         resultsDiv.innerHTML = ''; searchSelectedIndex = -1;
         let batchIndex = 0;
+
         if (data.length === 0) {
             resultsDiv.innerHTML = '<div class="p-3 text-center text-muted small">No items found. <button class="btn btn-link btn-sm" data-bs-toggle="modal" data-bs-target="#quickAddModal">Add New?</button></div>';
         }
+
         data.forEach(product => {
             const productGroup = document.createElement('div');
             productGroup.className = 'list-group-item p-3 border-bottom bg-white';
-            
+
+            // ── Product header info ──
+            const contentBadge = product.content
+                ? `<span class="badge bg-light text-secondary border x-small me-1"><i class="fas fa-flask me-1"></i>${product.content}</span>`
+                : '';
+            const companyBadge = product.company
+                ? `<span class="badge bg-light text-muted border x-small">${product.company}</span>`
+                : '';
+
+            if (product.out_of_stock) {
+                // Out of stock — show greyed card with substitute button
+                productGroup.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="fw-bold text-muted h6 mb-0" style="text-decoration:line-through;opacity:.6;">${product.name}</div>
+                            <div class="mt-1">${contentBadge}${companyBadge}</div>
+                            <div class="text-muted x-small mt-1">Packing: ${product.packing || '—'}</div>
+                        </div>
+                        <div class="d-flex flex-column align-items-end gap-1">
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="fas fa-times-circle me-1"></i>Out of Stock</span>
+                            ${product.content ? `
+                            <button class="btn btn-warning btn-sm px-3 rounded-pill fw-bold sub-btn mt-1"
+                                onclick="openSubstitutes(${product.id}, '${product.name.replace(/'/g,"\\'")}')"
+                                title="Find same-composition drugs in stock">
+                                <i class="fas fa-exchange-alt me-1"></i>Substitute
+                            </button>` : '<small class="text-muted" style="font-size:9px;">No content linked</small>'}
+                        </div>
+                    </div>`;
+                resultsDiv.appendChild(productGroup);
+                return; // no batches to render
+            }
+
             let batchesHtml = '';
             product.batches.forEach(b => {
                 batchesHtml += `
@@ -369,7 +436,7 @@
                         onclick='addToCart({
                             id: ${product.id}, 
                             batch_id: ${b.batch_id}, 
-                            name: "${product.name}", 
+                            name: "${product.name.replace(/"/g,"&quot;")}", 
                             batch_no: "${b.batch_no}", 
                             expiry: "${b.expiry}", 
                             price: ${b.price}, 
@@ -380,12 +447,16 @@
             });
 
             productGroup.innerHTML = `
-                <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="d-flex justify-content-between align-items-start mb-1">
                     <div>
                         <div class="fw-bold text-dark h6 mb-0">${product.name}</div>
-                        <div class="text-muted x-small">Packing: ${product.packing || '1'} | Factor: ${product.conversion_factor}</div>
+                        <div class="mt-1">${contentBadge}${companyBadge}</div>
+                        <div class="text-muted x-small mt-1">Packing: ${product.packing || '1'} | Factor: ${product.conversion_factor}</div>
                     </div>
-                    <span class="badge bg-info-soft text-info x-small">${product.batches.length} Batch(es)</span>
+                    <div class="d-flex flex-column align-items-end gap-1">
+                        <span class="badge bg-info-soft text-info x-small">${product.batches.length} Batch(es)</span>
+                        ${product.content ? `<button class="btn btn-outline-secondary btn-sm rounded-pill x-small px-2" onclick="openSubstitutes(${product.id}, '${product.name.replace(/'/g,"\\'")}')"><i class="fas fa-exchange-alt me-1"></i>Alt</button>` : ''}
+                    </div>
                 </div>
                 <div class="batch-list">${batchesHtml}</div>
             `;
@@ -394,21 +465,90 @@
         resultsDiv.classList.remove('d-none');
     });
 
+    // ── Substitute lookup ──────────────────────────────────────────
+    async function openSubstitutes(productId, productName) {
+        // Close search dropdown
+        resultsDiv.classList.add('d-none');
+
+        document.getElementById('subModalSubtitle').textContent = `Substitutes for: ${productName}`;
+        document.getElementById('substituteLoader').classList.remove('d-none');
+        document.getElementById('substituteList').classList.add('d-none');
+        document.getElementById('substituteEmpty').classList.add('d-none');
+
+        const modal = new bootstrap.Modal(document.getElementById('substituteModal'));
+        modal.show();
+
+        const resp = await fetch(`/api/products/substitute/?product_id=${productId}`);
+        const subs = await resp.json();
+
+        document.getElementById('substituteLoader').classList.add('d-none');
+
+        if (subs.length === 0) {
+            document.getElementById('substituteEmpty').classList.remove('d-none');
+            return;
+        }
+
+        const listEl = document.getElementById('substituteList');
+        listEl.innerHTML = '';
+
+        // content badge (same for all)
+        const contentLabel = subs[0]?.content || '';
+        if (contentLabel) {
+            listEl.innerHTML += `<div class="mb-3 p-2 rounded" style="background:#fff8e1;border-left:3px solid #f59e0b;">
+                <span class="small fw-bold text-warning"><i class="fas fa-flask me-1"></i>Composition: </span>
+                <span class="small">${contentLabel}</span>
+            </div>`;
+        }
+
+        subs.forEach(s => {
+            const batches = s.batches.map(b => `
+                <div class="d-flex justify-content-between align-items-center p-2 rounded bg-light border-start border-3 border-success mt-1">
+                    <div>
+                        <span class="badge bg-white text-dark border x-small">B: ${b.batch_no}</span>
+                        <span class="text-muted x-small ms-2">Exp: ${b.expiry}</span>
+                        <span class="badge bg-success text-white x-small ms-2">${b.stock} left</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="fw-bold text-success">₹${b.price.toFixed(2)}</span>
+                        <button class="btn btn-success btn-sm px-3 rounded-pill fw-bold"
+                            onclick='addToCart({id:${s.id},batch_id:${b.batch_id},name:"${s.name.replace(/"/g,"&quot;")}",batch_no:"${b.batch_no}",expiry:"${b.expiry}",price:${b.price},tax_rate:${s.tax_rate},stock:${b.stock}}); bootstrap.Modal.getInstance(document.getElementById("substituteModal")).hide();'>
+                            + ADD
+                        </button>
+                    </div>
+                </div>`).join('');
+
+            listEl.innerHTML += `
+                <div class="card border-0 shadow-sm rounded-3 mb-3">
+                    <div class="card-body p-3">
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <div>
+                                <div class="fw-bold">${s.name}</div>
+                                <div class="text-muted x-small">${s.company} &nbsp;·&nbsp; ${s.packing || '—'}</div>
+                            </div>
+                            <span class="badge bg-success-subtle text-success border border-success-subtle">In Stock</span>
+                        </div>
+                        ${batches}
+                    </div>
+                </div>`;
+        });
+        listEl.classList.remove('d-none');
+    }
+
     function addToCart(product) {
         if (product.stock <= 0) return alert('Out of stock!');
         // Unique key is product_id + batch_id to support multiple batches of same product
         const existing = cart.find(item => item.id === product.id && item.batch_id === product.batch_id);
         if (existing) { existing.quantity++; } else {
-            cart.push({ 
-                id: product.id, 
+            cart.push({
+                id: product.id,
                 batch_id: product.batch_id,
-                name: product.name, 
-                batch_no: product.batch_no, 
-                expiry: product.expiry, 
-                price: product.price, 
-                tax_rate: product.tax_rate, 
-                quantity: 1, 
-                max_stock: product.stock 
+                name: product.name,
+                batch_no: product.batch_no,
+                expiry: product.expiry,
+                price: product.price,
+                tax_rate: product.tax_rate,
+                quantity: 1,
+                max_stock: product.stock
             });
         }
         searchInput.value = ''; resultsDiv.classList.add('d-none'); renderCart();
@@ -421,13 +561,17 @@
         const tbody = document.querySelector('#posTable tbody');
         const emptyState = document.getElementById('emptyState');
         tbody.innerHTML = '';
-        if (cart.length === 0) { 
-            emptyState.classList.remove('d-none'); 
+        if (cart.length === 0) {
+            emptyState.classList.remove('d-none');
         } else {
             emptyState.classList.add('d-none');
             cart.forEach((item, index) => {
-                const taxAmount = (item.price * item.quantity * item.tax_rate) / 100;
-                const total = (item.price * item.quantity) + taxAmount;
+                // MRP is tax-inclusive, so total = MRP * quantity (no additional tax needed)
+                const total = item.price * item.quantity;
+                // Calculate tax amount for display purposes only (tax is already in MRP)
+                const basePrice = item.price / (1 + item.tax_rate / 100);
+                const taxAmount = item.price - basePrice;
+                const totalTaxAmount = taxAmount * item.quantity;
                 const tr = document.createElement('tr');
                 tr.className = 'cart-row';
                 tr.innerHTML = `
@@ -451,8 +595,8 @@
                             style="width: 70px; cursor: text; border: 1px solid #dee2e6 !important;">
                     </td>
                     <td class="text-primary small">
-                        ₹${taxAmount.toFixed(2)} 
-                        <span class="text-muted x-small">(${item.tax_rate}%)</span>
+                        ₹${totalTaxAmount.toFixed(2)} 
+                        <span class="text-muted x-small">(${item.tax_rate}% incl.)</span>
                     </td>
                     <td class="fw-bold small">₹${total.toFixed(2)}</td>
                     <td class="text-end pe-4">
@@ -517,14 +661,22 @@
     }
 
     function calculateGrandTotal() {
-        const subTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        const totalTax = cart.reduce((sum, item) => sum + (item.price * item.quantity * item.tax_rate / 100), 0);
+        // MRP is tax-inclusive, so calculate totals correctly
+        const subTotal = cart.reduce((sum, item) => {
+            const basePrice = item.price / (1 + item.tax_rate / 100);
+            return sum + (basePrice * item.quantity);
+        }, 0);
+        const totalTax = cart.reduce((sum, item) => {
+            const basePrice = item.price / (1 + item.tax_rate / 100);
+            const taxPerItem = item.price - basePrice;
+            return sum + (taxPerItem * item.quantity);
+        }, 0);
         const discount = parseFloat(document.getElementById('summaryDiscount').value) || 0;
         const grandTotal = (subTotal + totalTax) - discount;
         document.getElementById('summarySubTotal').innerText = subTotal.toFixed(2);
         document.getElementById('summaryTax').innerText = totalTax.toFixed(2);
         document.getElementById('summaryGrandTotal').innerText = grandTotal.toFixed(2);
-        
+
         // Update footer counters
         const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
         document.getElementById('cartItemCount').innerText = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;
@@ -532,8 +684,15 @@
     }
 
     function calculateDiscount(changed) {
-        const subTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        const totalTax = cart.reduce((sum, item) => sum + (item.price * item.quantity * item.tax_rate / 100), 0);
+        const subTotal = cart.reduce((sum, item) => {
+            const basePrice = item.price / (1 + item.tax_rate / 100);
+            return sum + (basePrice * item.quantity);
+        }, 0);
+        const totalTax = cart.reduce((sum, item) => {
+            const basePrice = item.price / (1 + item.tax_rate / 100);
+            const taxPerItem = item.price - basePrice;
+            return sum + (taxPerItem * item.quantity);
+        }, 0);
         const gross = subTotal + totalTax;
         let amount = parseFloat(document.getElementById('summaryDiscount').value) || 0;
         let percent = parseFloat(document.getElementById('summaryDiscountPerc').value) || 0;
@@ -580,15 +739,17 @@
         const data = {
             invoice_id: editData?.invoice_id || null,
             patient_name: document.getElementById('patientName').value,
+            patient_address: document.getElementById('patientAddress').value,
             patient_phone: document.getElementById('patientPhone').value,
             doctor_name: document.getElementById('doctorName').value,
             payment_mode: document.querySelector('input[name="paymentMethod"]:checked').value,
-            items: cart.map(item => ({ 
-                product_id: item.id, 
+            items: cart.map(item => ({
+                product_id: item.id,
                 batch_id: item.batch_id,
-                quantity: item.quantity, 
-                price: item.price, 
-                total: (item.price * item.quantity) * (1 + item.tax_rate / 100) 
+                quantity: item.quantity,
+                price: item.price,
+                // MRP is tax-inclusive, so total = MRP * quantity (no additional tax)
+                total: item.price * item.quantity
             })),
             sub_total: parseFloat(document.getElementById('summarySubTotal').innerText),
             tax_amount: parseFloat(document.getElementById('summaryTax').innerText),
@@ -624,10 +785,18 @@
         width: 60%;
     }
 
-    .bg-success-soft { background-color: rgba(25, 135, 84, 0.1); }
-    .bg-primary-soft { background-color: rgba(13, 110, 253, 0.1); }
-    .bg-info-soft { background-color: rgba(13, 202, 240, 0.1); }
-    
+    .bg-success-soft {
+        background-color: rgba(25, 135, 84, 0.1);
+    }
+
+    .bg-primary-soft {
+        background-color: rgba(13, 110, 253, 0.1);
+    }
+
+    .bg-info-soft {
+        background-color: rgba(13, 202, 240, 0.1);
+    }
+
     #searchResults {
         border-radius: 15px;
         border: 1px solid #dee2e6;
@@ -635,17 +804,18 @@
         margin-top: 8px;
         background: white;
     }
-    
+
     .batch-list {
         max-height: 200px;
         overflow-y: auto;
     }
-    
+
     .selected-batch {
         background-color: #e9ecef !important;
         border-color: #0d6efd !important;
         box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
     }
+
     .universal-loader {
         position: fixed;
         inset: 0;
@@ -653,12 +823,14 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background: rgba(255,255,255,0.88);
+        background: rgba(255, 255, 255, 0.88);
         backdrop-filter: blur(2px);
     }
+
     .universal-loader.d-none {
         display: none !important;
     }
+
     .loader-spinner {
         display: flex;
         align-items: center;
@@ -668,50 +840,51 @@
         border-radius: 0.75rem;
         box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.12);
     }
+
     .loader-text {
         font-weight: 600;
         color: #212529;
     }
-    
+
     /* Enhanced POS Cart Styling */
     .cart-row {
         transition: all 0.2s ease;
         border-left: 3px solid transparent;
     }
-    
+
     .cart-row:hover {
         background-color: #f8f9fa;
         border-left-color: #28a745;
     }
-    
+
     .qty-input {
         font-weight: 600;
         transition: all 0.2s;
     }
-    
+
     .qty-input:focus {
         background-color: #fff !important;
         border-color: #0d6efd !important;
         box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
     }
-    
+
     #productSearch:focus {
         background-color: #ffffff !important;
         border: 2px solid #28a745 !important;
         box-shadow: 0 0 0 0.3rem rgba(40, 167, 69, 0.15);
         padding-left: 3rem;
     }
-    
+
     .batch-item {
         cursor: pointer;
         transition: all 0.2s;
     }
-    
+
     .batch-item:hover {
         background-color: #f1f3f5 !important;
         transform: translateX(5px);
     }
-    
+
     kbd {
         background-color: #f8f9fa;
         border: 1px solid #dee2e6;
@@ -720,9 +893,9 @@
         font-size: 0.75rem;
         font-family: monospace;
         display: inline-block;
-        box-shadow: 0 1px 0 rgba(0,0,0,0.1);
+        box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
     }
-    
+
     .alert-info {
         border-radius: 12px;
     }

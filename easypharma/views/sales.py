@@ -112,6 +112,7 @@ class POSView(View):
                     )
 
                 invoice.patient_name = data.get('patient_name')
+                invoice.patient_address = data.get('patient_address')
                 invoice.patient_phone = data.get('patient_phone')
                 invoice.doctor_name = data.get('doctor_name')
                 invoice.sub_total = data['sub_total']
@@ -141,20 +142,32 @@ class POSView(View):
                     
                     if not batch:
                         raise Exception(f"No stock available for {product.product_name}")
-                        
+                    
+                    # Calculate tax from product master
+                    tax_rate = product.product_tax.tax_rate if product.product_tax else 0
+                    quantity = item['quantity']
+                    
+                    # Calculate base price (since MRP is tax-inclusive)
+                    unit_price = item['price']
+                    base_price = unit_price / (1 + tax_rate / 100) if tax_rate > 0 else unit_price
+                    tax_per_unit = unit_price - base_price
+                    tax_amount = tax_per_unit * quantity
+                    
                     SaleItem.objects.create(
                         tenant=request.tenant,
                         sale_invoice=invoice,
                         product=product,
                         batch_number=batch.batch_number,
                         expiry_date=batch.expiry_date,
-                        quantity=item['quantity'],
-                        unit_price=item['price'],
+                        quantity=quantity,
+                        unit_price=unit_price,
+                        tax_percentage=tax_rate,
+                        tax_amount=tax_amount,
                         total_amount=item['total']
                     )
                     
                     # Update stock batch
-                    batch.current_quantity -= item['quantity']
+                    batch.current_quantity -= quantity
                     if batch.current_quantity < 0:
                         raise Exception(f"Insufficient stock for {product.product_name}")
                     batch.save()
@@ -172,11 +185,14 @@ class PrintInvoiceView(View):
 
     def get(self, request, invoice_id):
         from django.shortcuts import get_object_or_404
+        from easypharma.models.print_setup import PrintSetup
         invoice = get_object_or_404(SaleInvoice, id=invoice_id)
         if not invoice.tenant and request.tenant:
-            # Fallback for old bills created without tenant (for debug/dev)
             invoice.tenant = request.tenant
-        return render(request, self.template_name, {'invoice': invoice})
+        # Load print settings (use tenant from invoice or request)
+        tenant = invoice.tenant or request.tenant
+        ps, _ = PrintSetup.objects.get_or_create(tenant=tenant)
+        return render(request, self.template_name, {'invoice': invoice, 'ps': ps})
 
 class SaleListView(View):
     template_name = 'sales/list.html'
@@ -214,24 +230,32 @@ class ProductSearchAPI(View):
         query = request.GET.get('q', '')
         from easypharma.models.stock import StockBatch
         
-        # Find products that have stock batches available
-        # Or just products that match the name
         products = Products.objects.filter(
             tenant=request.tenant,
             product_name__icontains=query
-        ).select_related('product_tax').prefetch_related('batches')[:10]
+        ).select_related('product_tax', 'product_content', 'compny_name').prefetch_related('batches')[:10]
         
         data = []
         for p in products:
-            # Get ALL batches for this product that have stock
             batches = p.batches.filter(current_quantity__gt=0).order_by('expiry_date')
             
             if not batches.exists():
+                # Still return the product but flag as out of stock so UI can show substitute button
+                data.append({
+                    'id': p.id,
+                    'name': p.product_name,
+                    'packing': p.product_packing,
+                    'content': p.product_content.content_name if p.product_content else None,
+                    'company': p.compny_name.company_name if p.compny_name else None,
+                    'tax_rate': p.product_tax.tax_rate if p.product_tax else 0,
+                    'conversion_factor': p.conversion_factor,
+                    'out_of_stock': True,
+                    'batches': []
+                })
                 continue
                 
             batch_list = []
             for batch in batches:
-                # Ensure price is per individual unit
                 unit_price = float(batch.sale_price)
                 if p.conversion_factor > 1:
                     unit_price = float(batch.mrp) / p.conversion_factor
@@ -251,11 +275,73 @@ class ProductSearchAPI(View):
                 'id': p.id,
                 'name': p.product_name,
                 'packing': p.product_packing,
+                'content': p.product_content.content_name if p.product_content else None,
+                'company': p.compny_name.company_name if p.compny_name else None,
                 'tax_rate': p.product_tax.tax_rate if p.product_tax else 0,
                 'conversion_factor': p.conversion_factor,
+                'out_of_stock': False,
                 'batches': batch_list
             })
             
+        return JsonResponse(data, safe=False)
+
+
+class SubstituteSearchAPI(View):
+    """Returns in-stock drugs with the same content/composition as the given product."""
+    def get(self, request):
+        product_id = request.GET.get('product_id')
+        if not product_id:
+            return JsonResponse([], safe=False)
+        
+        from easypharma.models.stock import StockBatch
+        try:
+            source = Products.objects.select_related('product_content').get(
+                id=product_id, tenant=request.tenant
+            )
+        except Products.DoesNotExist:
+            return JsonResponse([], safe=False)
+        
+        if not source.product_content:
+            return JsonResponse([], safe=False)
+        
+        # Find other products with same content that have stock
+        subs = Products.objects.filter(
+            tenant=request.tenant,
+            product_content=source.product_content,
+        ).exclude(id=source.id).select_related(
+            'product_tax', 'product_content', 'compny_name'
+        ).prefetch_related('batches')[:15]
+        
+        data = []
+        for p in subs:
+            batches = p.batches.filter(current_quantity__gt=0).order_by('expiry_date')
+            if not batches.exists():
+                continue
+            batch_list = []
+            for batch in batches:
+                unit_price = float(batch.sale_price)
+                if p.conversion_factor > 1:
+                    unit_price = float(batch.mrp) / p.conversion_factor
+                elif unit_price == 0 and batch.mrp:
+                    unit_price = float(batch.mrp)
+                batch_list.append({
+                    'batch_id': batch.id,
+                    'batch_no': batch.batch_number,
+                    'expiry': batch.expiry_date.strftime('%m/%y'),
+                    'stock': batch.current_quantity,
+                    'price': unit_price,
+                })
+            data.append({
+                'id': p.id,
+                'name': p.product_name,
+                'packing': p.product_packing,
+                'company': p.compny_name.company_name if p.compny_name else '—',
+                'content': source.product_content.content_name,
+                'tax_rate': p.product_tax.tax_rate if p.product_tax else 0,
+                'conversion_factor': p.conversion_factor,
+                'batches': batch_list,
+            })
+        
         return JsonResponse(data, safe=False)
 
 
