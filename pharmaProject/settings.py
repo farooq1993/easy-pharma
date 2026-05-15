@@ -35,9 +35,7 @@ ALLOWED_HOSTS = ["127.0.0.1", "localhost", "0.0.0.0", ".vercel.app",]
 
 CSRF_TRUSTED_ORIGINS = [
     'https://*.vercel.app',
-    # 'https://easy-pharma-production.up.railway.app',
-    # 'https://*.easy-pharma-production.up.railway.app',
-    # 'https://*.railway.app',
+   
 ]
 
 
@@ -131,7 +129,7 @@ WSGI_APPLICATION = 'pharmaProject.wsgi.application'
 
 # Database detection
 DATABASE_URL = (
-    os.environ.get('DATABASE_URL') or 
+    config('DATABASE_URL', default='') or 
     os.environ.get('POSTGRES_URL') or 
     os.environ.get('pharma_DATABASE_URL') or 
     os.environ.get('pharma_POSTGRES_URL')
