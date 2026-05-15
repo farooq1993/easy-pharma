@@ -5,3 +5,4 @@ from .sales import Customer, SaleInvoice, SaleItem
 from .stock import StockBatch
 from .gst import GSTScheme, GSTConfiguration, GSTFiling, GSTReturn, GSTCompositionReturn, GSTReminder
 from .accounting import SupplierLedger, SupplierPayment, ExpiryReturn, ExpiryReturnItem
+from .print_setup import PrintSetup

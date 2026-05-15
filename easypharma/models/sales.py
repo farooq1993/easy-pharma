@@ -18,6 +18,7 @@ class SaleInvoice(TenantAwareModel):
     invoice_number = models.CharField(max_length=50, unique=True)
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True)
     patient_name = models.CharField(max_length=200, null=True, blank=True)
+    patient_address = models.CharField(max_length=200, null=True, blank=True)
     patient_phone = models.CharField(max_length=20, null=True, blank=True)
     doctor_name = models.CharField(max_length=200, null=True, blank=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)

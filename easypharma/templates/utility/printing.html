@@ -1,25 +1,454 @@
 {% extends "includes/base.html" %}
 {% block content %}
+<style>
+/* ── Page Layout ── */
+.ps-page { display: flex; gap: 24px; align-items: flex-start; }
+.ps-form-col { flex: 0 0 420px; }
+.ps-preview-col { flex: 1; position: sticky; top: 80px; }
+
+/* ── Section Card ── */
+.ps-card {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 2px 12px rgba(0,0,0,.07);
+  margin-bottom: 18px;
+  overflow: hidden;
+}
+.ps-card-head {
+  padding: 14px 20px;
+  background: linear-gradient(135deg,#f8f9ff,#eef0ff);
+  border-bottom: 1px solid #e8eaf0;
+  display: flex; align-items: center; gap: 10px;
+}
+.ps-card-head i { color: #5c67f2; font-size: 16px; }
+.ps-card-head span { font-weight: 700; font-size: 13px; color: #2d3048; }
+.ps-card-body { padding: 18px 20px; }
+
+/* ── Form Controls ── */
+.ps-label { font-size: 11.5px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing:.5px; margin-bottom: 6px; display: block; }
+.ps-select, .ps-input, .ps-textarea {
+  width: 100%; border: 1.5px solid #e5e7eb; border-radius: 8px;
+  padding: 9px 12px; font-size: 13px; color: #374151;
+  background: #fafafa; transition: border-color .2s, box-shadow .2s;
+  outline: none;
+}
+.ps-select:focus, .ps-input:focus, .ps-textarea:focus {
+  border-color: #5c67f2; box-shadow: 0 0 0 3px rgba(92,103,242,.1);
+}
+.ps-textarea { resize: vertical; min-height: 70px; }
+
+/* ── Toggle Switch ── */
+.ps-toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f3f4f6; }
+.ps-toggle-row:last-child { border-bottom: none; }
+.ps-toggle-label { font-size: 13px; color: #374151; font-weight: 500; }
+.ps-toggle-sub { font-size: 11px; color: #9ca3af; margin-top: 1px; }
+.form-switch .form-check-input { width: 44px; height: 22px; cursor: pointer; }
+.form-switch .form-check-input:checked { background-color: #5c67f2; border-color: #5c67f2; }
+
+/* ── Logo Upload ── */
+.logo-drop {
+  border: 2px dashed #d1d5db; border-radius: 10px;
+  text-align: center; padding: 20px; cursor: pointer;
+  transition: all .2s; background: #fafafa;
+}
+.logo-drop:hover { border-color: #5c67f2; background: #f5f6ff; }
+.logo-drop i { font-size: 28px; color: #9ca3af; }
+.logo-drop p { margin: 6px 0 0; font-size: 12px; color: #6b7280; }
+.logo-preview { max-height: 80px; max-width: 100%; border-radius: 6px; margin-top: 10px; display: none; }
+
+/* ── Margin Sliders ── */
+.slider-row { display: flex; align-items: center; gap: 12px; }
+.slider-row input[type=range] { flex: 1; accent-color: #5c67f2; }
+.slider-val { font-size: 12px; font-weight: 600; color: #5c67f2; min-width: 34px; text-align: right; }
+
+/* ── Save Button ── */
+.ps-save-btn {
+  width: 100%; padding: 13px; border: none; border-radius: 10px;
+  background: linear-gradient(135deg,#5c67f2,#7c3aed);
+  color: #fff; font-weight: 700; font-size: 14px; cursor: pointer;
+  transition: opacity .2s, transform .15s; letter-spacing: .3px;
+}
+.ps-save-btn:hover { opacity: .92; transform: translateY(-1px); }
+
+/* ── Preview Invoice ── */
+.preview-wrap {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 2px 20px rgba(0,0,0,.1);
+  padding: 0;
+  overflow: hidden;
+}
+.preview-header-bar {
+  background: linear-gradient(135deg,#2d3048,#4a4f7a);
+  color: #fff; padding: 12px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.preview-header-bar span { font-size: 12px; font-weight: 700; letter-spacing: .5px; }
+.preview-scale {
+  transform-origin: top left;
+  padding: 20px;
+}
+#invoicePreview {
+  background: #fff;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 11px;
+  color: #000;
+  line-height: 1.4;
+  border: 1px solid #ddd;
+  padding: 16px;
+  border-radius: 4px;
+  min-height: 400px;
+}
+#invoicePreview .inv-logo { text-align: center; margin-bottom: 8px; }
+#invoicePreview .inv-logo img { max-height: 60px; max-width: 180px; }
+#invoicePreview .inv-pharmacy { text-align: center; margin-bottom: 6px; }
+#invoicePreview .inv-pharmacy h2 { font-size: 15px; font-weight: bold; margin: 0 0 3px; text-transform: uppercase; }
+#invoicePreview .inv-pharmacy p { margin: 1px 0; font-size: 10px; }
+#invoicePreview .inv-divider { border: none; border-top: 1px dashed #000; margin: 8px 0; }
+#invoicePreview .inv-title { text-align: center; font-weight: bold; font-size: 13px; margin: 6px 0; }
+#invoicePreview .inv-no { text-align: center; font-size: 10px; }
+#invoicePreview .inv-grid { display: flex; gap: 12px; margin: 10px 0; }
+#invoicePreview .inv-grid-col { flex: 1; }
+#invoicePreview .inv-grid-col b { font-size: 9px; text-transform: uppercase; display: block; margin-bottom: 1px; }
+#invoicePreview .inv-grid-col p { margin: 0 0 4px; font-size: 10px; }
+#invoicePreview table { width: 100%; border-collapse: collapse; font-size: 10px; }
+#invoicePreview th, #invoicePreview td { border: 1px solid #000; padding: 4px 5px; }
+#invoicePreview th { text-align: left; background: #f5f5f5; }
+#invoicePreview td:last-child { text-align: right; }
+#invoicePreview .inv-totals { max-width: 220px; margin-left: auto; margin-top: 10px; font-size: 10px; }
+#invoicePreview .inv-total-row { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px solid #ccc; }
+#invoicePreview .inv-total-bold { font-weight: bold; font-size: 11px; border-bottom: none !important; }
+#invoicePreview .inv-sigs { display: flex; justify-content: space-between; margin-top: 24px; font-size: 10px; }
+#invoicePreview .inv-sig { text-align: center; width: 45%; }
+#invoicePreview .inv-sig-line { border-top: 1px solid #000; padding-top: 4px; margin-top: 28px; }
+#invoicePreview .inv-footer { text-align: center; margin-top: 14px; padding-top: 8px; border-top: 1px dashed #000; font-size: 9px; }
+
+@media (max-width:900px) {
+  .ps-page { flex-direction: column; }
+  .ps-form-col { flex: 0 0 100%; width: 100%; }
+  .ps-preview-col { position: static; width: 100%; }
+}
+</style>
+
 <div class="container-fluid py-4">
-    <div class="card border-0 shadow-sm rounded-4 col-md-6">
-        <div class="card-header bg-white border-0 py-3">
-            <h5 class="fw-bold mb-0"><i class="bi bi-printer me-2"></i>Printing Setup</h5>
-        </div>
-        <div class="card-body">
-            <div class="mb-4">
-                <label class="form-label fw-bold small">Default Bill Header</label>
-                <textarea class="form-control bg-light border-0" rows="3">{{ request.tenant.pharmacy_name }}&#10;{{ request.tenant.address }}</textarea>
-            </div>
-            <div class="mb-4">
-                <label class="form-label fw-bold small">Thermal Printer Width</label>
-                <select class="form-select bg-light border-0">
-                    <option value="80">80mm (Standard)</option>
-                    <option value="58">58mm</option>
-                    <option value="a4">A4 (Laser)</option>
-                </select>
-            </div>
-            <button class="btn btn-primary px-4 rounded-pill">Save Configuration</button>
-        </div>
+  {% if messages %}
+  <div class="mb-3">
+    {% for msg in messages %}
+    <div class="alert alert-{{ msg.tags|default:'info' }} alert-dismissible fade show py-2" role="alert">
+      <i class="bi bi-{{ msg.tags == 'success' and 'check-circle' or 'exclamation-triangle' }} me-2"></i>{{ msg }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="d-flex align-items-center mb-4 gap-3">
+    <div style="background:linear-gradient(135deg,#5c67f2,#7c3aed);width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;">
+      <i class="bi bi-printer text-white" style="font-size:18px;"></i>
+    </div>
+    <div>
+      <h5 class="mb-0 fw-bold">Printing Setup</h5>
+      <small class="text-muted">Customize your invoice print layout</small>
+    </div>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" id="printForm">
+    {% csrf_token %}
+    <div class="ps-page">
+      <!-- ══ LEFT FORM COLUMN ══ -->
+      <div class="ps-form-col">
+
+        <!-- Logo Upload -->
+        <div class="ps-card">
+          <div class="ps-card-head">
+            <i class="bi bi-image"></i>
+            <span>Pharmacy Logo</span>
+          </div>
+          <div class="ps-card-body">
+            <div class="logo-drop" id="logoDrop" onclick="document.getElementById('logoFileInput').click()">
+              <i class="bi bi-cloud-arrow-up"></i>
+              <p>Click to upload logo <br><span style="font-size:10px;color:#9ca3af;">PNG, JPG, GIF · Max 2MB</span></p>
+            </div>
+            <img id="logoPreview" class="logo-preview"
+              {% if setup.logo_base64 %}src="{{ setup.logo_base64 }}" style="display:block;"{% endif %}
+              alt="Logo Preview">
+            <input type="file" id="logoFileInput" name="logo_file" accept="image/*" style="display:none;">
+
+            {% if setup.logo_base64 %}
+            <div class="mt-2 d-flex align-items-center gap-2">
+              <input type="checkbox" name="clear_logo" value="yes" id="clearLogo" class="form-check-input">
+              <label for="clearLogo" class="form-check-label" style="font-size:12px; color:#ef4444;">Remove current logo</label>
+            </div>
+            {% endif %}
+
+            <div class="ps-toggle-row mt-3">
+              <div><div class="ps-toggle-label">Show Logo on Invoice</div></div>
+              <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" name="show_logo" id="showLogo" {% if setup.show_logo %}checked{% endif %}>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Paper Size & Margins -->
+        <div class="ps-card">
+          <div class="ps-card-head">
+            <i class="bi bi-file-earmark"></i>
+            <span>Page Settings</span>
+          </div>
+          <div class="ps-card-body">
+            <label class="ps-label">Paper Size</label>
+            <select name="paper_size" class="ps-select mb-4" id="paperSizeSelect">
+              <option value="A4" {% if setup.paper_size == 'A4' %}selected{% endif %}>A4 — Standard Laser / Inkjet</option>
+              <option value="80mm" {% if setup.paper_size == '80mm' %}selected{% endif %}>80mm — Thermal Printer</option>
+              <option value="58mm" {% if setup.paper_size == '58mm' %}selected{% endif %}>58mm — Mini Thermal</option>
+            </select>
+
+            <label class="ps-label">Top Margin (mm)</label>
+            <div class="slider-row mb-4">
+              <input type="range" name="margin_top" id="marginTop" min="0" max="30" value="{{ setup.margin_top|default:10 }}" oninput="document.getElementById('marginTopVal').textContent=this.value+'mm'">
+              <span class="slider-val" id="marginTopVal">{{ setup.margin_top|default:10 }}mm</span>
+            </div>
+
+            <label class="ps-label">Side Margins (mm)</label>
+            <div class="slider-row">
+              <input type="range" name="margin_sides" id="marginSides" min="0" max="30" value="{{ setup.margin_sides|default:10 }}" oninput="document.getElementById('marginSidesVal').textContent=this.value+'mm'">
+              <span class="slider-val" id="marginSidesVal">{{ setup.margin_sides|default:10 }}mm</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Invoice Content -->
+        <div class="ps-card">
+          <div class="ps-card-head">
+            <i class="bi bi-toggles"></i>
+            <span>Invoice Content</span>
+          </div>
+          <div class="ps-card-body">
+            <div class="ps-toggle-row">
+              <div>
+                <div class="ps-toggle-label">Show GST Number</div>
+                <div class="ps-toggle-sub">Display GST No on header</div>
+              </div>
+              <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" name="show_gst_details" id="showGst" {% if setup.show_gst_details %}checked{% endif %}>
+              </div>
+            </div>
+            <div class="ps-toggle-row">
+              <div>
+                <div class="ps-toggle-label">Show DL Number</div>
+                <div class="ps-toggle-sub">Display Drug License on header</div>
+              </div>
+              <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" name="show_dl_details" id="showDl" {% if setup.show_dl_details %}checked{% endif %}>
+              </div>
+            </div>
+            <div class="ps-toggle-row">
+              <div>
+                <div class="ps-toggle-label">Customer Signature Line</div>
+                <div class="ps-toggle-sub">Add signature space for customer</div>
+              </div>
+              <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" name="show_customer_signature" id="showCustSig" {% if setup.show_customer_signature %}checked{% endif %}>
+              </div>
+            </div>
+            <div class="ps-toggle-row">
+              <div>
+                <div class="ps-toggle-label">Pharmacist Signature Line</div>
+                <div class="ps-toggle-sub">Add pharmacist sign space</div>
+              </div>
+              <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" name="show_pharmacist_signature" id="showPharmSig" {% if setup.show_pharmacist_signature %}checked{% endif %}>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Custom Text -->
+        <div class="ps-card">
+          <div class="ps-card-head">
+            <i class="bi bi-type"></i>
+            <span>Custom Text</span>
+          </div>
+          <div class="ps-card-body">
+            <label class="ps-label" for="customHeader">Extra Header Line</label>
+            <textarea class="ps-textarea mb-3" name="custom_header" id="customHeader" placeholder="e.g. All medicines are genuine and verified">{{ setup.custom_header|default:'' }}</textarea>
+
+            <label class="ps-label" for="customFooter">Footer Message</label>
+            <textarea class="ps-textarea" name="custom_footer" id="customFooter" placeholder="e.g. Thank you! Get well soon. Medicines once sold cannot be returned.">{{ setup.custom_footer|default:'' }}</textarea>
+          </div>
+        </div>
+
+        <button type="submit" class="ps-save-btn">
+          <i class="bi bi-floppy me-2"></i>Save Print Configuration
+        </button>
+      </div>
+
+      <!-- ══ RIGHT PREVIEW COLUMN ══ -->
+      <div class="ps-preview-col">
+        <div class="preview-wrap">
+          <div class="preview-header-bar">
+            <span><i class="bi bi-eye me-2"></i>LIVE INVOICE PREVIEW</span>
+            <span style="font-size:10px;opacity:.7;">Updates as you type</span>
+          </div>
+          <div class="preview-scale p-3">
+            <div id="invoicePreview">
+              <!-- Logo -->
+              <div class="inv-logo" id="prev-logo" style="display:{% if setup.show_logo and setup.logo_base64 %}block{% else %}none{% endif %}">
+                <img id="prev-logo-img" src="{{ setup.logo_base64|default:'' }}" alt="">
+              </div>
+
+              <!-- Pharmacy Header -->
+              <div class="inv-pharmacy">
+                <h2>{{ request.tenant.pharmacy_name }}</h2>
+                <p>{{ request.tenant.address }}</p>
+                <p>Phone: {{ request.tenant.phone }}</p>
+                <div id="prev-dl-gst">
+                  {% if request.tenant.license_number %}<p id="prev-dl">DL No: {{ request.tenant.license_number }}</p>{% endif %}
+                  {% if request.tenant.gst_number %}<p id="prev-gst">GST: {{ request.tenant.gst_number }}</p>{% endif %}
+                </div>
+              </div>
+              <p id="prev-custom-header" class="text-center" style="margin:4px 0; font-size:10px; font-style:italic;">{{ setup.custom_header|default:'' }}</p>
+
+              <hr class="inv-divider">
+              <div class="inv-title">RETAIL INVOICE</div>
+              <div class="inv-no">No: <b>INV-1-XX</b> &nbsp;&nbsp; Date: 15 May 2026 09:04</div>
+              <hr class="inv-divider">
+
+              <div class="inv-grid">
+                <div class="inv-grid-col">
+                  <b>PATIENT NAME</b><p>Sample Patient</p>
+                  <b>CUSTOMER ADDRESS</b><p>Sample City</p>
+                  <b>MOBILE NUMBER</b><p>98XXXXXXXX</p>
+                </div>
+                <div class="inv-grid-col">
+                  <b>REFERRED BY (DR.)</b><p>Dr. Sample</p>
+                  <b>PAYMENT MODE</b><p>Cash</p>
+                </div>
+              </div>
+
+              <table>
+                <thead><tr>
+                  <th style="width:40%">Medicine Name</th>
+                  <th>Batch</th><th>Exp</th><th>Qty</th><th>Price</th><th>Amount</th>
+                </tr></thead>
+                <tbody>
+                  <tr>
+                    <td><b>SAMPLE MED 500mg</b><div style="font-size:9px;color:#666;">10x10</div></td>
+                    <td>B2301A</td><td>12/26</td><td>2</td><td>45.00</td><td>90.00</td>
+                  </tr>
+                  <tr>
+                    <td><b>ANOTHER DRUG 250mg</b><div style="font-size:9px;color:#666;">1x6</div></td>
+                    <td>C1102B</td><td>06/27</td><td>1</td><td>18.00</td><td>18.00</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div class="inv-totals">
+                <div class="inv-total-row"><span>Sub Total:</span><span>108.00</span></div>
+                <div class="inv-total-row"><span>GST/Tax:</span><span>0.00</span></div>
+                <div class="inv-total-row"><span>Discount:</span><span>- 0.00</span></div>
+                <div class="inv-total-row inv-total-bold"><span>Net Payable:</span><span>108.00</span></div>
+              </div>
+
+              <!-- Signatures -->
+              <div class="inv-sigs" id="prev-sigs">
+                <div class="inv-sig" id="prev-cust-sig" style="display:{% if setup.show_customer_signature %}flex{% else %}none{% endif %}; flex-direction:column; align-items:center;">
+                  <div class="inv-sig-line">Customer Signature</div>
+                </div>
+                <div class="inv-sig" id="prev-pharm-sig" style="display:{% if setup.show_pharmacist_signature %}flex{% else %}none{% endif %}; flex-direction:column; align-items:center; margin-left:auto;">
+                  <div class="inv-sig-line">Pharmacist Signature</div>
+                </div>
+              </div>
+
+              <div class="inv-footer" id="prev-footer">
+                <p id="prev-footer-text">{{ setup.custom_footer|default:'Thank you for choosing '|add:request.tenant.pharmacy_name }}</p>
+                <p>Subject to terms &amp; conditions. Not for resale.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </form>
 </div>
+
+<script>
+// ── Logo Preview ──
+document.getElementById('logoFileInput').addEventListener('change', function(e){
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    const img = document.getElementById('logoPreview');
+    const prevImg = document.getElementById('prev-logo-img');
+    img.src = ev.target.result;
+    img.style.display = 'block';
+    prevImg.src = ev.target.result;
+    if (document.getElementById('showLogo').checked) {
+      document.getElementById('prev-logo').style.display = 'block';
+    }
+  };
+  reader.readAsDataURL(file);
+});
+
+// ── Toggle Logo in Preview ──
+document.getElementById('showLogo').addEventListener('change', function(){
+  const logoEl = document.getElementById('prev-logo');
+  const hasLogo = document.getElementById('prev-logo-img').src && document.getElementById('prev-logo-img').src !== window.location.href;
+  logoEl.style.display = (this.checked && hasLogo) ? 'block' : 'none';
+});
+
+// ── Toggle Customer Signature ──
+document.getElementById('showCustSig').addEventListener('change', function(){
+  document.getElementById('prev-cust-sig').style.display = this.checked ? 'flex' : 'none';
+});
+
+// ── Toggle Pharmacist Signature ──
+document.getElementById('showPharmSig').addEventListener('change', function(){
+  document.getElementById('prev-pharm-sig').style.display = this.checked ? 'flex' : 'none';
+});
+
+// ── Toggle GST ──
+document.getElementById('showGst').addEventListener('change', function(){
+  const el = document.getElementById('prev-gst');
+  if (el) el.style.display = this.checked ? '' : 'none';
+});
+
+// ── Toggle DL ──
+document.getElementById('showDl').addEventListener('change', function(){
+  const el = document.getElementById('prev-dl');
+  if (el) el.style.display = this.checked ? '' : 'none';
+});
+
+// ── Custom Header Live Preview ──
+document.getElementById('customHeader').addEventListener('input', function(){
+  document.getElementById('prev-custom-header').textContent = this.value;
+});
+
+// ── Custom Footer Live Preview ──
+document.getElementById('customFooter').addEventListener('input', function(){
+  document.getElementById('prev-footer-text').textContent = this.value || 'Thank you for choosing {{ request.tenant.pharmacy_name }}';
+});
+
+// ── Paper Size Preview Scaling ──
+document.getElementById('paperSizeSelect').addEventListener('change', function(){
+  const preview = document.getElementById('invoicePreview');
+  if (this.value === '80mm') {
+    preview.style.maxWidth = '300px';
+    preview.style.margin = '0 auto';
+  } else if (this.value === '58mm') {
+    preview.style.maxWidth = '218px';
+    preview.style.margin = '0 auto';
+  } else {
+    preview.style.maxWidth = '100%';
+    preview.style.margin = '';
+  }
+});
+
+// Run on page load
+window.addEventListener('DOMContentLoaded', function(){
+  document.getElementById('paperSizeSelect').dispatchEvent(new Event('change'));
+});
+</script>
 {% endblock %}
