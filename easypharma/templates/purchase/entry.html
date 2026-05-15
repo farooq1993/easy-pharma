@@ -110,7 +110,23 @@
                     <div class="row g-2 mb-2"><div class="col-6"><input type="number" id="summaryDiscountPerc" class="ep-input" placeholder="%" value="0"></div><div class="col-6"><input type="number" id="summaryDiscount" class="ep-input" placeholder="₹" value="0"></div></div>
                     <label class="ep-label">Payment Mode</label>
                     <select id="summaryPaymentMode" class="ep-input mb-3"><option>Cash</option><option>Credit</option></select>
+                    
+                    <div id="creditNotesSection" class="d-none mb-3">
+                        <label class="ep-label text-primary"><i class="fas fa-undo"></i> Apply Credit Note (Expiry Returns)</label>
+                        <div id="creditNotesList" class="p-2 border rounded" style="background: var(--brand-light); max-height: 150px; overflow-y: auto;">
+                            <!-- Notes will be loaded here -->
+                        </div>
+                        <div class="d-flex justify-content-between small fw-bold mt-1">
+                            <span>Total Applied:</span>
+                            <span id="summaryCreditApplied" class="text-success">₹0.00</span>
+                        </div>
+                    </div>
+
                     <div class="summary-total-row"><span class="fw-bold">Grand Total</span><span class="fw-bold fs-5" id="summaryGrandTotal">₹0.00</span></div>
+                    <div class="d-flex justify-content-between text-danger fw-bold d-none mt-2" id="summaryBalanceDueRow">
+                        <span>Balance Due:</span>
+                        <span id="summaryBalanceDue">₹0.00</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -126,6 +142,7 @@
     let items = [];
     let selectedProduct = null;
     let currentBatchHistory = [];   // store fetched batches for current product
+    let availableCreditNotes = [];  // store fetched credit notes for selected supplier
     const editData = {{ edit_data|default:'null'|safe }};  // edit mode data from server
     let csrfToken = '{{ csrf_token }}';
 
@@ -233,14 +250,55 @@
         container.classList.add('show');
     }
 
-    // Product search & selection logic
-    document.addEventListener('DOMContentLoaded', function() {
-        const searchInput = document.getElementById('productSearch');
-        const searchResultsDiv = document.getElementById('searchResults');
-        const batchInput = document.getElementById('itemBatch');
-        const suggestionsDiv = document.getElementById('batchSuggestions');
+        // Product search & selection logic
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('productSearch');
+            const searchResultsDiv = document.getElementById('searchResults');
+            const batchInput = document.getElementById('itemBatch');
+            const suggestionsDiv = document.getElementById('batchSuggestions');
+            const supplierSelect = document.getElementById('supplierSelect');
 
-        // product search
+            supplierSelect.addEventListener('change', async function() {
+                const sid = this.value;
+                const cnSection = document.getElementById('creditNotesSection');
+                const cnList = document.getElementById('creditNotesList');
+                cnList.innerHTML = '';
+                availableCreditNotes = [];
+                calculateSummary();
+                
+                if(!sid) {
+                    cnSection.classList.add('d-none');
+                    return;
+                }
+                try {
+                    const resp = await fetch(`/api/supplier-unadjusted-returns/?supplier_id=${sid}`);
+                    const data = await resp.json();
+                    if(data.length > 0) {
+                        availableCreditNotes = data;
+                        data.forEach((note, idx) => {
+                            cnList.innerHTML += `
+                                <div class="d-flex justify-content-between align-items-center mb-1 small border-bottom pb-1">
+                                    <div>
+                                        <input type="checkbox" class="cn-checkbox form-check-input me-1" data-idx="${idx}" onchange="toggleCreditNote(${idx}, this.checked)">
+                                        <strong>${note.reference}</strong> (${note.return_date})
+                                        <div class="text-muted" style="font-size:0.65rem">Bal: ₹${note.balance.toFixed(2)}</div>
+                                    </div>
+                                    <div>
+                                        <input type="number" id="cn-amt-${idx}" class="form-control form-control-sm text-end cn-amt-input" style="width: 80px;" disabled value="0" max="${note.balance}" oninput="updateCreditNoteAmt(${idx}, this.value)">
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        cnSection.classList.remove('d-none');
+                    } else {
+                        cnSection.classList.add('d-none');
+                    }
+                } catch(e) {
+                    console.error('Error fetching credit notes', e);
+                }
+            });
+
+            // product search
         searchInput.addEventListener('input', async (e) => {
             const query = e.target.value.trim();
             if (query.length < 1) { searchResultsDiv.classList.remove('open'); searchResultsDiv.style.display = 'none'; return; }
@@ -420,10 +478,53 @@
         gstDiv.innerHTML = Object.keys(gstMap).sort().map(r=>`<div class="d-flex justify-content-between small"><span>GST ${r}%</span><span>₹${gstMap[r].toFixed(2)}</span></div>`).join('');
         const disc = parseFloat(document.getElementById('summaryDiscount').value)||0;
         const grand = (sub + taxSum) - disc;
+        
+        let totalCreditApplied = 0;
+        document.querySelectorAll('.cn-amt-input').forEach(inp => {
+            if(!inp.disabled) totalCreditApplied += (parseFloat(inp.value)||0);
+        });
+        document.getElementById('summaryCreditApplied').innerText = `₹${totalCreditApplied.toFixed(2)}`;
+
         document.getElementById('summarySubTotal').innerHTML = `₹${sub.toFixed(2)}`;
         document.getElementById('summaryTax').innerHTML = `₹${taxSum.toFixed(2)}`;
         document.getElementById('summaryGrandTotal').innerHTML = `₹${grand.toFixed(2)}`;
+        
+        if(totalCreditApplied > 0) {
+            document.getElementById('summaryBalanceDueRow').classList.remove('d-none');
+            const balanceDue = Math.max(0, grand - totalCreditApplied);
+            document.getElementById('summaryBalanceDue').innerHTML = `₹${balanceDue.toFixed(2)}`;
+        } else {
+            document.getElementById('summaryBalanceDueRow').classList.add('d-none');
+        }
     }
+
+    window.toggleCreditNote = function(idx, isChecked) {
+        const input = document.getElementById(`cn-amt-${idx}`);
+        input.disabled = !isChecked;
+        if(isChecked) {
+            // Auto-fill max available or max needed
+            const currentGrand = parseFloat(document.getElementById('summaryGrandTotal').innerText.replace('₹','')) || 0;
+            let currentApplied = 0;
+            document.querySelectorAll('.cn-amt-input').forEach((inp, i) => {
+                if(!inp.disabled && i !== idx) currentApplied += (parseFloat(inp.value)||0);
+            });
+            const needed = currentGrand - currentApplied;
+            const noteBalance = availableCreditNotes[idx].balance;
+            input.value = Math.min(Math.max(0, needed), noteBalance).toFixed(2);
+        } else {
+            input.value = '0';
+        }
+        calculateSummary();
+    };
+
+    window.updateCreditNoteAmt = function(idx, val) {
+        let v = parseFloat(val)||0;
+        const max = availableCreditNotes[idx].balance;
+        if(v > max) {
+            document.getElementById(`cn-amt-${idx}`).value = max.toFixed(2);
+        }
+        calculateSummary();
+    };
 
     async function savePurchase() {
         const supplier = document.getElementById('supplierSelect').value;
@@ -436,6 +537,20 @@
         if(saveBtn) { saveBtn.disabled = true; saveBtn.classList.add('disabled'); }
         showLoader('Saving purchase...');
 
+        const applied_returns = [];
+        document.querySelectorAll('.cn-checkbox').forEach((chk) => {
+            if(chk.checked) {
+                const idx = chk.dataset.idx;
+                const amt = parseFloat(document.getElementById(`cn-amt-${idx}`).value) || 0;
+                if(amt > 0) {
+                    applied_returns.push({
+                        return_id: availableCreditNotes[idx].id,
+                        amount: amt
+                    });
+                }
+            }
+        });
+
         const data = {
             supplier_id: supplier,
             invoice_number: invNo,
@@ -446,7 +561,8 @@
             discount_percentage: parseFloat(document.getElementById('summaryDiscountPerc').value) || 0,
             discount_amount: parseFloat(document.getElementById('summaryDiscount').value) || 0,
             payment_mode: document.getElementById('summaryPaymentMode').value,
-            total_amount: parseFloat(document.getElementById('summaryGrandTotal').innerText.replace('₹',''))
+            total_amount: parseFloat(document.getElementById('summaryGrandTotal').innerText.replace('₹','')),
+            applied_returns: applied_returns
         };
         const endpoint = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
 

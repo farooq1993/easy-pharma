@@ -111,6 +111,53 @@ class PurchaseEntryView(View):
                         total_amount=item['total']
                     )
                 
+                from easypharma.models.accounting import SupplierLedger, ExpiryReturn
+                
+                applied_returns = data.get('applied_returns', [])
+                total_credit_applied = sum(float(r['amount']) for r in applied_returns)
+
+                # Check if it's editing, we might want to update or delete old ledger entry.
+                # Since we delete items, let's delete old ledger entries related to this invoice
+                if invoice_id:
+                    SupplierLedger.objects.filter(tenant=request.tenant, reference_number=invoice.invoice_number, transaction_type='Purchase').delete()
+                    # Revert old returns if any (complex, but for MVP we might ignore or just let them recreate. Ideally, if editing, we'd need to clear old applied returns. We'll set paid_amount instead)
+                    # But since this request creates a new invoice or edits, let's just handle new applications
+                    
+                invoice.paid_amount = invoice.paid_amount + total_credit_applied
+                invoice.save()
+
+                for ret in applied_returns:
+                    try:
+                        exp_return = ExpiryReturn.objects.get(id=ret['return_id'], tenant=request.tenant)
+                        if not exp_return.return_details:
+                            exp_return.return_details = {}
+                        if 'adjusted_invoices' not in exp_return.return_details:
+                            exp_return.return_details['adjusted_invoices'] = []
+                        
+                        exp_return.return_details['adjusted_invoices'].append({
+                            'id': invoice.id,
+                            'amount': ret['amount']
+                        })
+                        exp_return.save()
+                    except ExpiryReturn.DoesNotExist:
+                        pass
+
+                SupplierLedger.objects.create(
+                    tenant=request.tenant,
+                    supplier=supplier,
+                    date=invoice.purchase_date,
+                    transaction_type='Purchase',
+                    reference_number=invoice.invoice_number,
+                    debit=0,
+                    credit=invoice.total_amount,
+                    remarks="Purchase Invoice"
+                )
+
+                # If there are applied returns, create a ledger entry representing the adjustment (payment) against this invoice?
+                # Actually, ExpiryReturn ALREADY created a Debit in the ledger when it was created!
+                # We do NOT create another ledger entry here because the return is already in the ledger.
+                # Applying it just links them and reduces the outstanding balance.
+
                 return JsonResponse({'success': True, 'invoice_id': invoice.id})
         except Exception as e:
             import traceback

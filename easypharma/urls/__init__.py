@@ -7,5 +7,6 @@ from easypharma.urls.reports import urlpatterns as report_urls
 from easypharma.urls.utility import urlpatterns as utility_urls
 from easypharma.urls.doctor import urlpatterns as doctor_urls
 from easypharma.urls.gst import urlpatterns as gst_urls
+from easypharma.urls.accounting import urlpatterns as accounting_urls
 
-urlpatterns = master_urls + account_urls + sale_urls + tenant_urls + purchase_urls + report_urls + utility_urls + doctor_urls + gst_urls
+urlpatterns = master_urls + account_urls + sale_urls + tenant_urls + purchase_urls + report_urls + utility_urls + doctor_urls + gst_urls + accounting_urls

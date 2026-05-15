@@ -144,6 +144,45 @@ body {
     }
 }
 
+@media (max-width: 768px) {
+    .add-row-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+    
+    .add-row-grid > div:first-child {
+        grid-column: span 2; /* Search takes full width */
+    }
+    
+    .add-row-grid > div:last-child {
+        grid-column: span 2; /* Add button takes full width */
+    }
+    
+    .btn-add-item {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .btn-complete {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .add-row-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .add-row-grid > div {
+        grid-column: span 1 !important;
+    }
+}
+
 .unit-preview {
     font-size: 0.7rem;
     font-weight: 700;

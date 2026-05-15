@@ -1,0 +1,499 @@
+{% extends 'includes/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid py-4" id="expiryApp">
+    <div class="row mb-4">
+        <div class="col-12 d-flex justify-content-between align-items-center">
+            <h2 class="mb-0 text-dark">Expiry Returns</h2>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#returnModal">
+                <i class="bi bi-arrow-return-left me-2"></i>New Return
+            </button>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Date</th>
+                            <th>Supplier</th>
+                            <th>Items Count</th>
+                            <th>Remarks</th>
+                            <th class="text-end">Total Amount</th>
+                            <th class="text-center" style="width: 80px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in returns %}
+                        <tr>
+                            <td>{{ r.return_date|date:"Y-m-d" }}</td>
+                            <td>{{ r.supplier.name }}</td>
+                            <td>{{ r.items.count }}</td>
+                            <td>{{ r.remarks|default:"-" }}</td>
+                            <td class="text-end fw-bold text-danger">{{ r.total_amount }}</td>
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteReturn({{ r.id }})" title="Delete Return">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center py-4 text-muted">No expiry returns recorded.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Return Modal -->
+<div class="modal fade" id="returnModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title text-dark">New Expiry Return</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <label class="form-label text-dark fw-bold">Supplier *</label>
+                        <select id="supplier_id" class="form-select" required>
+                            <option value="">-- Choose Supplier --</option>
+                            {% for s in suppliers %}
+                            <option value="{{ s.id }}">{{ s.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label text-dark fw-bold">Return Date *</label>
+                        <input type="date" id="return_date" class="form-control" value="{{ today|date:'Y-m-d' }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label text-dark fw-bold">Remarks</label>
+                        <input type="text" id="remarks" class="form-control">
+                    </div>
+                </div>
+
+                <div class="card bg-light border-0 mb-3 overflow-visible">
+                    <div class="card-body overflow-visible">
+                        <div class="row g-3 align-items-end mb-3 position-relative">
+                            <div class="col-md-6 position-relative">
+                                <label class="form-label text-dark fw-bold">Search Batch</label>
+                                <input type="text" id="batchSearch" class="form-control shadow-sm" placeholder="Type product name to search batches..." autocomplete="off">
+                                <div id="batchDropdown" class="dropdown-menu w-100 shadow border-0" style="position: absolute; z-index: 1050; max-height: 250px; overflow-y: auto;"></div>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-bordered bg-white mb-0" id="returnItemsTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Batch</th>
+                                        <th>Expiry</th>
+                                        <th style="width: 100px;">Available</th>
+                                        <th style="width: 120px;">Return Qty</th>
+                                        <th style="width: 150px;">Rate</th>
+                                        <th class="text-end" style="width: 150px;">Amount</th>
+                                        <th style="width: 50px;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <th colspan="6" class="text-end">Total Amount:</th>
+                                        <th class="text-end fs-5 text-danger" id="totalAmount">0.00</th>
+                                        <th></th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Credit Bills Section -->
+                <div id="creditBillsContainer" class="d-none mt-4 border-top pt-3">
+                    <h6 class="text-primary mb-2 border-bottom pb-2">Adjust Return Amount against Credit Bills</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered" id="creditBillsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Invoice #</th>
+                                    <th>Date</th>
+                                    <th class="text-end">Bill Amount</th>
+                                    <th class="text-end">Balance Due</th>
+                                    <th class="text-end" style="width: 200px;">Allocate</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <th colspan="4" class="text-end">Total Allocated:</th>
+                                    <th class="text-end text-warning" id="totalAllocated">0.00</th>
+                                </tr>
+                                <tr>
+                                    <th colspan="4" class="text-end">Unallocated Return Amount:</th>
+                                    <th class="text-end text-success" id="unallocatedAmount">0.00</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+            <div class="modal-footer border-top">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveReturnBtn">Save Return</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let items = [];
+    let currentBills = [];
+    
+    const batchSearch = document.getElementById('batchSearch');
+    const batchDropdown = document.getElementById('batchDropdown');
+    const tbody = document.querySelector('#returnItemsTable tbody');
+    const supplierSelect = document.getElementById('supplier_id');
+    const creditBillsContainer = document.getElementById('creditBillsContainer');
+    const creditBillsTableBody = document.querySelector('#creditBillsTable tbody');
+
+    supplierSelect.addEventListener('change', async function() {
+        const supplierId = this.value;
+        if(!supplierId) {
+            creditBillsContainer.classList.add('d-none');
+            currentBills = [];
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/supplier-credit-bills/?supplier_id=${supplierId}`);
+            const data = await res.json();
+            currentBills = data;
+            
+            if(data.length > 0) {
+                renderBills();
+                creditBillsContainer.classList.remove('d-none');
+            } else {
+                creditBillsContainer.classList.add('d-none');
+            }
+        } catch(e) {
+            console.error(e);
+        }
+    });
+
+    function renderBills() {
+        creditBillsTableBody.innerHTML = '';
+        currentBills.forEach((bill, index) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${bill.invoice_number}</td>
+                <td>${bill.purchase_date}</td>
+                <td class="text-end">${bill.total_amount.toFixed(2)}</td>
+                <td class="text-end text-danger fw-bold">${bill.balance.toFixed(2)}</td>
+                <td>
+                    <div class="d-flex align-items-center justify-content-end">
+                        <input class="form-check-input mt-0 me-2 allocate-check border-secondary" type="checkbox" data-index="${index}" title="Auto Allocate">
+                        <input type="number" step="0.01" class="form-control form-control-sm text-end allocate-input" 
+                               data-index="${index}" data-balance="${bill.balance}" value="0.00" style="width: 100px;">
+                    </div>
+                </td>
+            `;
+            creditBillsTableBody.appendChild(tr);
+        });
+
+        document.querySelectorAll('.allocate-input').forEach(inp => {
+            inp.addEventListener('input', calculateAllocations);
+        });
+        
+        document.querySelectorAll('.allocate-check').forEach(chk => {
+            chk.addEventListener('change', function() {
+                const idx = this.dataset.index;
+                const input = document.querySelector(`.allocate-input[data-index="${idx}"]`);
+                if (this.checked) {
+                    let totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
+                    let currentlyAllocated = 0;
+                    document.querySelectorAll('.allocate-input').forEach(inp => {
+                        if (inp !== input) {
+                            currentlyAllocated += parseFloat(inp.value) || 0;
+                        }
+                    });
+                    let unallocated = totalAmount - currentlyAllocated;
+                    let balance = parseFloat(input.dataset.balance);
+                    let allocateAmt = Math.min(unallocated > 0 ? unallocated : 0, balance);
+                    input.value = allocateAmt.toFixed(2);
+                } else {
+                    input.value = "0.00";
+                }
+                calculateAllocations();
+            });
+        });
+    }
+
+    function calculateAllocations() {
+        let totalAllocated = 0;
+        let totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
+
+        document.querySelectorAll('.allocate-input').forEach(inp => {
+            let val = parseFloat(inp.value) || 0;
+            let bal = parseFloat(inp.dataset.balance);
+            if(val > bal) {
+                val = bal;
+                inp.value = val.toFixed(2);
+            }
+            totalAllocated += val;
+        });
+
+        document.getElementById('totalAllocated').textContent = totalAllocated.toFixed(2);
+        
+        let unallocated = totalAmount - totalAllocated;
+        document.getElementById('unallocatedAmount').textContent = unallocated.toFixed(2);
+        
+        if(unallocated < 0) {
+            document.getElementById('unallocatedAmount').classList.replace('text-success', 'text-danger');
+        } else {
+            document.getElementById('unallocatedAmount').classList.replace('text-danger', 'text-success');
+        }
+    }
+
+    // Batch Search
+    batchSearch.addEventListener('input', async function() {
+        if(this.value.length < 2) {
+            batchDropdown.style.display = 'none';
+            return;
+        }
+        
+        try {
+            const res = await fetch(`/api/stock-batches/?q=${this.value}`);
+            const data = await res.json();
+            
+            batchDropdown.innerHTML = '';
+            if(data.length > 0) {
+                data.forEach(b => {
+                    const a = document.createElement('a');
+                    a.className = 'dropdown-item cursor-pointer text-dark border-bottom';
+                    a.innerHTML = `<strong>${b.product_name}</strong> - Batch: ${b.batch_number} (Avail: ${b.available_qty}) <small class="text-muted ms-2 float-end">Exp: ${b.expiry_date}</small>`;
+                    a.onclick = () => addBatch(b);
+                    batchDropdown.appendChild(a);
+                });
+                batchDropdown.style.display = 'block';
+            } else {
+                const div = document.createElement('div');
+                div.className = 'dropdown-item text-muted';
+                div.innerText = 'No batches found.';
+                batchDropdown.appendChild(div);
+                batchDropdown.style.display = 'block';
+            }
+        } catch(e) {
+            console.error(e);
+        }
+    });
+
+    // Hide dropdown on click outside
+    document.addEventListener('click', (e) => {
+        if(!batchSearch.contains(e.target) && !batchDropdown.contains(e.target)) {
+            batchDropdown.style.display = 'none';
+        }
+    });
+
+    function addBatch(b) {
+        if(items.find(i => i.batch_id === b.id)) {
+            alert('Batch already added');
+            return;
+        }
+        
+        items.push({
+            batch_id: b.id,
+            product_name: b.product_name,
+            batch_number: b.batch_number,
+            expiry_date: b.expiry_date,
+            available_qty: b.available_qty,
+            quantity: 1,
+            rate: b.purchase_price,
+            amount: b.purchase_price
+        });
+        
+        batchSearch.value = '';
+        batchDropdown.style.display = 'none';
+        renderTable();
+    }
+
+    function renderTable() {
+        tbody.innerHTML = '';
+        let total = 0;
+        
+        items.forEach((item, index) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="fw-bold">${item.product_name}</td>
+                <td>${item.batch_number}</td>
+                <td>${item.expiry_date}</td>
+                <td class="text-center text-primary fw-bold">${item.available_qty}</td>
+                <td>
+                    <input type="number" class="form-control form-control-sm qty-input" 
+                           value="${item.quantity}" min="1" max="${item.available_qty}" data-index="${index}">
+                </td>
+                <td>
+                    <input type="number" step="0.01" class="form-control form-control-sm rate-input" 
+                           value="${item.rate}" data-index="${index}">
+                </td>
+                <td class="text-end align-middle fw-bold">${item.amount.toFixed(2)}</td>
+                <td class="text-center">
+                    <button class="btn btn-sm btn-outline-danger remove-btn" data-index="${index}">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+            total += item.amount;
+        });
+        
+        document.getElementById('totalAmount').textContent = total.toFixed(2);
+        
+        // Add event listeners
+        document.querySelectorAll('.qty-input').forEach(inp => {
+            inp.addEventListener('change', (e) => {
+                const idx = e.target.dataset.index;
+                let val = parseInt(e.target.value);
+                if(val > items[idx].available_qty) {
+                    val = items[idx].available_qty;
+                    e.target.value = val;
+                }
+                if(val < 1) {
+                    val = 1;
+                    e.target.value = val;
+                }
+                items[idx].quantity = val;
+                items[idx].amount = items[idx].quantity * items[idx].rate;
+                renderTable();
+            });
+        });
+        
+        document.querySelectorAll('.rate-input').forEach(inp => {
+            inp.addEventListener('change', (e) => {
+                const idx = e.target.dataset.index;
+                items[idx].rate = parseFloat(e.target.value) || 0;
+                items[idx].amount = items[idx].quantity * items[idx].rate;
+                renderTable();
+            });
+        });
+        
+        document.querySelectorAll('.remove-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = e.currentTarget.dataset.index;
+                items.splice(idx, 1);
+                renderTable();
+            });
+        });
+
+        calculateAllocations(); // Update allocations whenever items change
+    }
+
+    document.getElementById('saveReturnBtn').addEventListener('click', async function() {
+        const supplier_id = document.getElementById('supplier_id').value;
+        const return_date = document.getElementById('return_date').value;
+        const remarks = document.getElementById('remarks').value;
+        
+        if(!supplier_id) return alert('Please select a supplier');
+        if(items.length === 0) return alert('Please add at least one item');
+        
+        const total = items.reduce((sum, item) => sum + item.amount, 0);
+
+        let totalAllocated = 0;
+        let adjusted_invoices = [];
+
+        document.querySelectorAll('.allocate-input').forEach((inp, idx) => {
+            let val = parseFloat(inp.value) || 0;
+            if(val > 0) {
+                totalAllocated += val;
+                adjusted_invoices.push({
+                    id: currentBills[idx].id,
+                    amount: val
+                });
+            }
+        });
+
+        if(totalAllocated > total) {
+            return alert('Allocated amount cannot exceed total return amount.');
+        }
+        
+        const data = {
+            supplier_id,
+            return_date,
+            remarks,
+            total_amount: total,
+            items: items,
+            adjusted_invoices: adjusted_invoices
+        };
+        
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+        
+        try {
+            const res = await fetch("{% url 'expiry_return' %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify(data)
+            });
+            const result = await res.json();
+            
+            if(result.success) {
+                window.location.reload();
+            } else {
+                alert('Error: ' + result.error);
+                btn.disabled = false;
+                btn.innerHTML = 'Save Return';
+            }
+        } catch(e) {
+            console.error(e);
+            alert('Server error');
+            btn.disabled = false;
+            btn.innerHTML = 'Save Return';
+        }
+    });
+});
+
+async function deleteReturn(id) {
+    if(!confirm('Are you sure you want to delete this expiry return? This will also revert stock quantities and ledger entries.')) return;
+    
+    try {
+        const res = await fetch(`/accounting/expiry-return/${id}/delete/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        });
+        const result = await res.json();
+        if(result.success) {
+            window.location.reload();
+        } else {
+            alert('Error deleting return: ' + result.error);
+        }
+    } catch(e) {
+        console.error(e);
+        alert('Server error while deleting return');
+    }
+}
+</script>
+<style>
+.dropdown-item:hover {
+    background-color: #f8f9fa !important;
+}
+</style>
+{% endblock %}

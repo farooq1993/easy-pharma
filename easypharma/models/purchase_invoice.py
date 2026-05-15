@@ -28,8 +28,13 @@ class PurchaseInvoice(TenantAwareModel):
     discount_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
     discount_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    @property
+    def balance(self):
+        return self.total_amount - self.paid_amount
     
     def __str__(self):
         return f"Purchase INV: {self.invoice_number} from {self.supplier}"

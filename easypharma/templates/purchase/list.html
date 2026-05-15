@@ -28,6 +28,8 @@
                             <th>Tax</th>
                             <th>Discount</th>
                             <th>Total Amount</th>
+                            <th>Paid/Adj</th>
+                            <th>Balance Due</th>
                             <th class="text-end pe-4">Actions</th>
                         </tr>
                     </thead>
@@ -43,6 +45,8 @@
                             <td class="text-primary">{{ invoice.tax_amount }}</td>
                             <td class="text-danger">{{ invoice.discount_amount }}</td>
                             <td class="fw-bold text-success">{{ invoice.total_amount }}</td>
+                            <td class="text-primary fw-bold">{{ invoice.paid_amount|default:"0.00" }}</td>
+                            <td class="text-danger fw-bold">{{ invoice.balance }}</td>
                             <td class="text-end pe-4">
                                 <div class="btn-group">
                                     <a href="{% url 'purchase_edit' invoice.id %}" class="btn btn-sm btn-outline-primary border-0" title="Edit">
