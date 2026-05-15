@@ -45,6 +45,7 @@
             <ul class="collapse nav flex-column ms-3" id="purchaseMenu">
                 <li><a href="{% url 'purchase_entry' %}" class="nav-link small">New Purchase</a></li>
                 <li><a href="{% url 'purchase_list' %}" class="nav-link small">Purchase History</a></li>
+                <li><a href="{% url 'expiry_return' %}" class="nav-link small">Credit Note/Expiry Return</a></li>
             </ul>
         </li>
 
@@ -134,6 +135,25 @@
                 <li><a href="{% url 'gst_config' %}" class="nav-link small">Configuration</a></li>
                 <li><a href="{% url 'gst_filing_list' %}" class="nav-link small">Filings</a></li>
                 <li><a href="{% url 'gst_reminder_list' %}" class="nav-link small">Reminders</a></li>
+            </ul>
+        </li>
+
+        <li class="mt-3">
+            <h6 class="sidebar-text text-uppercase small opacity-75 ps-3 mb-2" style="color: #e7e1cb;">Accounting</h6>
+        </li>
+        <li>
+            <a class="nav-link d-flex align-items-center" 
+               data-bs-toggle="collapse" 
+               data-bs-target="#accountingMenu" 
+               aria-expanded="false">
+                <i class="bi bi-wallet2"></i>
+                <span class="sidebar-text">Accounting</span>
+                <i class="bi bi-caret-down-fill ms-auto"></i>
+            </a>
+            <ul class="collapse nav flex-column ms-3" id="accountingMenu">
+                <li><a href="{% url 'supplier_payment' %}" class="nav-link small">Supplier Payment</a></li>
+                <li><a href="{% url 'supplier_ledger' %}" class="nav-link small">Supplier Ledger</a></li>
+                
             </ul>
         </li>
 
