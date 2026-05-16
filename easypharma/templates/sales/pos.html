@@ -301,6 +301,21 @@
     document.addEventListener('keydown', (e) => {
         const results = document.querySelectorAll('.batch-item');
 
+        // ESC close search dropdown
+        if (e.key === 'Escape') {
+
+            resultsDiv.classList.add('d-none');
+
+            searchInput.value = '';
+
+            searchSelectedIndex = -1;
+        }
+
+        if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
+            e.preventDefault();
+            document.getElementById('productSearch').focus();
+        }
+        
         if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
             e.preventDefault(); document.getElementById('productSearch').focus();
         }
