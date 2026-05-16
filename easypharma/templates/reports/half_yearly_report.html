@@ -28,8 +28,6 @@
                 </div>
                 <select name="schedule" class="form-select">
                     <option value="all" {% if selected_schedule == 'all' %}selected{% endif %}>All Drug Types</option>
-                    <option value="H1" {% if selected_schedule == 'H1' %}selected{% endif %}>H1</option>
-                    <option value="Narcotic" {% if selected_schedule == 'Narcotic' %}selected{% endif %}>Narcotic</option>
                     {% for schedule in report_schedules %}
                         <option value="{{ schedule.schedule_name }}" {% if selected_schedule == schedule.schedule_name %}selected{% endif %}>{{ schedule.schedule_name }}</option>
                     {% endfor %}
@@ -162,7 +160,7 @@
     <!-- Sale Details -->
     <div class="card mb-4">
         <div class="card-header bg-dark text-white">
-            <h5 class="mb-0">Sale Details</h5>
+            <h5 class="mb-0">Sale Details H1</h5>
         </div>
         <div class="card-body">
             {% if sale_details %}
@@ -175,7 +173,7 @@
                             <th>Patient / Customer</th>
                             <th>Doctor</th>
                             <th class="text-end">Total</th>
-                            <th class="text-end">Schedule</th>
+                            <th class="text-end">Product name / Schedule</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -195,11 +193,14 @@
                             <td>{{ sale.doctor_name|default:'-' }}</td>
                             <td class="text-end">₹{{ sale.total_amount|floatformat:2 }}</td>
                             <td class="text-end">
-                                {% with sale.items.all|first as first_item %}
-                                    {% if first_item and first_item.product.product_schedule %}
-                                        {{ first_item.product.product_schedule.schedule_name }}
+                                {% with first_item=sale.items.first %}
+                                    {% if first_item %}
+                                        <div>{{ first_item.product.product_name }}</div>
+                                        <small class="text-muted">
+                                            {{ first_item.product.product_schedule.schedule_name }}
+                                        </small>
                                     {% else %}
-                                        All
+                                        N/A
                                     {% endif %}
                                 {% endwith %}
                             </td>
