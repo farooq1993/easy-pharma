@@ -1,5 +1,5 @@
 import logging
-
+from django.db.models import Prefetch
 from django.views import View
 from django.shortcuts import render
 from easypharma.models.stock import StockBatch
@@ -226,7 +226,16 @@ class HalfYearlySaleReportView(View):
             customer['avg_amount'] = customer['amount'] / customer['purchases'] if customer['purchases'] > 0 else 0
 
         # Sale details for each matching invoice (useful for patient/date-level review)
-        sale_details = sales.select_related('customer').order_by('-created_at')
+        sale_details = sales.select_related('customer').prefetch_related(
+                        Prefetch(
+                            'items',
+                            queryset=SaleItem.objects.select_related(
+                                'product',
+                                'product__product_schedule'
+                            )
+                        )
+                    ).order_by('-created_at')
+        
 
         # Product-level summary for selected schedule / half-year period
         product_summary = SaleItem.objects.filter(
@@ -239,7 +248,7 @@ class HalfYearlySaleReportView(View):
             quantity_sold=Sum('quantity'),
             revenue=Sum('total_amount')
         ).order_by('-quantity_sold')
-
+        
         report_schedules = ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('schedule_name')
 
         context = {
