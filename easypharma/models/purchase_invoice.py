@@ -3,6 +3,8 @@ from tenants.models import TenantAwareModel
 from easypharma.models.Items import Products
 from easypharma.models.accounts import User
 from django.db import transaction
+import datetime
+from django.utils import timezone
 
 class Supplier(TenantAwareModel):
     name = models.CharField(max_length=200)
@@ -23,6 +25,7 @@ class PurchaseInvoice(TenantAwareModel):
     purchase_date = models.DateField(null=True, blank=True)
     payment_mode = models.CharField(max_length=20, default='Cash', choices=[('Cash', 'Cash'), ('Credit', 'Credit')])
     
+    voucher_number = models.CharField(max_length=30, blank=True, null=True, db_index=True)
     sub_total = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     discount_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
@@ -32,6 +35,43 @@ class PurchaseInvoice(TenantAwareModel):
     
     created_at = models.DateTimeField(auto_now_add=True)
     
+    @classmethod
+    def generate_voucher_number(cls, tenant, purchase_date=None):
+        """
+        Sequential, tenant-scoped voucher number.
+        Format: PV-YYYY-XXXXXX  e.g. PV-2026-000042
+        Counter resets each financial year (April 1 – March 31).
+        """
+ 
+        today = purchase_date or timezone.now().date()
+        if isinstance(today, str):
+            today = datetime.date.fromisoformat(today)
+ 
+        # Financial year starts April
+        fy_year = today.year if today.month >= 4 else today.year - 1
+        fy_start = datetime.date(fy_year, 4, 1)
+        fy_end = datetime.date(fy_year + 1, 3, 31)
+ 
+        last = (
+            cls.objects
+            .filter(
+                tenant=tenant,
+                purchase_date__range=(fy_start, fy_end),
+                voucher_number__startswith=f"PV-{fy_year}-"
+            )
+            .order_by('-voucher_number')
+            .first()
+        )
+        if last and last.voucher_number:
+            try:
+                last_seq = int(last.voucher_number.rsplit('-', 1)[-1])
+            except ValueError:
+                last_seq = 0
+        else:
+            last_seq = 0
+ 
+        return f"PV-{fy_year}-{str(last_seq + 1).zfill(6)}"
+
     @property
     def balance(self):
         return self.total_amount - self.paid_amount

@@ -1,6 +1,8 @@
 from django.views import View
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
+from django.core.paginator import Paginator
+from django.db.models import Q
 from easypharma.models.Items import Products
 from easypharma.models.purchase_invoice import Supplier, PurchaseInvoice, PurchaseItem
 from easypharma.models.stock import StockBatch
@@ -91,6 +93,14 @@ class PurchaseEntryView(View):
                 invoice.discount_amount = data.get('discount_amount', 0)
                 invoice.payment_mode = data.get('payment_mode', 'Cash')
                 invoice.total_amount = data['total_amount']
+
+                 # ── Generate voucher number (new invoices only) ───────────────
+                if not invoice_id or not invoice.voucher_number:
+                    invoice.voucher_number = PurchaseInvoice.generate_voucher_number(
+                        tenant=request.tenant,
+                        purchase_date=data.get('purchase_date')
+                    )
+
                 invoice.save()
                 
                 for item in data['items']:
@@ -173,10 +183,54 @@ class SupplierAutocomplete(View):
 
 class PurchaseListView(View):
     template_name = 'purchase/list.html'
+    ITEMS_PER_PAGE = 20
 
     def get(self, request):
-        invoices = PurchaseInvoice.objects.filter(tenant=request.tenant).select_related('supplier').order_by('-created_at')
-        return render(request, self.template_name, {'invoices': invoices})
+        qs = (
+            PurchaseInvoice.objects
+            .filter(tenant=request.tenant)
+            .select_related('supplier')
+            .order_by('-purchase_date', '-created_at')
+        )
+
+        #invoices = PurchaseInvoice.objects.filter(tenant=request.tenant).select_related('supplier').order_by('-purchase_date','-created_at')
+
+        # ── Search: voucher no / supplier invoice no / supplier name ─────────
+        search_query = request.GET.get('q', '').strip()
+        if search_query:
+            qs = qs.filter(
+                Q(voucher_number__icontains=search_query) |
+                Q(invoice_number__icontains=search_query) |
+                Q(supplier__name__icontains=search_query)
+            )
+        
+        # ── Date range filter ─────────────────────────────────────────────────
+        date_from = request.GET.get('date_from', '').strip()
+        date_to   = request.GET.get('date_to',   '').strip()
+        if date_from:
+            qs = qs.filter(purchase_date__gte=date_from)
+        if date_to:
+            qs = qs.filter(purchase_date__lte=date_to)
+
+              # ── Payment mode filter ───────────────────────────────────────────────
+        payment_filter = request.GET.get('payment_mode', '').strip()
+        if payment_filter in ('Cash', 'Credit'):
+            qs = qs.filter(payment_mode=payment_filter)
+ 
+        # ── Pagination ────────────────────────────────────────────────────────
+        paginator   = Paginator(qs, self.ITEMS_PER_PAGE)
+        page_number = request.GET.get('page', 1)
+        page_obj    = paginator.get_page(page_number)
+
+        return render(request, self.template_name, 
+            {'page_obj':page_obj,
+            'invoices':       page_obj,        # alias so existing template tag works
+            'search_query':   search_query,
+            'date_from':      date_from,
+            'date_to':        date_to,
+            'payment_filter': payment_filter,
+            'total_count':    paginator.count,
+        })
 
     def delete(self, request, invoice_id):
         try:

@@ -132,9 +132,9 @@ body {
 /* ADD ROW GRID - IMPROVED ALIGNMENT & RESPONSIVE */
 .add-row-grid {
     display: grid;
-    grid-template-columns: minmax(180px, 2fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(80px, 0.8fr) minmax(80px, 0.8fr) minmax(100px, 1fr) minmax(85px, 0.7fr) minmax(100px, 1fr) auto;
+    grid-template-columns: minmax(180px, 2fr) minmax(120px, 1fr) minmax(150px, 1.2fr) minmax(80px, 0.8fr) minmax(80px, 0.8fr) minmax(100px, 1fr) minmax(75px, 0.7fr) minmax(100px, 1fr) auto;
     gap: 12px;
-    align-items: end;
+    align-items: start;
 }
 
 @media (max-width: 1300px) {
@@ -148,25 +148,27 @@ body {
     .add-row-grid {
         grid-template-columns: 1fr 1fr;
     }
-    
-    .add-row-grid > div:first-child {
-        grid-column: span 2; /* Search takes full width */
+
+    .add-row-grid>div:first-child {
+        grid-column: span 2;
+        /* Search takes full width */
     }
-    
-    .add-row-grid > div:last-child {
-        grid-column: span 2; /* Add button takes full width */
+
+    .add-row-grid>div:last-child {
+        grid-column: span 2;
+        /* Add button takes full width */
     }
-    
+
     .btn-add-item {
         width: 100%;
         justify-content: center;
     }
-    
+
     .page-header {
         flex-direction: column;
         align-items: flex-start;
     }
-    
+
     .btn-complete {
         width: 100%;
         justify-content: center;
@@ -177,8 +179,8 @@ body {
     .add-row-grid {
         grid-template-columns: 1fr;
     }
-    
-    .add-row-grid > div {
+
+    .add-row-grid>div {
         grid-column: span 1 !important;
     }
 }
@@ -348,6 +350,61 @@ body {
 .ep-toast.show {
     transform: translateY(0);
     opacity: 1;
+}
+
+/* Batch number input — uppercase mono */
+#itemBatch {
+    font-family: var(--mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+/* Expiry MM / YYYY split field */
+.expiry-split-wrap {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+}
+
+.expiry-month-select {
+    flex: 0 0 60px !important;
+    min-width: 0;
+    padding-left: 6px !important;
+    padding-right: 2px !important;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.expiry-year-input {
+    flex: 1 1 0 !important;
+    min-width: 48px;
+    text-align: center;
+    padding-left: 4px !important;
+    padding-right: 4px !important;
+    font-family: var(--mono);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+
+.expiry-year-input.is-invalid {
+    border-color: var(--red) !important;
+    background: var(--red-light);
+}
+
+.expiry-sep {
+    font-weight: 700;
+    color: var(--muted);
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    line-height: 1;
+    padding-bottom: 1px;
+}
+
+.expiry-hint-text {
+    font-size: 0.65rem;
+    margin-top: 3px;
+    font-weight: 600;
 }
 
 .ep-toast.error {
