@@ -26,3 +26,7 @@ def url_replace(context, **kwargs):
     for key, value in kwargs.items():
         params[key] = value
     return params.urlencode()
+
+@register.filter
+def tag_icon(tag):
+    return 'check-circle' if tag == 'success' else 'exclamation-triangle'

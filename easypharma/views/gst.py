@@ -281,8 +281,9 @@ class GSTReminderListView(LoginRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         today = timezone.now().date()
-        context['upcoming_count'] = context['reminders'].filter(reminder_date__gte=today).count()
-        context['overdue_count'] = context['reminders'].filter(reminder_date__lt=today, is_notified=False).count()
+        qs = self.get_queryset()
+        context['upcoming_count'] = qs.filter(reminder_date__gte=today).count()
+        context['overdue_count'] = qs.filter(reminder_date__lt=today, is_notified=False).count()
         return context
 
 
