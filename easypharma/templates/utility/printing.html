@@ -1,4 +1,5 @@
 {% extends "includes/base.html" %}
+{% load custom_filters %}
 {% block content %}
 <style>
 /* ── Page Layout ── */
@@ -135,7 +136,7 @@
   <div class="mb-3">
     {% for msg in messages %}
     <div class="alert alert-{{ msg.tags|default:'info' }} alert-dismissible fade show py-2" role="alert">
-      <i class="bi bi-{{ msg.tags == 'success' and 'check-circle' or 'exclamation-triangle' }} me-2"></i>{{ msg }}
+      <i class="bi bi-{% if msg.tags == 'success' %}check-circle{% else %}exclamation-triangle{% endif %} me-2"></i>{{ msg }}
       <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
     {% endfor %}
