@@ -73,18 +73,18 @@
                             <div class="expiry-split-wrap" id="expiryWrapper">
                                 <select id="itemExpiryMonth" class="ep-input expiry-month-select">
                                     <option value="">MM</option>
-                                    <option value="01">01</option>
-                                    <option value="02">02</option>
-                                    <option value="03">03</option>
-                                    <option value="04">04</option>
-                                    <option value="05">05</option>
-                                    <option value="06">06</option>
-                                    <option value="07">07</option>
-                                    <option value="08">08</option>
-                                    <option value="09">09</option>
-                                    <option value="10">10</option>
-                                    <option value="11">11</option>
-                                    <option value="12">12</option>
+                                    <option value="01">01 Jan</option>
+                                    <option value="02">02 Feb</option>
+                                    <option value="03">03 Mar</option>
+                                    <option value="04">04 Apr</option>
+                                    <option value="05">05 May</option>
+                                    <option value="06">06 Jun</option>
+                                    <option value="07">07 Jul</option>
+                                    <option value="08">08 Aug</option>
+                                    <option value="09">09 Sep</option>
+                                    <option value="10">10 Oct</option>
+                                    <option value="11">11 Nov</option>
+                                    <option value="12">12 Dec</option>
                                 </select>
                                 <span class="expiry-sep">/</span>
                                 <input type="text" id="itemExpiryYear" class="ep-input expiry-year-input"
@@ -92,9 +92,8 @@
                                     oninput="this.value=this.value.replace(/\D/g,'').slice(0,4)"
                                     onblur="validateExpiryYear(this)">
                             </div>
-                            <!-- Hidden field that stores YYYY-MM for use in JS logic -->
                             <input type="hidden" id="itemExpiry">
-                            <div id="expiryHint" style="font-size:0.65rem; margin-top:2px; display:none;"></div>
+                            <div id="expiryHint" class="expiry-hint-text" style="display:none;"></div>
                         </div>
                         <!-- Qty -->
                         <div><label class="ep-label">Qty (Packs)</label><input type="number" id="itemQty" class="ep-input" value="1" min="1"></div>
@@ -179,10 +178,10 @@
     function validateExpiryYear(el) {
         const y = el.value;
         if (y.length > 0 && y.length < 4) {
-            el.style.borderColor = '#dc3545';
+            el.classList.add('is-invalid');
             el.title = 'Enter full 4-digit year, e.g. 2026';
         } else {
-            el.style.borderColor = '';
+            el.classList.remove('is-invalid');
             el.title = '';
         }
     }
@@ -691,33 +690,6 @@
 </script>
 
 <style>
-    .expiry-split-wrap {
-        display: flex;
-        align-items: center;
-        gap: 3px;
-        width: 100%;
-    }
-    .expiry-month-select {
-        flex: 0 0 54px !important;
-        min-width: 0;
-        padding-left: 4px !important;
-        padding-right: 2px !important;
-        text-align: center;
-    }
-    .expiry-year-input {
-        flex: 1 1 0 !important;
-        min-width: 0;
-        text-align: center;
-        padding-left: 4px !important;
-        padding-right: 4px !important;
-    }
-    .expiry-sep {
-        font-weight: 700;
-        color: #888;
-        font-size: 1rem;
-        flex-shrink: 0;
-        line-height: 1;
-    }
     .universal-loader {
         position: fixed;
         inset: 0;

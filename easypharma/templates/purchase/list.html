@@ -1,12 +1,20 @@
 {% extends "includes/base.html" %}
 {% load static %}
+{% load custom_filters %}
 
 {% block content %}
 <div class="container-fluid py-4">
-    <div class="row align-items-center mb-4">
+
+    <!-- ── Page header ─────────────────────────────────────────────────── -->
+    <div class="row align-items-center mb-3">
         <div class="col">
             <h2 class="fw-bold mb-0">Purchase Invoices</h2>
-            <p class="text-muted small">View and manage all your pharmaceutical stock purchases.</p>
+            <p class="text-muted small mb-0">
+                View and manage all stock purchases.
+                {% if total_count %}
+                <span class="badge bg-secondary ms-1">{{ total_count }} record{{ total_count|pluralize }}</span>
+                {% endif %}
+            </p>
         </div>
         <div class="col-auto">
             <a href="{% url 'purchase_entry' %}" class="btn btn-success px-4 shadow-sm">
@@ -15,41 +23,135 @@
         </div>
     </div>
 
+    <!-- ── Search + filters ────────────────────────────────────────────── -->
+    <div class="card border-0 shadow-sm rounded-4 mb-3">
+        <div class="card-body py-3">
+            <form method="get" id="filterForm" class="row g-2 align-items-end">
+
+                <!-- Search box -->
+                <div class="col-lg-4 col-md-6">
+                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">
+                        <i class="fas fa-search me-1"></i> Search
+                    </label>
+                    <div class="input-group">
+                        <input type="text" name="q" id="searchInput"
+                            class="form-control border-0 bg-light"
+                            placeholder="Voucher no., invoice no. or supplier…"
+                            value="{{ search_query }}"
+                            autocomplete="off">
+                        {% if search_query %}
+                        <a href="{% url 'purchase_list' %}" class="btn btn-outline-secondary border-0 bg-light"
+                            title="Clear search"><i class="fas fa-times"></i></a>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Date From -->
+                <div class="col-lg-2 col-md-3 col-sm-6">
+                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">From</label>
+                    <input type="date" name="date_from" class="form-control border-0 bg-light"
+                        value="{{ date_from }}">
+                </div>
+
+                <!-- Date To -->
+                <div class="col-lg-2 col-md-3 col-sm-6">
+                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">To</label>
+                    <input type="date" name="date_to" class="form-control border-0 bg-light"
+                        value="{{ date_to }}">
+                </div>
+
+                <!-- Payment Mode -->
+                <div class="col-lg-2 col-md-3">
+                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">Payment</label>
+                    <select name="payment_mode" class="form-select border-0 bg-light">
+                        <option value="">All</option>
+                        <option value="Cash" {% if payment_filter == 'Cash' %}selected{% endif %}>Cash</option>
+                        <option value="Credit" {% if payment_filter == 'Credit' %}selected{% endif %}>Credit</option>
+                    </select>
+                </div>
+
+                <!-- Buttons -->
+                <div class="col-lg-2 col-md-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary flex-fill">
+                        <i class="fas fa-filter me-1"></i> Filter
+                    </button>
+                    <a href="{% url 'purchase_list' %}" class="btn btn-outline-secondary" title="Reset all filters">
+                        <i class="fas fa-redo"></i>
+                    </a>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+    <!-- ── Table ────────────────────────────────────────────────────────── -->
     <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
                     <thead class="bg-light text-muted small text-uppercase">
                         <tr>
-                            <th class="ps-4">Date</th>
-                            <th>Invoice No.</th>
+                            <th class="ps-4" style="white-space:nowrap;">Voucher No.</th>
+                            <th style="white-space:nowrap;">Date</th>
+                            <th style="white-space:nowrap;">Supplier Inv.</th>
                             <th>Supplier</th>
-                            <th>Sub Total</th>
-                            <th>Tax</th>
-                            <th>Discount</th>
-                            <th>Total Amount</th>
+                            <th>Payment</th>
+                            <th class="text-end">Sub Total</th>
+                            <th class="text-end">GST</th>
+                            <th class="text-end">Discount</th>
+                            <th class="text-end">Total</th>
                             <th class="text-end pe-4">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for invoice in invoices %}
                         <tr id="invoice-{{ invoice.id }}">
+
+                            <!-- Voucher number — prominent, copyable -->
                             <td class="ps-4">
-                                <div class="fw-bold small">{{ invoice.purchase_date|default:invoice.created_at|date:"d M Y" }}</div>
+                                <span class="voucher-badge" title="Click to copy"
+                                    onclick="copyVoucher('{{ invoice.voucher_number|default:'' }}', this)">
+                                    <i class="fas fa-tag me-1" style="font-size:0.65rem;"></i>
+                                    {{ invoice.voucher_number|default:"—" }}
+                                </span>
                             </td>
-                            <td><span class="badge bg-light text-dark border">#{{ invoice.invoice_number }}</span></td>
+
+                            <td>
+                                <div class="fw-bold small" style="white-space:nowrap;">
+                                    {{ invoice.purchase_date|default:invoice.created_at|date:"d M Y" }}
+                                </div>
+                            </td>
+
+                            <td>
+                                <span class="badge bg-light text-dark border">#{{ invoice.invoice_number }}</span>
+                            </td>
+
                             <td class="small fw-bold">{{ invoice.supplier.name }}</td>
-                            <td>{{ invoice.sub_total }}</td>
-                            <td class="text-primary">{{ invoice.tax_amount }}</td>
-                            <td class="text-danger">{{ invoice.discount_amount }}</td>
-                            <td class="fw-bold text-success">{{ invoice.total_amount }}</td>
-                            
+
+                            <td>
+                                {% if invoice.payment_mode == 'Credit' %}
+                                <span class="badge bg-warning-subtle text-warning border border-warning-subtle">Credit</span>
+                                {% else %}
+                                <span class="badge bg-success-subtle text-success border border-success-subtle">Cash</span>
+                                {% endif %}
+                            </td>
+
+                            <td class="text-end small">₹{{ invoice.sub_total }}</td>
+                            <td class="text-end small text-primary">₹{{ invoice.tax_amount }}</td>
+                            <td class="text-end small text-danger">
+                                {% if invoice.discount_amount > 0 %}-₹{{ invoice.discount_amount }}{% else %}—{% endif %}
+                            </td>
+                            <td class="text-end fw-bold text-success">₹{{ invoice.total_amount }}</td>
+
                             <td class="text-end pe-4">
                                 <div class="btn-group">
-                                    <a href="{% url 'purchase_edit' invoice.id %}" class="btn btn-sm btn-outline-primary border-0" title="Edit">
+                                    <a href="{% url 'purchase_edit' invoice.id %}"
+                                        class="btn btn-sm btn-outline-primary border-0" title="Edit">
                                         <i class="fas fa-edit"></i>
                                     </a>
-                                    <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteInvoice({{ invoice.id }})">
+                                    <button class="btn btn-sm btn-outline-danger border-0"
+                                        onclick="deleteInvoice({{ invoice.id }}, '{{ invoice.voucher_number|default:invoice.invoice_number }}')"
+                                        title="Delete">
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
                                 </div>
@@ -57,10 +159,21 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="8" class="text-center py-5">
-                                <div class="opacity-25 mb-3"><i class="fas fa-file-invoice" style="font-size: 3rem;"></i></div>
+                            <td colspan="10" class="text-center py-5">
+                                <div class="opacity-25 mb-3">
+                                    <i class="fas fa-file-invoice" style="font-size: 3rem;"></i>
+                                </div>
+                                {% if search_query or date_from or date_to or payment_filter %}
+                                <p class="text-muted">No invoices match your filters.</p>
+                                <a href="{% url 'purchase_list' %}" class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-redo me-1"></i> Clear filters
+                                </a>
+                                {% else %}
                                 <p class="text-muted">No purchase invoices found.</p>
-                                <a href="{% url 'purchase_entry' %}" class="btn btn-sm btn-success">Record your first purchase</a>
+                                <a href="{% url 'purchase_entry' %}" class="btn btn-sm btn-success">
+                                    Record your first purchase
+                                </a>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}
@@ -68,28 +181,237 @@
                 </table>
             </div>
         </div>
-    </div>
+
+        <!-- ── Pagination footer ─────────────────────────────────────────── -->
+        {% if page_obj.has_other_pages %}
+        <div class="card-footer bg-white border-0 py-3">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+
+                <small class="text-muted">
+                    Showing
+                    <strong>{{ page_obj.start_index }}–{{ page_obj.end_index }}</strong>
+                    of <strong>{{ total_count }}</strong> invoices
+                </small>
+
+                <nav aria-label="Purchase list pagination">
+                    <ul class="pagination pagination-sm mb-0">
+
+                        <!-- First -->
+                        {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link rounded-start-3" href="?{% url_replace page=1 %}">
+                                <i class="fas fa-angle-double-left"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?{% url_replace page=page_obj.previous_page_number %}">
+                                <i class="fas fa-angle-left"></i>
+                            </a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link rounded-start-3"><i class="fas fa-angle-double-left"></i></span>
+                        </li>
+                        <li class="page-item disabled">
+                            <span class="page-link"><i class="fas fa-angle-left"></i></span>
+                        </li>
+                        {% endif %}
+
+                        <!-- Page numbers (show ±2 around current) -->
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if num == page_obj.number %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
+                            {% elif num >= page_obj.number|add:"-2" and num <= page_obj.number|add:"2" %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{% url_replace page=num %}">{{ num }}</a>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+
+                        <!-- Next / Last -->
+                        {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?{% url_replace page=page_obj.next_page_number %}">
+                                <i class="fas fa-angle-right"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link rounded-end-3"
+                                href="?{% url_replace page=page_obj.paginator.num_pages %}">
+                                <i class="fas fa-angle-double-right"></i>
+                            </a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link"><i class="fas fa-angle-right"></i></span>
+                        </li>
+                        <li class="page-item disabled">
+                            <span class="page-link rounded-end-3"><i class="fas fa-angle-double-right"></i></span>
+                        </li>
+                        {% endif %}
+
+                    </ul>
+                </nav>
+
+                <!-- Jump to page -->
+                <div class="d-flex align-items-center gap-2">
+                    <small class="text-muted">Go to page:</small>
+                    <input type="number" id="jumpPage" class="form-control form-control-sm border-0 bg-light"
+                        style="width:65px; text-align:center;"
+                        min="1" max="{{ page_obj.paginator.num_pages }}"
+                        value="{{ page_obj.number }}"
+                        onkeydown="if(event.key==='Enter') jumpToPage()">
+                    <button class="btn btn-sm btn-outline-secondary border-0 bg-light"
+                        onclick="jumpToPage()">Go</button>
+                </div>
+
+            </div>
+        </div>
+        {% endif %}
+
+    </div><!-- /card -->
+</div>
+
+<!-- ── Toast notification ──────────────────────────────────────────────── -->
+<div id="listToast" style="
+    position:fixed; bottom:24px; right:24px; z-index:9999;
+    background:#16A34A; color:#fff; padding:10px 18px;
+    border-radius:10px; font-weight:600; font-size:0.85rem;
+    display:none; align-items:center; gap:8px; box-shadow:0 4px 14px rgba(0,0,0,.15);">
+    <i class="fas fa-check-circle"></i>
+    <span id="listToastMsg"></span>
 </div>
 
 <script>
-async function deleteInvoice(id) {
-    if (!confirm('Are you sure? This will delete the invoice and REVERT the stock levels. This action cannot be undone.')) return;
+// ── Delete invoice ────────────────────────────────────────────────────────
+async function deleteInvoice(id, label) {
+    if (!confirm(`Delete ${label}?\n\nThis will remove the invoice AND revert stock levels. This cannot be undone.`)) return;
 
-    const response = await fetch(`/delete/${id}/`, {
-        method: 'DELETE',
-        headers: {
-            'X-CSRFToken': '{{ csrf_token }}',
-            'Content-Type': 'application/json'
+    try {
+        const response = await fetch(`/purchase/delete/${id}/`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json'
+            }
+        });
+        const result = await response.json();
+        if (result.success) {
+            const row = document.getElementById(`invoice-${id}`);
+            if (row) {
+                row.style.transition = 'opacity 0.3s';
+                row.style.opacity = '0';
+                setTimeout(() => row.remove(), 300);
+            }
+            showToast('Invoice deleted and stock reverted.');
+        } else {
+            alert('Error: ' + result.error);
         }
-    });
-
-    const result = await response.json();
-    if (result.success) {
-        document.getElementById(`invoice-${id}`).remove();
-        alert('Invoice deleted and stock reverted.');
-    } else {
-        alert('Error: ' + result.error);
+    } catch (err) {
+        alert('Network error: ' + err.message);
     }
 }
+
+// ── Copy voucher number to clipboard ─────────────────────────────────────
+function copyVoucher(voucher, el) {
+    if (!voucher || voucher === '—') return;
+    navigator.clipboard.writeText(voucher).then(() => {
+        showToast(`Copied: ${voucher}`);
+        el.classList.add('copied');
+        setTimeout(() => el.classList.remove('copied'), 1500);
+    }).catch(() => {
+        // Fallback for non-https
+        const ta = document.createElement('textarea');
+        ta.value = voucher;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        showToast(`Copied: ${voucher}`);
+    });
+}
+
+// ── Pagination: jump to page ──────────────────────────────────────────────
+function jumpToPage() {
+    const page = parseInt(document.getElementById('jumpPage').value);
+    const max  = {{ page_obj.paginator.num_pages|default:1 }};
+    if (isNaN(page) || page < 1 || page > max) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('page', page);
+    window.location.href = url.toString();
+}
+
+// ── Toast helper ─────────────────────────────────────────────────────────
+function showToast(msg) {
+    const toast = document.getElementById('listToast');
+    document.getElementById('listToastMsg').textContent = msg;
+    toast.style.display = 'flex';
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => { toast.style.display = 'none'; }, 2500);
+}
+
+// ── Live search (debounced) ───────────────────────────────────────────────
+let searchTimer;
+document.getElementById('searchInput').addEventListener('input', function () {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+        document.getElementById('filterForm').submit();
+    }, 500);
+});
 </script>
+
+<style>
+    /* Voucher badge */
+    .voucher-badge {
+        display: inline-flex;
+        align-items: center;
+        background: #EDE9F8;
+        color: #5C3D99;
+        border: 1px solid #C9BEF0;
+        border-radius: 8px;
+        padding: 4px 10px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        font-family: 'JetBrains Mono', 'Courier New', monospace;
+        letter-spacing: 0.04em;
+        cursor: pointer;
+        transition: background 0.15s, transform 0.1s;
+        white-space: nowrap;
+    }
+    .voucher-badge:hover {
+        background: #D4C8F5;
+        transform: scale(1.03);
+    }
+    .voucher-badge.copied {
+        background: #DCFCE7;
+        color: #16A34A;
+        border-color: #86EFAC;
+    }
+
+    /* Pagination active */
+    .page-item.active .page-link {
+        background-color: #5C3D99;
+        border-color: #5C3D99;
+    }
+    .page-link {
+        color: #5C3D99;
+    }
+    .page-link:hover {
+        color: #3D2870;
+    }
+
+    /* Filter card */
+    .form-control:focus, .form-select:focus {
+        background: #fff !important;
+        border-color: #5C3D99 !important;
+        box-shadow: 0 0 0 3px rgba(92,61,153,.12);
+    }
+
+    /* Badge soft colours (Bootstrap 5.3 may not have these, define them) */
+    .bg-warning-subtle  { background-color: #FEF3C7 !important; }
+    .bg-success-subtle  { background-color: #DCFCE7 !important; }
+    .text-warning       { color: #D97706 !important; }
+</style>
 {% endblock %}
