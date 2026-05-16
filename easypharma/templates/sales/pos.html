@@ -535,10 +535,22 @@
     }
 
     function addToCart(product) {
-        if (product.stock <= 0) return alert('Out of stock!');
-        // Unique key is product_id + batch_id to support multiple batches of same product
-        const existing = cart.find(item => item.id === product.id && item.batch_id === product.batch_id);
-        if (existing) { existing.quantity++; } else {
+        if (product.stock <= 0) {
+            return alert('Out of stock!');
+        }
+
+        const existing = cart.find(
+            item =>
+                item.id === product.id &&
+                item.batch_id === product.batch_id
+        );
+
+        if (existing) {
+
+            existing.quantity++;
+
+        } else {
+
             cart.push({
                 id: product.id,
                 batch_id: product.batch_id,
@@ -551,73 +563,111 @@
                 max_stock: product.stock
             });
         }
-        searchInput.value = ''; resultsDiv.classList.add('d-none'); renderCart();
-        const lastRowIndex = cart.findIndex(item => item.id === product.id && item.batch_id === product.batch_id);
-        const qtyInput = document.querySelectorAll('.qty-input')[lastRowIndex];
-        qtyInput.focus(); qtyInput.select();
+
+        searchInput.value = '';
+
+        resultsDiv.classList.add('d-none');
+
+        shouldFocusLastQty = true;
+
+        renderCart();
     }
 
     function renderCart() {
         const tbody = document.querySelector('#posTable tbody');
         const emptyState = document.getElementById('emptyState');
+
         tbody.innerHTML = '';
+
         if (cart.length === 0) {
+
             emptyState.classList.remove('d-none');
+
         } else {
+
             emptyState.classList.add('d-none');
+
             cart.forEach((item, index) => {
-                // MRP is tax-inclusive, so total = MRP * quantity (no additional tax needed)
+
                 const total = item.price * item.quantity;
-                // Calculate tax amount for display purposes only (tax is already in MRP)
+
                 const basePrice = item.price / (1 + item.tax_rate / 100);
+
                 const taxAmount = item.price - basePrice;
+
                 const totalTaxAmount = taxAmount * item.quantity;
+
                 const tr = document.createElement('tr');
+
                 tr.className = 'cart-row';
+
                 tr.innerHTML = `
                     <td class="ps-4">
                         <div class="fw-bold text-dark small">${item.name}</div>
                         <div class="text-muted x-small">Exp: ${item.expiry}</div>
                     </td>
+
                     <td>
-                        <div class="badge bg-light text-muted x-small">B: ${item.batch_no}</div>
+                        <div class="badge bg-light text-muted x-small">
+                            B: ${item.batch_no}
+                        </div>
                     </td>
+
                     <td class="small">₹${item.price.toFixed(2)}</td>
+
                     <td>
-                        <input type="number" 
-                            class="form-control form-control-sm border-0 bg-light text-center fw-bold qty-input" 
-                            value="${item.quantity}" 
+                        <input type="number"
+                            class="form-control form-control-sm border-0 bg-light text-center fw-bold qty-input"
+                            value="${item.quantity}"
                             data-index="${index}"
                             min="1"
                             max="${item.max_stock}"
-                            oninput="updateQty(${index}, this.value)" 
+                            oninput="updateQty(${index}, this.value)"
                             onkeydown="handleQtyKeydown(event, ${index})"
-                            style="width: 70px; cursor: text; border: 1px solid #dee2e6 !important;">
+                            style="width:70px; cursor:text; border:1px solid #dee2e6 !important;">
                     </td>
+
                     <td class="text-primary small">
-                        ₹${totalTaxAmount.toFixed(2)} 
-                        <span class="text-muted x-small">(${item.tax_rate}% incl.)</span>
+                        ₹${totalTaxAmount.toFixed(2)}
+                        <span class="text-muted x-small">
+                            (${item.tax_rate}% incl.)
+                        </span>
                     </td>
-                    <td class="fw-bold small">₹${total.toFixed(2)}</td>
+
+                    <td class="fw-bold small">
+                        ₹${total.toFixed(2)}
+                    </td>
+
                     <td class="text-end pe-4">
-                        <button class="btn btn-sm text-danger border-0" 
-                            onclick="removeFromCart(${index})" 
-                            title="Delete row">
+                        <button class="btn btn-sm text-danger border-0"
+                            onclick="removeFromCart(${index})">
                             <i class="fas fa-trash-alt"></i>
                         </button>
                     </td>
                 `;
+
                 tbody.appendChild(tr);
             });
-            // Auto-focus on last qty field
-            setTimeout(() => {
-                const lastQtyInput = tbody.querySelector('.qty-input:last-child');
-                if (lastQtyInput) {
-                    lastQtyInput.focus();
-                    lastQtyInput.select();
-                }
-            }, 50);
+
+            if (shouldFocusLastQty) {
+
+                setTimeout(() => {
+
+                    const inputs = tbody.querySelectorAll('.qty-input');
+
+                    const lastQtyInput = inputs[inputs.length - 1];
+
+                    if (lastQtyInput) {
+                        lastQtyInput.focus();
+                        lastQtyInput.select();
+                    }
+
+                    shouldFocusLastQty = false;
+
+                }, 50);
+            }
         }
+
         calculateGrandTotal();
     }
 
@@ -657,7 +707,7 @@
     function updateQty(index, val) {
         const item = cart[index]; const newQty = parseInt(val) || 0;
         if (newQty > 0 && newQty <= item.max_stock) { item.quantity = newQty; } else if (newQty > item.max_stock) { item.quantity = item.max_stock; alert('Stock limit reached'); }
-        calculateGrandTotal(); renderCart();
+        calculateGrandTotal();
     }
 
     function calculateGrandTotal() {
