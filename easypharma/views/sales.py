@@ -504,3 +504,45 @@ class SalesReturnView(View):
             return redirect('pos_returns')
         
         return redirect('pos_returns')
+
+
+class PatientWiseSales(View):
+    template_name = "sales/patient_wise_sales.html"
+
+    def get(self, request):
+        return render(request, self.template_name)
+
+
+class PatientWiseSalesAPI(View):
+    def get(self, request):
+        patient_name = request.GET.get('patient_name', '').strip()
+        if not patient_name:
+            return JsonResponse({'error': 'Patient name is required'}, status=400)
+        
+        sales = SaleInvoice.objects.filter(
+            tenant=request.tenant,
+            patient_name__icontains=patient_name
+        ).order_by('-created_at')
+        
+        data = []
+        for sale in sales:
+            items = []
+            for item in sale.items.all().select_related('product'):
+                items.append({
+                    'product_name': item.product.product_name,
+                    'batch_number': item.batch_number,
+                    'expiry_date': item.expiry_date.strftime('%Y-%m-%d') if item.expiry_date else '',
+                    'quantity': item.quantity,
+                    'unit_price': float(item.unit_price),
+                    'total': float(item.total_amount)
+                })
+            data.append({
+                'invoice_number': sale.invoice_number,
+                'date': sale.created_at.strftime('%Y-%m-%d %H:%M'),
+                'doctor_name': sale.doctor_name,
+                'payment_mode': sale.payment_mode,
+                'total_amount': float(sale.total_amount),
+                'items': items
+            })
+        
+        return JsonResponse(data, safe=False)

@@ -1,5 +1,7 @@
 from django.urls import path
-from easypharma.views.sales import POSView, ProductSearchAPI, SaleListView, PrintInvoiceView, SalesReturnView, SubstituteSearchAPI
+from easypharma.views.sales import(POSView, ProductSearchAPI, 
+                        SaleListView, PrintInvoiceView, 
+                        SalesReturnView, SubstituteSearchAPI,PatientWiseSales,PatientWiseSalesAPI)
 
 urlpatterns = [
     path('pos/', POSView.as_view(), name='pos'),
@@ -10,4 +12,6 @@ urlpatterns = [
     path('pos/returns/', SalesReturnView.as_view(), name='pos_returns'),
     path('api/products/search/', ProductSearchAPI.as_view(), name='product_search_api'),
     path('api/products/substitute/', SubstituteSearchAPI.as_view(), name='substitute_search_api'),
+    path('sales/patient-wise/', PatientWiseSales.as_view(), name='patient_wise_sales'),
+    path('api/sales/patient-wise/', PatientWiseSalesAPI.as_view(), name='patient_wise_sales_api'),
 ]

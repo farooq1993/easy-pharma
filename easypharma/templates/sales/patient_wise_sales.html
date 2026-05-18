@@ -1,0 +1,450 @@
+{% extends 'includes/base.html' %}
+
+{% block content %}  
+
+<div class="p-6 max-w-7xl mx-auto">
+
+    <div class="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
+
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-5">
+            <h2 class="text-3xl font-bold text-white">
+                Patient-wise Sales Report
+            </h2>
+            <p class="text-purple-100 mt-1 text-sm">
+                Search patient and view all related invoices
+            </p>
+        </div>
+
+        <!-- Search Section -->
+        <div class="p-6 border-b border-gray-200 bg-gray-50">
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+
+                <div class="md:col-span-3">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        Search Patient
+                    </label>
+
+                    <input
+                        type="text"
+                        id="patientSearch"
+                        placeholder="Enter patient name..."
+                        class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
+                    >
+                </div>
+
+                <div class="flex items-end">
+                    <button
+                        id="searchBtn"
+                        class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold px-6 py-3 rounded-lg transition duration-200 shadow-md"
+                    >
+                        Search Invoice
+                    </button>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- Invoice Table -->
+        <div class="p-6">
+
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-xl font-bold text-gray-800">
+                    All Sales Invoices
+                </h3>
+
+                <span
+                    id="invoiceCount"
+                    class="bg-purple-100 text-purple-700 text-sm font-semibold px-3 py-1 rounded-full"
+                >
+                    0 Invoices
+                </span>
+            </div>
+
+            <div class="overflow-x-auto rounded-xl border border-gray-200">
+
+                <table class="min-w-full bg-white">
+
+                    <thead class="bg-gray-800 text-white">
+
+                        <tr>
+                            <th class="px-4 py-4 text-left text-sm font-semibold">
+                                Invoice No
+                            </th>
+
+                            <th class="px-4 py-4 text-left text-sm font-semibold">
+                                Date
+                            </th>
+
+                            <th class="px-4 py-4 text-left text-sm font-semibold">
+                                Doctor
+                            </th>
+
+                            <th class="px-4 py-4 text-left text-sm font-semibold">
+                                Payment
+                            </th>
+
+                            <th class="px-4 py-4 text-left text-sm font-semibold">
+                                Amount
+                            </th>
+
+                            <th class="px-4 py-4 text-center text-sm font-semibold">
+                                Action
+                            </th>
+                        </tr>
+
+                    </thead>
+
+                    <tbody
+                        id="invoiceTableBody"
+                        class="divide-y divide-gray-200 text-gray-700"
+                    >
+
+                        <tr>
+                            <td colspan="6" class="text-center py-10 text-gray-400">
+                                Search patient to view invoices
+                            </td>
+                        </tr>
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Invoice Details Section -->
+    <div
+        id="salesResultContainer"
+        class="hidden mt-8 bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden"
+    >
+
+        <!-- Invoice Header -->
+        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5">
+
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+
+                <div>
+                    <h3 class="text-2xl font-bold text-white">
+                        Invoice Details
+                    </h3>
+
+                    <p class="text-blue-100 mt-1">
+                        Invoice :
+                        <span id="displayInvoiceNum" class="font-semibold"></span>
+                    </p>
+                </div>
+
+                <button
+                    onclick="window.print()"
+                    class="mt-4 md:mt-0 bg-white text-blue-700 px-5 py-2 rounded-lg font-semibold shadow hover:bg-gray-100"
+                >
+                    Print Invoice
+                </button>
+
+            </div>
+
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="p-6">
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+
+                <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+                    <p class="text-xs uppercase tracking-wider text-gray-500 font-semibold">
+                        Date & Time
+                    </p>
+
+                    <h4
+                        id="displayDate"
+                        class="text-lg font-bold text-gray-800 mt-2"
+                    ></h4>
+                </div>
+
+                <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+                    <p class="text-xs uppercase tracking-wider text-gray-500 font-semibold">
+                        Prescribing Doctor
+                    </p>
+
+                    <h4
+                        id="displayDoctor"
+                        class="text-lg font-bold text-gray-800 mt-2"
+                    ></h4>
+                </div>
+
+                <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+                    <p class="text-xs uppercase tracking-wider text-gray-500 font-semibold">
+                        Payment Mode
+                    </p>
+
+                    <h4
+                        id="displayPayment"
+                        class="text-lg font-bold text-gray-800 mt-2"
+                    ></h4>
+                </div>
+
+            </div>
+
+            <!-- Product Table -->
+            <div class="overflow-x-auto rounded-xl border border-gray-200">
+
+                <table class="min-w-full bg-white">
+
+                    <thead class="bg-purple-600 text-white">
+
+                        <tr>
+
+                            <th class="px-4 py-4 text-left text-sm font-semibold">
+                                Product
+                            </th>
+
+                            <th class="px-4 py-4 text-left text-sm font-semibold">
+                                Batch
+                            </th>
+
+                            <th class="px-4 py-4 text-left text-sm font-semibold">
+                                Expiry
+                            </th>
+
+                            <th class="px-4 py-4 text-left text-sm font-semibold">
+                                Qty
+                            </th>
+
+                            <th class="px-4 py-4 text-left text-sm font-semibold">
+                                Unit Price
+                            </th>
+
+                            <th class="px-4 py-4 text-left text-sm font-semibold">
+                                Total
+                            </th>
+
+                        </tr>
+
+                    </thead>
+
+                    <tbody
+                        id="invoiceItemsTableBody"
+                        class="divide-y divide-gray-200 text-sm text-gray-700"
+                    >
+
+                    </tbody>
+
+                    <tfoot class="bg-gray-100">
+
+                        <tr>
+
+                            <td
+                                colspan="5"
+                                class="px-6 py-5 text-right text-lg font-bold text-gray-800"
+                            >
+                                Grand Total :
+                            </td>
+
+                            <td
+                                id="displayGrandTotal"
+                                class="px-6 py-5 text-xl font-bold text-green-600"
+                            >
+                            </td>
+
+                        </tr>
+
+                    </tfoot>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+
+document.addEventListener('DOMContentLoaded', function () {
+
+    const searchBtn = document.getElementById('searchBtn');
+
+    searchBtn.addEventListener('click', function () {
+
+        const patient = document.getElementById('patientSearch').value.trim();
+
+        if (!patient) {
+
+            alert('Please enter patient name');
+            return;
+        }
+
+        fetch(`{% url 'patient_wise_sales_api' %}?patient_name=${encodeURIComponent(patient)}`)
+
+            .then(response => response.json())
+
+            .then(data => {
+
+                renderInvoiceTable(data);
+
+            })
+
+            .catch(error => {
+
+                console.error(error);
+                alert('Error fetching invoices');
+
+            });
+
+    });
+
+});
+
+function renderInvoiceTable(data) {
+
+    const tableBody = document.getElementById('invoiceTableBody');
+
+    const invoiceCount = document.getElementById('invoiceCount');
+
+    tableBody.innerHTML = '';
+
+    invoiceCount.innerText = `${data.length} Invoices`;
+
+    if (data.length === 0) {
+
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center py-10 text-gray-400">
+                    No invoices found
+                </td>
+            </tr>
+        `;
+
+        return;
+    }
+
+    data.forEach((invoice, index) => {
+
+        const bgColor = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+
+        const row = `
+
+            <tr class="${bgColor} hover:bg-purple-50 transition duration-150">
+
+                <td class="px-4 py-4 font-semibold text-gray-800">
+                    ${invoice.invoice_number}
+                </td>
+
+                <td class="px-4 py-4">
+                    ${invoice.date}
+                </td>
+
+                <td class="px-4 py-4">
+                    ${invoice.doctor_name || 'N/A'}
+                </td>
+
+                <td class="px-4 py-4">
+                    ${invoice.payment_mode}
+                </td>
+
+                <td class="px-4 py-4 font-bold text-green-600">
+                    ₹${invoice.total_amount.toFixed(2)}
+                </td>
+
+                <td class="px-4 py-4 text-center">
+
+                    <button
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow"
+                        onclick='renderInvoiceDetails(${JSON.stringify(invoice)})'
+                    >
+                        View
+                    </button>
+
+                </td>
+
+            </tr>
+
+        `;
+
+        tableBody.insertAdjacentHTML('beforeend', row);
+
+    });
+
+}
+
+function renderInvoiceDetails(selectedInvoice) {
+
+    document.getElementById('salesResultContainer').classList.remove('hidden');
+
+    document.getElementById('displayInvoiceNum').textContent =
+        selectedInvoice.invoice_number;
+
+    document.getElementById('displayDate').textContent =
+        selectedInvoice.date;
+
+    document.getElementById('displayDoctor').textContent =
+        selectedInvoice.doctor_name || 'N/A';
+
+    document.getElementById('displayPayment').textContent =
+        selectedInvoice.payment_mode;
+
+    document.getElementById('displayGrandTotal').textContent =
+        '₹' + selectedInvoice.total_amount.toFixed(2);
+
+    const tableBody = document.getElementById('invoiceItemsTableBody');
+
+    tableBody.innerHTML = '';
+
+    selectedInvoice.items.forEach((item, index) => {
+
+        const bgColor = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+
+        const row = `
+
+            <tr class="${bgColor} hover:bg-blue-50 transition duration-150">
+
+                <td class="px-4 py-4 font-medium text-gray-900">
+                    ${item.product_name}
+                </td>
+
+                <td class="px-4 py-4">
+                    ${item.batch_number || 'N/A'}
+                </td>
+
+                <td class="px-4 py-4">
+                    ${item.expiry_date || 'N/A'}
+                </td>
+
+                <td class="px-4 py-4 font-semibold">
+                    ${item.quantity}
+                </td>
+
+                <td class="px-4 py-4">
+                    ₹${item.unit_price.toFixed(2)}
+                </td>
+
+                <td class="px-4 py-4 font-bold text-gray-900">
+                    ₹${item.total.toFixed(2)}
+                </td>
+
+            </tr>
+
+        `;
+
+        tableBody.insertAdjacentHTML('beforeend', row);
+
+    });
+
+    window.scrollTo({
+        top: document.getElementById('salesResultContainer').offsetTop - 40,
+        behavior: 'smooth'
+    });
+
+}
+
+</script>
+
+{% endblock %}
