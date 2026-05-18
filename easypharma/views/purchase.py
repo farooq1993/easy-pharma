@@ -126,12 +126,9 @@ class PurchaseEntryView(View):
                 applied_returns = data.get('applied_returns', [])
                 total_credit_applied = sum(float(r['amount']) for r in applied_returns)
 
-                # Check if it's editing, we might want to update or delete old ledger entry.
-                # Since we delete items, let's delete old ledger entries related to this invoice
                 if invoice_id:
                     SupplierLedger.objects.filter(tenant=request.tenant, reference_number=invoice.invoice_number, transaction_type='Purchase').delete()
-                    # Revert old returns if any (complex, but for MVP we might ignore or just let them recreate. Ideally, if editing, we'd need to clear old applied returns. We'll set paid_amount instead)
-                    # But since this request creates a new invoice or edits, let's just handle new applications
+                    
                     
                 invoice.paid_amount = invoice.paid_amount + total_credit_applied
                 invoice.save()
@@ -253,3 +250,49 @@ class PurchaseListView(View):
                 return JsonResponse({'success': True})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
+
+
+class SupplierWisePurchaseReportView(View):
+    template_name = 'purchase/supplier_report.html'
+
+    def get(self, request):
+        suppliers = Supplier.objects.filter(tenant=request.tenant)
+        return render(request, self.template_name, {'suppliers': suppliers})
+
+
+from django.http import JsonResponse
+
+class SupplierReportDataView(View):
+    def get(self, request, supplier_id):
+        try:
+            supplier = Supplier.objects.get(id=supplier_id, tenant=request.tenant)
+            purchases = PurchaseInvoice.objects.filter(supplier=supplier)  # adjust model name if different
+
+            data = {
+                    'purchases': [
+                        {
+                            'id': p.id,
+                            'invoice_number': p.invoice_number,
+                            'date': str(p.purchase_date),
+                            'total_amount': str(p.total_amount),
+                            'items': [
+                                {
+                                    'product_name': item.product.product_name,
+                                    'quantity': str(item.quantity),
+                                    'unit_price': str(item.purchase_price), 
+                                    'mrp': str(item.mrp),
+                                    'batch_number': item.batch_number,
+                                    'expiry_date': str(item.expiry_date),
+                                    'tax_percentage': str(item.tax_percentage),
+                                    'total_amount': str(item.total_amount),
+                                }
+                                for item in p.items.all()
+                            ]                          
+                        }                              
+                        for p in purchases
+                    ]                                 
+                }
+            return JsonResponse(data)
+
+        except Supplier.DoesNotExist:
+            return JsonResponse({'purchases': []}, status=404)

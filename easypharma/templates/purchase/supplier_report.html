@@ -1,0 +1,528 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Supplier-wise Purchase Report</h2>
+    <div class="mb-3">
+        <label for="supplierSelect" class="form-label">Select Supplier:</label>
+        <select id="supplierSelect" class="form-select">
+            <option value="">-- Select Supplier --</option>
+            {% for supplier in suppliers %}
+                <option value="{{ supplier.id }}">{{ supplier.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div id="reportContainer" style="display: none;">
+        <h4 class="mb-3">Purchase Report for <span id="supplierName"></span></h4>
+
+        <!-- Analytics Cards -->
+        <div class="row mb-4" id="analyticsCards">
+            <div class="col-md-3">
+                <div class="card text-white bg-primary">
+                    <div class="card-body">
+                        <h6 class="card-title">Total Purchases</h6>
+                        <h4 id="totalCount">0</h4>
+                        <small>invoices</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-white bg-success">
+                    <div class="card-body">
+                        <h6 class="card-title">Total Amount</h6>
+                        <h4 id="totalAmount">₹0</h4>
+                        <small>overall spend</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-white bg-warning">
+                    <div class="card-body">
+                        <h6 class="card-title">Highest Month</h6>
+                        <h4 id="highestMonth">-</h4>
+                        <small id="highestMonthAmount"></small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-white bg-info">
+                    <div class="card-body">
+                        <h6 class="card-title">Avg per Invoice</h6>
+                        <h4 id="avgAmount">₹0</h4>
+                        <small>average spend</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Invoice Table -->
+        <div class="card shadow-sm mt-3">
+            <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2 py-2">
+                <span class="fw-semibold">
+                    <i class="bi bi-receipt me-1"></i>Invoice Details
+                    <span id="tableRowCount" class="badge bg-secondary ms-1">0</span>
+                </span>
+                <div class="d-flex align-items-center gap-2">
+                    <div class="input-group input-group-sm" style="width:280px;">
+                        <span class="input-group-text bg-white border-end-0 text-muted">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input type="text" id="invoiceSearchInput"
+                            class="form-control border-start-0 ps-0"
+                            placeholder="Search invoice no, date, amount…"
+                            oninput="filterInvoiceTable(this.value)">
+                        <button class="btn btn-outline-secondary border-start-0" type="button"
+                            id="clearSearchBtn" onclick="clearSearch()" title="Clear search" style="display:none;">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                    <span id="searchResultCount" class="text-muted small" style="display:none;"></span>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-bordered table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Invoice Number</th>
+                            <th>Date</th>
+                            <th>Total Amount</th>
+                            <th class="text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportBody"></tbody>
+                </table>
+                <div id="noSearchResults" class="text-center py-4 text-muted" style="display:none;">
+                    <i class="bi bi-search fs-4 d-block mb-2"></i>
+                    No invoices match "<strong id="noSearchTerm"></strong>"
+                </div>
+            </div>
+        </div>
+
+        <!-- Invoice Detail Modal -->
+        <div class="modal fade" id="invoiceDetailModal" tabindex="-1" aria-labelledby="invoiceModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-dark text-white">
+                        <h5 class="modal-title" id="invoiceModalLabel">
+                            <i class="bi bi-receipt me-2"></i>Invoice Details
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <table class="table table-sm table-borderless mb-0">
+                                    <tr><th class="text-muted" style="width:120px">Invoice No:</th><td id="modal_invoice_number" class="fw-semibold">-</td></tr>
+                                    <tr><th class="text-muted">Date:</th><td id="modal_date">-</td></tr>
+                                    <tr><th class="text-muted">Supplier:</th><td id="modal_supplier">-</td></tr>
+                                </table>
+                            </div>
+                            <div class="col-md-6 text-md-end">
+                                <div class="p-3 bg-light rounded border">
+                                    <div class="text-muted small mb-1">Total Amount</div>
+                                    <div class="fs-3 fw-bold text-success" id="modal_total_amount">₹0</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <h6 class="fw-semibold border-bottom pb-2 mb-3">
+                            <i class="bi bi-list-ul me-1"></i>Items
+                        </h6>
+                        <div id="modal_loading" class="text-center py-4" style="display:none;">
+                            <div class="spinner-border spinner-border-sm text-primary me-2"></div>
+                            <span class="text-muted">Loading items...</span>
+                        </div>
+                        <table class="table table-sm table-bordered" id="modal_items_table" style="display:none;">
+                            <thead class="table-secondary">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Product</th>
+                                    <th class="text-end">Qty</th>
+                                    <th class="text-end">Purchase Price</th>
+                                    <th class="text-end">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modal_items_body"></tbody>
+                            <tfoot>
+                                <tr class="table-dark">
+                                    <td colspan="4" class="text-end fw-semibold">Grand Total</td>
+                                    <td class="text-end fw-bold" id="modal_grand_total">-</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                        <div id="modal_no_items" class="alert alert-warning" style="display:none;">
+                            No item details available for this invoice.
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light">
+                        <a id="modal_full_link" href="#" class="btn btn-primary btn-sm">
+                            <i class="bi bi-box-arrow-up-right me-1"></i>Open Full Invoice
+                        </a>
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Charts Row -->
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <div class="card shadow-sm">
+                    <div class="card-header fw-semibold">Monthly Purchase Amount</div>
+                    <div class="card-body">
+                        <canvas id="monthlyBarChart" height="100"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card shadow-sm">
+                    <div class="card-header fw-semibold">Month-wise Share</div>
+                    <div class="card-body d-flex justify-content-center">
+                        <canvas id="monthlyPieChart" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Line Trend Chart -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header fw-semibold">Purchase Trend Over Time</div>
+            <div class="card-body">
+                <canvas id="trendLineChart" height="80"></canvas>
+            </div>
+        </div>
+
+     
+
+        <div id="noDataMessage" class="alert alert-info mt-3" style="display: none;">
+            No purchase records found for this supplier.
+        </div>
+    </div>
+</div>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<script>
+    let barChart, pieChart, lineChart;
+
+    const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    const BAR_COLORS = [
+        '#4e73df','#1cc88a','#36b9cc','#f6c23e','#e74a3b',
+        '#858796','#5a5c69','#2e59d9','#17a673','#2c9faf',
+        '#f4b942','#e02d1b'
+    ];
+
+    document.getElementById('supplierSelect').addEventListener('change', function () {
+        const supplierId = this.value;
+        const supplierName = this.options[this.selectedIndex].text;
+
+        if (supplierId) {
+            fetch(`{% url 'supplier_report_data' 0 %}`.replace('0', supplierId))
+                .then(response => response.json())
+                .then(data => {
+                    const purchases = data.purchases;
+                    const reportBody = document.getElementById('reportBody');
+                    reportBody.innerHTML = '';
+
+                    if (purchases.length > 0) {
+                        // --- Populate table ---
+                        purchases.forEach(p => {
+                            const pJson = JSON.stringify(p).replace(/'/g, "\\'");
+                            reportBody.insertAdjacentHTML('beforeend', `
+                                <tr>
+                                    <td class="fw-semibold">${p.invoice_number}</td>
+                                    <td>${p.date}</td>
+                                    <td>₹${parseFloat(p.total_amount).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                                    <td class="text-center">
+                                        <button class="btn btn-sm btn-outline-primary view-invoice-btn"
+                                            data-invoice='${pJson}'
+                                            data-supplier="${supplierName}">
+                                            <i class="bi bi-eye me-1"></i>View Details
+                                        </button>
+                                    </td>
+                                </tr>`);
+                        });
+                        document.getElementById('noDataMessage').style.display = 'none';
+                        updateRowCount();
+                        document.getElementById('invoiceSearchInput').value = '';
+                        document.getElementById('clearSearchBtn').style.display = 'none';
+                        document.getElementById('searchResultCount').style.display = 'none';
+
+                        // --- Compute analytics ---
+                        const total = purchases.reduce((s, p) => s + parseFloat(p.total_amount), 0);
+                        const avg = total / purchases.length;
+
+                        // Monthly aggregation: key = "YYYY-MM"
+                        const monthlyMap = {};
+                        purchases.forEach(p => {
+                            const d = new Date(p.date);
+                            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                            monthlyMap[key] = (monthlyMap[key] || 0) + parseFloat(p.total_amount);
+                        });
+
+                        const sortedKeys = Object.keys(monthlyMap).sort();
+                        const monthLabels = sortedKeys.map(k => {
+                            const [yr, mo] = k.split('-');
+                            return `${MONTH_NAMES[parseInt(mo) - 1]} ${yr}`;
+                        });
+                        const monthValues = sortedKeys.map(k => monthlyMap[k]);
+
+                        const maxIdx = monthValues.indexOf(Math.max(...monthValues));
+
+                        // --- Update summary cards ---
+                        document.getElementById('totalCount').textContent = purchases.length;
+                        document.getElementById('totalAmount').textContent =
+                            '₹' + total.toLocaleString('en-IN', {minimumFractionDigits: 2});
+                        document.getElementById('avgAmount').textContent =
+                            '₹' + avg.toLocaleString('en-IN', {minimumFractionDigits: 2});
+                        document.getElementById('highestMonth').textContent = monthLabels[maxIdx] || '-';
+                        document.getElementById('highestMonthAmount').textContent =
+                            '₹' + (monthValues[maxIdx] || 0).toLocaleString('en-IN', {minimumFractionDigits: 2});
+
+                        // --- Render charts ---
+                        renderBarChart(monthLabels, monthValues);
+                        renderPieChart(monthLabels, monthValues);
+                        renderLineChart(monthLabels, monthValues);
+
+                    } else {
+                        document.getElementById('noDataMessage').style.display = 'block';
+                        destroyCharts();
+                    }
+
+                    document.getElementById('supplierName').textContent = supplierName;
+                    document.getElementById('reportContainer').style.display = 'block';
+                })
+                .catch(error => console.error('Error fetching report data:', error));
+        } else {
+            document.getElementById('reportContainer').style.display = 'none';
+            destroyCharts();
+        }
+    });
+
+    function destroyCharts() {
+        [barChart, pieChart, lineChart].forEach(c => c && c.destroy());
+    }
+
+    function renderBarChart(labels, values) {
+        if (barChart) barChart.destroy();
+        barChart = new Chart(document.getElementById('monthlyBarChart'), {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Purchase Amount (₹)',
+                    data: values,
+                    backgroundColor: labels.map((_, i) => BAR_COLORS[i % BAR_COLORS.length]),
+                    borderRadius: 6,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => ' ₹' + ctx.parsed.y.toLocaleString('en-IN', {minimumFractionDigits: 2})
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        ticks: {
+                            callback: v => '₹' + v.toLocaleString('en-IN')
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    function renderPieChart(labels, values) {
+        if (pieChart) pieChart.destroy();
+        pieChart = new Chart(document.getElementById('monthlyPieChart'), {
+            type: 'doughnut',
+            data: {
+                labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: labels.map((_, i) => BAR_COLORS[i % BAR_COLORS.length]),
+                    hoverOffset: 10,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => ` ${ctx.label}: ₹${ctx.parsed.toLocaleString('en-IN', {minimumFractionDigits: 2})}`
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    function renderLineChart(labels, values) {
+        if (lineChart) lineChart.destroy();
+        lineChart = new Chart(document.getElementById('trendLineChart'), {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Purchase Trend (₹)',
+                    data: values,
+                    borderColor: '#4e73df',
+                    backgroundColor: 'rgba(78,115,223,0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: '#4e73df',
+                    pointRadius: 5,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: ctx => ' ₹' + ctx.parsed.y.toLocaleString('en-IN', {minimumFractionDigits: 2})
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        ticks: {
+                            callback: v => '₹' + v.toLocaleString('en-IN')
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // --- Client-side Invoice Table Search ---
+    function filterInvoiceTable(query) {
+        const rows = document.querySelectorAll('#reportBody tr');
+        const q = query.trim().toLowerCase();
+        const clearBtn = document.getElementById('clearSearchBtn');
+        const countEl = document.getElementById('searchResultCount');
+        const noResults = document.getElementById('noSearchResults');
+        const noSearchTerm = document.getElementById('noSearchTerm');
+
+        clearBtn.style.display = q ? '' : 'none';
+
+        let visible = 0;
+        rows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            const match = !q || text.includes(q);
+            row.style.display = match ? '' : 'none';
+            if (match) visible++;
+        });
+
+        // Update row count badge
+        document.getElementById('tableRowCount').textContent = visible;
+
+        if (q) {
+            countEl.textContent = `${visible} of ${rows.length} shown`;
+            countEl.style.display = '';
+        } else {
+            countEl.style.display = 'none';
+        }
+
+        if (q && visible === 0) {
+            noSearchTerm.textContent = query;
+            noResults.style.display = '';
+        } else {
+            noResults.style.display = 'none';
+        }
+    }
+
+    function clearSearch() {
+        const input = document.getElementById('invoiceSearchInput');
+        input.value = '';
+        filterInvoiceTable('');
+        input.focus();
+    }
+
+    // Update row count badge whenever table is populated
+    function updateRowCount() {
+        const rows = document.querySelectorAll('#reportBody tr');
+        document.getElementById('tableRowCount').textContent = rows.length;
+    }
+
+    // --- Invoice Detail Modal ---
+    document.addEventListener('click', function (e) {
+        const btn = e.target.closest('.view-invoice-btn');
+        if (!btn) return;
+        const p = JSON.parse(btn.getAttribute('data-invoice'));
+        const supplier = btn.getAttribute('data-supplier');
+        openInvoiceModal(p, supplier);
+    });
+
+    function openInvoiceModal(p, supplierName) {
+        // Fill header info
+        document.getElementById('modal_invoice_number').textContent = p.invoice_number;
+        document.getElementById('modal_date').textContent = p.date;
+        document.getElementById('modal_supplier').textContent = supplierName;
+        document.getElementById('modal_total_amount').textContent =
+            '₹' + parseFloat(p.total_amount).toLocaleString('en-IN', {minimumFractionDigits: 2});
+
+        // Reset items section
+        document.getElementById('modal_items_body').innerHTML = '';
+        document.getElementById('modal_items_table').style.display = 'none';
+        document.getElementById('modal_no_items').style.display = 'none';
+        document.getElementById('modal_loading').style.display = 'block';
+
+        // Set full invoice link — adjust URL name to match your project
+        document.getElementById('modal_full_link').href = `/purchase/invoice/${p.id}/` || '#';
+
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('invoiceDetailModal'));
+        modal.show();
+
+        // Fetch invoice items if you have an endpoint, else show summary
+        // If you have an invoice detail API: fetch(`/purchase/invoice_items/${p.id}/`)
+        // For now, show a summary row from the data we already have
+        setTimeout(() => {
+            document.getElementById('modal_loading').style.display = 'none';
+
+            if (p.items && p.items.length > 0) {
+                // If your API returns items array
+                p.items.forEach((item, idx) => {
+                    const amount = parseFloat(item.quantity) * parseFloat(item.unit_price);
+                    document.getElementById('modal_items_body').insertAdjacentHTML('beforeend', `
+                            <tr>
+                                <td>${idx + 1}</td>
+                                <td>
+                                    ${item.product_name}
+                                    <br><small class="text-muted">Batch: ${item.batch_number} | Exp: ${item.expiry_date}</small>
+                                </td>
+                                <td class="text-end">${item.quantity}</td>
+                                <td class="text-end">₹${parseFloat(item.unit_price).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                                <td class="text-end">₹${parseFloat(item.total_amount).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                            </tr>`);
+                    });
+                document.getElementById('modal_grand_total').textContent =
+                    '₹' + parseFloat(p.total_amount).toLocaleString('en-IN', {minimumFractionDigits: 2});
+                document.getElementById('modal_items_table').style.display = '';
+            } else {
+                // Fallback: show single summary row
+                document.getElementById('modal_items_body').innerHTML = `
+                    <tr>
+                        <td colspan="4" class="text-muted fst-italic">
+                            Item-level details not available. Click "Open Full Invoice" for complete details.
+                        </td>
+                        <td class="text-end fw-semibold">
+                            ₹${parseFloat(p.total_amount).toLocaleString('en-IN', {minimumFractionDigits: 2})}
+                        </td>
+                    </tr>`;
+                document.getElementById('modal_grand_total').textContent =
+                    '₹' + parseFloat(p.total_amount).toLocaleString('en-IN', {minimumFractionDigits: 2});
+                document.getElementById('modal_items_table').style.display = '';
+            }
+        }, 300);
+    }
+</script>
+{% endblock %}
