@@ -56,9 +56,30 @@
                 </div>
             </div>
         </div>
-           <!-- Invoice Table -->
-        <div class="card shadow-sm">
-            <div class="card-header fw-semibold">Invoice Details</div>
+        <!-- Invoice Table -->
+        <div class="card shadow-sm mt-3">
+            <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2 py-2">
+                <span class="fw-semibold">
+                    <i class="bi bi-receipt me-1"></i>Invoice Details
+                    <span id="tableRowCount" class="badge bg-secondary ms-1">0</span>
+                </span>
+                <div class="d-flex align-items-center gap-2">
+                    <div class="input-group input-group-sm" style="width:280px;">
+                        <span class="input-group-text bg-white border-end-0 text-muted">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input type="text" id="invoiceSearchInput"
+                            class="form-control border-start-0 ps-0"
+                            placeholder="Search invoice no, date, amount…"
+                            oninput="filterInvoiceTable(this.value)">
+                        <button class="btn btn-outline-secondary border-start-0" type="button"
+                            id="clearSearchBtn" onclick="clearSearch()" title="Clear search" style="display:none;">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                    <span id="searchResultCount" class="text-muted small" style="display:none;"></span>
+                </div>
+            </div>
             <div class="card-body p-0">
                 <table class="table table-bordered table-hover mb-0">
                     <thead class="table-dark">
@@ -71,6 +92,10 @@
                     </thead>
                     <tbody id="reportBody"></tbody>
                 </table>
+                <div id="noSearchResults" class="text-center py-4 text-muted" style="display:none;">
+                    <i class="bi bi-search fs-4 d-block mb-2"></i>
+                    No invoices match "<strong id="noSearchTerm"></strong>"
+                </div>
             </div>
         </div>
 
@@ -221,6 +246,10 @@
                                 </tr>`);
                         });
                         document.getElementById('noDataMessage').style.display = 'none';
+                        updateRowCount();
+                        document.getElementById('invoiceSearchInput').value = '';
+                        document.getElementById('clearSearchBtn').style.display = 'none';
+                        document.getElementById('searchResultCount').style.display = 'none';
 
                         // --- Compute analytics ---
                         const total = purchases.reduce((s, p) => s + parseFloat(p.total_amount), 0);
@@ -371,6 +400,56 @@
                 }
             }
         });
+    }
+
+    // --- Client-side Invoice Table Search ---
+    function filterInvoiceTable(query) {
+        const rows = document.querySelectorAll('#reportBody tr');
+        const q = query.trim().toLowerCase();
+        const clearBtn = document.getElementById('clearSearchBtn');
+        const countEl = document.getElementById('searchResultCount');
+        const noResults = document.getElementById('noSearchResults');
+        const noSearchTerm = document.getElementById('noSearchTerm');
+
+        clearBtn.style.display = q ? '' : 'none';
+
+        let visible = 0;
+        rows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            const match = !q || text.includes(q);
+            row.style.display = match ? '' : 'none';
+            if (match) visible++;
+        });
+
+        // Update row count badge
+        document.getElementById('tableRowCount').textContent = visible;
+
+        if (q) {
+            countEl.textContent = `${visible} of ${rows.length} shown`;
+            countEl.style.display = '';
+        } else {
+            countEl.style.display = 'none';
+        }
+
+        if (q && visible === 0) {
+            noSearchTerm.textContent = query;
+            noResults.style.display = '';
+        } else {
+            noResults.style.display = 'none';
+        }
+    }
+
+    function clearSearch() {
+        const input = document.getElementById('invoiceSearchInput');
+        input.value = '';
+        filterInvoiceTable('');
+        input.focus();
+    }
+
+    // Update row count badge whenever table is populated
+    function updateRowCount() {
+        const rows = document.querySelectorAll('#reportBody tr');
+        document.getElementById('tableRowCount').textContent = rows.length;
     }
 
     // --- Invoice Detail Modal ---

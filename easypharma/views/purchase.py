@@ -279,7 +279,7 @@ class SupplierReportDataView(View):
                                 {
                                     'product_name': item.product.product_name,
                                     'quantity': str(item.quantity),
-                                    'unit_price': str(item.purchase_price),
+                                    'unit_price': str(item.purchase_price), 
                                     'mrp': str(item.mrp),
                                     'batch_number': item.batch_number,
                                     'expiry_date': str(item.expiry_date),
@@ -287,10 +287,10 @@ class SupplierReportDataView(View):
                                     'total_amount': str(item.total_amount),
                                 }
                                 for item in p.items.all()
-                            ]                          # ← closes 'items' list  ✓
-                        }                              # ← closes the dict      ✓
+                            ]                          
+                        }                              
                         for p in purchases
-                    ]                                  # ← closes 'purchases'   ✓
+                    ]                                 
                 }
             return JsonResponse(data)
 
