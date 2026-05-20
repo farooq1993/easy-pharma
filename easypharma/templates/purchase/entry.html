@@ -20,7 +20,12 @@
             <h1 class="page-title"><i class="fas fa-file-invoice" style="color:var(--brand); margin-right:8px;"></i> Purchase Entry</h1>
             <p class="ep-label mt-1" style="margin-bottom:0;">Stock + GST + Batch tracking</p>
         </div>
-        <button class="btn-complete" onclick="savePurchase()"><i class="fas fa-check-circle"></i> Complete Purchase</button>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-outline-secondary rounded-pill px-3 py-2 fw-bold" style="font-size: 0.85rem;" data-bs-toggle="modal" data-bs-target="#workflowModal">
+                <i class="fas fa-keyboard me-1"></i> Shortcuts
+            </button>
+            <button class="btn-complete" onclick="savePurchase()"><i class="fas fa-check-circle"></i> Complete Purchase</button>
+        </div>
     </div>
 
     <div class="row g-3">
@@ -174,6 +179,8 @@
     let availableCreditNotes = [];  // store fetched credit notes for selected supplier
     const editData = {{ edit_data|default:'null'|safe }};  // edit mode data from server
     let csrfToken = '{{ csrf_token }}';
+    let searchSelectedIndex = -1;
+    let batchSelectedIndex = -1;
 
     function validateExpiryYear(el) {
         const y = el.value;
@@ -218,6 +225,34 @@
         document.getElementById('unitPreview').innerHTML = `<i class="fas fa-cubes"></i> Total units: ${units} units`;
     }
 
+    // Update active dropdown search result highlight and scroll it into view
+    function updateSearchSelection() {
+        const container = document.getElementById('searchResults');
+        const items = container.querySelectorAll('button.search-item');
+        items.forEach((el, idx) => {
+            if (idx === searchSelectedIndex) {
+                el.classList.add('selected-item');
+                el.scrollIntoView({ block: 'nearest' });
+            } else {
+                el.classList.remove('selected-item');
+            }
+        });
+    }
+
+    // Update active batch suggestions list highlight and scroll it into view
+    function updateBatchSelection() {
+        const container = document.getElementById('batchSuggestions');
+        const items = container.querySelectorAll('.batch-suggestion-item');
+        items.forEach((el, idx) => {
+            if (idx === batchSelectedIndex) {
+                el.classList.add('selected-item');
+                el.scrollIntoView({ block: 'nearest' });
+            } else {
+                el.classList.remove('selected-item');
+            }
+        });
+    }
+
     function populateEditData(data) {
         if (!data) return;
         document.getElementById('supplierSelect').value = data.supplier_id || '';
@@ -260,6 +295,7 @@
 
     function renderBatchSuggestions(batches) {
         const container = document.getElementById('batchSuggestions');
+        batchSelectedIndex = -1;
         if (!batches || batches.length === 0) {
             container.innerHTML = '<div class="p-2 text-muted small">No previous batches found. You can type new batch.</div>';
             return;
@@ -350,6 +386,7 @@
             const resp = await fetch(`/api/products/master-search/?q=${encodeURIComponent(query)}`);
             const data = await resp.json();
             searchResultsDiv.innerHTML = '';
+            searchSelectedIndex = -1;
             if (data.length === 0) {
                 searchResultsDiv.innerHTML = `<div class="search-item p-2 text-muted">No products</div>`;
             } else {
@@ -361,7 +398,14 @@
                         selectedProduct = p;
                         searchInput.value = p.name;
                         document.getElementById('itemTax').value = p.tax_rate;
-                        document.getElementById('productInfo').innerHTML = `<i class="fas fa-info-circle"></i> ${p.packing || 'Standard'} | Conv:×${p.conversion_factor} | GST:${p.tax_rate}%`;
+                        document.getElementById('productInfo').innerHTML = `
+                            <div class="d-flex justify-content-between align-items-center w-100 py-1">
+                                <div><i class="fas fa-info-circle"></i> ${p.packing || 'Standard'} | Conv:×${p.conversion_factor} | GST:${p.tax_rate}%</div>
+                                <button type="button" class="btn btn-warning btn-sm py-0 px-2 rounded fw-bold text-dark border-0 shadow-sm" style="font-size: 0.7rem;" onclick="openPreviousPurchases(${p.id}, '${p.name.replace(/'/g,"\\'")}')">
+                                    <i class="fas fa-history me-1"></i>View Last Purchases
+                                </button>
+                            </div>
+                        `;
                         document.getElementById('productInfo').style.display = 'block';
                         updateUnitPreview();
                         searchResultsDiv.style.display = 'none';
@@ -376,6 +420,56 @@
                 });
             }
             searchResultsDiv.style.display = 'block';
+        });
+
+        // Keydown listener on searchInput for keyboard dropdown navigation
+        searchInput.addEventListener('keydown', (e) => {
+            const items = searchResultsDiv.querySelectorAll('button.search-item');
+            if (items.length === 0 || searchResultsDiv.style.display === 'none') return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                searchSelectedIndex = Math.min(searchSelectedIndex + 1, items.length - 1);
+                updateSearchSelection();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                searchSelectedIndex = Math.max(searchSelectedIndex - 1, 0);
+                updateSearchSelection();
+            } else if (e.key === 'Enter') {
+                if (searchSelectedIndex > -1 && searchSelectedIndex < items.length) {
+                    e.preventDefault();
+                    items[searchSelectedIndex].click();
+                    searchSelectedIndex = -1;
+                }
+            } else if (e.key === 'Escape') {
+                searchResultsDiv.style.display = 'none';
+                searchSelectedIndex = -1;
+            }
+        });
+
+        // Keydown listener on batchInput for keyboard batch suggestions navigation
+        batchInput.addEventListener('keydown', (e) => {
+            const items = suggestionsDiv.querySelectorAll('.batch-suggestion-item');
+            if (items.length === 0 || !suggestionsDiv.classList.contains('show')) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                batchSelectedIndex = Math.min(batchSelectedIndex + 1, items.length - 1);
+                updateBatchSelection();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                batchSelectedIndex = Math.max(batchSelectedIndex - 1, 0);
+                updateBatchSelection();
+            } else if (e.key === 'Enter') {
+                if (batchSelectedIndex > -1 && batchSelectedIndex < items.length) {
+                    e.preventDefault();
+                    items[batchSelectedIndex].click();
+                    batchSelectedIndex = -1;
+                }
+            } else if (e.key === 'Escape') {
+                suggestionsDiv.classList.remove('show');
+                batchSelectedIndex = -1;
+            }
         });
 
         // Click outside to close search & batch dropdowns
@@ -687,7 +781,189 @@
     window.removeItem = removeItem;
     window.calculateDiscount = calculateDiscount;
     window.updateUnitPreview = updateUnitPreview;
+
+    async function openPreviousPurchases(productId, productName) {
+        document.getElementById('purchasesModalProductName').textContent = productName;
+        const tbody = document.querySelector('#previousPurchasesTable tbody');
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin"></i> Loading last purchases...</td></tr>';
+        
+        const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('previousPurchasesModal'));
+        modal.show();
+
+        try {
+            const resp = await fetch(`/product-history/?product_id=${productId}&ajax=1`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const data = await resp.json();
+            tbody.innerHTML = '';
+            
+            if (!data.purchases || data.purchases.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">No purchase entries recorded for this medicine.</td></tr>';
+            } else {
+                const list = data.purchases.slice(0, 7);
+                list.forEach(p => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${p.date}</td>
+                        <td><span class="badge bg-light text-dark border">${p.invoice_number}</span></td>
+                        <td class="fw-bold text-dark">${p.supplier_name}</td>
+                        <td><span class="badge bg-light text-secondary border">${p.batch_number}</span></td>
+                        <td>${p.expiry_date}</td>
+                        <td class="fw-bold">${p.quantity}</td>
+                        <td class="text-success">+${p.free_quantity}</td>
+                        <td class="fw-bold">₹${p.purchase_price.toFixed(2)}</td>
+                        <td class="text-end fw-bold text-primary">₹${p.total.toFixed(2)}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            }
+        } catch (error) {
+            console.error('Error fetching previous purchases:', error);
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-danger">Error loading purchases</td></tr>';
+        }
+    }
+    window.openPreviousPurchases = openPreviousPurchases;
 </script>
+
+<!-- Shortcuts Modal -->
+<div class="modal fade" id="workflowModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-0 bg-light rounded-top-4">
+                <h5 class="modal-title fw-bold">
+                    <i class="fas fa-keyboard me-2 text-primary"></i> Pharmacy Keyboard Shortcuts & Workflow
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <h6 class="fw-bold mb-3 text-primary">
+                            <i class="fas fa-arrow-right me-2"></i> Purchase Entry Workflow
+                        </h6>
+                        <ol class="small">
+                            <li class="mb-2">Press <kbd>F10</kbd> to focus and select Supplier</li>
+                            <li class="mb-2">Enter Invoice Number and Date</li>
+                            <li class="mb-2">Press <kbd>F9</kbd> to focus the Medicine search box</li>
+                            <li class="mb-2">Type medicine name and select it</li>
+                            <li class="mb-2">Fill in batch details (Batch No, Expiry, Qty, Cost, Sale Price)</li>
+                            <li class="mb-2">Press <kbd>↵ Enter</kbd> to add the item to the list</li>
+                            <li class="mb-2">Repeat for other medicines, then press <kbd>F8</kbd> to save</li>
+                        </ol>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="fw-bold mb-3 text-success">
+                            <i class="fas fa-keyboard me-2"></i> Quick Keys
+                        </h6>
+                        <div class="small">
+                            <div class="mb-3 p-2 bg-light rounded">
+                                <div><kbd>F9</kbd> → Focus medicine search box</div>
+                            </div>
+                            <div class="mb-3 p-2 bg-light rounded">
+                                <div><kbd>F10</kbd> → Focus supplier selection</div>
+                            </div>
+                            <div class="mb-3 p-2 bg-light rounded">
+                                <div><kbd>F8</kbd> → Complete/Save purchase invoice</div>
+                            </div>
+                            <div class="mb-3 p-2 bg-light rounded">
+                                <div><kbd>↵ Enter</kbd> → Add row / Focus next field</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <hr class="my-4">
+                <h6 class="fw-bold mb-3 text-warning">
+                    <i class="fas fa-bolt me-2"></i> Global Function Keys (F1 - F10)
+                </h6>
+                <div class="row g-3 small">
+                    <div class="col-md-6">
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
+                            <span class="fw-bold"><kbd class="bg-primary text-white">F1</kbd> New POS Sale</span>
+                            <span class="text-muted">Open billing page</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
+                            <span class="fw-bold"><kbd class="bg-primary text-white">F2</kbd> New Purchase</span>
+                            <span class="text-muted">Open purchase entry</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
+                            <span class="fw-bold"><kbd class="bg-primary text-white">F3</kbd> Sales Return</span>
+                            <span class="text-muted">Open return page</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
+                            <span class="fw-bold"><kbd class="bg-primary text-white">F4</kbd> Patient History</span>
+                            <span class="text-muted">View patient record</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
+                            <span class="fw-bold"><kbd class="bg-primary text-white">F5</kbd> Drug Substitute</span>
+                            <span class="text-muted">Focus search / Alternatives</span>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
+                            <span class="fw-bold"><kbd class="bg-primary text-white">F6</kbd> Product History</span>
+                            <span class="text-muted">Trace product transaction flow</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
+                            <span class="fw-bold"><kbd class="bg-primary text-white">F7</kbd> Daily Sales</span>
+                            <span class="text-muted">Open sales reports</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
+                            <span class="fw-bold"><kbd class="bg-primary text-white">F8</kbd> Save / Complete</span>
+                            <span class="text-muted">Finish sale / Purchase entry</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
+                            <span class="fw-bold"><kbd class="bg-primary text-white">F9</kbd> Focus Search</span>
+                            <span class="text-muted">Focus primary search box</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
+                            <span class="fw-bold"><kbd class="bg-primary text-white">F10</kbd> Focus Header</span>
+                            <span class="text-muted">Focus Patient / Supplier</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Previous Purchases Modal -->
+<div class="modal fade" id="previousPurchasesModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-0 bg-light rounded-top-4">
+                <h5 class="modal-title fw-bold text-warning">
+                    <i class="fas fa-history me-2"></i>Previous Purchase History (Supplier Wise)
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <h6 id="purchasesModalProductName" class="fw-bold mb-3">Medicine Name</h6>
+                <div class="table-responsive" style="max-height: 350px;">
+                    <table class="table table-hover align-middle mb-0" id="previousPurchasesTable">
+                        <thead class="bg-light text-muted small text-uppercase">
+                            <tr>
+                                <th>Date</th>
+                                <th>Invoice No.</th>
+                                <th>Supplier Name</th>
+                                <th>Batch</th>
+                                <th>Expiry</th>
+                                <th>Qty</th>
+                                <th>Free</th>
+                                <th>Cost Price</th>
+                                <th class="text-end">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="9" class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin"></i> Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <style>
     .universal-loader {
@@ -715,6 +991,18 @@
     .loader-text {
         font-weight: 600;
         color: #212529;
+    }
+    .search-dropdown {
+        border-radius: 12px;
+        border: 1px solid #dee2e6;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        max-height: 250px;
+        overflow-y: auto;
+    }
+    .search-item:hover, .search-item.selected-item,
+    .batch-suggestion-item:hover, .batch-suggestion-item.selected-item {
+        background-color: var(--brand-light, #f0f4f9) !important;
+        outline: none;
     }
 </style>
 

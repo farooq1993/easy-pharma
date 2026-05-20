@@ -54,6 +54,122 @@
             }
         });
     </script>
+    
+    <!-- Global Pharmacy Keyboard Shortcuts (F1 - F10) -->
+    <script>
+        document.addEventListener('keydown', function(e) {
+            const shortcuts = {
+                'F1': function() { window.location.href = "{% url 'pos' %}"; },
+                'F2': function() { window.location.href = "{% url 'purchase_entry' %}"; },
+                'F3': function() { window.location.href = "{% url 'pos_returns' %}"; },
+                'F4': function() { window.location.href = "{% url 'patient_wise_sales' %}"; },
+                'F5': function() {
+                    const ps = document.getElementById('productSearch');
+                    if (ps) {
+                        ps.focus();
+                        ps.select();
+                    } else {
+                        window.location.href = "{% url 'pos' %}";
+                    }
+                },
+                'F6': function() { window.location.href = "{% url 'product_history' %}"; },
+                'F7': function() { window.location.href = "{% url 'daily_sale_report' %}"; },
+                'F8': function() {
+                    if (typeof completeOrder === 'function') {
+                        completeOrder();
+                    } else if (typeof savePurchase === 'function') {
+                        savePurchase();
+                    }
+                },
+                'F9': function() {
+                    const searchInput = document.getElementById('productSearch') || 
+                                        document.getElementById('productSearchInput') || 
+                                        document.getElementById('searchInput') || 
+                                        document.querySelector('input[type="search"]');
+                    if (searchInput) {
+                        searchInput.focus();
+                        searchInput.select();
+                    }
+                },
+                'F10': function() {
+                    const headerInput = document.getElementById('patientName') || 
+                                        document.getElementById('supplierSelect') ||
+                                        document.getElementById('invoiceNumber');
+                    if (headerInput) {
+                        headerInput.focus();
+                        if (headerInput.tagName === 'INPUT') {
+                            headerInput.select();
+                        }
+                    }
+                }
+            };
+
+            if (shortcuts[e.key]) {
+                e.preventDefault();
+                shortcuts[e.key]();
+            }
+        });
+    </script>
+
+    <!-- Global dynamic input uppercase formatter -->
+    <script>
+        // 1. Intercept programmatic value assignments globally
+        (function() {
+            const originalInputDescriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+            const originalTextareaDescriptor = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value');
+
+            if (originalInputDescriptor && originalInputDescriptor.set) {
+                Object.defineProperty(HTMLInputElement.prototype, 'value', {
+                    get: function() {
+                        return originalInputDescriptor.get.call(this);
+                    },
+                    set: function(val) {
+                        let finalVal = val;
+                        const type = this.getAttribute('type');
+                        const isExcluded = type && ['password', 'email', 'number', 'checkbox', 'radio', 'file', 'date'].includes(type.toLowerCase());
+                        if (!isExcluded && typeof val === 'string') {
+                            finalVal = val.toUpperCase();
+                        }
+                        originalInputDescriptor.set.call(this, finalVal);
+                    }
+                });
+            }
+
+            if (originalTextareaDescriptor && originalTextareaDescriptor.set) {
+                Object.defineProperty(HTMLTextAreaElement.prototype, 'value', {
+                    get: function() {
+                        return originalTextareaDescriptor.get.call(this);
+                    },
+                    set: function(val) {
+                        let finalVal = val;
+                        if (typeof val === 'string') {
+                            finalVal = val.toUpperCase();
+                        }
+                        originalTextareaDescriptor.set.call(this, finalVal);
+                    }
+                });
+            }
+        })();
+
+        // 2. Intercept typed inputs globally
+        document.addEventListener('input', function(e) {
+            if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+                const type = e.target.getAttribute('type');
+                if (type === 'password' || type === 'email' || type === 'number' || type === 'checkbox' || type === 'radio' || type === 'file' || type === 'date') return;
+                
+                const start = e.target.selectionStart;
+                const end = e.target.selectionEnd;
+                const upperValue = e.target.value.toUpperCase();
+                
+                if (e.target.value !== upperValue) {
+                    e.target.value = upperValue;
+                    if (start !== null && end !== null) {
+                        e.target.setSelectionRange(start, end);
+                    }
+                }
+            }
+        });
+    </script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

@@ -3,5 +3,6 @@ from django.urls import path, include
 
 urlpatterns = [
     path('', include('easypharma.urls')),
+    path('', include('dataMigration.urls')),
     path('admin/', admin.site.urls),
 ]

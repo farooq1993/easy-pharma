@@ -1,450 +1,730 @@
 {% extends 'includes/base.html' %}
 
-{% block content %}  
+{% block content %}
 
-<div class="p-6 max-w-7xl mx-auto">
+<style>
+    :root {
+        --brand: #6d28d9;
+        --brand-dark: #4c1d95;
+        --brand-light: #ede9fe;
+        --accent: #10b981;
+        --surface: #f8f7ff;
+        --card-shadow: 0 4px 24px rgba(109,40,217,.10);
+    }
 
-    <div class="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
+    body { background: var(--surface); }
 
-        <!-- Header -->
-        <div class="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-5">
-            <h2 class="text-3xl font-bold text-white">
-                Patient-wise Sales Report
-            </h2>
-            <p class="text-purple-100 mt-1 text-sm">
-                Search patient and view all related invoices
+    /* Hero */
+    .page-hero {
+        background: linear-gradient(135deg, #6d28d9 0%, #4338ca 55%, #1d4ed8 100%);
+        border-radius: 1.25rem;
+        padding: 2rem 2.5rem;
+        color: #fff;
+        position: relative;
+        overflow: hidden;
+        margin-bottom: 1.5rem;
+    }
+    .page-hero::before {
+        content: '';
+        position: absolute;
+        width: 300px; height: 300px;
+        background: rgba(255,255,255,.07);
+        border-radius: 50%;
+        top: -80px; right: -60px;
+        pointer-events: none;
+    }
+
+    /* Cards */
+    .ps-card {
+        background: #fff;
+        border-radius: 1.25rem;
+        box-shadow: var(--card-shadow);
+        overflow: hidden;
+        margin-bottom: 1.5rem;
+    }
+    .ps-card-head {
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid #f3f4f6;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: .75rem;
+    }
+
+    /* Search */
+    .search-body { padding: 1.5rem 2rem; }
+    .search-input-wrap { position: relative; }
+    .search-input-wrap .s-icon {
+        position: absolute; left: 14px; top: 50%;
+        transform: translateY(-50%);
+        color: #9ca3af; pointer-events: none;
+    }
+    #patientSearch {
+        width: 100%;
+        padding: .75rem 2.8rem .75rem 2.6rem;
+        border: 2px solid #e5e7eb;
+        border-radius: .875rem;
+        font-size: .95rem;
+        transition: border-color .2s, box-shadow .2s;
+        outline: none;
+    }
+    #patientSearch:focus {
+        border-color: var(--brand);
+        box-shadow: 0 0 0 3px rgba(109,40,217,.15);
+    }
+    .s-clear {
+        position: absolute; right: 12px; top: 50%;
+        transform: translateY(-50%);
+        background: none; border: none;
+        color: #9ca3af; cursor: pointer;
+        display: none; font-size: 1rem;
+    }
+    .s-clear:hover { color: #374151; }
+
+    /* Autocomplete */
+    .autocomplete-dropdown {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0; right: 0;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: .875rem;
+        box-shadow: 0 10px 36px rgba(0,0,0,.13);
+        max-height: 260px;
+        overflow-y: auto;
+        z-index: 1060;
+        display: none;
+    }
+    .autocomplete-dropdown.open { display: block; }
+    .ac-item {
+        display: flex;
+        align-items: center;
+        gap: .65rem;
+        padding: .65rem 1rem;
+        cursor: pointer;
+        border-bottom: 1px solid #f9fafb;
+        font-size: .88rem;
+        color: #374151;
+        transition: background .12s;
+    }
+    .ac-item:last-child { border-bottom: none; }
+    .ac-item:hover, .ac-item.active { background: var(--brand-light); color: var(--brand); }
+    .ac-avatar {
+        width: 32px; height: 32px;
+        background: var(--brand-light);
+        color: var(--brand);
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 700; font-size: .78rem;
+        flex-shrink: 0;
+    }
+    .ac-item:hover .ac-avatar, .ac-item.active .ac-avatar {
+        background: var(--brand); color: #fff;
+    }
+    .ac-item mark { background: #fef08a; padding: 0 2px; border-radius: 2px; }
+    .ac-hint { padding: .9rem 1rem; text-align: center; color: #9ca3af; font-size: .84rem; }
+
+    /* Search button */
+    #searchBtn {
+        height: 50px;
+        background: linear-gradient(135deg, var(--brand), #4338ca);
+        border: none;
+        border-radius: .875rem;
+        color: #fff;
+        font-weight: 600;
+        letter-spacing: .3px;
+        box-shadow: 0 4px 14px rgba(109,40,217,.35);
+        transition: transform .15s, box-shadow .15s;
+        width: 100%;
+    }
+    #searchBtn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(109,40,217,.45); }
+    #searchBtn:disabled { opacity: .7; transform: none; }
+
+    /* Recent pills */
+    .recent-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: .3rem;
+        background: var(--brand-light);
+        color: var(--brand);
+        border-radius: 2rem;
+        padding: .2rem .7rem;
+        font-size: .75rem;
+        font-weight: 600;
+        cursor: pointer;
+        margin-right: .4rem;
+        margin-top: .4rem;
+        transition: background .15s;
+    }
+    .recent-pill:hover { background: #ddd6fe; }
+
+    /* Stats pills */
+    .stat-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: .4rem;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 2rem;
+        padding: .3rem .85rem;
+        font-size: .8rem;
+        font-weight: 600;
+        color: #374151;
+    }
+    .stat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+    /* Invoice count badge */
+    .count-badge {
+        background: var(--brand-light);
+        color: var(--brand);
+        font-size: .78rem;
+        font-weight: 700;
+        padding: .28rem .85rem;
+        border-radius: 2rem;
+    }
+
+    /* Invoice table */
+    .inv-table { margin: 0; }
+    .inv-table thead th {
+        background: #1e1b4b;
+        color: #fff;
+        font-size: .78rem;
+        text-transform: uppercase;
+        letter-spacing: .6px;
+        padding: .9rem 1rem;
+        white-space: nowrap;
+        font-weight: 600;
+    }
+    .inv-table tbody tr { cursor: pointer; transition: background .12s; }
+    .inv-table tbody tr:hover { background: #f5f3ff !important; }
+    .inv-table td { padding: .75rem 1rem; font-size: .875rem; vertical-align: middle; }
+    .inv-table tbody tr:nth-child(even) { background: #fafafa; }
+
+    .pay-badge {
+        display: inline-block;
+        padding: .2rem .7rem;
+        border-radius: 2rem;
+        font-size: .72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .4px;
+    }
+    .pay-cash   { background: #d1fae5; color: #065f46; }
+    .pay-credit { background: #fee2e2; color: #991b1b; }
+    .pay-online { background: #dbeafe; color: #1e40af; }
+
+    .btn-view {
+        background: linear-gradient(135deg, #3b82f6, #6366f1);
+        color: #fff; border: none;
+        border-radius: .5rem;
+        padding: .32rem .85rem;
+        font-size: .78rem; font-weight: 600;
+        transition: transform .15s, box-shadow .15s;
+    }
+    .btn-view:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(99,102,241,.4); color: #fff; }
+
+    /* Empty state */
+    .empty-state { padding: 3rem 1rem; text-align: center; color: #9ca3af; }
+    .empty-icon { font-size: 2.5rem; opacity: .45; display: block; margin-bottom: .6rem; }
+
+    /* Detail panel */
+    #salesResultContainer { display: none; }
+    .detail-hero {
+        background: linear-gradient(135deg, #1d4ed8 0%, #4338ca 100%);
+        padding: 1.75rem 2rem;
+        color: #fff;
+    }
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .summary-tile {
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: .875rem;
+        padding: 1rem 1.2rem;
+    }
+    .summary-tile .s-label {
+        font-size: .68rem;
+        text-transform: uppercase;
+        letter-spacing: .7px;
+        color: #6b7280;
+        font-weight: 700;
+    }
+    .summary-tile .s-value {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #111827;
+        margin-top: .3rem;
+    }
+    .items-table thead th {
+        background: var(--brand);
+        color: #fff;
+        font-size: .78rem;
+        text-transform: uppercase;
+        letter-spacing: .5px;
+        padding: .8rem 1rem;
+        font-weight: 600;
+    }
+    .items-table td { padding: .7rem 1rem; font-size: .875rem; vertical-align: middle; }
+    .items-table tbody tr:nth-child(even) { background: #faf9ff; }
+    .items-table tbody tr:hover { background: #f0fdf4; }
+    .grand-row td {
+        background: #1e1b4b;
+        color: #fff;
+        font-weight: 700;
+        font-size: 1rem;
+        padding: .9rem 1.2rem;
+    }
+
+    /* Animation */
+    @keyframes fadeUp {
+        from { opacity: 0; transform: translateY(14px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-up { animation: fadeUp .3s ease forwards; }
+
+    @media print {
+        .page-hero, .ps-card:not(#detailCard), nav, aside { display: none !important; }
+        #salesResultContainer { display: block !important; }
+    }
+</style>
+
+<div class="container-fluid px-4 py-4" style="max-width:1280px;">
+
+    <!-- Hero -->
+    <div class="page-hero">
+        <div style="position:relative;z-index:1;">
+            <h1 class="fw-bold mb-1" style="font-size:1.7rem;letter-spacing:-.3px;">
+                <i class="bi bi-person-lines-fill me-2"></i>Patient-wise Sales Report
+            </h1>
+            <p class="mb-0 opacity-75" style="font-size:.875rem;">
+                Search a patient by name to view all their invoices and purchase history
             </p>
         </div>
-
-        <!-- Search Section -->
-        <div class="p-6 border-b border-gray-200 bg-gray-50">
-
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-
-                <div class="md:col-span-3">
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">
-                        Search Patient
-                    </label>
-
-                    <input
-                        type="text"
-                        id="patientSearch"
-                        placeholder="Enter patient name..."
-                        class="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
-                    >
-                </div>
-
-                <div class="flex items-end">
-                    <button
-                        id="searchBtn"
-                        class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold px-6 py-3 rounded-lg transition duration-200 shadow-md"
-                    >
-                        Search Invoice
-                    </button>
-                </div>
-
-            </div>
-
-        </div>
-
-        <!-- Invoice Table -->
-        <div class="p-6">
-
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-xl font-bold text-gray-800">
-                    All Sales Invoices
-                </h3>
-
-                <span
-                    id="invoiceCount"
-                    class="bg-purple-100 text-purple-700 text-sm font-semibold px-3 py-1 rounded-full"
-                >
-                    0 Invoices
-                </span>
-            </div>
-
-            <div class="overflow-x-auto rounded-xl border border-gray-200">
-
-                <table class="min-w-full bg-white">
-
-                    <thead class="bg-gray-800 text-white">
-
-                        <tr>
-                            <th class="px-4 py-4 text-left text-sm font-semibold">
-                                Invoice No
-                            </th>
-
-                            <th class="px-4 py-4 text-left text-sm font-semibold">
-                                Date
-                            </th>
-
-                            <th class="px-4 py-4 text-left text-sm font-semibold">
-                                Doctor
-                            </th>
-
-                            <th class="px-4 py-4 text-left text-sm font-semibold">
-                                Payment
-                            </th>
-
-                            <th class="px-4 py-4 text-left text-sm font-semibold">
-                                Amount
-                            </th>
-
-                            <th class="px-4 py-4 text-center text-sm font-semibold">
-                                Action
-                            </th>
-                        </tr>
-
-                    </thead>
-
-                    <tbody
-                        id="invoiceTableBody"
-                        class="divide-y divide-gray-200 text-gray-700"
-                    >
-
-                        <tr>
-                            <td colspan="6" class="text-center py-10 text-gray-400">
-                                Search patient to view invoices
-                            </td>
-                        </tr>
-
-                    </tbody>
-
-                </table>
-
-            </div>
-
-        </div>
-
     </div>
 
-    <!-- Invoice Details Section -->
-    <div
-        id="salesResultContainer"
-        class="hidden mt-8 bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden"
-    >
+    <!-- Search Card -->
+    <div class="ps-card">
+        <div class="search-body">
+            <label class="d-block fw-semibold text-secondary mb-2" style="font-size:.78rem;text-transform:uppercase;letter-spacing:.6px;">
+                <i class="bi bi-search me-1"></i> Search Patient
+            </label>
+            <div class="row g-3 align-items-end">
+                <div class="col-lg-9 col-md-8">
+                    <div style="position:relative;">
+                        <div class="search-input-wrap">
+                            <i class="bi bi-person s-icon"></i>
+                            <input type="text" id="patientSearch"
+                                placeholder="Type at least 2 characters of patient name…"
+                                autocomplete="off">
+                            <button class="s-clear" id="sClear" type="button">
+                                <i class="bi bi-x-circle-fill"></i>
+                            </button>
+                        </div>
+                        <div class="autocomplete-dropdown" id="acDropdown"></div>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-4">
+                    <button id="searchBtn" class="btn">
+                        <i class="bi bi-search me-2"></i>Search Invoices
+                    </button>
+                </div>
+            </div>
 
-        <!-- Invoice Header -->
-        <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5">
+            <!-- Recent searches -->
+            <div id="recentWrap" class="mt-3" style="display:none;">
+                <span class="text-muted me-1" style="font-size:.76rem;font-weight:600;">
+                    <i class="bi bi-clock-history me-1"></i>Recent:
+                </span>
+                <span id="recentPills"></span>
+            </div>
+        </div>
+    </div>
 
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+    <!-- Invoice Table Card -->
+    <div class="ps-card" id="invoiceTableCard">
+        <div class="ps-card-head">
+            <div class="d-flex align-items-center gap-2">
+                <span class="fw-bold" style="font-size:.95rem;">All Sales Invoices</span>
+                <span class="count-badge" id="invoiceCount">0 Invoices</span>
+            </div>
+            <div id="statsWrap" class="d-flex flex-wrap gap-2" style="display:none!important;">
+                <span class="stat-pill"><span class="stat-dot" style="background:#6d28d9;"></span>Total: <strong id="statTotal">₹0</strong></span>
+                <span class="stat-pill"><span class="stat-dot" style="background:#10b981;"></span>Avg: <strong id="statAvg">₹0</strong></span>
+                <span class="stat-pill"><span class="stat-dot" style="background:#f59e0b;"></span>Last: <strong id="statLast">—</strong></span>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table inv-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Invoice No</th>
+                        <th>Date</th>
+                        <th>Doctor</th>
+                        <th>Payment</th>
+                        <th>Amount</th>
+                        <th class="text-center">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="invoiceTableBody">
+                    <tr>
+                        <td colspan="7">
+                            <div class="empty-state">
+                                <i class="bi bi-person-search empty-icon"></i>
+                                <p class="mb-1 fw-semibold" style="color:#6b7280;">No patient selected</p>
+                                <p class="mb-0 small">Search a patient above to view their invoices</p>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
 
+    <!-- Invoice Detail Card -->
+    <div class="ps-card fade-up" id="salesResultContainer" style="display:none;">
+        <div class="detail-hero">
+            <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
                 <div>
-                    <h3 class="text-2xl font-bold text-white">
-                        Invoice Details
-                    </h3>
-
-                    <p class="text-blue-100 mt-1">
-                        Invoice :
-                        <span id="displayInvoiceNum" class="font-semibold"></span>
+                    <h5 class="fw-bold mb-1">
+                        <i class="bi bi-receipt me-2"></i>Invoice Details
+                    </h5>
+                    <p class="mb-0 opacity-75 small">
+                        Invoice No: <span id="displayInvoiceNum" class="fw-semibold"></span>
                     </p>
                 </div>
-
-                <button
-                    onclick="window.print()"
-                    class="mt-4 md:mt-0 bg-white text-blue-700 px-5 py-2 rounded-lg font-semibold shadow hover:bg-gray-100"
-                >
-                    Print Invoice
+                <button onclick="window.print()" class="btn btn-sm btn-light fw-semibold">
+                    <i class="bi bi-printer me-1"></i>Print
                 </button>
-
             </div>
-
         </div>
-
-        <!-- Summary Cards -->
-        <div class="p-6">
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
-
-                <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
-                    <p class="text-xs uppercase tracking-wider text-gray-500 font-semibold">
-                        Date & Time
-                    </p>
-
-                    <h4
-                        id="displayDate"
-                        class="text-lg font-bold text-gray-800 mt-2"
-                    ></h4>
+        <div class="p-4">
+            <div class="summary-grid">
+                <div class="summary-tile">
+                    <div class="s-label"><i class="bi bi-calendar3 me-1"></i>Date</div>
+                    <div class="s-value" id="displayDate">—</div>
                 </div>
-
-                <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
-                    <p class="text-xs uppercase tracking-wider text-gray-500 font-semibold">
-                        Prescribing Doctor
-                    </p>
-
-                    <h4
-                        id="displayDoctor"
-                        class="text-lg font-bold text-gray-800 mt-2"
-                    ></h4>
+                <div class="summary-tile">
+                    <div class="s-label"><i class="bi bi-person-badge me-1"></i>Doctor</div>
+                    <div class="s-value" id="displayDoctor">—</div>
                 </div>
-
-                <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
-                    <p class="text-xs uppercase tracking-wider text-gray-500 font-semibold">
-                        Payment Mode
-                    </p>
-
-                    <h4
-                        id="displayPayment"
-                        class="text-lg font-bold text-gray-800 mt-2"
-                    ></h4>
+                <div class="summary-tile">
+                    <div class="s-label"><i class="bi bi-credit-card me-1"></i>Payment</div>
+                    <div class="s-value" id="displayPayment">—</div>
                 </div>
-
+                <div class="summary-tile">
+                    <div class="s-label"><i class="bi bi-bag me-1"></i>Items</div>
+                    <div class="s-value" id="displayItemCount">—</div>
+                </div>
+                <div class="summary-tile" style="border-color:#6d28d9;background:#faf9ff;">
+                    <div class="s-label" style="color:var(--brand);">Grand Total</div>
+                    <div class="s-value" style="color:var(--accent);font-size:1.2rem;" id="displayGrandTotal">—</div>
+                </div>
             </div>
 
-            <!-- Product Table -->
-            <div class="overflow-x-auto rounded-xl border border-gray-200">
-
-                <table class="min-w-full bg-white">
-
-                    <thead class="bg-purple-600 text-white">
-
+            <div class="table-responsive rounded-3 border">
+                <table class="table items-table mb-0">
+                    <thead>
                         <tr>
-
-                            <th class="px-4 py-4 text-left text-sm font-semibold">
-                                Product
-                            </th>
-
-                            <th class="px-4 py-4 text-left text-sm font-semibold">
-                                Batch
-                            </th>
-
-                            <th class="px-4 py-4 text-left text-sm font-semibold">
-                                Expiry
-                            </th>
-
-                            <th class="px-4 py-4 text-left text-sm font-semibold">
-                                Qty
-                            </th>
-
-                            <th class="px-4 py-4 text-left text-sm font-semibold">
-                                Unit Price
-                            </th>
-
-                            <th class="px-4 py-4 text-left text-sm font-semibold">
-                                Total
-                            </th>
-
+                            <th>#</th>
+                            <th>Product</th>
+                            <th>Batch</th>
+                            <th>Expiry</th>
+                            <th class="text-end">Qty</th>
+                            <th class="text-end">Unit Price</th>
+                            <th class="text-end">Total</th>
                         </tr>
-
                     </thead>
-
-                    <tbody
-                        id="invoiceItemsTableBody"
-                        class="divide-y divide-gray-200 text-sm text-gray-700"
-                    >
-
-                    </tbody>
-
-                    <tfoot class="bg-gray-100">
-
-                        <tr>
-
-                            <td
-                                colspan="5"
-                                class="px-6 py-5 text-right text-lg font-bold text-gray-800"
-                            >
-                                Grand Total :
+                    <tbody id="invoiceItemsTableBody"></tbody>
+                    <tfoot>
+                        <tr class="grand-row">
+                            <td colspan="6" class="text-end">
+                                <i class="bi bi-receipt me-2"></i>Grand Total
                             </td>
-
-                            <td
-                                id="displayGrandTotal"
-                                class="px-6 py-5 text-xl font-bold text-green-600"
-                            >
-                            </td>
-
+                            <td class="text-end" id="detailGrandTotal" style="color:#6ee7b7;font-size:1.05rem;">—</td>
                         </tr>
-
                     </tfoot>
-
                 </table>
-
             </div>
-
         </div>
-
     </div>
 
 </div>
 
 <script>
+(function () {
+    const API_URL    = `{% url 'patient_wise_sales_api' %}`;
+    const searchInput = document.getElementById('patientSearch');
+    const searchBtn   = document.getElementById('searchBtn');
+    const sClear      = document.getElementById('sClear');
+    const acDropdown  = document.getElementById('acDropdown');
+    const tableBody   = document.getElementById('invoiceTableBody');
+    const countBadge  = document.getElementById('invoiceCount');
+    const statsWrap   = document.getElementById('statsWrap');
 
-document.addEventListener('DOMContentLoaded', function () {
+    let debounceTimer;
+    let invoiceStore = {};  // id/index → invoice object
 
-    const searchBtn = document.getElementById('searchBtn');
+    // ── Recent searches ──────────────────────────────────────────
+    let recent = JSON.parse(localStorage.getItem('psw_recent') || '[]');
+
+    function saveRecent(name) {
+        recent = [name, ...recent.filter(r => r !== name)].slice(0, 6);
+        localStorage.setItem('psw_recent', JSON.stringify(recent));
+        renderRecent();
+    }
+    function renderRecent() {
+        const wrap  = document.getElementById('recentWrap');
+        const pills = document.getElementById('recentPills');
+        if (!recent.length) { wrap.style.display = 'none'; return; }
+        wrap.style.display = '';
+        pills.innerHTML = recent.map(r =>
+            `<span class="recent-pill" onclick="doSearch(${JSON.stringify(r)})">
+                <i class="bi bi-clock-history" style="font-size:.7rem;"></i>${r}
+            </span>`
+        ).join('');
+    }
+    renderRecent();
+
+    // ── Search input events ───────────────────────────────────────
+    searchInput.addEventListener('input', function () {
+        const val = this.value;
+        sClear.style.display = val ? '' : 'none';
+        clearTimeout(debounceTimer);
+        if (val.trim().length < 2) { closeDropdown(); return; }
+        debounceTimer = setTimeout(() => fetchSuggestions(val.trim()), 300);
+    });
+
+    searchInput.addEventListener('keydown', function (e) {
+        const items = acDropdown.querySelectorAll('.ac-item');
+        const active = acDropdown.querySelector('.ac-item.active');
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const next = active ? active.nextElementSibling : items[0];
+            active && active.classList.remove('active');
+            next && next.classList.add('active');
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const prev = active ? active.previousElementSibling : items[items.length - 1];
+            active && active.classList.remove('active');
+            prev && prev.classList.add('active');
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            const act = acDropdown.querySelector('.ac-item.active');
+            if (act) { act.click(); }
+            else if (searchInput.value.trim()) { closeDropdown(); doSearch(searchInput.value.trim()); }
+        } else if (e.key === 'Escape') {
+            closeDropdown();
+        }
+    });
+
+    sClear.addEventListener('click', function () {
+        searchInput.value = '';
+        sClear.style.display = 'none';
+        closeDropdown();
+        searchInput.focus();
+    });
+
+    document.addEventListener('click', function (e) {
+        if (!e.target.closest('#patientSearch') && !e.target.closest('#acDropdown')) closeDropdown();
+    });
 
     searchBtn.addEventListener('click', function () {
+        const val = searchInput.value.trim();
+        if (!val) {
+            searchInput.style.borderColor = '#ef4444';
+            searchInput.focus();
+            setTimeout(() => searchInput.style.borderColor = '', 1200);
+            return;
+        }
+        closeDropdown();
+        doSearch(val);
+    });
 
-        const patient = document.getElementById('patientSearch').value.trim();
+    // ── Autocomplete ─────────────────────────────────────────────
+    function fetchSuggestions(query) {
+        acDropdown.innerHTML = `<div class="ac-hint"><div class="spinner-border spinner-border-sm text-secondary me-2"></div>Searching patients…</div>`;
+        acDropdown.classList.add('open');
 
-        if (!patient) {
+        fetch(`${API_URL}?patient_name=${encodeURIComponent(query)}&autocomplete=1`)
+            .then(r => r.json())
+            .then(data => {
+                let names = extractNames(data);
+                renderDropdown(names, query);
+            })
+            .catch(() => {
+                acDropdown.innerHTML = `<div class="ac-hint text-danger"><i class="bi bi-exclamation-circle me-1"></i>Could not fetch suggestions</div>`;
+            });
+    }
 
-            alert('Please enter patient name');
+    function extractNames(data) {
+        if (!Array.isArray(data) || !data.length) return [];
+        if (typeof data[0] === 'string') return data;
+        const seen = new Set();
+        const names = [];
+        data.forEach(inv => {
+            const n = inv.patient_name || inv.customer_name || inv.name;
+            if (n && !seen.has(n)) { seen.add(n); names.push(n); }
+        });
+        return names;
+    }
+
+    function highlight(text, q) {
+        return text.replace(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi'), '<mark>$1</mark>');
+    }
+
+    function renderDropdown(names, query) {
+        if (!names.length) {
+            acDropdown.innerHTML = `<div class="ac-hint">No patients found for "<strong>${query}</strong>"</div>`;
+            return;
+        }
+        acDropdown.innerHTML = names.slice(0, 8).map(name => `
+            <div class="ac-item" data-name="${name}">
+                <div class="ac-avatar">${name.charAt(0).toUpperCase()}</div>
+                <div>
+                    <div style="font-weight:600;">${highlight(name, query)}</div>
+                    <div style="font-size:.72rem;color:#9ca3af;">Click to search invoices</div>
+                </div>
+            </div>
+        `).join('');
+
+        acDropdown.querySelectorAll('.ac-item').forEach(item => {
+            item.addEventListener('click', function () {
+                const name = this.getAttribute('data-name');
+                searchInput.value = name;
+                sClear.style.display = '';
+                closeDropdown();
+                doSearch(name);
+            });
+        });
+    }
+
+    function closeDropdown() { acDropdown.classList.remove('open'); }
+
+    // ── Search / Fetch ────────────────────────────────────────────
+    window.doSearch = function(patientName) {
+        searchInput.value = patientName;
+        sClear.style.display = '';
+        searchBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Searching…`;
+        searchBtn.disabled = true;
+
+        fetch(`${API_URL}?patient_name=${encodeURIComponent(patientName)}`)
+            .then(r => r.json())
+            .then(data => {
+                renderInvoiceTable(data);
+                saveRecent(patientName);
+            })
+            .catch(() => {
+                tableBody.innerHTML = `<tr><td colspan="7">
+                    <div class="empty-state" style="color:#ef4444;">
+                        <i class="bi bi-exclamation-triangle empty-icon"></i>
+                        Error fetching invoices. Please try again.
+                    </div></td></tr>`;
+            })
+            .finally(() => {
+                searchBtn.innerHTML = `<i class="bi bi-search me-2"></i>Search Invoices`;
+                searchBtn.disabled = false;
+            });
+    };
+
+    // ── Render Table ──────────────────────────────────────────────
+    function renderInvoiceTable(data) {
+        tableBody.innerHTML = '';
+        invoiceStore = {};
+        countBadge.textContent = `${data.length} Invoice${data.length !== 1 ? 's' : ''}`;
+
+        if (!data.length) {
+            tableBody.innerHTML = `<tr><td colspan="7">
+                <div class="empty-state">
+                    <i class="bi bi-inbox empty-icon"></i>
+                    <p class="mb-0 fw-semibold">No invoices found for this patient</p>
+                </div></td></tr>`;
+            statsWrap.style.display = 'none';
             return;
         }
 
-        fetch(`{% url 'patient_wise_sales_api' %}?patient_name=${encodeURIComponent(patient)}`)
+        // Compute stats
+        const total = data.reduce((s, inv) => s + parseFloat(inv.total_amount), 0);
+        const avg   = total / data.length;
+        document.getElementById('statTotal').textContent = '₹' + total.toLocaleString('en-IN', {minimumFractionDigits:2});
+        document.getElementById('statAvg').textContent   = '₹' + avg.toLocaleString('en-IN', {minimumFractionDigits:2});
+        document.getElementById('statLast').textContent  = data[data.length - 1].date;
+        statsWrap.style.removeProperty('display');
 
-            .then(response => response.json())
-
-            .then(data => {
-
-                renderInvoiceTable(data);
-
-            })
-
-            .catch(error => {
-
-                console.error(error);
-                alert('Error fetching invoices');
-
-            });
-
-    });
-
-});
-
-function renderInvoiceTable(data) {
-
-    const tableBody = document.getElementById('invoiceTableBody');
-
-    const invoiceCount = document.getElementById('invoiceCount');
-
-    tableBody.innerHTML = '';
-
-    invoiceCount.innerText = `${data.length} Invoices`;
-
-    if (data.length === 0) {
-
-        tableBody.innerHTML = `
-            <tr>
-                <td colspan="6" class="text-center py-10 text-gray-400">
-                    No invoices found
-                </td>
-            </tr>
-        `;
-
-        return;
+        data.forEach((inv, idx) => {
+            invoiceStore[idx] = inv;
+            const payClass = {Cash:'pay-cash', Credit:'pay-credit'}[inv.payment_mode] || 'pay-online';
+            tableBody.insertAdjacentHTML('beforeend', `
+                <tr onclick="showDetail(${idx})">
+                    <td class="text-muted" style="font-size:.78rem;">${idx + 1}</td>
+                    <td class="fw-semibold" style="color:var(--brand);">${inv.invoice_number}</td>
+                    <td>${inv.date}</td>
+                    <td>${inv.doctor_name || '<span class="text-muted small">N/A</span>'}</td>
+                    <td><span class="pay-badge ${payClass}">${inv.payment_mode}</span></td>
+                    <td class="fw-bold" style="color:var(--accent);">
+                        ₹${parseFloat(inv.total_amount).toLocaleString('en-IN', {minimumFractionDigits:2})}
+                    </td>
+                    <td class="text-center">
+                        <button class="btn-view btn" onclick="event.stopPropagation();showDetail(${idx})">
+                            <i class="bi bi-eye me-1"></i>View
+                        </button>
+                    </td>
+                </tr>`);
+        });
     }
 
-    data.forEach((invoice, index) => {
+    // ── Render Detail ─────────────────────────────────────────────
+    window.showDetail = function(idx) {
+        const inv = invoiceStore[idx];
+        if (!inv) return;
 
-        const bgColor = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+        const panel = document.getElementById('salesResultContainer');
+        panel.style.display = 'block';
+        panel.classList.remove('fade-up');
+        void panel.offsetWidth;
+        panel.classList.add('fade-up');
 
-        const row = `
+        document.getElementById('displayInvoiceNum').textContent = inv.invoice_number;
+        document.getElementById('displayDate').textContent       = inv.date;
+        document.getElementById('displayDoctor').textContent     = inv.doctor_name || 'N/A';
+        document.getElementById('displayPayment').textContent    = inv.payment_mode;
+        document.getElementById('displayItemCount').textContent  = (inv.items ? inv.items.length : 0) + ' items';
 
-            <tr class="${bgColor} hover:bg-purple-50 transition duration-150">
+        const amtFmt = '₹' + parseFloat(inv.total_amount).toLocaleString('en-IN', {minimumFractionDigits:2});
+        document.getElementById('displayGrandTotal').textContent = amtFmt;
+        document.getElementById('detailGrandTotal').textContent  = amtFmt;
 
-                <td class="px-4 py-4 font-semibold text-gray-800">
-                    ${invoice.invoice_number}
-                </td>
+        const itemBody = document.getElementById('invoiceItemsTableBody');
+        itemBody.innerHTML = '';
 
-                <td class="px-4 py-4">
-                    ${invoice.date}
-                </td>
+        if (inv.items && inv.items.length) {
+            inv.items.forEach((item, i) => {
+                itemBody.insertAdjacentHTML('beforeend', `
+                    <tr>
+                        <td class="text-muted">${i + 1}</td>
+                        <td class="fw-semibold">${item.product_name}</td>
+                        <td><span class="badge bg-light text-dark border" style="font-weight:600;">${item.batch_number || 'N/A'}</span></td>
+                        <td>${item.expiry_date || 'N/A'}</td>
+                        <td class="text-end fw-semibold">${item.quantity}</td>
+                        <td class="text-end">₹${parseFloat(item.unit_price).toLocaleString('en-IN', {minimumFractionDigits:2})}</td>
+                        <td class="text-end fw-bold">₹${parseFloat(item.total).toLocaleString('en-IN', {minimumFractionDigits:2})}</td>
+                    </tr>`);
+            });
+        } else {
+            itemBody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4">
+                <i class="bi bi-inbox me-2"></i>No item details available
+            </td></tr>`;
+        }
 
-                <td class="px-4 py-4">
-                    ${invoice.doctor_name || 'N/A'}
-                </td>
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
 
-                <td class="px-4 py-4">
-                    ${invoice.payment_mode}
-                </td>
-
-                <td class="px-4 py-4 font-bold text-green-600">
-                    ₹${invoice.total_amount.toFixed(2)}
-                </td>
-
-                <td class="px-4 py-4 text-center">
-
-                    <button
-                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow"
-                        onclick='renderInvoiceDetails(${JSON.stringify(invoice)})'
-                    >
-                        View
-                    </button>
-
-                </td>
-
-            </tr>
-
-        `;
-
-        tableBody.insertAdjacentHTML('beforeend', row);
-
-    });
-
-}
-
-function renderInvoiceDetails(selectedInvoice) {
-
-    document.getElementById('salesResultContainer').classList.remove('hidden');
-
-    document.getElementById('displayInvoiceNum').textContent =
-        selectedInvoice.invoice_number;
-
-    document.getElementById('displayDate').textContent =
-        selectedInvoice.date;
-
-    document.getElementById('displayDoctor').textContent =
-        selectedInvoice.doctor_name || 'N/A';
-
-    document.getElementById('displayPayment').textContent =
-        selectedInvoice.payment_mode;
-
-    document.getElementById('displayGrandTotal').textContent =
-        '₹' + selectedInvoice.total_amount.toFixed(2);
-
-    const tableBody = document.getElementById('invoiceItemsTableBody');
-
-    tableBody.innerHTML = '';
-
-    selectedInvoice.items.forEach((item, index) => {
-
-        const bgColor = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
-
-        const row = `
-
-            <tr class="${bgColor} hover:bg-blue-50 transition duration-150">
-
-                <td class="px-4 py-4 font-medium text-gray-900">
-                    ${item.product_name}
-                </td>
-
-                <td class="px-4 py-4">
-                    ${item.batch_number || 'N/A'}
-                </td>
-
-                <td class="px-4 py-4">
-                    ${item.expiry_date || 'N/A'}
-                </td>
-
-                <td class="px-4 py-4 font-semibold">
-                    ${item.quantity}
-                </td>
-
-                <td class="px-4 py-4">
-                    ₹${item.unit_price.toFixed(2)}
-                </td>
-
-                <td class="px-4 py-4 font-bold text-gray-900">
-                    ₹${item.total.toFixed(2)}
-                </td>
-
-            </tr>
-
-        `;
-
-        tableBody.insertAdjacentHTML('beforeend', row);
-
-    });
-
-    window.scrollTo({
-        top: document.getElementById('salesResultContainer').offsetTop - 40,
-        behavior: 'smooth'
-    });
-
-}
-
+})();
 </script>
 
 {% endblock %}
