@@ -5,6 +5,7 @@ from easypharma.views.reports import (
     HalfYearlySaleReportView,
     ProfitReportView,
     GSTReportView,
+    ProductHistoryView,
 )
 
 urlpatterns = [
@@ -15,5 +16,6 @@ urlpatterns = [
     path('half-yearly-sales/', HalfYearlySaleReportView.as_view(), name='half_yearly_report'),
     path('profit/', ProfitReportView.as_view(), name='profit_report'),
     path('gst/', GSTReportView.as_view(), name='gst_report'),
+    path('product-history/', ProductHistoryView.as_view(), name='product_history'),
 ]
 

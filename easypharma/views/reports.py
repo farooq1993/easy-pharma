@@ -479,3 +479,121 @@ class GSTReportView(View):
         }
         return render(request, self.template_name, context)
 
+
+class ProductHistoryView(View):
+    template_name = 'reports/product_history.html'
+
+    def get(self, request):
+        from django.http import JsonResponse
+        from django.shortcuts import redirect
+        from django.contrib import messages
+        from easypharma.models.purchase_invoice import PurchaseItem
+        from easypharma.models.sales import SaleItem
+        from easypharma.models.stock import StockBatch
+        
+        product_id = request.GET.get('product_id')
+        if not product_id:
+            return render(request, self.template_name)
+        
+        try:
+            product = Products.objects.get(id=product_id, tenant=request.tenant)
+        except Products.DoesNotExist:
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('ajax') == '1':
+                return JsonResponse({'error': 'Product not found'}, status=404)
+            messages.error(request, 'Product not found.')
+            return redirect('product_history')
+        
+        # Purchases:
+        purchases = PurchaseItem.objects.filter(
+            product=product,
+            tenant=request.tenant
+        ).select_related('purchase_invoice', 'purchase_invoice__supplier').order_by('-purchase_invoice__purchase_date')
+        
+        purchase_list = []
+        total_purchased_qty = 0
+        total_free_qty = 0
+        total_purchase_val = Decimal('0')
+        for item in purchases:
+            total_purchased_qty += item.quantity
+            total_free_qty += item.free_quantity or 0
+            total_purchase_val += Decimal(str(item.quantity)) * Decimal(str(item.purchase_price))
+            purchase_list.append({
+                'date': item.purchase_invoice.purchase_date.strftime('%Y-%m-%d'),
+                'invoice_number': item.purchase_invoice.invoice_number,
+                'supplier_name': item.purchase_invoice.supplier.name if item.purchase_invoice.supplier else '—',
+                'batch_number': item.batch_number,
+                'expiry_date': item.expiry_date.strftime('%m/%Y') if item.expiry_date else '—',
+                'quantity': item.quantity,
+                'free_quantity': item.free_quantity or 0,
+                'purchase_price': float(item.purchase_price),
+                'total': float(Decimal(str(item.quantity)) * Decimal(str(item.purchase_price)))
+            })
+            
+        # Sales:
+        sales = SaleItem.objects.filter(
+            product=product,
+            tenant=request.tenant
+        ).select_related('sale_invoice').order_by('-sale_invoice__created_at')
+        
+        sale_list = []
+        total_sold_qty = 0
+        total_sales_val = Decimal('0')
+        for item in sales:
+            total_sold_qty += item.quantity
+            total_sales_val += Decimal(str(item.total_amount))
+            sale_list.append({
+                'date': item.sale_invoice.created_at.strftime('%Y-%m-%d %H:%M'),
+                'invoice_number': item.sale_invoice.invoice_number,
+                'patient_name': item.sale_invoice.patient_name or 'Walk-in',
+                'batch_number': item.batch_number,
+                'quantity': item.quantity,
+                'unit_price': float(item.unit_price),
+                'total': float(item.total_amount)
+            })
+            
+        # Stocks:
+        stocks = StockBatch.objects.filter(
+            product=product,
+            tenant=request.tenant
+        ).order_by('expiry_date')
+        
+        stock_list = []
+        current_stock = 0
+        for b in stocks:
+            current_stock += b.current_quantity
+            stock_list.append({
+                'batch_number': b.batch_number,
+                'expiry_date': b.expiry_date.strftime('%m/%Y') if b.expiry_date else '—',
+                'stock': b.current_quantity,
+                'purchase_price': float(b.purchase_price) if b.purchase_price else 0.0,
+                'sale_price': float(b.sale_price) if b.sale_price else 0.0,
+                'mrp': float(b.mrp) if b.mrp else 0.0
+            })
+            
+        avg_purchase_price = float(total_purchase_val / total_purchased_qty) if total_purchased_qty > 0 else 0.0
+        avg_sale_price = float(total_sales_val / total_sold_qty) if total_sold_qty > 0 else 0.0
+        
+        data = {
+            'product_name': product.product_name,
+            'packing': product.product_packing or '—',
+            'conversion_factor': product.conversion_factor,
+            'total_purchased': total_purchased_qty,
+            'total_free': total_free_qty,
+            'total_sold': total_sold_qty,
+            'current_stock': current_stock,
+            'avg_purchase_price': round(avg_purchase_price, 2),
+            'avg_sale_price': round(avg_sale_price, 2),
+            'purchases': purchase_list,
+            'sales': sale_list,
+            'stocks': stock_list
+        }
+        
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('ajax') == '1':
+            return JsonResponse(data)
+            
+        return render(request, self.template_name, {
+            'product': product,
+            'data': data
+        })
+
+

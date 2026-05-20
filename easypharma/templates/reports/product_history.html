@@ -1,0 +1,380 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0 text-primary">
+                <i class="fas fa-history me-2"></i>Product Transaction History
+            </h2>
+            <p class="text-muted small mb-0">Trace purchases, sales, and batch movements for any medicine.</p>
+        </div>
+    </div>
+
+    <!-- Search Bar Section -->
+    <div class="row mb-4">
+        <div class="col-md-8 col-lg-6">
+            <div class="position-relative">
+                <div class="input-group shadow-sm rounded-pill overflow-hidden">
+                    <span class="input-group-text bg-white border-0 ps-4">
+                        <i class="fas fa-search text-muted"></i>
+                    </span>
+                    <input type="text" id="productSearchInput" 
+                           class="form-control border-0 py-3 ps-2" 
+                           placeholder="Search medicine name to load history..." 
+                           autocomplete="off">
+                    <button class="btn btn-primary px-4" type="button" id="searchBtn">Load History</button>
+                </div>
+                <div id="autocompleteResults" class="list-group position-absolute w-100 shadow-lg d-none mt-2" 
+                     style="z-index: 1060; max-height: 300px; overflow-y: auto; border-radius: 12px;">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loader -->
+    <div id="historyLoader" class="text-center py-5 d-none">
+        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
+        <p class="text-muted mt-3 fw-bold">Fetching transaction details...</p>
+    </div>
+
+    <!-- Empty State -->
+    <div id="historyEmptyState" class="text-center py-5 bg-white rounded-4 shadow-sm my-4 border">
+        <div class="my-4 opacity-25">
+            <i class="fas fa-search-dollar" style="font-size: 5rem; color: var(--primary);"></i>
+        </div>
+        <h4 class="text-muted fw-bold">No Medicine Selected</h4>
+        <p class="text-muted small mx-auto" style="max-width: 400px;">
+            Search for a product using the bar above or press <kbd>F9</kbd> to focus the search box.
+        </p>
+    </div>
+
+    <!-- History Content (Initially Hidden) -->
+    <div id="historyContent" class="d-none">
+        <!-- Product Profile & Metrics -->
+        <div class="card border-0 shadow-sm rounded-4 mb-4">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+                    <div>
+                        <span class="badge bg-primary-subtle text-primary mb-2 px-3 py-2 rounded-pill fw-bold" id="productPackingBadge">Packing: 10 Tabs</span>
+                        <h3 class="fw-bold text-dark mb-1" id="selectedProductName">Paracetamol 500mg</h3>
+                        <p class="text-muted small mb-0">Conversion Factor: <strong id="productConversionFactor">10</strong> units per pack</p>
+                    </div>
+                </div>
+
+                <!-- KPI Metric Rows -->
+                <div class="row g-3">
+                    <div class="col-6 col-md-3">
+                        <div class="p-3 bg-light rounded-3 text-center border-start border-primary border-4 h-100">
+                            <div class="small text-muted text-uppercase fw-bold mb-1" style="font-size: 0.75rem;">Total Purchased</div>
+                            <div class="h3 fw-bold text-primary mb-0" id="statPurchased">0</div>
+                            <div class="x-small text-success mt-1" id="statFree">0 free packs</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="p-3 bg-light rounded-3 text-center border-start border-success border-4 h-100">
+                            <div class="small text-muted text-uppercase fw-bold mb-1" style="font-size: 0.75rem;">Total Sold</div>
+                            <div class="h3 fw-bold text-success mb-0" id="statSold">0</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="p-3 bg-light rounded-3 text-center border-start border-warning border-4 h-100">
+                            <div class="small text-muted text-uppercase fw-bold mb-1" style="font-size: 0.75rem;">Current Stock</div>
+                            <div class="h3 fw-bold text-warning mb-0" id="statStock">0</div>
+                            <div class="x-small text-muted mt-1">Available Units</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="p-3 bg-light rounded-3 text-center border-start border-info border-4 h-100">
+                            <div class="small text-muted text-uppercase fw-bold mb-1" style="font-size: 0.75rem;">Avg Cost / Sale</div>
+                            <div class="h4 fw-bold text-info mb-1" id="statAvgPurchase">₹0.00</div>
+                            <div class="x-small text-muted" id="statAvgSale">Sale: ₹0.00</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <ul class="nav nav-pills mb-4 bg-white p-2 rounded-3 shadow-sm border" id="historyTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active px-4 fw-bold" id="stock-tab" data-bs-toggle="pill" data-bs-target="#stockPanel" type="button" role="tab">
+                    <i class="fas fa-boxes me-2"></i>Current Stock Batches
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link px-4 fw-bold" id="purchase-tab" data-bs-toggle="pill" data-bs-target="#purchasePanel" type="button" role="tab">
+                    <i class="fas fa-shopping-basket me-2"></i>Purchase Logs
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link px-4 fw-bold" id="sale-tab" data-bs-toggle="pill" data-bs-target="#salePanel" type="button" role="tab">
+                    <i class="fas fa-cash-register me-2"></i>Sales Logs
+                </button>
+            </li>
+        </ul>
+
+        <!-- Tab Contents -->
+        <div class="tab-content" id="historyTabsContent">
+            <!-- Stock Batches Panel -->
+            <div class="tab-pane fade show active" id="stockPanel" role="tabpanel">
+                <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" id="stockTable">
+                            <thead class="bg-light text-muted small text-uppercase">
+                                <tr>
+                                    <th class="ps-4">Batch Number</th>
+                                    <th>Expiry</th>
+                                    <th>Remaining Stock (Units)</th>
+                                    <th>Purchase Cost (Pack)</th>
+                                    <th>Sale Price (Unit)</th>
+                                    <th class="text-end pe-4">MRP (Pack)</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Purchase History Panel -->
+            <div class="tab-pane fade" id="purchasePanel" role="tabpanel">
+                <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" id="purchaseTable">
+                            <thead class="bg-light text-muted small text-uppercase">
+                                <tr>
+                                    <th class="ps-4">Date</th>
+                                    <th>Invoice Number</th>
+                                    <th>Supplier</th>
+                                    <th>Batch</th>
+                                    <th>Expiry</th>
+                                    <th>Qty (Packs)</th>
+                                    <th>Free</th>
+                                    <th>Cost Price</th>
+                                    <th class="text-end pe-4">Total Value</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sales History Panel -->
+            <div class="tab-pane fade" id="salePanel" role="tabpanel">
+                <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" id="saleTable">
+                            <thead class="bg-light text-muted small text-uppercase">
+                                <tr>
+                                    <th class="ps-4">Date</th>
+                                    <th>Invoice Number</th>
+                                    <th>Patient Name</th>
+                                    <th>Batch</th>
+                                    <th>Qty Sold (Units)</th>
+                                    <th>Unit Price</th>
+                                    <th class="text-end pe-4">Total Bill</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('productSearchInput');
+    const autocompleteDiv = document.getElementById('autocompleteResults');
+    const historyLoader = document.getElementById('historyLoader');
+    const emptyState = document.getElementById('historyEmptyState');
+    const historyContent = document.getElementById('historyContent');
+    const searchBtn = document.getElementById('searchBtn');
+
+    let selectedProductId = null;
+
+    // Search input focusing by default
+    searchInput.focus();
+
+    // Keypress F9 to focus
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'F9') {
+            e.preventDefault();
+            searchInput.focus();
+            searchInput.select();
+        }
+    });
+
+    // Autocomplete on search input
+    searchInput.addEventListener('input', async function() {
+        const query = this.value.trim();
+        if (query.length < 1) {
+            autocompleteDiv.classList.add('d-none');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/products/master-search/?q=${encodeURIComponent(query)}`);
+            const data = await response.json();
+            autocompleteDiv.innerHTML = '';
+
+            if (data.length === 0) {
+                autocompleteDiv.innerHTML = '<div class="list-group-item text-muted text-center py-3">No matching medicines found</div>';
+            } else {
+                data.forEach(product => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center py-2';
+                    btn.innerHTML = `
+                        <div>
+                            <strong class="text-dark">${product.name}</strong>
+                            <div class="x-small text-muted">Packing: ${product.packing || '—'} &nbsp;·&nbsp; Factor: ×${product.conversion_factor}</div>
+                        </div>
+                        <span class="badge bg-primary-subtle text-primary border rounded-pill">${product.tax_rate}% GST</span>
+                    `;
+                    btn.addEventListener('click', function() {
+                        selectedProductId = product.id;
+                        searchInput.value = product.name;
+                        autocompleteDiv.classList.add('d-none');
+                        loadProductHistory(product.id);
+                    });
+                    autocompleteDiv.appendChild(btn);
+                });
+            }
+            autocompleteDiv.classList.remove('d-none');
+        } catch (error) {
+            console.error('Error autocomplete products:', error);
+        }
+    });
+
+    // Click outside dropdown to close it
+    document.addEventListener('click', function(e) {
+        if (!searchInput.contains(e.target) && !autocompleteDiv.contains(e.target)) {
+            autocompleteDiv.classList.add('d-none');
+        }
+    });
+
+    searchBtn.addEventListener('click', function() {
+        if (selectedProductId) {
+            loadProductHistory(selectedProductId);
+        } else {
+            alert('Please select a medicine from search autocomplete first.');
+        }
+    });
+
+    // Fetch and render the comprehensive product history
+    async function loadProductHistory(productId) {
+        emptyState.classList.add('d-none');
+        historyContent.classList.add('d-none');
+        historyLoader.classList.remove('d-none');
+
+        try {
+            const response = await fetch(`/product-history/?product_id=${productId}&ajax=1`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const data = await response.json();
+            
+            // Set metadata
+            document.getElementById('selectedProductName').textContent = data.product_name;
+            document.getElementById('productPackingBadge').textContent = `Packing: ${data.packing}`;
+            document.getElementById('productConversionFactor').textContent = data.conversion_factor;
+
+            // Set main summary cards
+            document.getElementById('statPurchased').textContent = data.total_purchased;
+            document.getElementById('statFree').textContent = `${data.total_free} free packs`;
+            document.getElementById('statSold').textContent = data.total_sold;
+            document.getElementById('statStock').textContent = data.current_stock;
+            document.getElementById('statAvgPurchase').textContent = `₹${data.avg_purchase_price.toFixed(2)}`;
+            document.getElementById('statAvgSale').textContent = `Sale avg: ₹${data.avg_sale_price.toFixed(2)}`;
+
+            // Render current stocks
+            const stockTbody = document.querySelector('#stockTable tbody');
+            stockTbody.innerHTML = '';
+            if (data.stocks.length === 0) {
+                stockTbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">No stock available in any batch</td></tr>';
+            } else {
+                data.stocks.forEach(s => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="ps-4 fw-bold"># ${s.batch_number}</td>
+                        <td>${s.expiry_date}</td>
+                        <td class="fw-bold text-success">${s.stock}</td>
+                        <td>₹${s.purchase_price.toFixed(2)}</td>
+                        <td>₹${s.sale_price.toFixed(2)}</td>
+                        <td class="text-end pe-4 fw-bold">₹${s.mrp.toFixed(2)}</td>
+                    `;
+                    stockTbody.appendChild(row);
+                });
+            }
+
+            // Render purchase transactions
+            const purchaseTbody = document.querySelector('#purchaseTable tbody');
+            purchaseTbody.innerHTML = '';
+            if (data.purchases.length === 0) {
+                purchaseTbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">No purchase entries recorded</td></tr>';
+            } else {
+                data.purchases.forEach(p => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="ps-4">${p.date}</td>
+                        <td><span class="badge bg-light text-dark border">${p.invoice_number}</span></td>
+                        <td>${p.supplier_name}</td>
+                        <td><span class="badge bg-secondary-soft text-secondary">${p.batch_number}</span></td>
+                        <td>${p.expiry_date}</td>
+                        <td class="fw-bold">${p.quantity}</td>
+                        <td class="text-success">+ ${p.free_quantity}</td>
+                        <td>₹${p.purchase_price.toFixed(2)}</td>
+                        <td class="text-end pe-4 fw-bold">₹${p.total.toFixed(2)}</td>
+                    `;
+                    purchaseTbody.appendChild(row);
+                });
+            }
+
+            // Render sales transactions
+            const saleTbody = document.querySelector('#saleTable tbody');
+            saleTbody.innerHTML = '';
+            if (data.sales.length === 0) {
+                saleTbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">No sales entries recorded</td></tr>';
+            } else {
+                data.sales.forEach(s => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="ps-4">${s.date}</td>
+                        <td><span class="badge bg-light text-dark border">${s.invoice_number}</span></td>
+                        <td>${s.patient_name}</td>
+                        <td><span class="badge bg-warning-soft text-warning">${s.batch_number}</span></td>
+                        <td class="fw-bold">${s.quantity}</td>
+                        <td>₹${s.unit_price.toFixed(2)}</td>
+                        <td class="text-end pe-4 fw-bold text-success">₹${s.total.toFixed(2)}</td>
+                    `;
+                    saleTbody.appendChild(row);
+                });
+            }
+
+            historyLoader.classList.add('d-none');
+            historyContent.classList.remove('d-none');
+        } catch (error) {
+            console.error('Error fetching product history:', error);
+            historyLoader.classList.add('d-none');
+            emptyState.classList.remove('d-none');
+            alert('Unable to load product history. Please check logs.');
+        }
+    }
+});
+</script>
+
+<style>
+    .bg-secondary-soft { background-color: rgba(108, 117, 125, 0.1); }
+    .bg-warning-soft { background-color: rgba(255, 193, 7, 0.1); }
+    .badge { font-weight: 600; font-size: 0.8rem; }
+    .table td, .table th { padding: 12px 16px; }
+    .nav-pills .nav-link { color: var(--secondary); transition: all 0.2s ease-in-out; border-radius: 8px; }
+    .nav-pills .nav-link.active { background-color: var(--primary); color: #fff; }
+</style>
+{% endblock %}
