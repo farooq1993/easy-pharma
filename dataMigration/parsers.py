@@ -8,22 +8,71 @@ def clean_value(val):
         return ""
     return str(val).strip()
 
-def parse_csv_to_rows(file_content_str, drop_first_column=False):
-    """
-    Parses a CSV string content into a clean list of lists (rows).
-    Drops the first column if drop_first_column is True.
-    """
-    f = io.StringIO(file_content_str.strip())
-    reader = csv.reader(f)
+import csv
+import io
+
+
+def parse_csv_to_rows(
+    content,
+    drop_first_column=False
+):
+
     rows = []
-    for r in reader:
-        if not r:
+
+    csv_reader = csv.reader(
+        io.StringIO(content)
+    )
+
+    for row in csv_reader:
+
+        # ------------------------------------
+        # CLEAN EMPTY CELLS
+        # ------------------------------------
+
+        cleaned = [
+
+            str(col).strip()
+
+            for col in row
+
+            if str(col).strip()
+
+        ]
+
+        if not cleaned:
             continue
-        cleaned_row = [clean_value(x) for x in r]
-        if drop_first_column and len(cleaned_row) > 0:
-            cleaned_row = cleaned_row[1:]
-        rows.append(cleaned_row)
+
+        # ------------------------------------
+        # OPTIONAL COLUMN DROP
+        # ------------------------------------
+
+        if (
+            drop_first_column
+            and len(cleaned) > 1
+        ):
+
+            cleaned = cleaned[1:]
+
+        rows.append(cleaned)
+
     return rows
+
+# def parse_csv_to_rows(file_content_str, drop_first_column=False):
+#     """
+#     Parses a CSV string content into a clean list of lists (rows).
+#     Drops the first column if drop_first_column is True.
+#     """
+#     f = io.StringIO(file_content_str.strip())
+#     reader = csv.reader(f)
+#     rows = []
+#     for r in reader:
+#         if not r:
+#             continue
+#         cleaned_row = [clean_value(x) for x in r]
+#         if drop_first_column and len(cleaned_row) > 0:
+#             cleaned_row = cleaned_row[1:]
+#         rows.append(cleaned_row)
+#     return rows
 
 def parse_text_lines_to_rows(text_content, drop_first_column=False):
     """
@@ -41,7 +90,8 @@ def parse_text_lines_to_rows(text_content, drop_first_column=False):
             continue
         
         # Split by tabs or double spaces
-        parts = re.split(r'\t| {2,}', line_str)
+        #parts = re.split(r'\t| {2,}', line_str)
+        parts = re.split(r',|\t| {2,}', line_str)
         cleaned_parts = [clean_value(x) for x in parts if x.strip()]
         
         if cleaned_parts:
@@ -125,50 +175,108 @@ def extract_conversion_and_type(packing_str, name_str=""):
 # ----------------------------------------------------
 # Parse Company Master
 # ----------------------------------------------------
-def parse_companies(rows):
-    """
-    Parses company rows.
-    Expected: [Code, Company Name, Short Name] or [Company Name, Short Name]
-    """
-    companies = []
-    for r in rows:
-        # We need at least 1 column for company name
-        if len(r) == 0:
-            continue
-            
-        if len(r) == 1:
-            name = r[0]
-            short = name[:6].upper()
-            code = ""
-        elif len(r) == 2:
-            # Check if first is numeric (Code)
-            if r[0].isdigit():
-                code = r[0]
-                name = r[1]
-                short = name[:6].upper()
-            else:
-                name = r[0]
-                short = r[1][:6].upper()
-                code = ""
-        else:
-            # 3 or more columns
-            if r[0].isdigit():
-                code = r[0]
-                name = r[1]
-                short = r[2]
-            else:
-                name = r[0]
-                short = r[1]
-                code = r[2]
-                
-        if name and name.upper() not in ["COMPANY", "NAME", "COMPANY NAME"]:
-            companies.append({
-                'company_code': code,
-                'company_name': name.upper(),
-                'sht_name': short.upper()[:6]
-            })
-    return companies
+import re
 
+
+def parse_companies(rows):
+
+    companies = []
+
+    junk_patterns = [
+
+        "PRINTED ON",
+        "PAGE NO",
+        "MASTER LIST",
+        "COMPANY NAME",
+        "SHORT NAME",
+        "----",
+        "TULJ",
+        "COMP"
+
+    ]
+
+    for r in rows:
+
+        if not r:
+            continue
+
+        # ----------------------------------------
+        # CLEAN ROW
+        # ----------------------------------------
+
+        r = [
+
+            str(x).strip()
+
+            for x in r
+
+            if str(x).strip()
+
+        ]
+
+        if not r:
+            continue
+
+        row_text = " ".join(r).upper()
+
+        # ----------------------------------------
+        # SKIP JUNK
+        # ----------------------------------------
+
+        if any(
+            j in row_text
+            for j in junk_patterns
+        ):
+            continue
+
+        # separator lines
+        if re.match(
+            r'^[-\s]+$',
+            row_text
+        ):
+            continue
+
+        # ----------------------------------------
+        # EXPECTED FORMAT
+        #
+        # 1001,SYSTOPIC,SYS
+        # ----------------------------------------
+
+        if len(r) < 3:
+            continue
+
+        # first column numeric
+        if not r[0].isdigit():
+            continue
+
+        company_code = r[0]
+
+        company_name = (
+            r[1]
+            .strip()
+            .upper()
+        )
+
+        sht_name = (
+            r[2]
+            .strip()
+            .upper()
+        )
+
+        if not company_name:
+            continue
+
+        companies.append({
+
+            'company_code': company_code,
+
+            'company_name': company_name,
+
+            'sht_name': sht_name[:6]
+
+        })
+
+    return companies
 
 # ----------------------------------------------------
 # Parse Supplier Master (Stateful Multi-line Grid & Flat Fallback)
@@ -412,34 +520,89 @@ def parse_suppliers_from_rows(rows):
 # ----------------------------------------------------
 # Parse Product Master
 # ----------------------------------------------------
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import math
+
+
+MAX_WORKERS = 10
+CHUNK_SIZE = 5000
+
+
+def process_product_chunk(chunk_rows):
+
+    chunk_products = []
+
+    for r in chunk_rows:
+
+        try:
+
+            if len(r) < 1:
+                continue
+
+            if r[0].upper() in ["PRODUCT NAME", "NAME", "PRODUCT", "DRUG"]:
+                continue
+
+            name = r[0].upper()
+
+            packing = r[1] if len(r) > 1 else "10 TAB"
+
+            company = r[2].upper() if len(r) > 2 else ""
+
+            hsn = r[3] if len(r) > 3 else "3004"
+
+            conv_factor, prod_type = extract_conversion_and_type(
+                packing,
+                name
+            )
+
+            if name:
+                chunk_products.append({
+                    'product_name': name,
+                    'product_packing': packing,
+                    'company_name': company,
+                    'hsn_code': hsn,
+                    'conversion_factor': conv_factor,
+                    'product_type': prod_type
+                })
+
+        except Exception as e:
+            print(f"Error processing row: {r}")
+            print(str(e))
+
+    return chunk_products
+
+
+def chunkify(data, chunk_size):
+
+    for i in range(0, len(data), chunk_size):
+        yield data[i:i + chunk_size]
+
 def parse_products(rows):
-    """
-    Parses products from CSV/Excel or parsed text rows.
-    Columns expected: Product Name, Packing/Unit, Company
-    """
+
     products = []
-    for r in rows:
-        if len(r) < 1:
-            continue
-        if r[0].upper() in ["PRODUCT NAME", "NAME", "PRODUCT", "DRUG"]:
-            continue
-            
-        name = r[0].upper()
-        packing = r[1] if len(r) > 1 else "10 TAB"
-        company = r[2].upper() if len(r) > 2 else ""
-        hsn = r[3] if len(r) > 3 else "3004"
-        
-        conv_factor, prod_type = extract_conversion_and_type(packing, name)
-        
-        if name:
-            products.append({
-                'product_name': name,
-                'product_packing': packing,
-                'company_name': company,
-                'hsn_code': hsn,
-                'conversion_factor': conv_factor,
-                'product_type': prod_type
-            })
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+
+        futures = []
+
+        for chunk in chunkify(rows, CHUNK_SIZE):
+
+            futures.append(
+                executor.submit(
+                    process_product_chunk,
+                    chunk
+                )
+            )
+
+        for future in as_completed(futures):
+
+            try:
+                result = future.result()
+                products.extend(result)
+
+            except Exception as e:
+                print(f"Thread Error: {str(e)}")
+
     return products
 
 

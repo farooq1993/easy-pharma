@@ -4,21 +4,6 @@ from django.views.generic import TemplateView, View
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.http import JsonResponse
 from django.contrib import messages
-
-class OrganizationRequiredMixin(UserPassesTestMixin):
-    """
-    Mixin to restrict data migration access solely to SaaS global system Admins.
-    """
-    def test_func(self):
-        user = self.request.user
-        return user.is_authenticated and user.user_type == 'admin'
-
-    def handle_no_permission(self):
-        if self.request.headers.get('x-requested-with') == 'XMLHttpRequest' or self.request.path.startswith('/migration/parse/') or self.request.path.startswith('/migration/import/') or self.request.path.startswith('/migration/rollback/'):
-            return JsonResponse({'success': False, 'error': 'Access Denied: Only system administrators can perform data migration.'}, status=403)
-            
-        messages.error(self.request, "Access Denied: Only system administrators can access the Data Migration Center.")
-        return redirect('home')
 from django.db import transaction
 from django.utils import timezone
 
@@ -39,6 +24,22 @@ from dataMigration.parsers import (
     parse_stock_batches,
     is_multiline_supplier_layout
 )
+
+class OrganizationRequiredMixin(UserPassesTestMixin):
+    """
+    Mixin to restrict data migration access solely to SaaS global system Admins.
+    """
+    def test_func(self):
+        user = self.request.user
+        return user.is_authenticated and user.user_type == 'admin'
+
+    def handle_no_permission(self):
+        if self.request.headers.get('x-requested-with') == 'XMLHttpRequest' or self.request.path.startswith('/migration/parse/') or self.request.path.startswith('/migration/import/') or self.request.path.startswith('/migration/rollback/'):
+            return JsonResponse({'success': False, 'error': 'Access Denied: Only system administrators can perform data migration.'}, status=403)
+            
+        messages.error(self.request, "Access Denied: Only system administrators can access the Data Migration Center.")
+        return redirect('home')
+
 
 class MigrationDashboardView(LoginRequiredMixin, OrganizationRequiredMixin, TemplateView):
     template_name = "dataMigration/dashboard.html"
@@ -90,6 +91,9 @@ class MigrationParseView(LoginRequiredMixin, OrganizationRequiredMixin, View):
         import_type = request.POST.get('import_type')
         input_method = request.POST.get('input_method')
         drop_first_col = request.POST.get('drop_first_column') == 'true'
+
+        if import_type == 'company':
+            drop_first_col = False
         
         content = ""
         if input_method == 'file':
@@ -98,9 +102,13 @@ class MigrationParseView(LoginRequiredMixin, OrganizationRequiredMixin, View):
                 return JsonResponse({'success': False, 'error': 'No file uploaded'})
             try:
                 # Read content as string
-                content = uploaded_file.read().decode('utf-8', errors='ignore')
-            except Exception as e:
-                return JsonResponse({'success': False, 'error': f'Failed to read file: {str(e)}'})
+                content = uploaded_file.read().decode('utf-8')
+                 
+            except UnicodeDecodeError as e:
+                uploaded_file.seek(0)
+                content = uploaded_file.read().decode('latin1')
+                print("File decoding error, attempted latin1 fallback:", str(e))
+                #return JsonResponse({'success': False, 'error': f'Failed to read file: {str(e)}'})
         else:
             content = request.POST.get('raw_text', '')
             
@@ -137,13 +145,24 @@ class MigrationParseView(LoginRequiredMixin, OrganizationRequiredMixin, View):
                         rows = [r[1:] for r in rows if len(r) > 0]
                 else:
                     if input_method == 'file' and uploaded_file.name.endswith('.csv'):
-                        rows = parse_csv_to_rows(content, drop_first_column=drop_first_col)
+                        rows = parse_csv_to_rows(content,drop_first_column=drop_first_col)
+
                     else:
-                        rows = parse_text_lines_to_rows(content, drop_first_column=drop_first_col)
+                        rows = parse_text_lines_to_rows(content,drop_first_column=drop_first_col)
+                        print("ROWS SAMPLE abc ==> ", rows[:10])
+                # else:
+                #     if input_method == 'file' and uploaded_file.name.endswith('.csv'):
+                #         rows = parse_csv_to_rows(content, drop_first_column=drop_first_col)
+                #     else:
+                #         rows = parse_text_lines_to_rows(content, drop_first_column=drop_first_col)
                 
                 # Direct parsing to structured JSON based on model
                 if import_type == 'company':
+                    print("DROP FIRST => ", drop_first_col)
+                    print("ROWS SAMPLE => ", rows[:10])
                     parsed_data = parse_companies(rows)
+                    print("PARSED SAMPLE => ", parsed_data[:5])
+
                 elif import_type == 'supplier':
                     parsed_data = parse_suppliers_from_rows(rows)
                 elif import_type == 'product':
@@ -246,7 +265,10 @@ class MigrationImportView(LoginRequiredMixin, OrganizationRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         import_type = request.POST.get('import_type')
         input_method = request.POST.get('input_method')
-        drop_first_col = request.POST.get('drop_first_column') == 'true'
+        drop_first_col = (request.POST.get('drop_first_column') == 'true')
+        if import_type == 'company':
+            drop_first_col = False
+        #drop_first_col = request.POST.get('drop_first_column') == 'true'
         filename = request.POST.get('filename', 'Direct Copy-Paste')
         
         content = ""
@@ -255,8 +277,13 @@ class MigrationImportView(LoginRequiredMixin, OrganizationRequiredMixin, View):
             if not uploaded_file:
                 return JsonResponse({'success': False, 'error': 'No file uploaded'})
             try:
-                content = uploaded_file.read().decode('utf-8', errors='ignore')
-            except Exception as e:
+                content = uploaded_file.read().decode('utf-8')
+                print("========",content[:500])  # Debug: print first 500 chars of content
+            #except Exception as e:
+            except UnicodeDecodeError as e:
+                uploaded_file.seek(0)
+                content = uploaded_file.read().decode( 'latin1')
+                print("File decoding error, attempted latin1 fallback:", str(e))
                 return JsonResponse({'success': False, 'error': f'Failed to read file: {str(e)}'})
         else:
             content = request.POST.get('raw_text', '')
