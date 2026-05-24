@@ -84,6 +84,8 @@ class MigrationBackgroundWorker(threading.Thread):
             if import_type == 'supplier' and self.input_method == 'text':
                 all_parsed_items = parse_suppliers_from_text(self.data_content)
             else:
+                if import_type == 'product':
+                    self.drop_first_col = False
                 # Tokenise into rows
                 if (self.input_method == 'file' and
                         self.data_content.startswith(('"', 'Code', 'Product', 'Name'))):
@@ -119,8 +121,15 @@ class MigrationBackgroundWorker(threading.Thread):
                     )
                 elif import_type == 'supplier':
                     all_parsed_items = parse_suppliers_from_rows(cleaned_rows)
+                
                 elif import_type == 'product':
-                    all_parsed_items = parse_products(cleaned_rows)
+                    if self.input_method == 'text':
+                        all_parsed_items = parse_product_master_text(self.data_content)
+                        print("==== All items =====", all_parsed_items)
+                    else:
+                        all_parsed_items = parse_products(cleaned_rows)
+                # elif import_type == 'product':
+                #     all_parsed_items = parse_products(cleaned_rows)
                 elif import_type == 'stock':
                     all_parsed_items = parse_stock_batches(cleaned_rows)
                 else:

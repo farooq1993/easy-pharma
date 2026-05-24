@@ -737,15 +737,16 @@ Prod.Type : []AYURVEDIC[]
         })
         .then(res => res.json())
         .then(data => {
-            if (!data.success) {
-                document.getElementById("parseSpinner").classList.add("d-none");
-                document.getElementById("parseIcon").classList.remove("d-none");
-                document.getElementById("btnParse").removeAttribute("disabled");
+            document.getElementById("parseSpinner").classList.add("d-none");
+            document.getElementById("parseIcon").classList.remove("d-none");
+            document.getElementById("btnParse").removeAttribute("disabled");
+
+            if (data.success) {
+                parsedRecords = data.data;
+                renderPreviewTable(data.data, data.summary);
+            } else {
                 alert("Parsing failed: " + data.error);
-                return;
             }
-            // Backend now returns a background job_id — poll until done
-            pollParseJob(data.job_id);
         })
         .catch(err => {
             document.getElementById("parseSpinner").classList.add("d-none");
@@ -753,48 +754,6 @@ Prod.Type : []AYURVEDIC[]
             document.getElementById("btnParse").removeAttribute("disabled");
             alert("Connection error: " + err);
         });
-    }
-
-    // Poll /migration/parse/status/<job_id>/ until the background parse job completes
-    function pollParseJob(jobId) {
-        const interval = setInterval(() => {
-            fetch(`/migration/parse/status/${jobId}/`)
-            .then(res => res.json())
-            .then(job => {
-                if (!job.success) {
-                    clearInterval(interval);
-                    document.getElementById("parseSpinner").classList.add("d-none");
-                    document.getElementById("parseIcon").classList.remove("d-none");
-                    document.getElementById("btnParse").removeAttribute("disabled");
-                    alert("Parsing failed: " + (job.error || "Unknown error"));
-                    return;
-                }
-
-                if (job.status === "done") {
-                    clearInterval(interval);
-                    document.getElementById("parseSpinner").classList.add("d-none");
-                    document.getElementById("parseIcon").classList.remove("d-none");
-                    document.getElementById("btnParse").removeAttribute("disabled");
-                    parsedRecords = job.data;
-                    renderPreviewTable(job.data, job.summary);
-
-                } else if (job.status === "error") {
-                    clearInterval(interval);
-                    document.getElementById("parseSpinner").classList.add("d-none");
-                    document.getElementById("parseIcon").classList.remove("d-none");
-                    document.getElementById("btnParse").removeAttribute("disabled");
-                    alert("Parsing failed: " + (job.error || "Unknown error"));
-                }
-                // statuses "queued" / "parsing" / "enriching" → keep polling
-            })
-            .catch(err => {
-                clearInterval(interval);
-                document.getElementById("parseSpinner").classList.add("d-none");
-                document.getElementById("parseIcon").classList.remove("d-none");
-                document.getElementById("btnParse").removeAttribute("disabled");
-                alert("Connection error while polling: " + err);
-            });
-        }, 1000);
     }
 
     // Render Preview Mapping Table dynamically depending on columns

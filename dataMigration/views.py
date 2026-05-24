@@ -1,11 +1,36 @@
 import json
+import uuid
+import threading
+import logging
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views.generic import TemplateView, View
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.http import JsonResponse
 from django.contrib import messages
-from django.db import transaction
+from django.db import transaction, connection
+from django.core.cache import cache
 from django.utils import timezone
+
+logger = logging.getLogger('easypharma')
+
+
+def decode_uploaded_file(uploaded_file):
+    """
+    Robustly decodes an uploaded file trying UTF-8 first,
+    then Windows-1252 (cp1252 — most legacy Indian pharmacy software),
+    then latin-1 as a guaranteed fallback.
+    Returns (content_str, encoding_used).
+    """
+    for encoding in ('utf-8', 'cp1252', 'latin1'):
+        try:
+            uploaded_file.seek(0)
+            content = uploaded_file.read().decode(encoding)
+            return content, encoding
+        except (UnicodeDecodeError, LookupError):
+            continue
+    # Should never reach here since latin1 decodes every byte
+    uploaded_file.seek(0)
+    return uploaded_file.read().decode('latin1', errors='replace'), 'latin1-replace'
 
 from tenants.models import Tenant
 from easypharma.models.Items import Products, DrugCompany, ProductType
@@ -22,7 +47,8 @@ from dataMigration.parsers import (
     parse_suppliers_from_rows,
     parse_products,
     parse_stock_batches,
-    is_multiline_supplier_layout
+    is_multiline_supplier_layout,
+    parse_product_master_text
 )
 
 class OrganizationRequiredMixin(UserPassesTestMixin):
@@ -80,182 +106,225 @@ class MigrationDashboardView(LoginRequiredMixin, OrganizationRequiredMixin, Temp
             'all_tenants': all_tenants,
             'selected_tenant': selected_tenant,
         })
-        return context
+        return context# ---------------------------------------------------------------------------
+# Background parse helpers
+# ---------------------------------------------------------------------------
+
+def _batch_enrich(parsed_data, import_type, tenant):
+    """
+    Enrich all parsed records with DB status in BULK (2-4 queries total).
+    This replaces the old per-row query loop that caused 88,000+ DB hits.
+    """
+    PREVIEW_LIMIT = 100
+
+    if import_type == 'company':
+        existing = set(
+            DrugCompany.objects.filter(tenant=tenant)
+            .values_list('company_name', flat=True)
+        )
+        existing_up = {n.upper() for n in existing}
+        for item in parsed_data:
+            if item['company_name'].upper() in existing_up:
+                item.update(import_status='Exists (Skip/Update)', import_status_class='text-warning',
+                            notes='This company is already registered in your database.')
+            else:
+                item.update(import_status='Ready', import_status_class='text-success', notes='')
+
+    elif import_type == 'supplier':
+        existing = set(
+            Supplier.objects.filter(tenant=tenant)
+            .values_list('name', flat=True)
+        )
+        existing_up = {n.upper() for n in existing}
+        for item in parsed_data:
+            if item['name'].upper() in existing_up:
+                item.update(import_status='Exists (Skip/Update)', import_status_class='text-warning',
+                            notes='A supplier with this name is already registered.')
+            else:
+                item.update(import_status='Ready', import_status_class='text-success', notes='')
+
+    elif import_type == 'product':
+        existing_companies = {
+            n.upper() for n in
+            DrugCompany.objects.filter(tenant=tenant).values_list('company_name', flat=True)
+        }
+        existing_products = {
+            n.upper() for n in
+            Products.objects.filter(tenant=tenant).values_list('product_name', flat=True)
+        }
+        for item in parsed_data:
+            name = item['product_name'].upper()
+            comp = item.get('company_name', '').upper()
+            if name in existing_products:
+                item.update(import_status='Exists', import_status_class='text-warning',
+                            notes='Product already exists in the catalog.')
+            elif comp and comp not in existing_companies:
+                item.update(import_status='Ready (Auto-Create Company)', import_status_class='text-info',
+                            notes=f"Company '{item.get('company_name')}' will be automatically created.")
+            else:
+                item.update(import_status='Ready', import_status_class='text-success', notes='')
+
+    elif import_type == 'stock':
+        product_map = {
+            p.product_name.upper(): p
+            for p in Products.objects.filter(tenant=tenant)
+        }
+        existing_batches = {
+            (pid, bn.upper())
+            for pid, bn in StockBatch.objects.filter(tenant=tenant)
+            .values_list('product_id', 'batch_number')
+        }
+        for item in parsed_data:
+            pname = item['product_name'].upper()
+            prod = product_map.get(pname)
+            if not prod:
+                item.update(import_status='Ready (Auto-Create Product)', import_status_class='text-info',
+                            notes=f"Product '{item['product_name']}' not in catalog. Will auto-create!")
+            elif (prod.id, item['batch_number'].upper()) in existing_batches:
+                item.update(import_status='Duplicate Batch', import_status_class='text-danger',
+                            notes='This batch number already exists for this product.')
+            else:
+                item.update(import_status='Ready', import_status_class='text-success', notes='')
+
+    preview_data = parsed_data[:PREVIEW_LIMIT]
+    warnings = sum(1 for x in parsed_data
+                   if 'Exists' in x.get('import_status', '') or 'Duplicate' in x.get('import_status', ''))
+    return preview_data, {
+        'total': len(parsed_data),
+        'preview_count': len(preview_data),
+        'warnings': warnings,
+        'is_truncated': len(parsed_data) > PREVIEW_LIMIT,
+    }
+
+
+def _run_parse_job(job_id, import_type, input_method, content, drop_first_col, tenant_id):
+    """
+    Background thread: parse content → batch-enrich → cache result.
+    """
+    _CACHE_KEY = f'parse_job_{job_id}'
+    try:
+        cache.set(_CACHE_KEY, {'status': 'parsing', 'progress': 15}, timeout=3600)
+
+        # ── 1. Tokenise ────────────────────────────────────────────────────
+        if import_type == 'supplier' and input_method == 'text':
+            parsed_data = parse_suppliers_from_text(content)
+        else:
+            if input_method == 'file':
+                rows = parse_csv_to_rows(content, drop_first_column=drop_first_col)
+            else:
+                rows = parse_text_lines_to_rows(content, drop_first_column=drop_first_col)
+
+            if import_type == 'supplier':
+                if not is_multiline_supplier_layout(rows) and drop_first_col:
+                    rows = [r[1:] for r in rows if r]
+                parsed_data = parse_suppliers_from_rows(rows)
+            elif import_type == 'company':
+                parsed_data = parse_companies(rows)
+
+            elif import_type == 'product':
+                if input_method == 'text':
+                    parsed_data = parse_product_master_text(content)
+                    print("=========== lin 227 FINAL PREVIEW DATA ===========")
+                    print(parsed_data[:20])
+                else:
+                    parsed_data = parse_products(rows)
+                
+
+            # elif import_type == 'product':
+            #     parsed_data = parse_products(rows)
+            elif import_type == 'stock':
+                parsed_data = parse_stock_batches(rows)
+            else:
+                parsed_data = []
+
+        logger.info(f'Parse job {job_id}: parsed {len(parsed_data)} {import_type} records')
+        print("=========== FINAL PREVIEW DATA ===========")
+        print(parsed_data[:20])
+        cache.set(_CACHE_KEY, {'status': 'enriching', 'progress': 60}, timeout=3600)
+
+        # ── 2. Batch DB enrichment (2-4 queries total) ────────────────────
+        tenant = Tenant.objects.get(id=tenant_id)
+        preview_data, summary = _batch_enrich(parsed_data, import_type, tenant)
+
+        # ── 3. Store result ────────────────────────────────────────────────
+        cache.set(_CACHE_KEY, {
+            'status': 'done',
+            'progress': 100,
+            'data': preview_data,
+            'summary': summary,
+        }, timeout=3600)
+        logger.info(f'Parse job {job_id}: done — {summary["total"]} records')
+
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        cache.set(_CACHE_KEY, {'status': 'error', 'error': str(exc)}, timeout=3600)
+    finally:
+        connection.close()
+
 
 class MigrationParseView(LoginRequiredMixin, OrganizationRequiredMixin, View):
     """
-    POST API to upload/paste text and parse it into an interactive JSON preview.
-    Handles the user's specific request to drop the 1st ID column.
+    POST  — launches a background parse job, returns job_id immediately.
+    The browser polls /migration/parse/status/<job_id>/ for results.
     """
     def post(self, request, *args, **kwargs):
-        import_type = request.POST.get('import_type')
+        import_type  = request.POST.get('import_type')
         input_method = request.POST.get('input_method')
         drop_first_col = request.POST.get('drop_first_column') == 'true'
-
         if import_type == 'company':
             drop_first_col = False
         
-        content = ""
+        if import_type == 'product':
+            drop_first_col = False
+
+        # ── Read file / text ──────────────────────────────────────────────
+        content = ''
         if input_method == 'file':
             uploaded_file = request.FILES.get('file')
             if not uploaded_file:
                 return JsonResponse({'success': False, 'error': 'No file uploaded'})
-            try:
-                # Read content as string
-                content = uploaded_file.read().decode('utf-8')
-                 
-            except UnicodeDecodeError as e:
-                uploaded_file.seek(0)
-                content = uploaded_file.read().decode('latin1')
-                print("File decoding error, attempted latin1 fallback:", str(e))
-                #return JsonResponse({'success': False, 'error': f'Failed to read file: {str(e)}'})
+            content, enc_used = decode_uploaded_file(uploaded_file)
+            if enc_used != 'utf-8':
+                logger.info(f'File "{uploaded_file.name}" decoded using {enc_used} (legacy encoding).')
         else:
             content = request.POST.get('raw_text', '')
-            
+
         if not content.strip():
             return JsonResponse({'success': False, 'error': 'No content provided to parse'})
-            
-        # Dynamically resolve tenant based on administrative choice
+
+        # ── Resolve tenant ────────────────────────────────────────────────
         tenant_id = request.POST.get('selected_tenant_id')
         if tenant_id and request.user.user_type == 'admin':
             tenant = get_object_or_404(Tenant, id=tenant_id)
         else:
             tenant = request.tenant
-            
-        parsed_data = []
-        warnings = []
-        
-        try:
-            # First, tokenize into standard lists of strings (rows)
-            # Paste text report could contain custom formatted layouts, handled by specific parsers
-            if import_type == 'supplier' and input_method == 'text':
-                parsed_raw = parse_suppliers_from_text(content)
-                parsed_data = parsed_raw
-            else:
-                # Delimited parse
-                # For supplier imports, we check if it is a multi-line layout BEFORE dropping any columns
-                if import_type == 'supplier':
-                    if input_method == 'file' and uploaded_file.name.endswith('.csv'):
-                        rows = parse_csv_to_rows(content, drop_first_column=False)
-                    else:
-                        rows = parse_text_lines_to_rows(content, drop_first_column=False)
-                        
-                    # If it's NOT a multi-line layout and drop_first_col is True, we drop the first column
-                    if not is_multiline_supplier_layout(rows) and drop_first_col:
-                        rows = [r[1:] for r in rows if len(r) > 0]
-                else:
-                    if input_method == 'file' and uploaded_file.name.endswith('.csv'):
-                        rows = parse_csv_to_rows(content,drop_first_column=drop_first_col)
 
-                    else:
-                        rows = parse_text_lines_to_rows(content,drop_first_column=drop_first_col)
-                        print("ROWS SAMPLE abc ==> ", rows[:10])
-                # else:
-                #     if input_method == 'file' and uploaded_file.name.endswith('.csv'):
-                #         rows = parse_csv_to_rows(content, drop_first_column=drop_first_col)
-                #     else:
-                #         rows = parse_text_lines_to_rows(content, drop_first_column=drop_first_col)
-                
-                # Direct parsing to structured JSON based on model
-                if import_type == 'company':
-                    print("DROP FIRST => ", drop_first_col)
-                    print("ROWS SAMPLE => ", rows[:10])
-                    parsed_data = parse_companies(rows)
-                    print("PARSED SAMPLE => ", parsed_data[:5])
+        # ── Launch background parse ───────────────────────────────────────
+        job_id = str(uuid.uuid4())
+        cache.set(f'parse_job_{job_id}', {'status': 'queued', 'progress': 5}, timeout=3600)
 
-                elif import_type == 'supplier':
-                    parsed_data = parse_suppliers_from_rows(rows)
-                elif import_type == 'product':
-                    parsed_data = parse_products(rows)
-                elif import_type == 'stock':
-                    parsed_data = parse_stock_batches(rows)
-            
-            # Enrich data with DB status check (Existing matches, warning indicators)
-            enriched_data = []
-            
-            for item in parsed_data:
-                status = "Ready"
-                status_class = "text-success"
-                notes = ""
-                
-                if import_type == 'company':
-                    name = item['company_name']
-                    exists = DrugCompany.objects.filter(tenant=tenant, company_name__iexact=name).exists()
-                    if exists:
-                        status = "Exists (Skip/Update)"
-                        status_class = "text-warning"
-                        notes = "This company is already registered in your database."
-                        
-                elif import_type == 'supplier':
-                    name = item['name']
-                    exists = Supplier.objects.filter(tenant=tenant, name__iexact=name).exists()
-                    if exists:
-                        status = "Exists (Skip/Update)"
-                        status_class = "text-warning"
-                        notes = "A supplier with this name is already registered."
-                        
-                elif import_type == 'product':
-                    name = item['product_name']
-                    # Look up company
-                    comp_name = item['company_name']
-                    if comp_name:
-                        comp_match = DrugCompany.objects.filter(tenant=tenant, company_name__iexact=comp_name).first()
-                        if not comp_match:
-                            notes = f"Company '{comp_name}' will be automatically created."
-                            status = "Ready (Auto-Create Company)"
-                            status_class = "text-info"
-                            
-                    exists = Products.objects.filter(tenant=tenant, product_name__iexact=name).exists()
-                    if exists:
-                        status = "Exists"
-                        status_class = "text-warning"
-                        notes = "Product already exists in the catalog."
-                        
-                elif import_type == 'stock':
-                    p_name = item['product_name']
-                    batch_num = item['batch_number']
-                    
-                    # Look up product in catalog
-                    prod_match = Products.objects.filter(tenant=tenant, product_name__iexact=p_name).first()
-                    if not prod_match:
-                        notes = f"Product '{p_name}' not in catalog. Will auto-create product!"
-                        status = "Ready (Auto-Create Product)"
-                        status_class = "text-info"
-                    else:
-                        # Check duplicate batch
-                        batch_exists = StockBatch.objects.filter(
-                            tenant=tenant, 
-                            product=prod_match, 
-                            batch_number__iexact=batch_num
-                        ).exists()
-                        if batch_exists:
-                            status = "Duplicate Batch"
-                            status_class = "text-danger"
-                            notes = "This batch number already exists for this product. Importing may result in duplicate stock."
-                            
-                item['import_status'] = status
-                item['import_status_class'] = status_class
-                item['notes'] = notes
-                enriched_data.append(item)
-                
-            preview_limit = 100
-            preview_data = enriched_data[:preview_limit]
-            
-            return JsonResponse({
-                'success': True,
-                'data': preview_data,
-                'summary': {
-                    'total': len(enriched_data),
-                    'preview_count': len(preview_data),
-                    'warnings': len([x for x in enriched_data if "Exists" in x['import_status'] or "Duplicate" in x['import_status']]),
-                    'is_truncated': len(enriched_data) > preview_limit
-                }
-            })
-            
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return JsonResponse({'success': False, 'error': f'Parsing error: {str(e)}'})
+        t = threading.Thread(
+            target=_run_parse_job,
+            args=(job_id, import_type, input_method, content, drop_first_col, tenant.id),
+            daemon=True,
+            name=f'parse-{job_id[:8]}',
+        )
+        t.start()
+
+        return JsonResponse({'success': True, 'job_id': job_id, 'status': 'queued'})
+
+
+class MigrationParseStatusView(LoginRequiredMixin, OrganizationRequiredMixin, View):
+    """
+    GET /migration/parse/status/<job_id>/
+    Returns parse job progress / results from cache.
+    """
+    def get(self, request, job_id, *args, **kwargs):
+        job = cache.get(f'parse_job_{job_id}')
+        if not job:
+            return JsonResponse({'success': False, 'error': 'Job not found or expired (>1 h).'})
+        return JsonResponse({'success': True, **job})
 
 class MigrationImportView(LoginRequiredMixin, OrganizationRequiredMixin, View):
     """
@@ -268,7 +337,11 @@ class MigrationImportView(LoginRequiredMixin, OrganizationRequiredMixin, View):
         drop_first_col = (request.POST.get('drop_first_column') == 'true')
         if import_type == 'company':
             drop_first_col = False
-        #drop_first_col = request.POST.get('drop_first_column') == 'true'
+        
+        if import_type == 'product':
+            drop_first_col = False
+
+
         filename = request.POST.get('filename', 'Direct Copy-Paste')
         
         content = ""
@@ -276,15 +349,9 @@ class MigrationImportView(LoginRequiredMixin, OrganizationRequiredMixin, View):
             uploaded_file = request.FILES.get('file')
             if not uploaded_file:
                 return JsonResponse({'success': False, 'error': 'No file uploaded'})
-            try:
-                content = uploaded_file.read().decode('utf-8')
-                print("========",content[:500])  # Debug: print first 500 chars of content
-            #except Exception as e:
-            except UnicodeDecodeError as e:
-                uploaded_file.seek(0)
-                content = uploaded_file.read().decode( 'latin1')
-                print("File decoding error, attempted latin1 fallback:", str(e))
-                return JsonResponse({'success': False, 'error': f'Failed to read file: {str(e)}'})
+            content, enc_used = decode_uploaded_file(uploaded_file)
+            if enc_used != 'utf-8':
+                logger.info(f'Import file "{uploaded_file.name}" decoded using {enc_used} (legacy encoding).')
         else:
             content = request.POST.get('raw_text', '')
             

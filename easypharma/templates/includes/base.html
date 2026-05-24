@@ -74,13 +74,7 @@
                 },
                 'F6': function() { window.location.href = "{% url 'product_history' %}"; },
                 'F7': function() { window.location.href = "{% url 'daily_sale_report' %}"; },
-                'F8': function() {
-                    if (typeof completeOrder === 'function') {
-                        completeOrder();
-                    } else if (typeof savePurchase === 'function') {
-                        savePurchase();
-                    }
-                },
+                'F8': function() { window.location.href = "{% url 'pos' %}?mode=counter"; },
                 'F9': function() {
                     const searchInput = document.getElementById('productSearch') || 
                                         document.getElementById('productSearchInput') || 
@@ -100,6 +94,13 @@
                         if (headerInput.tagName === 'INPUT') {
                             headerInput.select();
                         }
+                    }
+                },
+                'F12': function() {
+                    if (typeof completeOrder === 'function') {
+                        completeOrder();
+                    } else if (typeof savePurchase === 'function') {
+                        savePurchase();
                     }
                 }
             };

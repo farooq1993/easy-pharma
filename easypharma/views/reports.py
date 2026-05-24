@@ -81,6 +81,16 @@ class DailySaleReportView(View):
             subtotal=Sum('sub_total')
         )
 
+        # Counter Sales vs Prescription Sales breakdown
+        counter_stats = sales.filter(sale_type='Counter').aggregate(
+            count=Count('id'),
+            amount=Sum('total_amount')
+        )
+        prescription_stats = sales.filter(sale_type='Prescription').aggregate(
+            count=Count('id'),
+            amount=Sum('total_amount')
+        )
+
         # Payment mode breakdown
         payment_breakdown = sales.values('payment_mode').annotate(
             count=Count('id'),
@@ -106,6 +116,8 @@ class DailySaleReportView(View):
             'date': date_obj,
             'sales': sales,
             'daily_stats': daily_stats,
+            'counter_stats': counter_stats,
+            'prescription_stats': prescription_stats,
             'payment_breakdown': payment_breakdown,
             'top_products': top_products,
             'report_schedules': report_schedules,
