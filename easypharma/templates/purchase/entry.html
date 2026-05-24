@@ -168,7 +168,42 @@
 </div>
 
 <!-- Quick Add Modal -->
-<div class="modal fade ep-modal" id="quickAddModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Quick Add Medicine</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="mb-2"><label class="ep-label">Name *</label><input type="text" id="quickName" class="ep-input"></div><div class="row"><div class="col-6"><label class="ep-label">Packing</label><input type="text" id="quickPacking" class="ep-input"></div><div class="col-6"><label class="ep-label">Conversion</label><input type="number" id="quickConv" class="ep-input" value="1"></div></div><div class="mt-2"><label class="ep-label">Tax Rate</label><select id="quickTax" class="ep-input">{% for tax in product_taxes %}<option value="{{ tax.id }}">{{ tax.tax_name }} ({{ tax.tax_rate }}%)</option>{% endfor %}</select></div></div><div class="modal-footer"><button class="btn-save-modal btn btn-primary" onclick="saveQuickProduct()">Save Medicine</button></div></div></div></div>
+<div class="modal fade ep-modal" id="quickAddModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Quick Add Medicine</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div><div class="modal-body">
+            <div class="mb-2">
+                <label class="ep-label">Name *</label>
+                <input type="text" id="quickName" class="ep-input">
+            </div>
+            <div class="row">
+                <div class="col-6">
+                    <label class="ep-label">Packing</label>
+                    <input type="text" id="quickPacking" class="ep-input">
+                </div>
+                <div class="col-6">
+                    <label class="ep-label">Conversion</label>
+                    <input type="number" id="quickConv" class="ep-input" value="1">
+                </div>
+            </div>
+            <div class="mt-2">
+                <label class="ep-label">Tax Rate</label>
+                <select id="quickTax" class="ep-input">
+                    {% for tax in product_taxes %}
+                    <option value="{{ tax.id }}">{{ tax.tax_name }} ({{ tax.tax_rate }}%)</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-save-modal btn btn-primary" onclick="saveQuickProduct()">Save Medicine</button>
+        </div>
+    </div>
+</div>
+</div>
 
 <div class="ep-toast" id="epToast"></div>
 

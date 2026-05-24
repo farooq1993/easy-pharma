@@ -177,6 +177,15 @@
                 <li><a href="{% url 'printing_setup' %}" class="nav-link small">Printing Setup</a></li>
             </ul>
         </li>
+        <li class="mt-3">
+            <h6 class="sidebar-text text-uppercase small opacity-75 ps-3 mb-2" style="color: #e7e1cb;">Help & Support</h6>
+        </li>
+        <li>
+            <a href="#" class="nav-link text-white fw-bold d-flex align-items-center" data-bs-toggle="modal" data-bs-target="#helpShortcutModal">
+                <i class="bi bi-question-circle-fill text-warning me-2"></i>
+                <span class="sidebar-text">Keyboard Shortcuts & Help</span>
+            </a>
+        </li>
     </ul>
 
     {% if user.is_authenticated %}
@@ -212,8 +221,129 @@
             <li><a href="{% url 'pos' %}" class="nav-link"><i class="bi bi-cart-plus-fill me-2"></i>Sale (POS)</a></li>
             <li><a href="{% url 'pos_returns' %}" class="nav-link"><i class="bi bi-arrow-counterclockwise me-2"></i>Sales Returns</a></li>
             <li><a href="{% url 'master-crud' 'pharmacy-link' %}" class="nav-link text-info"><i class="bi bi-building me-2"></i>Firm Details</a></li>
+            <li><a href="#" class="nav-link text-warning fw-bold" data-bs-toggle="modal" data-bs-target="#helpShortcutModal"><i class="bi bi-question-circle-fill me-2"></i>Keyboard Shortcuts & Help</a></li>
             <hr class="text-white opacity-25">
             <li><a href="{% url 'logout' %}" class="nav-link text-danger"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
         </ul>
+    </div>
+</div>
+
+<!-- Help & Support Modal -->
+<div class="modal fade" id="helpShortcutModal" tabindex="-1" aria-labelledby="helpShortcutModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 1rem; overflow: hidden;">
+            <!-- Premium Gradient Header -->
+            <div class="modal-header text-white border-0 py-3" style="background: linear-gradient(135deg, #9052b9 0%, #763b9c 100%);">
+                <h5 class="modal-title d-flex align-items-center" id="helpShortcutModalLabel">
+                    <i class="bi bi-question-circle-fill fs-4 me-2"></i>
+                    <span>Easy-Pharma Keyboard Shortcuts & Support</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            
+            <div class="modal-body p-4 bg-light">
+                <!-- Support Contact Card -->
+                <div class="card border-0 shadow-sm rounded-4 mb-4" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 5px solid #0d6efd !important;">
+                    <div class="card-body">
+                        <h6 class="text-primary fw-bold mb-3 d-flex align-items-center">
+                            <i class="bi bi-headset me-2 fs-5"></i> Technical Support
+                        </h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center">
+                                    <div class="rounded-circle bg-white text-primary p-2.5 me-3 shadow-sm d-flex align-items-center justify-content-center" style="width: 44px; height: 44px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+                                        <i class="bi bi-telephone-fill fs-5"></i>
+                                    </div>
+                                    <div>
+                                        <small class="text-muted d-block fw-semibold">Support Mobile</small>
+                                        <a href="tel:9657847644" class="text-dark fw-bold text-decoration-none fs-5">9657847644</a>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center">
+                                    <div class="rounded-circle bg-white text-primary p-2.5 me-3 shadow-sm d-flex align-items-center justify-content-center" style="width: 44px; height: 44px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+                                        <i class="bi bi-envelope-at-fill fs-5"></i>
+                                    </div>
+                                    <div>
+                                        <small class="text-muted d-block fw-semibold">Support Email</small>
+                                        <a href="mailto:farooqaziz1993@gmail.com" class="text-dark fw-bold text-decoration-none">farooqaziz1993@gmail.com</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Keyboard Shortcuts Section -->
+                <div class="card border-0 shadow-sm rounded-4">
+                    <div class="card-header bg-white border-0 pt-3 pb-0">
+                        <h6 class="text-secondary fw-bold mb-0 d-flex align-items-center">
+                            <i class="bi bi-keyboard-fill me-2 fs-5 text-secondary"></i> Keyboard Shortcut Mappings
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="list-group list-group-flush rounded-3 border">
+                                    <div class="list-group-item d-flex justify-content-between align-items-center py-2.5">
+                                        <span class="small fw-semibold text-secondary">New Sale (POS)</span>
+                                        <kbd class="bg-dark text-white px-2.5 py-1 rounded shadow-sm font-monospace">F1</kbd>
+                                    </div>
+                                    <div class="list-group-item d-flex justify-content-between align-items-center py-2.5">
+                                        <span class="small fw-semibold text-secondary">New Purchase Entry</span>
+                                        <kbd class="bg-dark text-white px-2.5 py-1 rounded shadow-sm font-monospace">F2</kbd>
+                                    </div>
+                                    <div class="list-group-item d-flex justify-content-between align-items-center py-2.5">
+                                        <span class="small fw-semibold text-secondary">Sales Returns</span>
+                                        <kbd class="bg-dark text-white px-2.5 py-1 rounded shadow-sm font-monospace">F3</kbd>
+                                    </div>
+                                    <div class="list-group-item d-flex justify-content-between align-items-center py-2.5">
+                                        <span class="small fw-semibold text-secondary">Patient Wise Sales</span>
+                                        <kbd class="bg-dark text-white px-2.5 py-1 rounded shadow-sm font-monospace">F4</kbd>
+                                    </div>
+                                    <div class="list-group-item d-flex justify-content-between align-items-center py-2.5">
+                                        <span class="small fw-semibold text-secondary">Focus POS Product Search</span>
+                                        <kbd class="bg-dark text-white px-2.5 py-1 rounded shadow-sm font-monospace">F5</kbd>
+                                    </div>
+                                    <div class="list-group-item d-flex justify-content-between align-items-center py-2.5">
+                                        <span class="small fw-semibold text-secondary">Product History</span>
+                                        <kbd class="bg-dark text-white px-2.5 py-1 rounded shadow-sm font-monospace">F6</kbd>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="list-group list-group-flush rounded-3 border">
+                                    <div class="list-group-item d-flex justify-content-between align-items-center py-2.5">
+                                        <span class="small fw-semibold text-secondary">Daily Sale Report</span>
+                                        <kbd class="bg-dark text-white px-2.5 py-1 rounded shadow-sm font-monospace">F7</kbd>
+                                    </div>
+                                    <div class="list-group-item d-flex justify-content-between align-items-center py-2.5 text-primary fw-bold" style="background-color: rgba(13, 110, 253, 0.05);">
+                                        <span class="small">Counter Sale Mode</span>
+                                        <kbd class="bg-primary text-white px-2.5 py-1 rounded shadow-sm font-monospace">F8</kbd>
+                                    </div>
+                                    <div class="list-group-item d-flex justify-content-between align-items-center py-2.5">
+                                        <span class="small fw-semibold text-secondary">Focus Search Box (Global)</span>
+                                        <kbd class="bg-dark text-white px-2.5 py-1 rounded shadow-sm font-monospace">F9</kbd>
+                                    </div>
+                                    <div class="list-group-item d-flex justify-content-between align-items-center py-2.5">
+                                        <span class="small fw-semibold text-secondary">Focus Customer/Supplier (Header)</span>
+                                        <kbd class="bg-dark text-white px-2.5 py-1 rounded shadow-sm font-monospace">F10</kbd>
+                                    </div>
+                                    <div class="list-group-item d-flex justify-content-between align-items-center py-2.5 text-success fw-bold" style="background-color: rgba(25, 135, 84, 0.05);">
+                                        <span class="small">Save & Complete Billing</span>
+                                        <kbd class="bg-success text-white px-2.5 py-1 rounded shadow-sm font-monospace">F12</kbd>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer border-0 bg-white">
+                <button type="button" class="btn btn-secondary px-4 py-2" data-bs-dismiss="modal" style="border-radius: 0.5rem;">Close</button>
+            </div>
+        </div>
     </div>
 </div>

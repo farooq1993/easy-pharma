@@ -9,6 +9,18 @@
             <div class="loader-text">Please wait...</div>
         </div>
     </div>
+    <!-- Mode Notice Banner -->
+    <div id="counterSaleBanner" class="alert alert-info border-0 shadow-sm rounded-4 d-none align-items-center gap-3 mb-3 p-3 animate-fade-in" style="background: linear-gradient(135deg, #e3f2fd, #bbdefb); border-left: 5px solid #1e88e5 !important;">
+        <div class="rounded-circle bg-white p-2 d-flex align-items-center justify-content-center text-primary shadow-sm" style="width: 40px; height: 40px;">
+            <i class="fas fa-cash-register fa-lg"></i>
+        </div>
+        <div>
+            <h6 class="fw-bold mb-0 text-primary-emphasis" style="color: #0d47a1 !important;">Counter Sale Mode (General Billing)</h6>
+            <p class="mb-0 x-small text-muted">Bypassing prescription/doctor details. Direct, fast checkouts are active.</p>
+        </div>
+        <button type="button" class="btn-close ms-auto" aria-label="Close" onclick="exitCounterMode()"></button>
+    </div>
+
     <!-- Search Bar Row -->
     <div class="row g-3 mb-3">
         <div class="col-12">
@@ -238,14 +250,14 @@
                                 <div><kbd>Esc</kbd> → Focus search from qty field</div>
                             </div>
                             <div class="p-2 bg-light rounded">
-                                <div><kbd>F8</kbd> → Complete billing</div>
+                                <div><kbd>F12</kbd> → Complete billing</div>
                             </div>
                         </div>
                     </div>
                 </div>
                 <hr class="my-4">
                 <h6 class="fw-bold mb-3 text-warning">
-                    <i class="fas fa-bolt me-2"></i> Global Function Keys (F1 - F10)
+                    <i class="fas fa-bolt me-2"></i> Global Function Keys (F1 - F12)
                 </h6>
                 <div class="row g-3 small">
                     <div class="col-md-6">
@@ -280,8 +292,8 @@
                             <span class="text-muted">Open sales reports</span>
                         </div>
                         <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
-                            <span class="fw-bold"><kbd class="bg-primary text-white">F8</kbd> Save / Complete</span>
-                            <span class="text-muted">Finish sale / Purchase entry</span>
+                            <span class="fw-bold"><kbd class="bg-primary text-white">F8</kbd> Counter Sale</span>
+                            <span class="text-muted">Open general billing</span>
                         </div>
                         <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
                             <span class="fw-bold"><kbd class="bg-primary text-white">F9</kbd> Focus Search</span>
@@ -290,6 +302,10 @@
                         <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
                             <span class="fw-bold"><kbd class="bg-primary text-white">F10</kbd> Focus Header</span>
                             <span class="text-muted">Focus Patient / Supplier</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
+                            <span class="fw-bold"><kbd class="bg-primary text-white">F12</kbd> Save / Complete</span>
+                            <span class="text-muted">Finish sale / Purchase entry</span>
                         </div>
                     </div>
                 </div>
@@ -427,6 +443,73 @@
     let searchSelectedIndex = -1;
     const editData = {{ edit_data|default:'null'|safe }};
 
+    // Check if ?mode=counter is present in URL
+    document.addEventListener('DOMContentLoaded', () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('mode') === 'counter') {
+            enableCounterMode();
+        } else {
+            // Auto focus search box on load for normal mode too
+            const searchInput = document.getElementById('productSearch');
+            if (searchInput) searchInput.focus();
+        }
+    });
+
+    function enableCounterMode() {
+        const banner = document.getElementById('counterSaleBanner');
+        if (banner) {
+            banner.classList.remove('d-none');
+            banner.classList.add('d-flex');
+        }
+        
+        // Fill counter sale fields
+        document.getElementById('patientName').value = "COUNTER SALE";
+        document.getElementById('patientAddress').value = "COUNTER";
+        document.getElementById('patientPhone').value = "9999999999";
+        document.getElementById('doctorName').value = "SELF";
+
+        // Read-only fields to prevent user confusion
+        document.getElementById('patientName').readOnly = true;
+        document.getElementById('patientAddress').readOnly = true;
+        document.getElementById('patientPhone').readOnly = true;
+        document.getElementById('doctorName').readOnly = true;
+
+        // Auto focus product search input immediately
+        setTimeout(() => {
+            const searchInput = document.getElementById('productSearch');
+            if (searchInput) {
+                searchInput.focus();
+                searchInput.select();
+            }
+        }, 100);
+    }
+
+    function exitCounterMode() {
+        // Remove query param from URL without page reload
+        const url = new URL(window.location.href);
+        url.searchParams.delete('mode');
+        window.history.pushState({}, '', url);
+
+        const banner = document.getElementById('counterSaleBanner');
+        if (banner) {
+            banner.classList.remove('d-flex');
+            banner.classList.add('d-none');
+        }
+
+        // Reset fields
+        document.getElementById('patientName').value = "";
+        document.getElementById('patientAddress').value = "";
+        document.getElementById('patientPhone').value = "";
+        document.getElementById('doctorName').value = "{% if default_doctor %}{{ default_doctor.name }}{% endif %}";
+
+        document.getElementById('patientName').readOnly = false;
+        document.getElementById('patientAddress').readOnly = false;
+        document.getElementById('patientPhone').readOnly = false;
+        document.getElementById('doctorName').readOnly = false;
+        
+        document.getElementById('productSearch').focus();
+    }
+
     // Keyboard Shortcuts
     document.addEventListener('keydown', (e) => {
         const results = document.querySelectorAll('.batch-item');
@@ -467,7 +550,7 @@
             results[searchSelectedIndex].querySelector('.add-btn').click();
         }
 
-        if (e.key === 'F8') { e.preventDefault(); completeOrder(); }
+        if (e.key === 'F12') { e.preventDefault(); completeOrder(); }
     });
 
     function populateEditData(data) {
@@ -1020,7 +1103,8 @@
             sub_total: parseFloat(document.getElementById('summarySubTotal').innerText),
             tax_amount: parseFloat(document.getElementById('summaryTax').innerText),
             discount_amount: parseFloat(document.getElementById('summaryDiscount').value) || 0,
-            total_amount: parseFloat(document.getElementById('summaryGrandTotal').innerText)
+            total_amount: parseFloat(document.getElementById('summaryGrandTotal').innerText),
+            sale_type: !document.getElementById('counterSaleBanner').classList.contains('d-none') ? 'Counter' : 'Prescription'
         };
 
         try {

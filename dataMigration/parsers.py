@@ -3,27 +3,283 @@ import csv
 import io
 from datetime import datetime
 
+
+# ============================================================
+# JUNK ROW FILTER — strips legacy Micropro/3DPM print headers
+# ============================================================
+
+def looks_like_packing(val):
+    if not val:
+        return False
+
+    val = str(val).upper().strip()
+
+    packing_patterns = [
+        r'^\d+\s*ML$',
+        r'^\d+\s*TAB$',
+        r'^\d+\s*TABS$',
+        r'^\d+\s*CAP$',
+        r'^\d+\s*CAPS$',
+        r'^\d+\s*PCS$',
+        r'^\d+\s*VIAL$',
+        r'^\d+\s*AMP$',
+        r'^\d+\s*S$',
+        r'^\d+\s*\'S$',
+    ]
+
+    return any(re.match(p, val) for p in packing_patterns)
+
+def clean_legacy_control_chars(text):
+
+    # remove ESC/P printer control chars
+    text = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', text)
+
+    # remove weird repeated spaces
+    text = re.sub(r' +', ' ', text)
+
+    return text
+
+def parse_product_master_text(text_content):
+
+    products = []
+
+    for idx, line in enumerate(lines):
+
+        line = clean_legacy_control_chars(line)
+
+        original_line = str(line)
+
+        line = original_line.strip()
+
+        if not line:
+            continue
+
+        upper_line = line.upper()
+
+        # -----------------------------------
+        # SKIP JUNK
+        # -----------------------------------
+
+        if any(x in upper_line for x in [
+            'PRINTED ON',
+            'PAGE NO',
+            'PRODUCT NAME',
+            'PACKING',
+            'MFG',
+            'PRODUCT TYPE',
+            '---',
+            '===='
+        ]):
+            continue
+
+        # separator
+        if re.match(r'^[-=\.\*\s_#|+]+$', line):
+            continue
+
+        # -----------------------------------
+        # TOKENIZE
+        # -----------------------------------
+
+        parts = re.split(r'\s+', line)
+
+        if len(parts) < 2:
+            continue
+
+        # -----------------------------------
+        # LAST TOKEN = COMPANY
+        # SECOND LAST = PACKING
+        # REMAINING = PRODUCT
+        # -----------------------------------
+
+        company = parts[-1].strip()
+
+        packing = parts[-2].strip()
+
+        product_name = " ".join(parts[:-2]).strip()
+
+        # -----------------------------------
+        # SAFETY CHECKS
+        # -----------------------------------
+
+        if not product_name:
+            continue
+
+        if looks_like_packing(product_name):
+            continue
+
+        if len(product_name) < 3:
+            continue
+
+        # remove serial number
+        product_name = re.sub(
+            r'^\d+\s+',
+            '',
+            product_name
+        )
+
+        conv_factor, prod_type = extract_conversion_and_type(
+            packing,
+            product_name
+        )
+
+        products.append({
+
+            'product_name': product_name.upper(),
+
+            'product_packing': packing.upper(),
+
+            'company_name': company.upper(),
+
+            'hsn_code': '3004',
+
+            'conversion_factor': conv_factor,
+
+            'product_type': prod_type
+
+        })
+    print("==== Parsed products from text content =====", products)
+    return products
+
+# Patterns that ALWAYS indicate a report metadata / separator row
+_JUNK_PATTERNS = re.compile(
+    r'^(3DPM|MICRO\s*PRO|MICROPRO|PAGE\s*NO|PRINTED\s*ON|PRINT\s*DATE'
+    r'|PRODUCT\s*TYPE\s*WISE|PRODUCTS\s*TYPEWISE|PRODUCT\s*WISE'
+    r'|TULJAI\s*MED|BATCH\s*WISE|STOCK\s*REPORT|MASTER\s*LIST'
+    r'|EXPIRY\s*WISE|COMPANY\s*MASTER|SUPPLIER\s*MASTER'
+    r'|PHARMA\s*SOFTWARE|PAGE\s*:)'
+    , re.IGNORECASE
+)
+
+# Column header keywords that appear on every page break
+_COLUMN_HEADERS = {
+    'PRODUCT NAME', 'PRODUCT', 'PROD NAME', 'PROD.NAME',
+    'ITEM NAME', 'ITEM', 'NAME', 'DRUG NAME', 'DRUG',
+    'P.NAME', 'P. NAME', 'PARTICULARS',
+    'MFG', 'MFG.', 'COMPANY', 'MANUFACTURER',
+    'PACK', 'PACKING', 'SCHEDULE', 'SCH', 'HSN',
+    'PRODUCT 1',  # specific 3DPM artifact
+}
+
+
+def is_junk_report_row(row: list) -> bool:
+    """
+    Returns True when a parsed row represents report metadata,
+    a page separator, a column-header repetition, or a print marker
+    that should NEVER be imported as a real data record.
+
+    Handles legacy Micropro, 3DPM, and similar printed-report CSVs.
+    """
+    if not row:
+        return True
+
+    # -- join all cells for whole-row checks --
+    row_text = ' '.join(str(c).strip() for c in row if str(c).strip())
+
+    if not row_text:
+        return True
+
+    # Separator / divider lines (dashes, equals, dots, stars …)
+    if re.match(r'^[-=\.\*\s_#|+]+$', row_text):
+        return True
+
+    # Report-level metadata keywords (page numbers, print dates …)
+    if _JUNK_PATTERNS.search(row_text):
+        return True
+
+    # Pure numeric rows with very few chars (page numbers, SR no footers)
+    first_cell = str(row[0]).strip()
+    if re.match(r'^\d{1,4}$', first_cell) and len(row) == 1:
+        return True
+
+    # Column-header repetitions (appear on every page of printed reports)
+    # A row is a header row if ALL of its non-empty cells match known header keywords
+    non_empty = [str(c).strip().upper() for c in row if str(c).strip()]
+    if non_empty and all(cell in _COLUMN_HEADERS for cell in non_empty):
+        return True
+
+    # First cell is exactly a known column header keyword
+    if first_cell.upper() in _COLUMN_HEADERS:
+        return True
+
+    return False
+
 def clean_value(val):
     if val is None:
         return ""
     return str(val).strip()
 
-def parse_csv_to_rows(file_content_str, drop_first_column=False):
-    """
-    Parses a CSV string content into a clean list of lists (rows).
-    Drops the first column if drop_first_column is True.
-    """
-    f = io.StringIO(file_content_str.strip())
-    reader = csv.reader(f)
+import csv
+import io
+
+
+def parse_csv_to_rows(
+    content,
+    drop_first_column=False
+):
+
     rows = []
-    for r in reader:
-        if not r:
+
+    csv_reader = csv.reader(
+        io.StringIO(content)
+    )
+
+    for row in csv_reader:
+
+        # ------------------------------------
+        # CLEAN EMPTY CELLS
+        # ------------------------------------
+
+        cleaned = [
+
+            str(col).strip()
+
+            for col in row
+
+            if str(col).strip()
+
+        ]
+
+        if not cleaned:
             continue
-        cleaned_row = [clean_value(x) for x in r]
-        if drop_first_column and len(cleaned_row) > 0:
-            cleaned_row = cleaned_row[1:]
-        rows.append(cleaned_row)
+
+        # ------------------------------------
+        # SKIP LEGACY REPORT JUNK ROWS
+        # ------------------------------------
+
+        if is_junk_report_row(cleaned):
+            continue
+
+        # ------------------------------------
+        # OPTIONAL COLUMN DROP
+        # ------------------------------------
+
+        if (
+            drop_first_column
+            and len(cleaned) > 1
+        ):
+
+            cleaned = cleaned[1:]
+
+        rows.append(cleaned)
+
     return rows
+
+# def parse_csv_to_rows(file_content_str, drop_first_column=False):
+#     """
+#     Parses a CSV string content into a clean list of lists (rows).
+#     Drops the first column if drop_first_column is True.
+#     """
+#     f = io.StringIO(file_content_str.strip())
+#     reader = csv.reader(f)
+#     rows = []
+#     for r in reader:
+#         if not r:
+#             continue
+#         cleaned_row = [clean_value(x) for x in r]
+#         if drop_first_column and len(cleaned_row) > 0:
+#             cleaned_row = cleaned_row[1:]
+#         rows.append(cleaned_row)
+#     return rows
 
 def parse_text_lines_to_rows(text_content, drop_first_column=False):
     """
@@ -34,20 +290,24 @@ def parse_text_lines_to_rows(text_content, drop_first_column=False):
     rows = []
     for line in lines:
         line_str = line.strip()
-        # Skip report headers, separators, empty lines
-        if not line_str or re.match(r'^[-\s\+=_\.\*#]+$', line_str):
+        if not line_str:
             continue
-        if "Page No" in line_str or "Printed on" in line_str or "Products Typewise" in line_str:
-            continue
-        
-        # Split by tabs or double spaces
-        parts = re.split(r'\t| {2,}', line_str)
+
+        # Split by tabs or double spaces or commas
+        parts = re.split(r',|\t| {2,}', line_str)
         cleaned_parts = [clean_value(x) for x in parts if x.strip()]
-        
-        if cleaned_parts:
-            if drop_first_column and len(cleaned_parts) > 0:
-                cleaned_parts = cleaned_parts[1:]
-            rows.append(cleaned_parts)
+
+        if not cleaned_parts:
+            continue
+
+        # Skip legacy report junk rows (page headers, dividers, column-header repeats)
+        if is_junk_report_row(cleaned_parts):
+            continue
+
+        if drop_first_column and len(cleaned_parts) > 0:
+            cleaned_parts = cleaned_parts[1:]
+
+        rows.append(cleaned_parts)
     return rows
 
 def parse_expiry_date(date_str):
@@ -125,50 +385,108 @@ def extract_conversion_and_type(packing_str, name_str=""):
 # ----------------------------------------------------
 # Parse Company Master
 # ----------------------------------------------------
-def parse_companies(rows):
-    """
-    Parses company rows.
-    Expected: [Code, Company Name, Short Name] or [Company Name, Short Name]
-    """
-    companies = []
-    for r in rows:
-        # We need at least 1 column for company name
-        if len(r) == 0:
-            continue
-            
-        if len(r) == 1:
-            name = r[0]
-            short = name[:6].upper()
-            code = ""
-        elif len(r) == 2:
-            # Check if first is numeric (Code)
-            if r[0].isdigit():
-                code = r[0]
-                name = r[1]
-                short = name[:6].upper()
-            else:
-                name = r[0]
-                short = r[1][:6].upper()
-                code = ""
-        else:
-            # 3 or more columns
-            if r[0].isdigit():
-                code = r[0]
-                name = r[1]
-                short = r[2]
-            else:
-                name = r[0]
-                short = r[1]
-                code = r[2]
-                
-        if name and name.upper() not in ["COMPANY", "NAME", "COMPANY NAME"]:
-            companies.append({
-                'company_code': code,
-                'company_name': name.upper(),
-                'sht_name': short.upper()[:6]
-            })
-    return companies
+import re
 
+
+def parse_companies(rows):
+
+    companies = []
+
+    junk_patterns = [
+
+        "PRINTED ON",
+        "PAGE NO",
+        "MASTER LIST",
+        "COMPANY NAME",
+        "SHORT NAME",
+        "----",
+        "TULJ",
+        "COMP"
+
+    ]
+
+    for r in rows:
+
+        if not r:
+            continue
+
+        # ----------------------------------------
+        # CLEAN ROW
+        # ----------------------------------------
+
+        r = [
+
+            str(x).strip()
+
+            for x in r
+
+            if str(x).strip()
+
+        ]
+
+        if not r:
+            continue
+
+        row_text = " ".join(r).upper()
+
+        # ----------------------------------------
+        # SKIP JUNK
+        # ----------------------------------------
+
+        if any(
+            j in row_text
+            for j in junk_patterns
+        ):
+            continue
+
+        # separator lines
+        if re.match(
+            r'^[-\s]+$',
+            row_text
+        ):
+            continue
+
+        # ----------------------------------------
+        # EXPECTED FORMAT
+        #
+        # 1001,SYSTOPIC,SYS
+        # ----------------------------------------
+
+        if len(r) < 3:
+            continue
+
+        # first column numeric
+        if not r[0].isdigit():
+            continue
+
+        company_code = r[0]
+
+        company_name = (
+            r[1]
+            .strip()
+            .upper()
+        )
+
+        sht_name = (
+            r[2]
+            .strip()
+            .upper()
+        )
+
+        if not company_name:
+            continue
+
+        companies.append({
+
+            'company_code': company_code,
+
+            'company_name': company_name,
+
+            'sht_name': sht_name[:6]
+
+        })
+
+    return companies
 
 # ----------------------------------------------------
 # Parse Supplier Master (Stateful Multi-line Grid & Flat Fallback)
@@ -412,34 +730,181 @@ def parse_suppliers_from_rows(rows):
 # ----------------------------------------------------
 # Parse Product Master
 # ----------------------------------------------------
-def parse_products(rows):
-    """
-    Parses products from CSV/Excel or parsed text rows.
-    Columns expected: Product Name, Packing/Unit, Company
-    """
-    products = []
-    for r in rows:
-        if len(r) < 1:
-            continue
-        if r[0].upper() in ["PRODUCT NAME", "NAME", "PRODUCT", "DRUG"]:
-            continue
-            
-        name = r[0].upper()
-        packing = r[1] if len(r) > 1 else "10 TAB"
-        company = r[2].upper() if len(r) > 2 else ""
-        hsn = r[3] if len(r) > 3 else "3004"
-        
-        conv_factor, prod_type = extract_conversion_and_type(packing, name)
-        
-        if name:
-            products.append({
-                'product_name': name,
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import math
+
+
+MAX_WORKERS = 10
+CHUNK_SIZE = 5000
+
+
+def process_product_chunk(chunk_rows):
+
+    chunk_products = []
+
+    for r in chunk_rows:
+
+        try:
+
+            if len(r) < 1:
+                continue
+
+            if is_junk_report_row(r):
+                continue
+
+            cleaned = [
+                str(x).strip()
+                for x in r
+                if str(x).strip()
+            ]
+
+            if not cleaned:
+                continue
+
+            # -----------------------------------
+            # DETECT SHIFTED ROWS
+            # -----------------------------------
+
+            product_name = ""
+            packing = ""
+            company = ""
+
+            # CASE:
+            # ['1 AL SYP', '30ML']
+            if len(cleaned) >= 2 and looks_like_packing(cleaned[1]):
+
+                product_name = cleaned[0]
+                packing = cleaned[1]
+
+                if len(cleaned) > 2:
+                    company = cleaned[2]
+
+            # CASE:
+            # ['30ML', 'HPP']
+            elif looks_like_packing(cleaned[0]):
+
+                # invalid shifted row
+                continue
+
+            else:
+
+                product_name = cleaned[0]
+
+                if len(cleaned) > 1:
+                    packing = cleaned[1]
+
+                if len(cleaned) > 2:
+                    company = cleaned[2]
+
+            product_name = product_name.upper().strip()
+
+            if len(product_name) < 3:
+                continue
+
+            # EXTRA SAFETY
+            if looks_like_packing(product_name):
+                continue
+
+            conv_factor, prod_type = extract_conversion_and_type(
+                packing,
+                product_name
+            )
+
+            chunk_products.append({
+                'product_name': product_name,
                 'product_packing': packing,
-                'company_name': company,
-                'hsn_code': hsn,
+                'company_name': company.upper(),
+                'hsn_code': '3004',
                 'conversion_factor': conv_factor,
                 'product_type': prod_type
             })
+
+        except Exception as e:
+            print("Row Error:", r)
+            print(str(e))
+
+    return chunk_products
+
+# def process_product_chunk(chunk_rows):
+
+#     chunk_products = []
+
+#     for r in chunk_rows:
+
+#         try:
+
+#             if len(r) < 1:
+#                 continue
+
+#             # Skip legacy report junk rows (defensive second pass)
+#             if is_junk_report_row(r):
+#                 continue
+
+#             name = r[0].upper().strip()
+
+#             # Skip if name is too short or purely numeric
+#             if len(name) < 2 or name.isdigit():
+#                 continue
+
+#             packing = r[1] if len(r) > 1 else "10 TAB"
+
+#             company = r[2].upper() if len(r) > 2 else ""
+
+#             hsn = r[3] if len(r) > 3 else "3004"
+
+#             conv_factor, prod_type = extract_conversion_and_type(
+#                 packing,
+#                 name
+#             )
+
+#             if name:
+#                 chunk_products.append({
+#                     'product_name': name,
+#                     'product_packing': packing,
+#                     'company_name': company,
+#                     'hsn_code': hsn,
+#                     'conversion_factor': conv_factor,
+#                     'product_type': prod_type
+#                 })
+
+#         except Exception as e:
+#             print(f"Error processing row: {r}")
+#             print(str(e))
+
+#     return chunk_products
+
+
+def chunkify(data, chunk_size):
+
+    for i in range(0, len(data), chunk_size):
+        yield data[i:i + chunk_size]
+
+def parse_products(rows):
+
+    products = []
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+
+        futures = []
+
+        for chunk in chunkify(rows, CHUNK_SIZE):
+
+            futures.append(
+                executor.submit(
+                    process_product_chunk,
+                    chunk
+                )
+            )
+
+        for future in as_completed(futures):
+
+            try:
+                result = future.result()
+                products.extend(result)
+
+            except Exception as e:
+                print(f"Thread Error: {str(e)}")
+
     return products
 
 

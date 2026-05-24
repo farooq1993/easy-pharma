@@ -67,6 +67,38 @@
         </div>
     </div>
 
+    <!-- Sale Type Breakdown -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm animate-fade-in" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);">
+                <div class="card-body d-flex align-items-center">
+                    <div class="rounded-circle bg-primary text-white p-3 me-3 d-flex align-items-center justify-content-center" style="width: 56px; height: 56px; box-shadow: 0 4px 10px rgba(13, 110, 253, 0.2);">
+                        <i class="bi bi-cart3 fs-4"></i>
+                    </div>
+                    <div>
+                        <h6 class="text-primary fw-bold mb-1">Counter Sales (Fast Billing)</h6>
+                        <h3 class="mb-0 fw-bold text-dark">₹{{ counter_stats.amount|default:"0"|floatformat:2 }}</h3>
+                        <small class="text-muted fw-semibold">{{ counter_stats.count|default:"0" }} transactions</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm animate-fade-in" style="background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);">
+                <div class="card-body d-flex align-items-center">
+                    <div class="rounded-circle bg-success text-white p-3 me-3 d-flex align-items-center justify-content-center" style="width: 56px; height: 56px; box-shadow: 0 4px 10px rgba(25, 135, 84, 0.2);">
+                        <i class="bi bi-file-earmark-medical fs-4"></i>
+                    </div>
+                    <div>
+                        <h6 class="text-success fw-bold mb-1">Prescription Sales</h6>
+                        <h3 class="mb-0 fw-bold text-dark">₹{{ prescription_stats.amount|default:"0"|floatformat:2 }}</h3>
+                        <small class="text-muted fw-semibold">{{ prescription_stats.count|default:"0" }} transactions</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Payment Mode Breakdown -->
     <div class="row mb-4">
         <div class="col-md-6">
@@ -148,6 +180,7 @@
                         <tr>
                             <th>Invoice #</th>
                             <th>Customer/Patient</th>
+                            <th>Type</th>
                             <th>Items Count</th>
                             <th>Subtotal</th>
                             <th>Tax</th>
@@ -168,6 +201,17 @@
                                     {{ sale.customer.name }}
                                 {% else %}
                                     N/A
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if sale.sale_type == 'Counter' %}
+                                    <span class="badge badge-counter rounded-pill">
+                                        <i class="bi bi-cart3 me-1"></i> Counter Sale
+                                    </span>
+                                {% else %}
+                                    <span class="badge badge-prescription rounded-pill">
+                                        <i class="bi bi-file-earmark-medical me-1"></i> Prescription
+                                    </span>
                                 {% endif %}
                             </td>
                             <td><span class="badge bg-info">{{ sale.items.count }}</span></td>
@@ -195,6 +239,21 @@
     .card {
         box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
         border-radius: 0.5rem;
+    }
+    .badge-counter {
+        background-color: rgba(13, 110, 253, 0.1);
+        color: #0d6efd;
+        border: 1px solid rgba(13, 110, 253, 0.2);
+    }
+    .badge-prescription {
+        background-color: rgba(25, 135, 84, 0.1);
+        color: #198754;
+        border: 1px solid rgba(25, 135, 84, 0.2);
+    }
+    .rounded-pill {
+        padding: 0.35em 0.65em;
+        font-size: 0.75em;
+        font-weight: 600;
     }
 </style>
 {% endblock %}

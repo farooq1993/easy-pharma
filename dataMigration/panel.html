@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tactical Radar Telemetry Model</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #90e1f0;
+            color: #ffffff;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .radar-panel {
+            background-color: #71ff7d;
+            border: 2px solid #45f3ff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 0 20px rgb(125, 235, 243);
+            text-align: center;
+        }
+
+        .panel-header {
+            font-size: 1.1rem;
+            font-weight: bold;
+            margin-bottom: 15px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        /* Radar Canvas Styling */
+        #radarCanvas {
+            background-color: #0b0c10;
+            border: 1px solid #45f3ff;
+            border-radius: 50%;
+        }
+
+        .telemetry-feed {
+            margin-top: 15px;
+            font-size: 1 rem;
+            color: #f3f6f8;
+            text-align: left;
+            height: 50px;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="radar-panel">
+        <div class="panel-header">Tactical Minimap Telemetry</div>
+        <canvas id="radarCanvas" width="300" height="300"></canvas>
+        <div class="telemetry-feed" id="logFeed">System initialized. Waiting for ping...</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('radarCanvas');
+        const ctx = canvas.getContext('2d');
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const radius = canvas.width / 2 - 5;
+        let sweepAngle = 0;
+
+        // Mock coordinates for authorized entities (Teammates/Revealed Targets)
+        // Format: [X offset from center, Y offset from center, type]
+        const entities = [
+            [40, -60, 'Teammate'],
+            [-80, 30, 'Objective'],
+            [20, 50, 'Revealed Target']
+        ];
+
+        function drawRadar() {
+            // Clear frame
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Background Grid Rings
+            ctx.strokeStyle = 'rgba(69, 243, 255, 0.3)';
+            ctx.lineWidth = 1;
+            for (let r = 50; r  {
+                const x = centerX + entity[0];
+                const y = centerY + entity[1];
+                
+                ctx.beginPath();
+                ctx.arc(x, y, 5, 0, 2 * Math.PI);
+                
+                if (entity[2] === 'Teammate') ctx.fillStyle = '#00ff00';       // Green for allies
+                else if (entity[2] === 'Objective') ctx.fillStyle = '#0000ff';  // Blue for targets
+                else ctx.fillStyle = '#ff0000';                                // Red for revealed hostiles
+                
+                ctx.fill();
+            </script>
+</body>
+</html>
+

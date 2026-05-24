@@ -120,6 +120,7 @@ class POSView(View):
                 invoice.discount_amount = data['discount_amount']
                 invoice.total_amount = data['total_amount']
                 invoice.payment_mode = data['payment_mode']
+                invoice.sale_type = data.get('sale_type', 'Prescription')
                 if data.get('invoice_number'):
                     invoice.invoice_number = data['invoice_number']
                 invoice.save()
