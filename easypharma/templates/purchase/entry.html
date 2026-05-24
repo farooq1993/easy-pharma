@@ -169,40 +169,83 @@
 
 <!-- Quick Add Modal -->
 <div class="modal fade ep-modal" id="quickAddModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Quick Add Medicine</h5>
+                <h5 class="modal-title"><i class="fas fa-plus-circle me-2" style="color:var(--brand);"></i>Quick Add Medicine</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div><div class="modal-body">
-            <div class="mb-2">
-                <label class="ep-label">Name *</label>
-                <input type="text" id="quickName" class="ep-input">
             </div>
-            <div class="row">
-                <div class="col-6">
-                    <label class="ep-label">Packing</label>
-                    <input type="text" id="quickPacking" class="ep-input">
+            <div class="modal-body">
+
+                <!-- Row 1: Name -->
+                <div class="mb-3">
+                    <label class="ep-label">Medicine Name <span class="text-danger">*</span></label>
+                    <input type="text" id="quickName" class="ep-input" placeholder="e.g. Paracetamol 500mg">
                 </div>
-                <div class="col-6">
-                    <label class="ep-label">Conversion</label>
-                    <input type="number" id="quickConv" class="ep-input" value="1">
+
+                <!-- Row 2: Packing + Conversion -->
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="ep-label">Packing</label>
+                        <input type="text" id="quickPacking" class="ep-input" placeholder="e.g. 10 tablets / strip">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="ep-label">Conversion Factor</label>
+                        <input type="number" id="quickConv" class="ep-input" value="1" min="1"
+                               title="Units per pack (e.g. 10 for a strip of 10 tablets)">
+                    </div>
                 </div>
+
+                <!-- Row 3: Tax + Drug Schedule -->
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="ep-label">Tax Rate</label>
+                        <select id="quickTax" class="ep-input">
+                            <option value="">— Select Tax —</option>
+                            {% for tax in product_taxes %}
+                            <option value="{{ tax.id }}">{{ tax.tax_name }} ({{ tax.tax_rate }}%)</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="ep-label">Drug Schedule</label>
+                        <select id="quickSchedule" class="ep-input">
+                            <option value="">— Select Schedule —</option>
+                            {% for schedule in product_schedules %}
+                            <option value="{{ schedule.id }}">{{ schedule.schedule_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Row 4: Company + HSN Code -->
+                <div class="row g-3 mb-1">
+                    <div class="col-md-6">
+                        <label class="ep-label">Company Name</label>
+                        <select id="quickCompany" class="ep-input">
+                            <option value="">— Select Company —</option>
+                            {% for company in drug_companies %}
+                            <option value="{{ company.id }}">{{ company.company_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="ep-label">HSN Code</label>
+                        <input type="text" id="quickHsn" class="ep-input" placeholder="e.g. 30049099"
+                               maxlength="8" inputmode="numeric"
+                               oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
+                    </div>
+                </div>
+
             </div>
-            <div class="mt-2">
-                <label class="ep-label">Tax Rate</label>
-                <select id="quickTax" class="ep-input">
-                    {% for tax in product_taxes %}
-                    <option value="{{ tax.id }}">{{ tax.tax_name }} ({{ tax.tax_rate }}%)</option>
-                    {% endfor %}
-                </select>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn-save-modal btn btn-primary" onclick="saveQuickProduct()">
+                    <i class="fas fa-save me-1"></i> Save Medicine
+                </button>
             </div>
-        </div>
-        <div class="modal-footer">
-            <button class="btn-save-modal btn btn-primary" onclick="saveQuickProduct()">Save Medicine</button>
         </div>
     </div>
-</div>
 </div>
 
 <div class="ep-toast" id="epToast"></div>
@@ -806,12 +849,42 @@
     }
 
     window.saveQuickProduct = async function() {
-        const data = { name: document.getElementById('quickName').value, packing: document.getElementById('quickPacking').value, conversion_factor: document.getElementById('quickConv').value, tax_id: document.getElementById('quickTax').value };
-        if(!data.name) return showToast('Name required','error');
-        const resp = await fetch('/api/products/quick-add/', { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken}, body:JSON.stringify(data) });
-        const res = await resp.json();
-        if(res.success) { bootstrap.Modal.getInstance(document.getElementById('quickAddModal')).hide(); showToast('Medicine added'); document.getElementById('productSearch').value=res.name; document.getElementById('productSearch').dispatchEvent(new Event('input')); }
-        else showToast('Error','error');
+        const name = document.getElementById('quickName').value.trim();
+        if (!name) return showToast('Medicine name is required', 'error');
+
+        const data = {
+            name:              name,
+            packing:           document.getElementById('quickPacking').value.trim(),
+            conversion_factor: document.getElementById('quickConv').value || 1,
+            tax_id:            document.getElementById('quickTax').value || null,
+            schedule_id:       document.getElementById('quickSchedule').value || null,
+            company_id:        document.getElementById('quickCompany').value || null,
+            hsn_code:          document.getElementById('quickHsn').value.trim() || null,
+        };
+
+        try {
+            const resp = await fetch('/api/products/quick-add/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify(data)
+            });
+            const res = await resp.json();
+            if (res.success) {
+                bootstrap.Modal.getInstance(document.getElementById('quickAddModal')).hide();
+                // Reset modal fields for next use
+                ['quickName','quickPacking','quickHsn'].forEach(id => document.getElementById(id).value = '');
+                document.getElementById('quickConv').value = 1;
+                ['quickTax','quickSchedule','quickCompany'].forEach(id => document.getElementById(id).value = '');
+                showToast(`Medicine "${res.name}" added successfully`);
+                // Populate search so user can immediately add to invoice
+                document.getElementById('productSearch').value = res.name;
+                document.getElementById('productSearch').dispatchEvent(new Event('input'));
+            } else {
+                showToast('Error: ' + (res.error || 'Could not save medicine'), 'error');
+            }
+        } catch (err) {
+            showToast('Error: ' + err.message, 'error');
+        }
     };
     window.removeItem = removeItem;
     window.calculateDiscount = calculateDiscount;
