@@ -1107,9 +1107,41 @@
         max-height: 250px;
         overflow-y: auto;
     }
-    .search-item:hover, .search-item.selected-item,
-    .batch-suggestion-item:hover, .batch-suggestion-item.selected-item {
-        background-color: var(--brand-light, #f0f4f9) !important;
+    /* ── Product & Batch dropdown hover / keyboard-selected highlight ── */
+    .search-item {
+        transition: background 0.12s ease, border-left-color 0.12s ease, transform 0.1s ease;
+        border-left: 3px solid transparent;
+        cursor: pointer;
+    }
+    .search-item:hover {
+        background: linear-gradient(90deg, #e8f0fe 0%, #f3f6ff 100%) !important;
+        border-left-color: #4361ee !important;
+        transform: translateX(2px);
+        outline: none;
+    }
+    .search-item.selected-item {
+        background: linear-gradient(90deg, #d0e4ff 0%, #e8f1ff 100%) !important;
+        border-left: 3px solid #2563eb !important;
+        box-shadow: inset 0 0 0 1px rgba(37,99,235,0.15);
+        transform: translateX(3px);
+        outline: none;
+    }
+    .batch-suggestion-item {
+        transition: background 0.12s ease, border-left-color 0.12s ease, transform 0.1s ease;
+        border-left: 3px solid transparent;
+        cursor: pointer;
+    }
+    .batch-suggestion-item:hover {
+        background: linear-gradient(90deg, #fef3e8 0%, #fff8f2 100%) !important;
+        border-left-color: #f97316 !important;
+        transform: translateX(2px);
+        outline: none;
+    }
+    .batch-suggestion-item.selected-item {
+        background: linear-gradient(90deg, #ffe8d0 0%, #fff3e8 100%) !important;
+        border-left: 3px solid #ea6c00 !important;
+        box-shadow: inset 0 0 0 1px rgba(234,108,0,0.15);
+        transform: translateX(3px);
         outline: none;
     }
 </style>

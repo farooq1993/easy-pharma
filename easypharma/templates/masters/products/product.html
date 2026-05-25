@@ -19,7 +19,7 @@
     
     <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
         <div class="card-body p-4 p-md-5">
-            <form method="POST">
+            <form method="POST" id="productForm" onsubmit="return handleProductSubmit(event);">
                 {% csrf_token %}
                 <div class="row g-4">
                     <!-- Product Name -->
@@ -115,7 +115,7 @@
                 </div>
 
                 <div class="mt-5 d-flex gap-2">
-                    <button type="submit" class="btn btn-success btn-lg px-5 fw-bold shadow-sm">
+                    <button type="submit" id="mainSaveBtn" class="btn btn-success btn-lg px-5 fw-bold shadow-sm">
                         <i class="fas fa-save me-2"></i> {% if product %}UPDATE PRODUCT{% else %}SAVE PRODUCT{% endif %}
                     </button>
                     <a href="{% url 'all-products' %}" class="btn btn-light btn-lg px-4 border">CANCEL</a>
@@ -124,6 +124,68 @@
         </div>
     </div>
 </div>
+
+<!-- Duplicate / Saving Guard -->
+<div class="modal fade" id="dupCheckModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+
+      <!-- Saving spinner state -->
+      <div id="dupSavingState" class="text-center px-4 py-5">
+        <div class="saving-spinner mx-auto mb-3"></div>
+        <h5 class="fw-bold mb-1">Saving Product…</h5>
+        <p class="text-muted small mb-0">Please wait, do not close this page.</p>
+      </div>
+
+      <!-- Duplicate found state -->
+      <div id="dupFoundState" style="display:none;">
+        <div class="modal-header border-0 pb-0 pt-4 px-4">
+          <div class="d-flex align-items-center gap-2">
+            <span class="dup-icon-wrap"><i class="fas fa-exclamation-triangle text-warning fs-4"></i></span>
+            <h5 class="fw-bold mb-0">Possible Duplicate Found</h5>
+          </div>
+        </div>
+        <div class="modal-body px-4 pt-2 pb-3">
+          <p class="text-muted small mb-3">A product with a similar name already exists in your inventory:</p>
+          <div id="dupMatchList" class="dup-match-list mb-3"></div>
+          <p class="small mb-0">Do you still want to create a new product?</p>
+        </div>
+        <div class="modal-footer border-0 pt-0 px-4 pb-4 gap-2">
+          <button class="btn btn-outline-secondary px-4" onclick="cancelDupSave()"><i class="fas fa-times me-1"></i> No, Go Back</button>
+          <button class="btn btn-warning px-4 fw-bold" onclick="confirmDupSave()"><i class="fas fa-save me-1"></i> Yes, Save Anyway</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<style>
+  .saving-spinner {
+    width: 52px; height: 52px;
+    border: 5px solid #e9ecef;
+    border-top-color: #198754;
+    border-radius: 50%;
+    animation: spin 0.75s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .dup-icon-wrap {
+    width: 40px; height: 40px;
+    background: #fff3cd; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .dup-match-list { display: flex; flex-direction: column; gap: 8px; }
+  .dup-match-item {
+    display: flex; align-items: center; gap: 10px;
+    background: #fff8f0; border: 1px solid #ffe0b2;
+    border-left: 4px solid #f97316;
+    border-radius: 8px; padding: 10px 14px;
+    font-size: 0.875rem;
+  }
+  .dup-match-item .dup-name { font-weight: 600; color: #1a1a2e; }
+  .dup-match-item .dup-meta { color: #6c757d; font-size: 0.78rem; margin-top: 1px; }
+</style>
 
 <!-- Generic Quick Add Modal -->
 <div class="modal fade" id="quickAddModal" tabindex="-1" aria-hidden="true">
@@ -243,5 +305,88 @@ function submitQuickAdd() {
         console.error(error);
     });
 }
+
+// ── Duplicate check + double-submit guard ──────────────────────────
+let _formSubmitAllowed = false;
+let _dupModal;
+
+document.addEventListener('DOMContentLoaded', function () {
+    _dupModal = new bootstrap.Modal(document.getElementById('dupCheckModal'));
+});
+
+async function handleProductSubmit(e) {
+    if (_formSubmitAllowed) return true; // second pass — real submit
+    e.preventDefault();
+
+    const nameInput = document.getElementById('productName');
+    const name = nameInput.value.trim();
+    if (!name) return false;
+
+    // Show saving spinner
+    document.getElementById('dupSavingState').style.display = '';
+    document.getElementById('dupFoundState').style.display = 'none';
+    _dupModal.show();
+
+    try {
+        const resp = await fetch('/api/products/master-search/?q=' + encodeURIComponent(name));
+        const matches = await resp.json();
+
+        // Filter: similar name (case-insensitive contains)
+        const similar = matches.filter(p =>
+            p.name.toLowerCase().includes(name.toLowerCase()) ||
+            name.toLowerCase().includes(p.name.toLowerCase())
+        ).slice(0, 4);
+
+        if (similar.length === 0) {
+            // No duplicates — proceed
+            _formSubmitAllowed = true;
+            _dupModal.hide();
+            document.getElementById('productForm').submit();
+        } else {
+            // Show duplicates
+            const list = document.getElementById('dupMatchList');
+            list.innerHTML = similar.map(p => `
+                <div class="dup-match-item">
+                  <i class="fas fa-pills text-warning fs-5"></i>
+                  <div>
+                    <div class="dup-name">${p.name}</div>
+                    <div class="dup-meta">${p.packing || 'No packing info'} &nbsp;|&nbsp; GST: ${p.tax_rate ?? '—'}%</div>
+                  </div>
+                </div>`).join('');
+            document.getElementById('dupSavingState').style.display = 'none';
+            document.getElementById('dupFoundState').style.display = '';
+        }
+    } catch (err) {
+        // API failed — don't block save, just proceed
+        console.warn('Duplicate check failed, proceeding:', err);
+        _formSubmitAllowed = true;
+        _dupModal.hide();
+        document.getElementById('productForm').submit();
+    }
+    return false;
+}
+
+function cancelDupSave() {
+    _dupModal.hide();
+    _formSubmitAllowed = false;
+}
+
+function confirmDupSave() {
+    _formSubmitAllowed = true;
+    _dupModal.hide();
+    document.getElementById('productForm').submit();
+}
+
+// Disable save button once real submit fires (double-click guard)
+document.addEventListener('DOMContentLoaded', function () {
+    document.getElementById('productForm').addEventListener('submit', function () {
+        const btn = document.getElementById('mainSaveBtn');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Saving…';
+        }
+    });
+});
+
 </script>
 {% endblock %}

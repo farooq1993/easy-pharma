@@ -733,6 +733,9 @@ Prod.Type : []AYURVEDIC[]
 
         fetch("{% url 'migration_parse' %}", {
             method: "POST",
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
             body: formData
         })
         .then(res => res.json())
