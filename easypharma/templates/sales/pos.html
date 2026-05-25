@@ -257,6 +257,9 @@
                             <div class="mb-3 p-2 bg-light rounded">
                                 <div><kbd>Esc</kbd> → Focus search from qty field</div>
                             </div>
+                            <div class="mb-3 p-2 bg-light rounded">
+                                <div><kbd>Tab</kbd> → Jump to Patient Details (from last item)</div>
+                            </div>
                             <div class="p-2 bg-light rounded">
                                 <div><kbd>F12</kbd> → Complete billing</div>
                             </div>
@@ -1003,7 +1006,37 @@
         } else if (event.key === 'Escape') {
             event.preventDefault();
             document.getElementById('productSearch').focus();
+        } else if (event.key === 'Tab') {
+            // If this is the LAST qty row, Tab should jump to Patient Details
+            const allQtyInputs = document.querySelectorAll('.qty-input');
+            const isLast = index === cart.length - 1;
+            if (isLast && !event.shiftKey) {
+                event.preventDefault();
+                focusPatientDetails();
+            }
+            // If not last, let Tab naturally move to next qty input (browser default)
         }
+    }
+
+    function focusPatientDetails() {
+        const patientNameInput = document.getElementById('patientName');
+        if (!patientNameInput) return;
+
+        // Scroll sidebar into view smoothly
+        patientNameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // Pulse-highlight the entire Patient Details section
+        const section = patientNameInput.closest('.mb-4');
+        if (section) {
+            section.classList.add('patient-section-pulse');
+            setTimeout(() => section.classList.remove('patient-section-pulse'), 1200);
+        }
+
+        // Focus the name field after scroll settles
+        setTimeout(() => {
+            patientNameInput.focus();
+            patientNameInput.select();
+        }, 180);
     }
 
     async function saveQuickProduct() {
@@ -1253,6 +1286,46 @@
         overflow: hidden;
         margin-top: 8px;
         background: white;
+    }
+
+    /* ── Product dropdown batch-item highlight ── */
+    .batch-item {
+        cursor: pointer;
+        transition: background 0.12s ease, border-left-color 0.12s ease, transform 0.1s ease !important;
+    }
+    .batch-item:hover {
+        background: linear-gradient(90deg, #e8f0fe 0%, #f3f6ff 100%) !important;
+        border-left-color: #4361ee !important;
+        transform: translateX(3px) !important;
+    }
+    .batch-item.selected-batch {
+        background: linear-gradient(90deg, #d0e4ff 0%, #e8f1ff 100%) !important;
+        border-left-color: #2563eb !important;
+        border-left-width: 4px !important;
+        box-shadow: inset 0 0 0 1px rgba(37,99,235,0.18) !important;
+        transform: translateX(4px) !important;
+    }
+    .batch-item.selected-batch .fw-bold.text-primary {
+        color: #1d4ed8 !important;
+    }
+    .batch-item.selected-batch .add-btn {
+        background: #1d4ed8 !important;
+        border-color: #1d4ed8 !important;
+        box-shadow: 0 2px 8px rgba(29,78,216,0.35);
+    }
+
+    /* ── Patient Details section pulse on Tab-in ── */
+    @keyframes patientPulse {
+        0%   { box-shadow: 0 0 0 0 rgba(34,197,94,0.0); background: transparent; }
+        30%  { box-shadow: 0 0 0 6px rgba(34,197,94,0.25); background: rgba(34,197,94,0.07); }
+        70%  { box-shadow: 0 0 0 10px rgba(34,197,94,0.10); background: rgba(34,197,94,0.04); }
+        100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.0); background: transparent; }
+    }
+    .patient-section-pulse {
+        animation: patientPulse 1.2s ease forwards;
+        border-radius: 10px;
+        padding: 8px !important;
+        margin: -8px !important;
     }
 
     .batch-list {
