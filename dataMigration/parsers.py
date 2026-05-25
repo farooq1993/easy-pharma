@@ -294,7 +294,8 @@ def parse_text_lines_to_rows(text_content, drop_first_column=False):
             continue
 
         # Split by tabs or double spaces or commas
-        parts = re.split(r',|\t| {2,}', line_str)
+        #parts = re.split(r',|\t| {2,}', line_str)
+        parts = re.split(r'\t| {2,}', line_str)
         cleaned_parts = [clean_value(x) for x in parts if x.strip()]
 
         if not cleaned_parts:
@@ -530,83 +531,156 @@ def is_multiline_supplier_layout(rows):
     return False
 
 def parse_supplier_block(block):
-    """
-    Parses a block of grouped rows corresponding to a single supplier.
-    """
+
     supplier = {
         'name': '',
-        'code': '',
-        'address': '',
         'phone': '',
+        'address': '',
+        'email': '',
         'gst': '',
-        'dl': '',
-        'email': ''
+        'dl': ''
     }
-    
+
     address_parts = []
-    phone_parts = []
-    
+
     for row in block:
+
         for cell in row:
-            cell_str = str(cell).strip()
-            if not cell_str:
+
+            text = str(cell).strip()
+
+            if not text:
                 continue
-            
-            # Split by first colon to get key-value
-            if ':' in cell_str:
-                key, val = cell_str.split(':', 1)
-                key = key.strip()
-                val = val.strip()
-                
-                # Check keys
-                key_lower = key.lower()
-                
-                if key_lower == 'name':
-                    # Clean any nested labels in value just in case
-                    cleaned_val = clean_nested_labels(val)
-                    # Extract code inside brackets if any
-                    code_match = re.match(r'^\[([^\]]+)\]\s*(.*)', cleaned_val)
-                    if code_match:
-                        supplier['code'] = code_match.group(1).strip().upper()
-                        supplier['name'] = code_match.group(2).strip().upper()
-                    else:
-                        supplier['name'] = cleaned_val.strip().upper()
-                        
-                elif 'address' in key_lower or 'add.line' in key_lower or 'add.l' in key_lower or key_lower == 'city':
-                    cleaned_val = clean_nested_labels(val)
-                    if cleaned_val and cleaned_val not in address_parts:
-                        address_parts.append(cleaned_val)
-                        
-                elif 'phone' in key_lower or 'mobile' in key_lower:
-                    cleaned_val = clean_nested_labels(val)
-                    if cleaned_val:
-                        phone_clean = re.sub(r'[^\d]+', '', cleaned_val)
-                        if phone_clean and phone_clean not in phone_parts:
-                            phone_parts.append(phone_clean)
-                            
-                elif 'gst' in key_lower or 'gstin' in key_lower:
-                    cleaned_val = clean_nested_labels(val)
-                    supplier['gst'] = cleaned_val.strip().upper()
-                    
-                elif 'dl' in key_lower or 'lic' in key_lower or 'license' in key_lower:
-                    cleaned_val = clean_nested_labels(val)
-                    supplier['dl'] = cleaned_val.strip().upper()
-                    
-                elif 'email' in key_lower or 'mail' in key_lower:
-                    cleaned_val = clean_nested_labels(val)
-                    supplier['email'] = cleaned_val.strip()
-            else:
-                # If there's no colon but it's a non-empty string and we have a valid key,
-                # e.g., some raw text address line that doesn't have a colon.
-                pass
-                
-    # Compile address
-    if address_parts:
-        supplier['address'] = ", ".join(address_parts)
-    # Compile phone
-    if phone_parts:
-        supplier['phone'] = ", ".join(phone_parts)
-        
+
+            upper = text.upper()
+
+            # ---------------------------------
+            # NAME
+            # ---------------------------------
+
+            if upper.startswith('NAME'):
+
+                match = re.search(
+                    r'Name\s*:\s*(?:\[[^\]]+\])?\s*(.*)',
+                    text,
+                    re.IGNORECASE
+                )
+
+                if match:
+
+                    supplier['name'] = (
+                        match.group(1)
+                        .strip()
+                        .upper()
+                    )
+
+                continue
+
+            # ---------------------------------
+            # ADDRESS
+            # ---------------------------------
+
+            elif upper.startswith('ADDRESS'):
+
+                addr = re.sub(
+                    r'Address\s*:',
+                    '',
+                    text,
+                    flags=re.IGNORECASE
+                ).strip()
+
+                if addr:
+                    address_parts.append(addr)
+
+                continue
+
+            # ---------------------------------
+            # CITY
+            # ---------------------------------
+
+            elif upper.startswith('CITY'):
+
+                city = re.sub(
+                    r'City\s*:',
+                    '',
+                    text,
+                    flags=re.IGNORECASE
+                ).strip()
+
+                if city:
+                    address_parts.append(city)
+
+                continue
+
+            # ---------------------------------
+            # PHONE
+            # ---------------------------------
+
+            elif upper.startswith('PHONE'):
+
+                phone = re.sub(
+                    r'Phone\s*:',
+                    '',
+                    text,
+                    flags=re.IGNORECASE
+                )
+
+                phone = re.sub(
+                    r'[^\d]',
+                    '',
+                    phone
+                )
+
+                if phone:
+                    supplier['phone'] = phone
+
+                continue
+
+            # ---------------------------------
+            # EMAIL
+            # ---------------------------------
+
+            elif 'EMAIL' in upper:
+
+                email = text.split(':')[-1].strip()
+
+                supplier['email'] = email
+
+                continue
+
+            # ---------------------------------
+            # GST
+            # ---------------------------------
+
+            elif 'GST' in upper:
+
+                gst = text.split(':')[-1].strip()
+
+                supplier['gst'] = gst.upper()
+
+                continue
+
+            # ---------------------------------
+            # DL NUMBER
+            # ---------------------------------
+
+            elif 'DL' in upper:
+
+                dl = text.split(':')[-1].strip()
+
+                supplier['dl'] = dl.upper()
+
+                continue
+
+    # Merge address properly
+    supplier['address'] = ", ".join(
+        [x for x in address_parts if x]
+    )
+
+    # fallback phone
+    if not supplier['phone']:
+        supplier['phone'] = '0000000000'
+
     return supplier
 
 def parse_suppliers_from_rows_multiline(rows):
@@ -650,31 +724,182 @@ def parse_suppliers_from_rows_multiline(rows):
     return suppliers
 
 def parse_suppliers_from_text(text_content):
-    """
-    Parses suppliers from raw copy-pasted block text report.
-    Works for both the stateful multi-line layout and standard text reports.
-    """
-    # Convert text to rows first using the existing robust line tokenizer
-    rows = parse_text_lines_to_rows(text_content, drop_first_column=False)
-    
-    if is_multiline_supplier_layout(rows):
-        return parse_suppliers_from_rows_multiline(rows)
-        
-    # Fallback to the original block splitter logic for single-record text blocks
-    blocks = re.split(r'\n[-\s\+=_\.\*#]+\n|\n\n', text_content)
+
+    import re
+
     suppliers = []
-    
-    for block in blocks:
-        lines = [l.strip() for l in block.split('\n') if l.strip()]
-        if not lines:
+
+    current = None
+
+    lines = text_content.splitlines()
+
+    for raw_line in lines:
+
+        line = str(raw_line).strip()
+
+        if not line:
             continue
-            
-        # Treat each line as a single cell row to reuse parse_supplier_block
-        supplier_rows = [[line] for line in lines]
-        supplier = parse_supplier_block(supplier_rows)
-        if supplier['name']:
-            suppliers.append(supplier)
-            
+
+        # remove csv junk
+        line = line.strip(',')
+
+        upper = line.upper()
+
+        # =====================================
+        # NEW SUPPLIER
+        # =====================================
+
+        if re.search(r'NAME\s*:', upper):
+
+            # save previous
+            if current and current.get('name'):
+
+                suppliers.append(current)
+
+            current = {
+                'name': '',
+                'phone': '0000000000',
+                'address': '',
+                'email': '',
+                'gst': '',
+                'dl': ''
+            }
+
+            match = re.search(
+                r'NAME\s*:\s*(?:\[[^\]]+\])?\s*(.*)',
+                line,
+                re.IGNORECASE
+            )
+
+            if match:
+
+                name = (
+                    match.group(1)
+                    .replace(',', '')
+                    .strip()
+                    .upper()
+                )
+
+                current['name'] = name
+
+            continue
+
+        # =====================================
+        # ADDRESS
+        # =====================================
+
+        if re.search(r'ADDRESS\s*:', upper):
+
+            if current:
+
+                match = re.search(
+                    r'ADDRESS\s*:\s*(.*)',
+                    line,
+                    re.IGNORECASE
+                )
+
+                if match:
+
+                    addr = (
+                        match.group(1)
+                        .split('Res.Add')[0]
+                        .replace('"', '')
+                        .strip(' ,')
+                    )
+
+                    current['address'] = addr
+
+            continue
+
+        # =====================================
+        # CITY
+        # =====================================
+
+        if re.search(r'CITY\s*:', upper):
+
+            if current:
+
+                match = re.search(
+                    r'CITY\s*:\s*(.*)',
+                    line,
+                    re.IGNORECASE
+                )
+
+                if match:
+
+                    city = (
+                        match.group(1)
+                        .split(',')[0]
+                        .strip()
+                    )
+
+                    if city and city != '-':
+
+                        if current['address']:
+
+                            current['address'] += f", {city}"
+
+                        else:
+
+                            current['address'] = city
+
+            continue
+
+        # =====================================
+        # PHONE
+        # =====================================
+
+        if re.search(r'PHONE\s*:', upper):
+
+            if current:
+
+                nums = re.findall(r'\d{10}', line)
+
+                if nums:
+
+                    current['phone'] = nums[0]
+
+            continue
+
+        # =====================================
+        # GST
+        # =====================================
+
+        if 'GST' in upper:
+
+            if current:
+
+                nums = re.findall(
+                    r'[0-9A-Z]{15}',
+                    upper
+                )
+
+                if nums:
+
+                    current['gst'] = nums[0]
+
+        # =====================================
+        # DL
+        # =====================================
+
+        if 'DL' in upper:
+
+            if current:
+
+                dl = line.split(':')[-1].strip()
+
+                if dl and dl != '-':
+
+                    current['dl'] = dl
+
+    # append last supplier
+    if current and current.get('name'):
+
+        suppliers.append(current)
+
+    print("==== PARSED SUPPLIERS ====")
+    print(suppliers[:5])
+
     return suppliers
 
 def parse_suppliers_from_rows(rows):
