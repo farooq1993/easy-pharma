@@ -48,7 +48,8 @@ from dataMigration.parsers import (
     parse_products,
     parse_stock_batches,
     is_multiline_supplier_layout,
-    parse_product_master_text
+    parse_product_master_text,
+    parse_suppliers_from_rows_multiline
 )
 
 class OrganizationRequiredMixin(UserPassesTestMixin):
@@ -197,68 +198,120 @@ def _batch_enrich(parsed_data, import_type, tenant):
     }
 
 
-def _run_parse_job(job_id, import_type, input_method, content, drop_first_col, tenant_id):
-    """
-    Background thread: parse content → batch-enrich → cache result.
-    """
+def _run_parse_job(job_id, import_type, input_method,content, drop_first_col, tenant_id):
+
     _CACHE_KEY = f'parse_job_{job_id}'
+
     try:
-        cache.set(_CACHE_KEY, {'status': 'parsing', 'progress': 15}, timeout=3600)
 
-        # ── 1. Tokenise ────────────────────────────────────────────────────
-        if import_type == 'supplier' and input_method == 'text':
+        cache.set(_CACHE_KEY,
+            {'status': 'parsing', 'progress': 15},timeout=3600)
+
+        # =====================================================
+        # SUPPLIER IMPORT
+        # =====================================================
+
+        if import_type == 'supplier':
+
             parsed_data = parse_suppliers_from_text(content)
-        else:
+
+        # =====================================================
+        # COMPANY IMPORT
+        # =====================================================
+
+        elif import_type == 'company':
+
             if input_method == 'file':
-                rows = parse_csv_to_rows(content, drop_first_column=drop_first_col)
+
+                rows = parse_csv_to_rows(
+                    content,
+                    drop_first_column=False
+                )
+
             else:
-                rows = parse_text_lines_to_rows(content, drop_first_column=drop_first_col)
 
-            if import_type == 'supplier':
-                if not is_multiline_supplier_layout(rows) and drop_first_col:
-                    rows = [r[1:] for r in rows if r]
-                parsed_data = parse_suppliers_from_rows(rows)
-            elif import_type == 'company':
-                parsed_data = parse_companies(rows)
+                rows = parse_text_lines_to_rows(
+                    content,
+                    drop_first_column=False
+                )
 
-            elif import_type == 'product':
-                if input_method == 'text':
-                    parsed_data = parse_product_master_text(content)
-                    print("=========== lin 227 FINAL PREVIEW DATA ===========")
-                    print(parsed_data[:20])
-                else:
-                    parsed_data = parse_products(rows)
-                
+            parsed_data = parse_companies(rows)
 
-            # elif import_type == 'product':
-            #     parsed_data = parse_products(rows)
-            elif import_type == 'stock':
-                parsed_data = parse_stock_batches(rows)
+        # =====================================================
+        # PRODUCT IMPORT
+        # =====================================================
+
+        elif import_type == 'product':
+
+            if input_method == 'text':
+
+                parsed_data = parse_product_master_text(
+                    content
+                )
+
             else:
-                parsed_data = []
 
-        logger.info(f'Parse job {job_id}: parsed {len(parsed_data)} {import_type} records')
-        print("=========== FINAL PREVIEW DATA ===========")
-        print(parsed_data[:20])
-        cache.set(_CACHE_KEY, {'status': 'enriching', 'progress': 60}, timeout=3600)
+                rows = parse_csv_to_rows(
+                    content,
+                    drop_first_column=False
+                )
 
-        # ── 2. Batch DB enrichment (2-4 queries total) ────────────────────
+                parsed_data = parse_products(rows)
+
+        # =====================================================
+        # STOCK IMPORT
+        # =====================================================
+
+        elif import_type == 'stock':
+
+            rows = parse_text_lines_to_rows(
+                content,
+                drop_first_column=drop_first_col
+            )
+
+            parsed_data = parse_stock_batches(rows)
+
+        else:
+
+            parsed_data = []
+
+        logger.info(
+            f'Parse job {job_id}: parsed '
+            f'{len(parsed_data)} {import_type} records'
+        )
+
+        cache.set(
+            _CACHE_KEY,
+            {'status': 'enriching', 'progress': 60},
+            timeout=3600
+        )
+
         tenant = Tenant.objects.get(id=tenant_id)
-        preview_data, summary = _batch_enrich(parsed_data, import_type, tenant)
 
-        # ── 3. Store result ────────────────────────────────────────────────
+        preview_data, summary = _batch_enrich(
+            parsed_data,
+            import_type,
+            tenant
+        )
+
         cache.set(_CACHE_KEY, {
             'status': 'done',
             'progress': 100,
             'data': preview_data,
             'summary': summary,
         }, timeout=3600)
-        logger.info(f'Parse job {job_id}: done — {summary["total"]} records')
 
     except Exception as exc:
         import traceback
         traceback.print_exc()
-        cache.set(_CACHE_KEY, {'status': 'error', 'error': str(exc)}, timeout=3600)
+        cache.set(_CACHE_KEY,
+            {
+                'status': 'error',
+                'error': str(exc)
+            },
+            timeout=3600
+        )
+
     finally:
         connection.close()
 

@@ -32,6 +32,7 @@ from dataMigration.parsers import (
     parse_suppliers_from_text,
     parse_products,
     parse_stock_batches,
+    parse_suppliers_from_rows_multiline,
 )
 
 logger = logging.getLogger(__name__)
@@ -111,7 +112,6 @@ class MigrationBackgroundWorker(threading.Thread):
                     parsed_data = parse_companies(rows)
                     all_parsed_items = parsed_data
                     total_items = len(all_parsed_items)
-                    print(f"Parsed {len(all_parsed_items)} companies")
                     # all_parsed_items = parse_companies(cleaned_rows)
                     _bulk_import_companies(
                         all_parsed_items,
@@ -120,16 +120,16 @@ class MigrationBackgroundWorker(threading.Thread):
                         total_items
                     )
                 elif import_type == 'supplier':
-                    all_parsed_items = parse_suppliers_from_rows(cleaned_rows)
+
+                    all_parsed_items = parse_suppliers_from_text(self.data_content)
+                    
                 
                 elif import_type == 'product':
                     if self.input_method == 'text':
                         all_parsed_items = parse_product_master_text(self.data_content)
-                        print("==== All items =====", all_parsed_items)
                     else:
                         all_parsed_items = parse_products(cleaned_rows)
-                # elif import_type == 'product':
-                #     all_parsed_items = parse_products(cleaned_rows)
+    
                 elif import_type == 'stock':
                     all_parsed_items = parse_stock_batches(cleaned_rows)
                 else:
