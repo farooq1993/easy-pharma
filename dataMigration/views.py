@@ -214,7 +214,7 @@ def _run_parse_job(job_id, import_type, input_method,content, drop_first_col, te
         if import_type == 'supplier':
 
             parsed_data = parse_suppliers_from_text(content)
-
+            
         # =====================================================
         # COMPANY IMPORT
         # =====================================================
@@ -248,6 +248,7 @@ def _run_parse_job(job_id, import_type, input_method,content, drop_first_col, te
                 parsed_data = parse_product_master_text(
                     content
                 )
+                print(f"Parsed {len(parsed_data)} products from text input")
 
             else:
 
