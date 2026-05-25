@@ -3,7 +3,10 @@ from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.core.paginator import Paginator
 from django.db.models import Q
-from easypharma.models.Items import Products
+from easypharma.models.Items import (Products,DrugCompany, ProductContent, 
+                                     ProductSchedule,
+                                     ProductTax, ProductType)
+
 from easypharma.models.purchase_invoice import Supplier, PurchaseInvoice, PurchaseItem
 from easypharma.models.stock import StockBatch
 from django.db import transaction
@@ -18,7 +21,9 @@ class PurchaseEntryView(View):
         products = Products.objects.filter(tenant=request.tenant)
         from easypharma.models.Items import ProductTax
         product_taxes = ProductTax.objects.filter(tenant=request.tenant)
-        
+        product_schedules = ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True))
+        drug_companies = DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True))
+
         edit_data = None
         if invoice_id:
             try:
@@ -58,6 +63,8 @@ class PurchaseEntryView(View):
             'suppliers': suppliers,
             'products': products,
             'product_taxes': product_taxes,
+            'product_schedules': product_schedules,
+            'drug_companies': drug_companies,
             'edit_data': edit_data,
             'today': now().date()
         })

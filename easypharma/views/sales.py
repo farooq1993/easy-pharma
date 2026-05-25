@@ -66,13 +66,15 @@ class POSView(View):
                 }
             except SaleInvoice.DoesNotExist:
                 edit_data = None
-
+        count = SaleInvoice.objects.filter(tenant=request.tenant).count()
+        next_invoice_number = f"INV-{request.tenant.id}-{count + 1}"
         return render(request, self.template_name, {
             'products': products,
             'customers': customers,
             'product_taxes': product_taxes,
             'default_doctor': default_doctor,
-            'edit_data': edit_data
+            'edit_data': edit_data,
+            'next_invoice_number': next_invoice_number,
         })
 
     def post(self, request):

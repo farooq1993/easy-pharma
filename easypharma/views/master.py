@@ -191,6 +191,22 @@ class ProductCreate(View):
         return redirect('all-products')
 
 class QuickProductAPI(View):
+    # Your purchase entry view (wherever it renders entry.html)
+    def get(self, request):
+        from django.db.models import Q
+        context = {
+            'suppliers': Supplier.objects.filter(tenant=request.tenant),
+            'product_taxes': ProductTax.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
+            
+            # ADD THESE TWO ↓
+            'product_schedules': ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
+            'drug_companies': DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
+            
+            'today': date.today(),
+        }
+        
+        return render(request, 'purchase/entry.html', context)
+        
     def post(self, request):
         try:
             data = json.loads(request.body)
@@ -198,7 +214,10 @@ class QuickProductAPI(View):
                 tenant=request.tenant,
                 product_name=data.get('name'),
                 product_packing=data.get('packing'),
-                product_tax_id=data.get('tax_id'),
+                product_tax_id=data.get('tax_id') or None,
+                product_schedule_id=data.get('schedule_id') or None,
+                compny_name_id=data.get('company_id') or None,
+                product_hsn_code=data.get('hsn_code') or '',
                 conversion_factor=int(data.get('conversion_factor', 1))
             )
             return JsonResponse({'success': True, 'id': product.id, 'name': product.product_name})

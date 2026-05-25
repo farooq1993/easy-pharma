@@ -46,6 +46,11 @@
                     <h5 class="fw-bold mb-0 text-success">
                         <i class="fas fa-prescription me-2"></i> Pharmacy POS
                     </h5>
+                     <span class="text-muted x-small text-uppercase fw-bold">Bill No.</span>
+                        <span id="runningBillNumber" class="badge fs-6 fw-bold px-3 py-2 rounded-pill"
+                            style="background: linear-gradient(135deg, #e8f5e9, #c8e6c9); color: #1b5e20; border: 1.5px solid #a5d6a7;">
+                            —
+                        </span>
                 </div>
 
                 <div class="card-body p-0">
@@ -105,18 +110,21 @@
                         <h6 class="fw-bold mb-3 small text-uppercase text-muted border-bottom pb-2">Patient Details</h6>
                         <div class="mb-2">
                             <input type="text" id="patientName" class="form-control border-0 bg-light py-2"
-                                placeholder="Patient Name (Tab to Next)">
+                                placeholder="Patient Name *">
+                            <div class="invalid-feedback">Patient name is required.</div>
                         </div>
                         <div class="mb-2">
                             <input type="text" id="patientAddress" class="form-control border-0 bg-light py-2"
-                                placeholder="Patient Address">
+                                placeholder="Patient Address *">
+                            <div class="invalid-feedback">Patient address is required.</div>
                         </div>
                         <div class="row g-2 mb-2">
                             <div class="col-6"><input type="text" id="patientPhone"
                                     class="form-control border-0 bg-light py-2" placeholder="Mobile"></div>
                             <div class="col-6"><input type="text" id="doctorName"
-                                    class="form-control border-0 bg-light py-2" placeholder="Dr. Name"
-                                    value="{% if default_doctor %}{{ default_doctor.name }}{% endif %}"></div>
+                                    class="form-control border-0 bg-light py-2" placeholder="Dr. Name *"
+                                    value="{% if default_doctor %}{{ default_doctor.name }}{% endif %}">
+                                <div class="invalid-feedback">Doctor name is required.</div></div>
                         </div>
                     </div>
 
@@ -152,16 +160,16 @@
                         <div class="payment-modes mb-4">
                             <div class="row g-2">
                                 <div class="col-6">
-                                    <input type="radio" class="btn-check" name="paymentMethod" id="payCash" value="Cash"
-                                        checked>
-                                    <label class="btn btn-outline-light text-dark w-100 py-2 rounded-3 border"
-                                        for="payCash">Cash</label>
+                                    <input type="radio" class="btn-check" name="paymentMethod" id="payCash" value="Cash" checked>
+                                    <label class="btn payment-btn payment-btn-active w-100 py-2 rounded-3 fw-bold" for="payCash">
+                                        <i class="fas fa-money-bill-wave me-1"></i> Cash
+                                    </label>
                                 </div>
                                 <div class="col-6">
-                                    <input type="radio" class="btn-check" name="paymentMethod" id="payCard"
-                                        value="Card">
-                                    <label class="btn btn-outline-light text-dark w-100 py-2 rounded-3 border"
-                                        for="payCard">Card/UPI</label>
+                                    <input type="radio" class="btn-check" name="paymentMethod" id="payCard" value="Card">
+                                    <label class="btn payment-btn w-100 py-2 rounded-3 fw-bold" for="payCard">
+                                        <i class="fas fa-credit-card me-1"></i> Card/UPI
+                                    </label>
                                 </div>
                             </div>
                         </div>
@@ -443,8 +451,23 @@
     let searchSelectedIndex = -1;
     const editData = {{ edit_data|default:'null'|safe }};
 
+    // ── Bill Number Badge ──
+    function updateBillNumberDisplay() {
+        const badge = document.getElementById('runningBillNumber');
+        if (!badge) return;
+        if (editData && editData.invoice_number) {
+            badge.textContent = editData.invoice_number;
+            badge.style.background = 'linear-gradient(135deg, #fff3e0, #ffe0b2)';
+            badge.style.color = '#e65100';
+            badge.style.border = '1.5px solid #ffcc80';
+        } else {
+            const nextNum = "{% if next_invoice_number %}{{ next_invoice_number }}{% endif %}";
+            badge.textContent = nextNum ? nextNum : 'NEW';
+        }
+    }
     // Check if ?mode=counter is present in URL
     document.addEventListener('DOMContentLoaded', () => {
+        updateBillNumberDisplay();
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('mode') === 'counter') {
             enableCounterMode();
@@ -1079,8 +1102,48 @@
     }
     function removeFromCart(index) { cart.splice(index, 1); renderCart(); }
 
+    // ── Payment mode highlight toggle ──
+    document.querySelectorAll('input[name="paymentMethod"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+            document.querySelectorAll('label.payment-btn').forEach(l => l.classList.remove('payment-btn-active'));
+            document.querySelector(`label[for="${radio.id}"]`).classList.add('payment-btn-active');
+        });
+    });
+
+    // ── Patient details validation ──
+    function validatePatientDetails() {
+        const isCounterMode = !document.getElementById('counterSaleBanner').classList.contains('d-none');
+        if (isCounterMode) return true;
+
+        const fields = [
+            { id: 'patientName',    value: document.getElementById('patientName').value.trim() },
+            { id: 'patientAddress', value: document.getElementById('patientAddress').value.trim() },
+            { id: 'doctorName',     value: document.getElementById('doctorName').value.trim() },
+        ];
+
+        let valid = true;
+        fields.forEach(f => {
+            const el = document.getElementById(f.id);
+            if (!f.value) {
+                el.classList.add('is-invalid');
+                el.addEventListener('input', () => el.classList.remove('is-invalid'), { once: true });
+                valid = false;
+            } else {
+                el.classList.remove('is-invalid');
+            }
+        });
+
+        if (!valid) {
+            const first = document.querySelector('#patientName.is-invalid, #patientAddress.is-invalid, #doctorName.is-invalid');
+            if (first) { first.scrollIntoView({ behavior: 'smooth', block: 'center' }); first.focus(); }
+        }
+        return valid;
+    }
+
     async function completeOrder() {
         if (cart.length === 0) return alert('Bill is empty');
+        if (!validatePatientDetails()) return;
+
         const checkoutBtn = document.querySelector('.btn-success.btn-lg');
         if (checkoutBtn) { checkoutBtn.disabled = true; }
         showLoader('Generating bill...');
@@ -1129,6 +1192,43 @@
 <style>
     .x-small {
         font-size: 0.65rem;
+    }
+
+    /* Validation styles */
+    .form-control.is-invalid {
+        border: 1.5px solid #dc3545 !important;
+        background-color: #fff5f5 !important;
+        animation: fieldShake 0.3s ease;
+    }
+    .form-control.is-invalid + .invalid-feedback {
+        display: block;
+        font-size: 0.75rem;
+        color: #dc3545;
+        margin-top: 4px;
+    }
+    @keyframes fieldShake {
+        0%, 100% { transform: translateX(0); }
+        25%       { transform: translateX(-4px); }
+        75%       { transform: translateX(4px); }
+    }
+
+    /* Payment mode buttons */
+    .payment-btn {
+        border: 2px solid #dee2e6;
+        background: #f8f9fa;
+        color: #495057;
+        transition: all 0.2s ease;
+    }
+    .payment-btn:hover {
+        border-color: #28a745;
+        background: #f0fdf4;
+        color: #28a745;
+    }
+    .payment-btn-active {
+        border-color: #28a745 !important;
+        background: linear-gradient(135deg, #d4edda, #c3e6cb) !important;
+        color: #155724 !important;
+        box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.2);
     }
 
     .w-60 {
