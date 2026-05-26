@@ -594,6 +594,36 @@
 
 {% block extra_js %}
 <script>
+
+    function getCookie(name) {
+
+        let cookieValue = null;
+
+        if (document.cookie && document.cookie !== '') {
+
+            const cookies = document.cookie.split(';');
+
+            for (let i = 0; i < cookies.length; i++) {
+
+                const cookie = cookies[i].trim();
+
+                if (
+                    cookie.substring(0, name.length + 1)
+                    === (name + '=')
+                ) {
+
+                    cookieValue = decodeURIComponent(
+                        cookie.substring(name.length + 1)
+                    );
+
+                    break;
+                }
+            }
+        }
+
+        return cookieValue;
+    }
+    
     // Global App State
     let activeImportType = "company";
     let activeInputMethod = "text";
@@ -779,6 +809,8 @@ Prod.Type : []AYURVEDIC[]
                     document.getElementById("parseIcon").classList.remove("d-none");
                     document.getElementById("btnParse").removeAttribute("disabled");
                     parsedRecords = job.data;
+                    window.currentParseJobId = jobId;
+                    console.log("PARSE JOB COMPLETED:",jobId);
                     renderPreviewTable(job.data, job.summary);
 
                 } else if (job.status === "error") {
@@ -919,6 +951,11 @@ Prod.Type : []AYURVEDIC[]
         }
 
         const payload = new FormData();
+        payload.append(
+            "job_id",
+            window.currentParseJobId
+        );
+        
         payload.append("import_type", activeImportType);
         payload.append("input_method", activeInputMethod);
         payload.append("drop_first_column", document.getElementById("dropFirstColumn").checked);
