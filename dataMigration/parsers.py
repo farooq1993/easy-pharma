@@ -767,115 +767,413 @@ def parse_products(rows):
 # ============================================================
 
 def parse_stock_batches(rows):
+
     start_time = time.time()
-    _dbg("parse_stock_batches: starting with %d rows", len(rows))
+
+    _dbg(
+        "parse_stock_batches: starting with %d rows",
+        len(rows)
+    )
+
     if not rows:
-        _dbg("WARNING: parse_stock_batches received 0 rows!")
+
+        _dbg(
+            "WARNING: parse_stock_batches received 0 rows!"
+        )
+
         return []
 
     batches = []
+
     current_product_code = ""
+
     current_product_name = ""
+
     current_company = ""
+
     current_type = "TABLET"
+
     skipped_no_batch = 0
+
     skipped_too_short = 0
 
-    for r in rows:
-        if len(r) < 2:
-            skipped_too_short += 1
-            continue
-        if any(x in r[0] for x in ["Product Name", "P.Code", "TULJAI MEDICALS", "Products Typewise", "Close"]):
-            continue
+    skipped_junk = 0
 
-        type_match = re.search(r'Prod\.Type\s*:\s*\[?\]?([^\[\]\:]+)', r[0], re.IGNORECASE)
-        if type_match:
-            current_type = type_match.group(1).strip().upper()
-            _dbg("  parse_stock_batches: product type changed to '%s'", current_type)
-            continue
+    for idx, r in enumerate(rows):
 
-        row_cells = r + [""] * (7 - len(r))
+        try:
 
-        expiry_idx = -1
-        for idx in range(len(row_cells)):
-            if parse_expiry_date(row_cells[idx]) is not None:
-                expiry_idx = idx
-                break
+            # =====================================================
+            # NORMALIZE ROW
+            # =====================================================
 
-        if expiry_idx == 2:
-            is_shifted = True
-        elif expiry_idx == 3:
-            is_shifted = False
-        else:
-            col_0 = row_cells[0].strip()
-            is_shifted = col_0.replace('.', '', 1).isdigit() and len(col_0) < 8
+            r = [
+                str(x).strip()
+                for x in r
+                if str(x).strip()
+            ]
 
-        if is_shifted:
-            mrp_str = row_cells[0]
-            batch_no = row_cells[1]
-            expiry_str = row_cells[2]
-            qty_str = row_cells[3]
-            company = row_cells[5] or row_cells[4] or current_company
-            p_code = current_product_code
-            p_name = current_product_name
-        else:
-            col_0 = row_cells[0].strip()
-            code_name_match = re.match(r'^(\d+)\s+(.*)', col_0)
-            if code_name_match:
-                p_code = code_name_match.group(1)
-                p_name = code_name_match.group(2).strip().upper()
+            if idx < 5:
+
+                _dbg(
+                    "NORMALIZED STOCK ROW %d = %s",
+                    idx,
+                    r
+                )
+
+            if len(r) < 2:
+
+                skipped_too_short += 1
+
+                continue
+
+            row_text = " ".join(r).upper()
+
+            # =====================================================
+            # SKIP JUNK ROWS
+            # =====================================================
+
+            junk_words = [
+                "PRODUCT NAME",
+                "P.CODE",
+                "TULJAI MEDICALS",
+                "PRODUCTS TYPEWISE",
+                "CLOSE",
+                "PAGE",
+                "PROD.TYPE",
+                "-----",
+            ]
+
+            if any(x in row_text for x in junk_words):
+
+                skipped_junk += 1
+
+                # Detect product type
+
+                type_match = re.search(
+                    r'PROD\.TYPE\s*:\s*\[?\]?([^\[\]\:]+)',
+                    row_text,
+                    re.IGNORECASE
+                )
+
+                if type_match:
+
+                    current_type = (
+                        type_match
+                        .group(1)
+                        .strip()
+                        .upper()
+                    )
+
+                    _dbg(
+                        "parse_stock_batches: product type changed to '%s'",
+                        current_type
+                    )
+
+                continue
+
+            # =====================================================
+            # PAD ROW
+            # =====================================================
+
+            row_cells = r + [""] * (7 - len(r))
+
+            # =====================================================
+            # FIND EXPIRY COLUMN
+            # =====================================================
+
+            expiry_idx = -1
+
+            for col_idx in range(len(row_cells)):
+
+                if parse_expiry_date(
+                    row_cells[col_idx]
+                ) is not None:
+
+                    expiry_idx = col_idx
+
+                    break
+
+            if expiry_idx == -1:
+
+                skipped_no_batch += 1
+
+                continue
+
+            # =====================================================
+            # DETECT SHIFTED ROW
+            # =====================================================
+
+            if expiry_idx == 2:
+
+                is_shifted = True
+
+            elif expiry_idx == 3:
+
+                is_shifted = False
+
             else:
-                p_name = col_0.upper()
-                p_code = ""
-            mrp_str = row_cells[1]
-            batch_no = row_cells[2]
-            expiry_str = row_cells[3]
-            qty_str = row_cells[4]
-            company = row_cells[6] or row_cells[5]
-            current_product_code = p_code
-            current_product_name = p_name
-            current_company = company or current_company
 
-        company = company.strip() if company else ""
-        if company:
-            m = re.match(r'^\d+\s+(.*)', company)
-            if m:
-                company = m.group(1).strip()
-            company = re.sub(r'\d+$', '', company).strip()
+                first_col = row_cells[0].strip()
 
-        try:
-            mrp = float(re.sub(r'[^\d\.]+', '', mrp_str)) if mrp_str else 0.0
-        except ValueError:
-            mrp = 0.0
-        try:
-            qty = int(re.sub(r'[^\d]+', '', qty_str)) if qty_str else 0
-        except ValueError:
-            qty = 0
+                is_shifted = (
+                    first_col
+                    .replace('.', '', 1)
+                    .isdigit()
+                    and expiry_idx == 2
+                )
 
-        expiry = parse_expiry_date(expiry_str)
+            # =====================================================
+            # SHIFTED / CONTINUATION ROW
+            # =====================================================
 
-        if p_name and batch_no:
-            conv_factor, derived_type = extract_conversion_and_type(p_name, p_name)
+            if is_shifted:
+
+                mrp_str = row_cells[0]
+
+                batch_no = row_cells[1]
+
+                expiry_str = row_cells[2]
+
+                qty_str = row_cells[3]
+
+                company = (
+                    row_cells[-1]
+                    or current_company
+                )
+
+                p_code = current_product_code
+
+                p_name = current_product_name
+
+            # =====================================================
+            # NEW PRODUCT ROW
+            # =====================================================
+
+            else:
+
+                col_0 = row_cells[0].strip()
+
+                code_name_match = re.match(
+                    r'^(\d+)\s+(.*)',
+                    col_0
+                )
+
+                if code_name_match:
+
+                    p_code = (
+                        code_name_match
+                        .group(1)
+                    )
+
+                    p_name = (
+                        code_name_match
+                        .group(2)
+                        .strip()
+                        .upper()
+                    )
+
+                else:
+
+                    p_name = col_0.upper()
+
+                    p_code = ""
+
+                mrp_str = row_cells[1]
+
+                batch_no = row_cells[2]
+
+                expiry_str = row_cells[3]
+
+                qty_str = row_cells[4]
+
+                company = (
+                    row_cells[-1]
+                    if row_cells else ""
+                )
+
+                current_product_code = p_code
+
+                current_product_name = p_name
+
+                current_company = (
+                    company
+                    or current_company
+                )
+
+            # =====================================================
+            # CLEAN COMPANY
+            # =====================================================
+
+            company = (
+                company.strip()
+                if company else ""
+            )
+
+            if company:
+
+                m = re.match(
+                    r'^\d+\s+(.*)',
+                    company
+                )
+
+                if m:
+
+                    company = (
+                        m.group(1)
+                        .strip()
+                    )
+
+                company = re.sub(
+                    r'\d+$',
+                    '',
+                    company
+                ).strip()
+
+            # =====================================================
+            # PARSE MRP
+            # =====================================================
+
+            try:
+
+                mrp = float(
+                    re.sub(
+                        r'[^\d\.]+',
+                        '',
+                        mrp_str
+                    )
+                ) if mrp_str else 0.0
+
+            except ValueError:
+
+                mrp = 0.0
+
+            # =====================================================
+            # PARSE QTY
+            # =====================================================
+
+            try:
+
+                qty = int(
+                    re.sub(
+                        r'[^\d]+',
+                        '',
+                        qty_str
+                    )
+                ) if qty_str else 0
+
+            except ValueError:
+
+                qty = 0
+
+            # =====================================================
+            # PARSE EXPIRY
+            # =====================================================
+
+            expiry = parse_expiry_date(
+                expiry_str
+            )
+
+            # =====================================================
+            # VALIDATE
+            # =====================================================
+
+            if not p_name:
+
+                skipped_no_batch += 1
+
+                continue
+
+            if not batch_no:
+
+                skipped_no_batch += 1
+
+                continue
+
+            # =====================================================
+            # CONVERSION + TYPE
+            # =====================================================
+
+            conv_factor, derived_type = (
+                extract_conversion_and_type(
+                    p_name,
+                    p_name
+                )
+            )
+
+            # =====================================================
+            # FINAL APPEND
+            # =====================================================
+
             batches.append({
+
                 'product_code': p_code,
+
                 'product_name': p_name,
-                'product_type': current_type if current_type != "TABLET" else derived_type,
+
+                'product_type': (
+                    current_type
+                    if current_type != "TABLET"
+                    else derived_type
+                ),
+
                 'conversion_factor': conv_factor,
+
                 'mrp': mrp,
-                'batch_number': batch_no.upper().strip(),
+
+                'batch_number': (
+                    batch_no
+                    .upper()
+                    .strip()
+                ),
+
                 'expiry_date': expiry,
+
                 'quantity': qty,
-                'company_name': company.strip().upper() if company else current_company.strip().upper(),
+
+                'company_name': (
+                    company.strip().upper()
+                    if company else
+                    current_company.strip().upper()
+                ),
             })
-        else:
-            skipped_no_batch += 1
+
+        except Exception as e:
+
+            _dbg(
+                "parse_stock_batches ERROR row=%d err=%s row=%s",
+                idx,
+                e,
+                r
+            )
 
     elapsed = time.time() - start_time
-    _dbg("parse_stock_batches: accepted=%d, skipped_no_batch=%d, skipped_too_short=%d, time=%.2fs",
-         len(batches), skipped_no_batch, skipped_too_short, elapsed)
+
+    _dbg(
+        "parse_stock_batches: accepted=%d, skipped_no_batch=%d, skipped_too_short=%d, skipped_junk=%d, time=%.2fs",
+        len(batches),
+        skipped_no_batch,
+        skipped_too_short,
+        skipped_junk,
+        elapsed
+    )
+
     if batches:
-        _dbg("parse_stock_batches sample batch[0]: %s", batches[0])
+
+        _dbg(
+            "parse_stock_batches sample batch[0]: %s",
+            batches[0]
+        )
+
     if len(batches) == 0:
-        _dbg("WARNING: parse_stock_batches produced 0 batches!")
-        _dbg("  First 3 input rows: %s", rows[:3])
+
+        _dbg(
+            "WARNING: parse_stock_batches produced 0 batches!"
+        )
+
+        _dbg(
+            "First 3 input rows: %s",
+            rows[:3]
+        )
+
     return batches

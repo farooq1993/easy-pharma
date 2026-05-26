@@ -500,13 +500,7 @@ def _run_parse_job(
 
         elif import_type == 'company':
 
-            print("=" * 80, flush=True)
-            print("[COMPANY IMPORT START]", flush=True)
-            print(f"INPUT METHOD={input_method}", flush=True)
-
             if input_method == 'file':
-
-                print("[COMPANY] using parse_csv_to_rows()", flush=True)
 
                 rows = parse_csv_to_rows(
                     content,
@@ -514,8 +508,6 @@ def _run_parse_job(
                 )
 
             else:
-
-                print("[COMPANY] using parse_text_lines_to_rows()", flush=True)
 
                 rows = parse_text_lines_to_rows(
                     content,
@@ -603,37 +595,131 @@ def _run_parse_job(
                     rows
                 )
 
-        # =====================================================
+        # =====================================================    
         # STOCK
         # =====================================================
 
         elif import_type == 'stock':
 
-            rows = parse_text_lines_to_rows(
-                content,
-                drop_first_column=drop_first_col
+            print("=" * 80, flush=True)
+            print("[STOCK IMPORT START]", flush=True)
+            print(f"INPUT METHOD={input_method}", flush=True)
+
+            # =================================================
+            # AUTO DETECT FORMAT
+            # =================================================
+
+            first_part = content[:1000]
+
+            is_csv = (
+                ',' in first_part
+                or '\t' in first_part
             )
 
-            parsed_data = parse_stock_batches(
-                rows
-            )
+            if input_method == 'file' and is_csv:
 
-        else:
+                print(
+                    "[STOCK] CSV/TAB format detected",
+                    flush=True
+                )
 
-            parsed_data = []
+                rows = parse_csv_to_rows(
+                    content,
+                    drop_first_column=False
+                )
 
-        print(
-            f"[PARSE COMPLETE] total={len(parsed_data)}",
-            flush=True
-        )
+            else:
 
-        if parsed_data:
+                print(
+                    "[STOCK] TEXT format detected",
+                    flush=True
+                )
+
+                rows = parse_text_lines_to_rows(
+                    content,
+                    drop_first_column=False
+                )
 
             print(
-                f"[FIRST ITEM] {parsed_data[0]}",
+                f"[STOCK RAW ROWS]={len(rows)}",
                 flush=True
             )
 
+            if rows:
+                print(
+                    f"[STOCK SAMPLE ROW]={rows[0]}",
+                    flush=True
+                )
+
+            # =================================================
+            # REMOVE EMPTY/JUNK ROWS
+            # =================================================
+
+            cleaned_rows = []
+
+            skipped = 0
+
+            junk_words = [
+                'PRINTED ON',
+                'PAGE NO',
+                'STOCK',
+                'BATCH',
+                '----'
+            ]
+
+            for r in rows:
+
+                try:
+
+                    if not r:
+                        skipped += 1
+                        continue
+
+                    row_text = " ".join(
+                        [str(x).strip().upper() for x in r]
+                    )
+
+                    if not row_text.strip():
+                        skipped += 1
+                        continue
+
+                    if any(j in row_text for j in junk_words):
+                        skipped += 1
+                        continue
+
+                    cleaned_rows.append(r)
+
+                except Exception:
+
+                    skipped += 1
+
+            print(
+                f"[STOCK CLEANED ROWS]={len(cleaned_rows)}",
+                flush=True
+            )
+
+            print(
+                f"[STOCK SKIPPED]={skipped}",
+                flush=True
+            )
+
+            parsed_data = parse_stock_batches(
+                cleaned_rows
+            )
+
+            print(
+                f"[STOCK PARSED]={len(parsed_data)}",
+                flush=True
+            )
+
+            if parsed_data:
+
+                print(
+                    f"[STOCK FIRST ITEM]={parsed_data[0]}",
+                    flush=True
+                )
+
+            print("=" * 80, flush=True)
         # =====================================================
         # CACHE PARSED DATA
         # =====================================================
