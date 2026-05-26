@@ -501,9 +501,7 @@ def _bulk_import_products(items, tenant, log_entry, total_items):
             if item.get('product_name')
         ]).values_list('product_name', flat=True)
     )
-    # existing_upper = {
-    #     n.upper() for n in Products.objects.filter(tenant=tenant).values_list('product_name', flat=True)
-    # }
+   
     dbg("Existing products in DB: %d (fetched in %.2fs)", len(existing_upper), time.time() - step_start)
 
     # D. Bulk create
