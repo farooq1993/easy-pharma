@@ -1061,7 +1061,25 @@
 
     function updateQty(index, val) {
         const item = cart[index]; const newQty = parseInt(val) || 0;
-        if (newQty > 0 && newQty <= item.max_stock) { item.quantity = newQty; } else if (newQty > item.max_stock) { item.quantity = item.max_stock; alert('Stock limit reached'); }
+        if (newQty > 0 && newQty <= item.max_stock) {
+            item.quantity = newQty;
+        } else if (newQty > item.max_stock) {
+            item.quantity = item.max_stock;
+            alert('Stock limit reached');
+        }
+        // Update only the total cell of this row (avoids losing focus)
+        const rows = document.querySelectorAll('#posTable tbody tr');
+        if (rows[index]) {
+            const total = item.price * item.quantity;
+            const basePrice = item.price / (1 + item.tax_rate / 100);
+            const taxAmount = (item.price - basePrice) * item.quantity;
+            // Total column is 6th td (index 5)
+            const totalCell = rows[index].querySelectorAll('td')[5];
+            if (totalCell) totalCell.innerHTML = `₹${total.toFixed(2)}`;
+            // GST/Tax column is 5th td (index 4)
+            const taxCell = rows[index].querySelectorAll('td')[4];
+            if (taxCell) taxCell.innerHTML = `₹${taxAmount.toFixed(2)} <span class="text-muted x-small">(${item.tax_rate}% incl.)</span>`;
+        }
         calculateGrandTotal();
     }
 

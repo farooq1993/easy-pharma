@@ -33,35 +33,13 @@
         <!-- Filters and Search -->
         <div class="card shadow-sm mb-4">
             <div class="card-body">
-                <form class="row g-3 align-items-center">
-                    <div class="col-md-5">
-                        <div class="input-group search-box">
-                            <input type="text" id="searchInput" class="form-control" placeholder="Search by name or HSN...">
-                            <button class="btn btn-outline-secondary" type="button" onclick="searchProducts()">
-                                <i class="fas fa-search"></i>
-                            </button>
-                            <button class="btn btn-outline-secondary" type="button" onclick="clearSearch()">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <select class="form-control selectpicker" id="filterType" title="Filter by Type" data-live-search="true">
-                            <option value="">All Types</option>
-                            {% for product_type in product_types %}
-                                <option value="{{ product_type.name }}">{{ product_type.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <select class="form-control selectpicker" id="filterSchedule" title="Filter by Schedule" data-live-search="true">
-                            <option value="">All Schedules</option>
-                            {% for schedule in product_schedules %}
-                                <option value="{{ schedule.schedule_name }}">{{ schedule.schedule_name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
+                <form action="" method="get">
+                    <input type="text" name="q" value="{{ search_query }}" class="form-control" placeholder="Search by name or HSN...">
+                    <button class="btn btn-outline-secondary" type="submit">
+                        <i class="fas fa-search"></i>
+                    </button>
                 </form>
+                
             </div>
         </div>
 

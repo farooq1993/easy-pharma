@@ -5,7 +5,8 @@ from django.http import JsonResponse
 import json
 from django.core.paginator import Paginator
 from django.apps import apps
-
+from django.db.models import Q
+from datetime import date
 from easypharma.models.Items import (DrugCompany, ProductContent, 
                                      ProductSchedule,
                                      ProductTax, ProductType, Products)
@@ -246,19 +247,34 @@ class ProductMasterSearchAPI(View):
 class ProductListView(View):
     template_name = 'masters/products/product_list.html'
     def get(self, request):
-        products = Products.objects.filter(tenant=request.tenant).select_related(
-            'product_type', 'product_schedule', 'product_tax', 'product_content', 'compny_name'
+        query = request.GET.get('q', '')
+
+        products = Products.objects.filter(tenant=request.tenant)
+        if query:
+            products = products.filter(
+                Q(product_name__icontains=query) |
+                Q(product_hsn_code__icontains=query)
+            )
+        
+        products = products.select_related(
+            'product_type',
+            'product_schedule',
+            'product_tax',
+            'product_content',
+            'compny_name'
         ).order_by('-id')
         paginator = Paginator(products, 20)
         page = request.GET.get('page')
         page_obj = paginator.get_page(page)
-        
+
         context = {
             'products': page_obj,
             'page_obj': page_obj,
             'product_types': ProductType.objects.filter(tenant=request.tenant),
-            'product_schedules': ProductSchedule.objects.filter(tenant=request.tenant)
+            'product_schedules': ProductSchedule.objects.filter(tenant=request.tenant),
+            'search_query': query
         }
+
         return render(request, self.template_name, context)
 
     def delete(self, request):
