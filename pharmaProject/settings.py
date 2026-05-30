@@ -166,8 +166,8 @@ MULTI_TENANCY_CONFIG = {
     'tenant_model': 'tenants.Tenant',
 }
 
-DATA_UPLOAD_MAX_MEMORY_SIZE = 150 * 1024 * 1024   # 100 MB
-FILE_UPLOAD_MAX_MEMORY_SIZE = 150 * 1024 * 1024
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024      # 10 MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 
 # Redis Cache configuration with dynamic fallback
 REDIS_URL = config("REDIS_URL", default="redis://127.0.0.1:6379/1")
