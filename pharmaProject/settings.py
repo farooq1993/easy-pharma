@@ -165,6 +165,33 @@ MULTI_TENANCY_CONFIG = {
     'tenant_model': 'tenants.Tenant',
 }
 
+# Redis Cache configuration with dynamic fallback
+REDIS_URL = config("REDIS_URL", default="redis://127.0.0.1:6379/1")
+try:
+    import django_redis
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                "IGNORE_EXCEPTIONS": True,
+                "SOCKET_CONNECT_TIMEOUT": 5,
+                "SOCKET_TIMEOUT": 5,
+            }
+        }
+    }
+    print("REDIS CACHE CONFIGURED")
+except ImportError:
+    print("django-redis not installed. Falling back to LocMemCache.")
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "easy-pharma-fallback-cache",
+        }
+    }
+
+
 # Tenant-specific settings
 TENANT_COOKIE_NAME = 'tenant_id'
 TENANT_HEADER_NAME = 'X-Tenant-ID'

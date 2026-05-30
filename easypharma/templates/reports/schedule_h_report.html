@@ -1,0 +1,260 @@
+{% if not is_pdf %}{% extends 'includes/base.html' %}{% load static %}
+{% block title %}Schedule H Drug Register{% endblock %}
+{% block content %}{% endif %}
+
+{% if not is_pdf %}
+<style>
+.register-table { font-size: 12px; }
+.register-table th { background: #1a237e; color: #fff; white-space: nowrap; vertical-align: middle; }
+.register-table td { vertical-align: middle; }
+.badge-schedule { font-size: 10px; }
+</style>
+
+<div class="container-fluid py-4">
+
+  <!-- Header -->
+  <div class="row align-items-center mb-4">
+    <div class="col-md-7">
+      <div class="d-flex align-items-center gap-3">
+        <div style="background:linear-gradient(135deg,#1a237e,#283593);width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;">
+          <i class="bi bi-journal-medical text-white fs-4"></i>
+        </div>
+        <div>
+          <h4 class="mb-0 fw-bold">{{ schedule_type }} Drug Register</h4>
+          <small class="text-muted">
+            Statutory Sale Register &nbsp;|&nbsp;
+            {{ start_date|date:"d M Y" }} — {{ end_date|date:"d M Y" }}
+          </small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-5">
+      <form method="GET" class="row g-2">
+        <div class="col-md-4">
+          <select name="schedule_type" class="form-select form-select-sm">
+            {% for sc in schedule_choices %}
+              <option value="{{ sc.schedule_name }}" {% if schedule_type == sc.schedule_name %}selected{% endif %}>{{ sc.schedule_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date|date:'Y-m-d' }}">
+        </div>
+        <div class="col-md-3">
+          <input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date|date:'Y-m-d' }}">
+        </div>
+        <div class="col-md-2 d-flex gap-1">
+          <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-filter"></i></button>
+          <a href="?schedule_type={{ schedule_type }}&start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}&pdf=1"
+             class="btn btn-danger btn-sm" title="Export PDF">
+            <i class="bi bi-file-earmark-pdf"></i>
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Stats cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm rounded-4 text-center py-3">
+        <div class="card-body">
+          <h6 class="text-muted small text-uppercase fw-bold">Total Entries</h6>
+          <h3 class="text-primary fw-bold mb-0">{{ register_rows|length }}</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm rounded-4 text-center py-3">
+        <div class="card-body">
+          <h6 class="text-muted small text-uppercase fw-bold">Total Quantity</h6>
+          <h3 class="text-success fw-bold mb-0">{{ total_qty }}</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm rounded-4 text-center py-3">
+        <div class="card-body">
+          <h6 class="text-muted small text-uppercase fw-bold">Total Value</h6>
+          <h3 class="text-warning fw-bold mb-0">₹{{ total_value|floatformat:2 }}</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm rounded-4 text-center py-3">
+        <div class="card-body">
+          <h6 class="text-muted small text-uppercase fw-bold">Period</h6>
+          <h6 class="fw-bold mb-0">{{ start_date|date:"M Y" }}{% if start_date.month != end_date.month %} – {{ end_date|date:"M Y" }}{% endif %}</h6>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Register Table -->
+  <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+    <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center py-3 px-4">
+      <h6 class="mb-0 fw-bold">
+        <i class="bi bi-table me-2 text-primary"></i>{{ schedule_type }} Sale Register
+      </h6>
+      <span class="badge bg-primary">{{ register_rows|length }} records</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 register-table">
+          <thead>
+            <tr>
+              <th class="ps-3">Sr.</th>
+              <th>Date</th>
+              <th>Invoice No.</th>
+              <th>Patient Name</th>
+              <th>Address</th>
+              <th>Phone</th>
+              <th>Doctor</th>
+              <th>Medicine Name</th>
+              <th>Packing</th>
+              <th>Batch</th>
+              <th>Expiry</th>
+              <th class="text-center">Qty</th>
+              <th class="text-end">Unit Price</th>
+              <th class="text-end pe-3">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in register_rows %}
+            <tr>
+              <td class="ps-3 text-muted small">{{ row.sr }}</td>
+              <td class="small fw-bold text-nowrap">{{ row.date }}</td>
+              <td><span class="badge bg-light text-dark border">#{{ row.invoice_no }}</span></td>
+              <td class="fw-bold small">{{ row.patient_name }}</td>
+              <td class="small text-muted">{{ row.patient_address }}</td>
+              <td class="small text-muted">{{ row.patient_phone }}</td>
+              <td class="small">{{ row.doctor_name }}</td>
+              <td class="fw-bold small">{{ row.product_name }}</td>
+              <td class="small text-muted">{{ row.packing }}</td>
+              <td class="small font-monospace">{{ row.batch_number }}</td>
+              <td class="small text-muted">{{ row.expiry_date }}</td>
+              <td class="text-center fw-bold">{{ row.quantity }}</td>
+              <td class="text-end small">₹{{ row.unit_price }}</td>
+              <td class="text-end fw-bold pe-3">₹{{ row.total }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="14" class="text-center py-5 text-muted">
+                <i class="bi bi-journal-x fs-1 opacity-25 d-block mb-2"></i>
+                No {{ schedule_type }} drug sales found for the selected period.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          {% if register_rows %}
+          <tfoot class="bg-light fw-bold">
+            <tr>
+              <td colspan="11" class="ps-3 text-end">TOTAL</td>
+              <td class="text-center">{{ total_qty }}</td>
+              <td></td>
+              <td class="text-end pe-3">₹{{ total_value|floatformat:2 }}</td>
+            </tr>
+          </tfoot>
+          {% endif %}
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% if not is_pdf %}{% endblock %}{% endif %}
+
+{% else %}
+{# ===== PDF VERSION ===== #}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @page { size: A4 landscape; margin: 15mm 10mm; }
+    body { font-family: Arial, sans-serif; font-size: 9px; color: #000; }
+    .header { text-align: center; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 8px; }
+    .header h2 { font-size: 16px; margin: 0 0 2px; }
+    .header h3 { font-size: 13px; margin: 0 0 4px; color: #1a237e; }
+    .header p { margin: 1px 0; font-size: 9px; }
+    .meta { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 9px; }
+    table { width: 100%; border-collapse: collapse; font-size: 8px; }
+    th { background: #1a237e; color: #fff; padding: 4px 3px; text-align: left; font-size: 8px; white-space: nowrap; }
+    td { padding: 3px; border-bottom: 1px solid #ddd; vertical-align: top; }
+    tr:nth-child(even) td { background: #f5f5f5; }
+    tfoot td { background: #eef; font-weight: bold; border-top: 2px solid #1a237e; }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+    .footer { margin-top: 15px; display: flex; justify-content: space-between; font-size: 9px; }
+    .sig-line { border-top: 1px solid #000; padding-top: 4px; margin-top: 30px; width: 150px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>{{ pharmacy.pharmacy_name }}</h2>
+    <h3>{{ schedule_type }} Drug Sale Register</h3>
+    <p>{{ pharmacy.address }} | Ph: {{ pharmacy.phone }}</p>
+    <p>DL No: {{ pharmacy.license_number|default:'N/A' }} | GST: {{ pharmacy.gst_number|default:'N/A' }}</p>
+    <p>Period: {{ start_date|date:"d M Y" }} to {{ end_date|date:"d M Y" }}</p>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Sr.</th>
+        <th>Date</th>
+        <th>Invoice No.</th>
+        <th>Patient Name</th>
+        <th>Address</th>
+        <th>Phone</th>
+        <th>Doctor Name</th>
+        <th>Medicine Name</th>
+        <th>Packing</th>
+        <th>Batch No.</th>
+        <th>Expiry</th>
+        <th class="text-center">Qty</th>
+        <th class="text-right">Unit Price</th>
+        <th class="text-right">Amount (₹)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in register_rows %}
+      <tr>
+        <td>{{ row.sr }}</td>
+        <td>{{ row.date }}</td>
+        <td>{{ row.invoice_no }}</td>
+        <td>{{ row.patient_name }}</td>
+        <td>{{ row.patient_address }}</td>
+        <td>{{ row.patient_phone }}</td>
+        <td>{{ row.doctor_name }}</td>
+        <td><strong>{{ row.product_name }}</strong></td>
+        <td>{{ row.packing }}</td>
+        <td>{{ row.batch_number }}</td>
+        <td>{{ row.expiry_date }}</td>
+        <td class="text-center">{{ row.quantity }}</td>
+        <td class="text-right">{{ row.unit_price }}</td>
+        <td class="text-right">{{ row.total }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="11" class="text-right">TOTAL</td>
+        <td class="text-center">{{ total_qty }}</td>
+        <td></td>
+        <td class="text-right">{{ total_value }}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="footer">
+    <div class="sig-line">Pharmacist / Chemist Signature</div>
+    <div style="font-size:8px; text-align:center;">
+      <p>Total {{ register_rows|length }} entries | Value: ₹{{ total_value|floatformat:2 }}</p>
+      <p>This is a computer generated register.</p>
+    </div>
+    <div class="sig-line">Proprietor Signature</div>
+  </div>
+</body>
+</html>
+{% endif %}

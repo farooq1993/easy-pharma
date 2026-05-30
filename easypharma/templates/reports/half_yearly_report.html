@@ -33,6 +33,9 @@
                     {% endfor %}
                 </select>
                 <button type="submit" class="btn btn-primary">Filter</button>
+                <a href="?half={{ half }}&year={{ year }}&start_date={{ start_date|default:'' }}&end_date={{ end_date|default:'' }}&schedule={{ selected_schedule }}&pdf=1" class="btn btn-danger">
+                    <i class="bi bi-file-earmark-pdf"></i> Export
+                </a>
             </form>
         </div>
     </div>

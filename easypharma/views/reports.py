@@ -13,6 +13,42 @@ from decimal import Decimal
 
 logger = logging.getLogger('easypharma.reports')
 
+import os
+from io import BytesIO
+from django.conf import settings
+from django.template.loader import get_template
+from django.http import HttpResponse
+from xhtml2pdf import pisa
+
+def link_callback(uri, rel):
+    if uri.startswith(settings.STATIC_URL):
+        path = os.path.join(settings.STATIC_ROOT, uri.replace(settings.STATIC_URL, ""))
+        if not os.path.exists(path):
+            for static_dir in getattr(settings, 'STATICFILES_DIRS', []):
+                p = os.path.join(static_dir, uri.replace(settings.STATIC_URL, ""))
+                if os.path.exists(p):
+                    path = p
+                    break
+        return path
+    elif uri.startswith(settings.MEDIA_URL):
+        path = os.path.join(settings.MEDIA_ROOT, uri.replace(settings.MEDIA_URL, ""))
+        return path
+    return uri
+
+def render_to_pdf(template_src, context_dict={}, filename="report.pdf"):
+    # Ensure PDF rendering doesn't load sidebar/navbar by telling the context
+    context_dict['is_pdf'] = True
+    template = get_template(template_src)
+    html = template.render(context_dict)
+    result = BytesIO()
+    pdf = pisa.pisaDocument(BytesIO(html.encode("utf-8")), result, link_callback=link_callback)
+    if not pdf.err:
+        response = HttpResponse(result.getvalue(), content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+    return HttpResponse("Error generating PDF", status=500)
+
+
 class StockReportView(View):
     template_name = 'reports/stock_report.html'
 
@@ -36,11 +72,16 @@ class StockReportView(View):
 
         total_value = sum(item['total_value'] for item in product_summary)
         
-        return render(request, self.template_name, {
+        context = {
             'stocks': stocks,
             'summary': product_summary,
             'total_value': total_value
-        })
+        }
+        
+        if request.GET.get('pdf') == '1':
+            return render_to_pdf(self.template_name, context, filename="stock_report.pdf")
+
+        return render(request, self.template_name, context)
 
 
 # ========== NEW REPORTS ==========
@@ -123,6 +164,10 @@ class DailySaleReportView(View):
             'report_schedules': report_schedules,
             'selected_schedule': selected_schedule,
         }
+        PDF_TEMPLATE = 'reports/daily_sale_report_pdf.html'
+        if request.GET.get('pdf') == '1':
+            return render_to_pdf(PDF_TEMPLATE, context, filename=f"daily_sale_report_{date_obj}.pdf")
+
         return render(request, self.template_name, context)
 
 
@@ -277,6 +322,10 @@ class HalfYearlySaleReportView(View):
             'report_schedules': report_schedules,
             'selected_schedule': selected_schedule,
         }
+        if request.GET.get('pdf') == '1':
+            fn = f"sale_report_{selected_schedule}.pdf" if selected_schedule != 'all' else "sale_report.pdf"
+            return render_to_pdf(self.template_name, context, filename=fn)
+
         return render(request, self.template_name, context)
 
 
@@ -361,6 +410,9 @@ class ProfitReportView(View):
             'total_profit': total_profit,
             'profit_margin': round(profit_margin, 2),
         }
+        if request.GET.get('pdf') == '1':
+            return render_to_pdf(self.template_name, context, filename="profit_report.pdf")
+
         return render(request, self.template_name, context)
 
 
@@ -489,6 +541,9 @@ class GSTReportView(View):
             'gst_liability': gst_liability,
             'pharmacy_gst': request.tenant.gst_number or 'N/A',
         }
+        if request.GET.get('pdf') == '1':
+            return render_to_pdf(self.template_name, context, filename=f"gst_report_{month}_{year}.pdf")
+
         return render(request, self.template_name, context)
 
 
@@ -603,9 +658,235 @@ class ProductHistoryView(View):
         if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('ajax') == '1':
             return JsonResponse(data)
             
-        return render(request, self.template_name, {
+        context = {
             'product': product,
             'data': data
-        })
+        }
 
+        if request.GET.get('pdf') == '1':
+            return render_to_pdf(self.template_name, context, filename=f"product_history_{product.product_name}.pdf")
+
+        return render(request, self.template_name, context)
+
+
+# ========== SCHEDULE H & NARCOTIC DRUG REGISTER ==========
+
+class ScheduleHReportView(View):
+    """
+    Schedule H / H1 Drug Register — lists all sales of Schedule H/H1 drugs
+    in a format suitable for statutory drug register submission.
+    """
+    template_name = 'reports/schedule_h_report.html'
+
+    def get(self, request):
+        schedule_type = request.GET.get('schedule_type', 'Schedule H')
+        start_date_str = request.GET.get('start_date')
+        end_date_str = request.GET.get('end_date')
+
+        if start_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                start_date = now().date().replace(day=1)
+        else:
+            start_date = now().date().replace(day=1)
+
+        if end_date_str:
+            try:
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                end_date = now().date()
+        else:
+            end_date = now().date()
+
+        logger.debug('ScheduleHReportView.get schedule=%s start=%s end=%s tenant=%s', schedule_type, start_date, end_date, request.tenant)
+
+        # Get sale items for the selected schedule in the date range
+        sale_items = SaleItem.objects.filter(
+            tenant=request.tenant,
+            product__product_schedule__schedule_name=schedule_type,
+            sale_invoice__created_at__date__gte=start_date,
+            sale_invoice__created_at__date__lte=end_date,
+        ).select_related(
+            'product',
+            'product__product_schedule',
+            'sale_invoice',
+            'sale_invoice__customer',
+        ).order_by('sale_invoice__created_at')
+
+        # Build register rows
+        register_rows = []
+        serial = 1
+        for item in sale_items:
+            inv = item.sale_invoice
+            register_rows.append({
+                'sr': serial,
+                'date': inv.created_at.strftime('%d/%m/%Y'),
+                'invoice_no': inv.invoice_number,
+                'patient_name': inv.patient_name or (inv.customer.name if inv.customer else 'Walk-in'),
+                'patient_address': inv.patient_address or '—',
+                'patient_phone': inv.patient_phone or '—',
+                'doctor_name': inv.doctor_name or '—',
+                'product_name': item.product.product_name,
+                'packing': item.product.product_packing or '—',
+                'batch_number': item.batch_number or '—',
+                'expiry_date': item.expiry_date.strftime('%m/%Y') if item.expiry_date else '—',
+                'quantity': item.quantity,
+                'unit_price': float(item.unit_price),
+                'total': float(item.total_amount),
+                'payment_mode': inv.payment_mode,
+                'sale_type': inv.sale_type,
+            })
+            serial += 1
+
+        # Summary stats
+        total_qty = sum(r['quantity'] for r in register_rows)
+        total_value = sum(r['total'] for r in register_rows)
+
+        # Available schedule types for filter
+        schedule_choices = ProductSchedule.objects.filter(
+            Q(tenant=request.tenant) | Q(tenant__isnull=True)
+        ).order_by('schedule_name')
+
+        context = {
+            'schedule_type': schedule_type,
+            'start_date': start_date,
+            'end_date': end_date,
+            'register_rows': register_rows,
+            'total_qty': total_qty,
+            'total_value': total_value,
+            'schedule_choices': schedule_choices,
+            'pharmacy': request.tenant,
+        }
+
+        if request.GET.get('pdf') == '1':
+            fn = f"schedule_h_register_{schedule_type.replace(' ', '_')}_{start_date}_{end_date}.pdf"
+            return render_to_pdf(self.template_name, context, filename=fn)
+
+        return render(request, self.template_name, context)
+
+
+class NarcoticDrugReportView(View):
+    """
+    Narcotic Drug Register — purchase & sale register for narcotic drugs
+    (as required under NDPS Act).
+    """
+    template_name = 'reports/narcotic_drug_report.html'
+
+    def get(self, request):
+        start_date_str = request.GET.get('start_date')
+        end_date_str = request.GET.get('end_date')
+
+        if start_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                start_date = now().date().replace(day=1)
+        else:
+            start_date = now().date().replace(day=1)
+
+        if end_date_str:
+            try:
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                end_date = now().date()
+        else:
+            end_date = now().date()
+
+        logger.debug('NarcoticDrugReportView.get start=%s end=%s tenant=%s', start_date, end_date, request.tenant)
+
+        NARCOTIC_SCHEDULES = ['Narcotic', 'Schedule X', 'NDPS']
+
+        # Purchase register
+        purchase_items = PurchaseItem.objects.filter(
+            tenant=request.tenant,
+            product__product_schedule__schedule_name__in=NARCOTIC_SCHEDULES,
+            purchase_invoice__purchase_date__gte=start_date,
+            purchase_invoice__purchase_date__lte=end_date,
+        ).select_related(
+            'product',
+            'product__product_schedule',
+            'purchase_invoice',
+            'purchase_invoice__supplier',
+        ).order_by('purchase_invoice__purchase_date')
+
+        purchase_rows = []
+        p_serial = 1
+        for item in purchase_items:
+            inv = item.purchase_invoice
+            purchase_rows.append({
+                'sr': p_serial,
+                'date': inv.purchase_date.strftime('%d/%m/%Y') if inv.purchase_date else '—',
+                'voucher_no': inv.voucher_number or inv.invoice_number,
+                'supplier_name': inv.supplier.name if inv.supplier else '—',
+                'supplier_dl': inv.supplier.dl_number if inv.supplier and hasattr(inv.supplier, 'dl_number') else '—',
+                'product_name': item.product.product_name,
+                'packing': item.product.product_packing or '—',
+                'batch_number': item.batch_number,
+                'expiry_date': item.expiry_date.strftime('%m/%Y') if item.expiry_date else '—',
+                'quantity': item.quantity,
+                'free_quantity': item.free_quantity,
+                'purchase_price': float(item.purchase_price),
+                'total': float(item.total_amount),
+                'schedule': item.product.product_schedule.schedule_name if item.product.product_schedule else '—',
+            })
+            p_serial += 1
+
+        # Sale register
+        sale_items = SaleItem.objects.filter(
+            tenant=request.tenant,
+            product__product_schedule__schedule_name__in=NARCOTIC_SCHEDULES,
+            sale_invoice__created_at__date__gte=start_date,
+            sale_invoice__created_at__date__lte=end_date,
+        ).select_related(
+            'product',
+            'product__product_schedule',
+            'sale_invoice',
+            'sale_invoice__customer',
+        ).order_by('sale_invoice__created_at')
+
+        sale_rows = []
+        s_serial = 1
+        for item in sale_items:
+            inv = item.sale_invoice
+            sale_rows.append({
+                'sr': s_serial,
+                'date': inv.created_at.strftime('%d/%m/%Y'),
+                'invoice_no': inv.invoice_number,
+                'patient_name': inv.patient_name or (inv.customer.name if inv.customer else 'Walk-in'),
+                'patient_address': inv.patient_address or '—',
+                'doctor_name': inv.doctor_name or '—',
+                'product_name': item.product.product_name,
+                'packing': item.product.product_packing or '—',
+                'batch_number': item.batch_number or '—',
+                'expiry_date': item.expiry_date.strftime('%m/%Y') if item.expiry_date else '—',
+                'quantity': item.quantity,
+                'unit_price': float(item.unit_price),
+                'total': float(item.total_amount),
+                'schedule': item.product.product_schedule.schedule_name if item.product.product_schedule else '—',
+            })
+            s_serial += 1
+
+        total_purchase_qty = sum(r['quantity'] for r in purchase_rows)
+        total_purchase_val = sum(r['total'] for r in purchase_rows)
+        total_sale_qty = sum(r['quantity'] for r in sale_rows)
+        total_sale_val = sum(r['total'] for r in sale_rows)
+
+        context = {
+            'start_date': start_date,
+            'end_date': end_date,
+            'purchase_rows': purchase_rows,
+            'sale_rows': sale_rows,
+            'total_purchase_qty': total_purchase_qty,
+            'total_purchase_val': total_purchase_val,
+            'total_sale_qty': total_sale_qty,
+            'total_sale_val': total_sale_val,
+            'pharmacy': request.tenant,
+        }
+
+        if request.GET.get('pdf') == '1':
+            fn = f"narcotic_drug_register_{start_date}_{end_date}.pdf"
+            return render_to_pdf(self.template_name, context, filename=fn)
+
+        return render(request, self.template_name, context)
 

@@ -1,0 +1,372 @@
+{% if not is_pdf %}{% extends 'includes/base.html' %}{% load static %}
+{% block title %}Narcotic Drug Register{% endblock %}
+{% block content %}{% endif %}
+
+{% if not is_pdf %}
+<style>
+.reg-table { font-size: 11px; }
+.reg-table th { background: #4a148c; color: #fff; white-space: nowrap; vertical-align: middle; }
+.reg-table td { vertical-align: middle; }
+.section-badge { font-size: 10px; letter-spacing: 1px; }
+</style>
+
+<div class="container-fluid py-4">
+
+  <!-- Header -->
+  <div class="row align-items-center mb-4">
+    <div class="col-md-7">
+      <div class="d-flex align-items-center gap-3">
+        <div style="background:linear-gradient(135deg,#4a148c,#6a1b9a);width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;">
+          <i class="bi bi-shield-exclamation text-white fs-4"></i>
+        </div>
+        <div>
+          <h4 class="mb-0 fw-bold">Narcotic Drug Register</h4>
+          <small class="text-muted">
+            NDPS Act — Purchase &amp; Sale Register &nbsp;|&nbsp;
+            {{ start_date|date:"d M Y" }} — {{ end_date|date:"d M Y" }}
+          </small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-5">
+      <form method="GET" class="row g-2 align-items-center justify-content-end">
+        <div class="col-auto">
+          <label class="form-label small text-muted mb-0">From</label>
+          <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date|date:'Y-m-d' }}">
+        </div>
+        <div class="col-auto">
+          <label class="form-label small text-muted mb-0">To</label>
+          <input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date|date:'Y-m-d' }}">
+        </div>
+        <div class="col-auto d-flex gap-1 align-items-end">
+          <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-filter me-1"></i>Filter</button>
+          <a href="?start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}&pdf=1"
+             class="btn btn-danger btn-sm">
+            <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm rounded-4 text-center py-3" style="border-left: 4px solid #4a148c !important;">
+        <div class="card-body">
+          <h6 class="text-muted small text-uppercase fw-bold">Purchase Entries</h6>
+          <h3 class="fw-bold mb-0" style="color:#4a148c;">{{ purchase_rows|length }}</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm rounded-4 text-center py-3" style="border-left: 4px solid #1565c0 !important;">
+        <div class="card-body">
+          <h6 class="text-muted small text-uppercase fw-bold">Purchase Value</h6>
+          <h3 class="text-primary fw-bold mb-0">₹{{ total_purchase_val|floatformat:2 }}</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm rounded-4 text-center py-3" style="border-left: 4px solid #e65100 !important;">
+        <div class="card-body">
+          <h6 class="text-muted small text-uppercase fw-bold">Sale Entries</h6>
+          <h3 class="fw-bold mb-0" style="color:#e65100;">{{ sale_rows|length }}</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm rounded-4 text-center py-3" style="border-left: 4px solid #2e7d32 !important;">
+        <div class="card-body">
+          <h6 class="text-muted small text-uppercase fw-bold">Sale Value</h6>
+          <h3 class="text-success fw-bold mb-0">₹{{ total_sale_val|floatformat:2 }}</h3>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PURCHASE REGISTER -->
+  <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+    <div class="card-header border-0 py-3 px-4 d-flex justify-content-between" style="background:linear-gradient(90deg,#4a148c,#6a1b9a);">
+      <h6 class="mb-0 fw-bold text-white">
+        <i class="bi bi-cart-plus me-2"></i>PART A — Narcotic Drug Purchase Register
+      </h6>
+      <span class="badge bg-white text-dark">{{ purchase_rows|length }} entries</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 reg-table">
+          <thead>
+            <tr>
+              <th class="ps-3">Sr.</th>
+              <th>Date</th>
+              <th>Voucher No.</th>
+              <th>Supplier Name</th>
+              <th>Supplier D.L.</th>
+              <th>Schedule</th>
+              <th>Medicine Name</th>
+              <th>Packing</th>
+              <th>Batch No.</th>
+              <th>Expiry</th>
+              <th class="text-center">Qty</th>
+              <th class="text-center">Free</th>
+              <th class="text-end">Pur. Price</th>
+              <th class="text-end pe-3">Total (₹)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in purchase_rows %}
+            <tr>
+              <td class="ps-3 text-muted small">{{ row.sr }}</td>
+              <td class="small fw-bold text-nowrap">{{ row.date }}</td>
+              <td><span class="badge bg-light text-dark border">{{ row.voucher_no }}</span></td>
+              <td class="fw-bold small">{{ row.supplier_name }}</td>
+              <td class="small text-muted font-monospace">{{ row.supplier_dl }}</td>
+              <td><span class="badge bg-purple-subtle text-purple border section-badge">{{ row.schedule }}</span></td>
+              <td class="fw-bold small">{{ row.product_name }}</td>
+              <td class="small text-muted">{{ row.packing }}</td>
+              <td class="small font-monospace">{{ row.batch_number }}</td>
+              <td class="small text-muted">{{ row.expiry_date }}</td>
+              <td class="text-center fw-bold">{{ row.quantity }}</td>
+              <td class="text-center text-success">{{ row.free_quantity }}</td>
+              <td class="text-end small">₹{{ row.purchase_price }}</td>
+              <td class="text-end fw-bold pe-3">₹{{ row.total }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="14" class="text-center py-4 text-muted">
+                <i class="bi bi-inbox fs-2 opacity-25 d-block mb-2"></i>
+                No narcotic drug purchases found for the selected period.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          {% if purchase_rows %}
+          <tfoot class="bg-light fw-bold">
+            <tr>
+              <td colspan="10" class="ps-3 text-end">TOTAL PURCHASES</td>
+              <td class="text-center">{{ total_purchase_qty }}</td>
+              <td></td>
+              <td></td>
+              <td class="text-end pe-3">₹{{ total_purchase_val|floatformat:2 }}</td>
+            </tr>
+          </tfoot>
+          {% endif %}
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- SALE REGISTER -->
+  <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+    <div class="card-header border-0 py-3 px-4 d-flex justify-content-between" style="background:linear-gradient(90deg,#e65100,#bf360c);">
+      <h6 class="mb-0 fw-bold text-white">
+        <i class="bi bi-bag-dash me-2"></i>PART B — Narcotic Drug Sale Register
+      </h6>
+      <span class="badge bg-white text-dark">{{ sale_rows|length }} entries</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 reg-table">
+          <thead style="background:#e65100;">
+            <tr>
+              <th class="ps-3">Sr.</th>
+              <th>Date</th>
+              <th>Invoice No.</th>
+              <th>Patient Name</th>
+              <th>Address</th>
+              <th>Doctor</th>
+              <th>Schedule</th>
+              <th>Medicine Name</th>
+              <th>Packing</th>
+              <th>Batch No.</th>
+              <th>Expiry</th>
+              <th class="text-center">Qty</th>
+              <th class="text-end">Unit Price</th>
+              <th class="text-end pe-3">Amount (₹)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in sale_rows %}
+            <tr>
+              <td class="ps-3 text-muted small">{{ row.sr }}</td>
+              <td class="small fw-bold text-nowrap">{{ row.date }}</td>
+              <td><span class="badge bg-light text-dark border">#{{ row.invoice_no }}</span></td>
+              <td class="fw-bold small">{{ row.patient_name }}</td>
+              <td class="small text-muted">{{ row.patient_address }}</td>
+              <td class="small">{{ row.doctor_name }}</td>
+              <td><span class="badge bg-warning-subtle text-warning border section-badge">{{ row.schedule }}</span></td>
+              <td class="fw-bold small">{{ row.product_name }}</td>
+              <td class="small text-muted">{{ row.packing }}</td>
+              <td class="small font-monospace">{{ row.batch_number }}</td>
+              <td class="small text-muted">{{ row.expiry_date }}</td>
+              <td class="text-center fw-bold">{{ row.quantity }}</td>
+              <td class="text-end small">₹{{ row.unit_price }}</td>
+              <td class="text-end fw-bold pe-3">₹{{ row.total }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="14" class="text-center py-4 text-muted">
+                <i class="bi bi-inbox fs-2 opacity-25 d-block mb-2"></i>
+                No narcotic drug sales found for the selected period.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          {% if sale_rows %}
+          <tfoot class="bg-light fw-bold">
+            <tr>
+              <td colspan="11" class="ps-3 text-end">TOTAL SALES</td>
+              <td class="text-center">{{ total_sale_qty }}</td>
+              <td></td>
+              <td class="text-end pe-3">₹{{ total_sale_val|floatformat:2 }}</td>
+            </tr>
+          </tfoot>
+          {% endif %}
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% if not is_pdf %}{% endblock %}{% endif %}
+
+{% else %}
+{# ===== PDF VERSION ===== #}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @page { size: A4 landscape; margin: 12mm 8mm; }
+    body { font-family: Arial, sans-serif; font-size: 8px; color: #000; }
+    .header { text-align: center; margin-bottom: 8px; border-bottom: 2px solid #000; padding-bottom: 6px; }
+    .header h2 { font-size: 14px; margin: 0 0 2px; }
+    .header h3 { font-size: 11px; margin: 0 0 3px; color: #4a148c; }
+    .header p { margin: 1px 0; font-size: 8px; }
+    .section-title { font-size: 10px; font-weight: bold; background: #4a148c; color: #fff; padding: 4px 8px; margin: 10px 0 4px; }
+    .section-title-b { background: #e65100; }
+    table { width: 100%; border-collapse: collapse; font-size: 7.5px; }
+    th { background: #4a148c; color: #fff; padding: 3px; text-align: left; white-space: nowrap; }
+    th.b { background: #e65100; }
+    td { padding: 2.5px; border-bottom: 1px solid #ddd; vertical-align: top; }
+    tr:nth-child(even) td { background: #f5f5f5; }
+    tfoot td { font-weight: bold; border-top: 2px solid #4a148c; }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+    .footer { margin-top: 15px; display: flex; justify-content: space-between; font-size: 8px; }
+    .sig-line { border-top: 1px solid #000; padding-top: 4px; margin-top: 30px; width: 130px; text-align: center; }
+    .summary-box { border: 1px solid #4a148c; padding: 6px 10px; margin: 8px 0; display: inline-block; font-size: 8px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>{{ pharmacy.pharmacy_name }}</h2>
+    <h3>Narcotic &amp; Psychotropic Drug Register</h3>
+    <p>{{ pharmacy.address }} | Ph: {{ pharmacy.phone }}</p>
+    <p>DL No: {{ pharmacy.license_number|default:'N/A' }} | GST: {{ pharmacy.gst_number|default:'N/A' }}</p>
+    <p>Period: {{ start_date|date:"d M Y" }} to {{ end_date|date:"d M Y" }}</p>
+  </div>
+
+  <div class="summary-box">
+    <strong>SUMMARY</strong> &nbsp;|&nbsp;
+    Purchase: {{ purchase_rows|length }} entries, ₹{{ total_purchase_val|floatformat:2 }} &nbsp;|&nbsp;
+    Sales: {{ sale_rows|length }} entries, ₹{{ total_sale_val|floatformat:2 }}
+  </div>
+
+  <div class="section-title">PART A — PURCHASE REGISTER</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Sr.</th><th>Date</th><th>Voucher No.</th><th>Supplier Name</th>
+        <th>Supplier D.L.</th><th>Schedule</th><th>Medicine Name</th>
+        <th>Packing</th><th>Batch No.</th><th>Expiry</th>
+        <th class="text-center">Qty</th><th class="text-center">Free</th>
+        <th class="text-right">Pur. Price</th><th class="text-right">Total (₹)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in purchase_rows %}
+      <tr>
+        <td>{{ row.sr }}</td>
+        <td>{{ row.date }}</td>
+        <td>{{ row.voucher_no }}</td>
+        <td><strong>{{ row.supplier_name }}</strong></td>
+        <td>{{ row.supplier_dl }}</td>
+        <td>{{ row.schedule }}</td>
+        <td><strong>{{ row.product_name }}</strong></td>
+        <td>{{ row.packing }}</td>
+        <td>{{ row.batch_number }}</td>
+        <td>{{ row.expiry_date }}</td>
+        <td class="text-center">{{ row.quantity }}</td>
+        <td class="text-center">{{ row.free_quantity }}</td>
+        <td class="text-right">{{ row.purchase_price }}</td>
+        <td class="text-right">{{ row.total }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="10" class="text-right">TOTAL</td>
+        <td class="text-center">{{ total_purchase_qty }}</td>
+        <td></td><td></td>
+        <td class="text-right">{{ total_purchase_val|floatformat:2 }}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="section-title section-title-b" style="margin-top:15px;">PART B — SALE REGISTER</div>
+  <table>
+    <thead>
+      <tr>
+        <th class="b">Sr.</th><th class="b">Date</th><th class="b">Invoice No.</th>
+        <th class="b">Patient Name</th><th class="b">Address</th>
+        <th class="b">Doctor</th><th class="b">Schedule</th>
+        <th class="b">Medicine Name</th><th class="b">Packing</th>
+        <th class="b">Batch No.</th><th class="b">Expiry</th>
+        <th class="b text-center">Qty</th>
+        <th class="b text-right">Unit Price</th>
+        <th class="b text-right">Amount (₹)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in sale_rows %}
+      <tr>
+        <td>{{ row.sr }}</td>
+        <td>{{ row.date }}</td>
+        <td>{{ row.invoice_no }}</td>
+        <td><strong>{{ row.patient_name }}</strong></td>
+        <td>{{ row.patient_address }}</td>
+        <td>{{ row.doctor_name }}</td>
+        <td>{{ row.schedule }}</td>
+        <td><strong>{{ row.product_name }}</strong></td>
+        <td>{{ row.packing }}</td>
+        <td>{{ row.batch_number }}</td>
+        <td>{{ row.expiry_date }}</td>
+        <td class="text-center">{{ row.quantity }}</td>
+        <td class="text-right">{{ row.unit_price }}</td>
+        <td class="text-right">{{ row.total }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="11" class="text-right">TOTAL</td>
+        <td class="text-center">{{ total_sale_qty }}</td>
+        <td></td>
+        <td class="text-right">{{ total_sale_val|floatformat:2 }}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="footer">
+    <div class="sig-line">Drug Inspector Signature</div>
+    <div style="text-align:center; font-size:7px;">
+      <p>Computer generated register | {{ pharmacy.pharmacy_name }}</p>
+      <p>Period: {{ start_date|date:"d M Y" }} to {{ end_date|date:"d M Y" }}</p>
+    </div>
+    <div class="sig-line">Pharmacist / Proprietor</div>
+  </div>
+</body>
+</html>
+{% endif %}

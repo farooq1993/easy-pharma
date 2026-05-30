@@ -115,8 +115,11 @@
             <ul class="collapse nav flex-column ms-3" id="reportsMenu">
                 <li><a href="{% url 'daily_sale_report' %}" class="nav-link small">Daily Sale Report</a></li>
                 <li><a href="{% url 'half_yearly_report' %}" class="nav-link small">Half-Yearly Report</a></li>
+                <li><a href="{% url 'half_yearly_report' %}?schedule=Schedule H" class="nav-link small">Schedule H Sale Report</a></li>
                 <li><a href="{% url 'half_yearly_report' %}?schedule=H1" class="nav-link small">H1 Sale Report</a></li>
                 <li><a href="{% url 'half_yearly_report' %}?schedule=Narcotic" class="nav-link small">Narcotic Sale Report</a></li>
+                <li><a href="{% url 'schedule_h_report' %}" class="nav-link small fw-semibold" style="color:#90caf9;"><i class="bi bi-journal-medical me-1"></i>Schedule H Register</a></li>
+                <li><a href="{% url 'narcotic_drug_report' %}" class="nav-link small fw-semibold" style="color:#ce93d8;"><i class="bi bi-shield-exclamation me-1"></i>Narcotic Drug Register</a></li>
                 <li><a href="{% url 'profit_report' %}" class="nav-link small">Profit Report</a></li>
                 <li><a href="{% url 'gst_report' %}" class="nav-link small">GST Report</a></li>
                 <li><a href="{% url 'stock_report' %}" class="nav-link small">Stock Report</a></li>

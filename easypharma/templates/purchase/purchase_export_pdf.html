@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @page { size: A4 landscape; margin: 12mm 10mm; }
+    body { font-family: Arial, sans-serif; font-size: 8.5px; color: #000; }
+
+    .header { text-align: center; margin-bottom: 10px; border-bottom: 2px solid #1565c0; padding-bottom: 8px; }
+    .header h2 { font-size: 16px; margin: 0 0 2px; }
+    .header h3 { font-size: 12px; margin: 0 0 3px; color: #1565c0; }
+    .header p { margin: 1px 0; font-size: 8px; }
+
+    .meta-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 8px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+
+    .invoice-block { margin-bottom: 14px; }
+    .invoice-header { background: #1565c0; color: #fff; padding: 4px 8px; display: flex; justify-content: space-between; font-size: 9px; font-weight: bold; }
+    .invoice-meta { background: #e3f2fd; padding: 4px 8px; font-size: 8px; display: flex; gap: 20px; flex-wrap: wrap; border-bottom: 1px solid #bbdefb; }
+    .invoice-meta span { display: inline; }
+    .invoice-meta strong { color: #1565c0; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 8px; }
+    th { background: #1565c0; color: #fff; padding: 3px 4px; text-align: left; white-space: nowrap; }
+    td { padding: 2.5px 4px; border-bottom: 1px solid #eee; }
+    tr:nth-child(even) td { background: #f5faff; }
+
+    .invoice-totals { background: #e8f4ff; padding: 4px 8px; display: flex; justify-content: flex-end; gap: 20px; font-size: 8px; border-top: 1px solid #90caf9; }
+    .invoice-totals .grand { font-weight: bold; color: #1565c0; }
+
+    .grand-summary { margin-top: 15px; border: 2px solid #1565c0; padding: 8px; display: flex; justify-content: space-between; font-size: 9px; background: #e3f2fd; }
+    .grand-summary div { text-align: center; }
+    .grand-summary .val { font-size: 12px; font-weight: bold; color: #1565c0; }
+
+    .footer { margin-top: 15px; display: flex; justify-content: space-between; font-size: 8px; }
+    .sig-line { border-top: 1px solid #000; padding-top: 3px; margin-top: 25px; width: 130px; text-align: center; }
+
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+    .page-break { page-break-before: always; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h2>{{ pharmacy.pharmacy_name }}</h2>
+    <h3>Purchase Bill Export — All Transaction Data</h3>
+    <p>{{ pharmacy.address }} | Ph: {{ pharmacy.phone }}</p>
+    <p>DL No: {{ pharmacy.license_number|default:'N/A' }} | GST: {{ pharmacy.gst_number|default:'N/A' }}</p>
+  </div>
+
+  <div class="meta-row">
+    <div>
+      <strong>Generated:</strong> {% now "d M Y, H:i" %}
+      {% if search_query %} &nbsp;| <strong>Search:</strong> {{ search_query }}{% endif %}
+    </div>
+    <div>
+      {% if date_from %}<strong>From:</strong> {{ date_from }}{% endif %}
+      {% if date_to %} &nbsp;<strong>To:</strong> {{ date_to }}{% endif %}
+    </div>
+    <div>
+      <strong>Total Invoices:</strong> {{ total_invoices }}
+    </div>
+  </div>
+
+  <!-- Grand Summary -->
+  <div class="grand-summary">
+    <div>
+      <div class="val">{{ total_invoices }}</div>
+      <div>Total Invoices</div>
+    </div>
+    <div>
+      <div class="val">₹{{ grand_sub_total|floatformat:2 }}</div>
+      <div>Sub Total</div>
+    </div>
+    <div>
+      <div class="val">₹{{ grand_tax|floatformat:2 }}</div>
+      <div>GST / Tax</div>
+    </div>
+    <div>
+      <div class="val">₹{{ grand_discount|floatformat:2 }}</div>
+      <div>Discount</div>
+    </div>
+    <div>
+      <div class="val" style="color:#1b5e20;">₹{{ grand_total|floatformat:2 }}</div>
+      <div>GRAND TOTAL</div>
+    </div>
+  </div>
+
+  <br>
+
+  {% for invoice in invoices_data %}
+  <div class="invoice-block">
+
+    <div class="invoice-header">
+      <span>
+        #{{ forloop.counter }} &nbsp; Voucher: {{ invoice.voucher_number }}
+        &nbsp; | &nbsp; Supplier Inv: {{ invoice.invoice_number }}
+      </span>
+      <span>{{ invoice.purchase_date }}</span>
+    </div>
+
+    <div class="invoice-meta">
+      <span><strong>Supplier:</strong> {{ invoice.supplier_name }}</span>
+      <span><strong>Payment:</strong> {{ invoice.payment_mode }}</span>
+      <span><strong>Sub Total:</strong> ₹{{ invoice.sub_total|floatformat:2 }}</span>
+      <span><strong>GST:</strong> ₹{{ invoice.tax_amount|floatformat:2 }}</span>
+      <span><strong>Discount:</strong> ₹{{ invoice.discount_amount|floatformat:2 }}</span>
+      <span><strong>Total:</strong> ₹{{ invoice.total_amount|floatformat:2 }}</span>
+    </div>
+
+    {% if invoice.items %}
+    <table>
+      <thead>
+        <tr>
+          <th>Sr.</th>
+          <th>Medicine / Product</th>
+          <th>Packing</th>
+          <th>Batch No.</th>
+          <th>Expiry</th>
+          <th class="text-center">Qty</th>
+          <th class="text-center">Free</th>
+          <th class="text-right">Pur. Price (₹)</th>
+          <th class="text-right">MRP (₹)</th>
+          <th class="text-right">Sale Price (₹)</th>
+          <th class="text-right">GST %</th>
+          <th class="text-right">Item Total (₹)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in invoice.items %}
+        <tr>
+          <td>{{ forloop.counter }}</td>
+          <td><strong>{{ item.product_name }}</strong></td>
+          <td>{{ item.packing }}</td>
+          <td>{{ item.batch_number }}</td>
+          <td>{{ item.expiry_date }}</td>
+          <td class="text-center">{{ item.quantity }}</td>
+          <td class="text-center">{{ item.free_quantity }}</td>
+          <td class="text-right">{{ item.purchase_price|floatformat:2 }}</td>
+          <td class="text-right">{{ item.mrp|floatformat:2 }}</td>
+          <td class="text-right">{{ item.sale_price|floatformat:2 }}</td>
+          <td class="text-right">{{ item.tax_percentage }}%</td>
+          <td class="text-right"><strong>{{ item.total_amount|floatformat:2 }}</strong></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="padding: 5px 8px; font-style: italic; color: #666; font-size: 8px;">No line items recorded for this invoice.</div>
+    {% endif %}
+
+  </div>
+  {% endfor %}
+
+  <div class="footer">
+    <div class="sig-line">Authorised Signatory</div>
+    <div style="text-align:center; font-size:7.5px;">
+      <p>This is a computer generated document.</p>
+      <p>{{ pharmacy.pharmacy_name }} | Total: ₹{{ grand_total|floatformat:2 }}</p>
+    </div>
+    <div class="sig-line">Pharmacist</div>
+  </div>
+
+</body>
+</html>
