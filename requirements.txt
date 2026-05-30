@@ -31,7 +31,6 @@ python-decouple==3.8
 PyYAML==6.0.3
 redis==8.0.0
 reportlab==4.5.1
-
 requests==2.34.2
 six==1.17.0
 sqlparse==0.5.3
