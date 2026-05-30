@@ -38,6 +38,7 @@ CSRF_TRUSTED_ORIGINS = [
    
 ]
 
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Application definition
 
@@ -165,7 +166,7 @@ MULTI_TENANCY_CONFIG = {
     'tenant_model': 'tenants.Tenant',
 }
 
-DATA_UPLOAD_MAX_MEMORY_SIZE = 150 * 1024 * 1024  # 150 MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 150 * 1024 * 1024   # 100 MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 150 * 1024 * 1024
 
 # Redis Cache configuration with dynamic fallback
