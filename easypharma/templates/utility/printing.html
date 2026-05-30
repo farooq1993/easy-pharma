@@ -201,6 +201,7 @@
             <label class="ps-label">Paper Size</label>
             <select name="paper_size" class="ps-select mb-4" id="paperSizeSelect">
               <option value="A4" {% if setup.paper_size == 'A4' %}selected{% endif %}>A4 — Standard Laser / Inkjet</option>
+              <option value="8x4" {% if setup.paper_size == '8x4' %}selected{% endif %}>Epson LX310 — 8" × 4" Dot Matrix (Standard Retail)</option>
               <option value="80mm" {% if setup.paper_size == '80mm' %}selected{% endif %}>80mm — Thermal Printer</option>
               <option value="58mm" {% if setup.paper_size == '58mm' %}selected{% endif %}>58mm — Mini Thermal</option>
             </select>
@@ -435,15 +436,36 @@ document.getElementById('customFooter').addEventListener('input', function(){
 // ── Paper Size Preview Scaling ──
 document.getElementById('paperSizeSelect').addEventListener('change', function(){
   const preview = document.getElementById('invoicePreview');
-  if (this.value === '80mm') {
+  if (this.value === '8x4') {
+    // Epson LX310 8"x4" — narrow landscape-like compact layout
+    preview.style.maxWidth = '380px';
+    preview.style.margin = '0 auto';
+    preview.style.minHeight = '180px';
+    preview.style.fontSize = '9px';
+    preview.style.lineHeight = '1.3';
+    // Add visual cue
+    preview.title = 'Epson LX310 – 8×4 inch dot matrix layout';
+  } else if (this.value === '80mm') {
     preview.style.maxWidth = '300px';
     preview.style.margin = '0 auto';
+    preview.style.minHeight = '';
+    preview.style.fontSize = '';
+    preview.style.lineHeight = '';
+    preview.title = '80mm Thermal';
   } else if (this.value === '58mm') {
     preview.style.maxWidth = '218px';
     preview.style.margin = '0 auto';
+    preview.style.minHeight = '';
+    preview.style.fontSize = '';
+    preview.style.lineHeight = '';
+    preview.title = '58mm Thermal';
   } else {
     preview.style.maxWidth = '100%';
     preview.style.margin = '';
+    preview.style.minHeight = '';
+    preview.style.fontSize = '';
+    preview.style.lineHeight = '';
+    preview.title = 'A4';
   }
 });
 

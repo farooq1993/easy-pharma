@@ -266,9 +266,29 @@
         box-shadow: none;
       }
       @page {
-        size: {{ ps.paper_size|default:'A4' }};
-        margin: {{ ps.margin_top|default:10 }}mm {{ ps.margin_sides|default:10 }}mm;
+        {% if ps.paper_size == '8x4' %}
+          size: 8in 4in;
+          margin: 3mm 4mm;
+        {% elif ps.paper_size == '80mm' %}
+          size: 80mm auto;
+          margin: 2mm 3mm;
+        {% elif ps.paper_size == '58mm' %}
+          size: 58mm auto;
+          margin: 2mm 2mm;
+        {% else %}
+          size: A4 portrait;
+          margin: {{ ps.margin_top|default:10 }}mm {{ ps.margin_sides|default:10 }}mm;
+        {% endif %}
       }
+      {% if ps.paper_size == '8x4' %}
+        body { font-size: 9px !important; }
+        .inv-pharmacy-info h1 { font-size: 12px !important; }
+        .inv-pharmacy-info p { font-size: 8px !important; }
+        .inv-header { padding-bottom: 6px !important; margin-bottom: 5px !important; }
+        table th, table td { padding: 2px 3px !important; font-size: 8px !important; }
+        .inv-meta-grid { gap: 6px !important; }
+        .inv-totals { margin-top: 5px !important; }
+      {% endif %}
     }
   </style>
 </head>

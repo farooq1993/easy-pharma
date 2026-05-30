@@ -82,6 +82,21 @@
 
             </form>
         </div>
+
+        <!-- Export Buttons -->
+        <div class="border-top px-3 pb-3 pt-2 d-flex gap-2 align-items-center">
+            <small class="text-muted me-2"><i class="fas fa-download me-1"></i>Export filtered data:</small>
+            <a id="exportCsvBtn"
+               href="{% url 'purchase_export_csv' %}?q={{ search_query }}&date_from={{ date_from }}&date_to={{ date_to }}&payment_mode={{ payment_filter }}"
+               class="btn btn-sm btn-success">
+                <i class="fas fa-file-csv me-1"></i> Export CSV
+            </a>
+            <a id="exportPdfBtn"
+               href="{% url 'purchase_export_pdf' %}?q={{ search_query }}&date_from={{ date_from }}&date_to={{ date_to }}&payment_mode={{ payment_filter }}"
+               class="btn btn-sm btn-danger">
+                <i class="fas fa-file-pdf me-1"></i> Export PDF
+            </a>
+        </div>
     </div>
 
     <!-- ── Table ────────────────────────────────────────────────────────── -->

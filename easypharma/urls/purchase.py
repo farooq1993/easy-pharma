@@ -1,6 +1,8 @@
 from django.urls import path
-from easypharma.views.purchase import(PurchaseEntryView, PurchaseListView, 
-                                        SupplierAutocomplete,SupplierWisePurchaseReportView,SupplierReportDataView)
+from easypharma.views.purchase import (PurchaseEntryView, PurchaseListView,
+                                        SupplierAutocomplete, SupplierWisePurchaseReportView,
+                                        SupplierReportDataView, PurchaseExportCSVView,
+                                        PurchaseExportPDFView)
 
 urlpatterns = [
     path('entry/', PurchaseEntryView.as_view(), name='purchase_entry'),
@@ -10,4 +12,8 @@ urlpatterns = [
     path('api/suppliers/search/', SupplierAutocomplete.as_view(), name='supplier_search_api'),
     path('report/supplier-wise/', SupplierWisePurchaseReportView.as_view(), name='supplier_wise_purchase_report'),
     path('supplier_report_data/<int:supplier_id>/', SupplierReportDataView.as_view(), name='supplier_report_data'),
+
+    # Export
+    path('export/csv/', PurchaseExportCSVView.as_view(), name='purchase_export_csv'),
+    path('export/pdf/', PurchaseExportPDFView.as_view(), name='purchase_export_pdf'),
 ]

@@ -303,3 +303,167 @@ class SupplierReportDataView(View):
 
         except Supplier.DoesNotExist:
             return JsonResponse({'purchases': []}, status=404)
+
+
+# ========== PURCHASE BILL EXPORT ==========
+
+import csv
+from django.http import HttpResponse
+from easypharma.views.reports import render_to_pdf
+
+
+def _get_filtered_purchases(request):
+    """Helper — return a filtered purchase invoice queryset based on GET params."""
+    qs = (
+        PurchaseInvoice.objects
+        .filter(tenant=request.tenant)
+        .select_related('supplier')
+        .prefetch_related('items__product')
+        .order_by('-purchase_date', '-created_at')
+    )
+
+    search_query = request.GET.get('q', '').strip()
+    if search_query:
+        qs = qs.filter(
+            Q(voucher_number__icontains=search_query) |
+            Q(invoice_number__icontains=search_query) |
+            Q(supplier__name__icontains=search_query)
+        )
+
+    date_from = request.GET.get('date_from', '').strip()
+    date_to   = request.GET.get('date_to',   '').strip()
+    if date_from:
+        qs = qs.filter(purchase_date__gte=date_from)
+    if date_to:
+        qs = qs.filter(purchase_date__lte=date_to)
+
+    payment_filter = request.GET.get('payment_mode', '').strip()
+    if payment_filter in ('Cash', 'Credit'):
+        qs = qs.filter(payment_mode=payment_filter)
+
+    return qs
+
+
+class PurchaseExportCSVView(View):
+    """Export filtered purchase list as CSV — includes all transaction line items."""
+
+    def get(self, request):
+        qs = _get_filtered_purchases(request)
+
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="purchase_bills.csv"'
+
+        writer = csv.writer(response)
+        # Header row
+        writer.writerow([
+            'Voucher No.', 'Purchase Date', 'Invoice No.', 'Supplier',
+            'Payment Mode', 'Product Name', 'Packing',
+            'Batch No.', 'Expiry Date', 'Qty', 'Free Qty',
+            'Purchase Price (₹)', 'MRP (₹)', 'Sale Price (₹)',
+            'GST %', 'Item Total (₹)',
+            'Invoice Sub Total (₹)', 'Invoice GST (₹)',
+            'Invoice Discount (₹)', 'Invoice Total (₹)',
+        ])
+
+        for invoice in qs:
+            items = invoice.items.all()
+            if items.exists():
+                for item in items:
+                    writer.writerow([
+                        invoice.voucher_number or '—',
+                        invoice.purchase_date.strftime('%d/%m/%Y') if invoice.purchase_date else '—',
+                        invoice.invoice_number,
+                        invoice.supplier.name if invoice.supplier else '—',
+                        invoice.payment_mode,
+                        item.product.product_name,
+                        item.product.product_packing or '—',
+                        item.batch_number,
+                        item.expiry_date.strftime('%m/%Y') if item.expiry_date else '—',
+                        item.quantity,
+                        item.free_quantity,
+                        float(item.purchase_price),
+                        float(item.mrp),
+                        float(item.sale_price),
+                        float(item.tax_percentage),
+                        float(item.total_amount),
+                        float(invoice.sub_total),
+                        float(invoice.tax_amount),
+                        float(invoice.discount_amount),
+                        float(invoice.total_amount),
+                    ])
+            else:
+                # Invoice with no items — write header row only
+                writer.writerow([
+                    invoice.voucher_number or '—',
+                    invoice.purchase_date.strftime('%d/%m/%Y') if invoice.purchase_date else '—',
+                    invoice.invoice_number,
+                    invoice.supplier.name if invoice.supplier else '—',
+                    invoice.payment_mode,
+                    '—', '—', '—', '—', '—', '—', '—', '—', '—', '—', '—',
+                    float(invoice.sub_total),
+                    float(invoice.tax_amount),
+                    float(invoice.discount_amount),
+                    float(invoice.total_amount),
+                ])
+
+        return response
+
+
+class PurchaseExportPDFView(View):
+    """Export filtered purchase list as PDF — all transaction data."""
+
+    template_name = 'purchase/purchase_export_pdf.html'
+
+    def get(self, request):
+        qs = _get_filtered_purchases(request)
+
+        invoices_data = []
+        for invoice in qs:
+            items = []
+            for item in invoice.items.all():
+                items.append({
+                    'product_name': item.product.product_name,
+                    'packing': item.product.product_packing or '—',
+                    'batch_number': item.batch_number,
+                    'expiry_date': item.expiry_date.strftime('%m/%Y') if item.expiry_date else '—',
+                    'quantity': item.quantity,
+                    'free_quantity': item.free_quantity,
+                    'purchase_price': float(item.purchase_price),
+                    'mrp': float(item.mrp),
+                    'sale_price': float(item.sale_price),
+                    'tax_percentage': float(item.tax_percentage),
+                    'total_amount': float(item.total_amount),
+                })
+            invoices_data.append({
+                'voucher_number': invoice.voucher_number or '—',
+                'purchase_date': invoice.purchase_date.strftime('%d/%m/%Y') if invoice.purchase_date else '—',
+                'invoice_number': invoice.invoice_number,
+                'supplier_name': invoice.supplier.name if invoice.supplier else '—',
+                'payment_mode': invoice.payment_mode,
+                'sub_total': float(invoice.sub_total),
+                'tax_amount': float(invoice.tax_amount),
+                'discount_amount': float(invoice.discount_amount),
+                'total_amount': float(invoice.total_amount),
+                'items': items,
+            })
+
+        # Overall totals
+        grand_total = sum(i['total_amount'] for i in invoices_data)
+        grand_sub_total = sum(i['sub_total'] for i in invoices_data)
+        grand_tax = sum(i['tax_amount'] for i in invoices_data)
+        grand_discount = sum(i['discount_amount'] for i in invoices_data)
+
+        context = {
+            'invoices_data': invoices_data,
+            'grand_total': grand_total,
+            'grand_sub_total': grand_sub_total,
+            'grand_tax': grand_tax,
+            'grand_discount': grand_discount,
+            'pharmacy': request.tenant,
+            'date_from': request.GET.get('date_from', ''),
+            'date_to': request.GET.get('date_to', ''),
+            'search_query': request.GET.get('q', ''),
+            'total_invoices': len(invoices_data),
+        }
+
+        return render_to_pdf(self.template_name, context, filename='purchase_bills.pdf')

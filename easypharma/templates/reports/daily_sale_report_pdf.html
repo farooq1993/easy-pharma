@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+{% load static %}
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Daily Sale Report - {{ date|date:"d F, Y" }}</title>
+    <style>
+        /* ── Page setup ── */
+        @page {
+            size: A4 landscape;
+            margin: 1.2cm 1.5cm;
+            @top-center {
+                content: "Daily Sale Report";
+                font-size: 9pt;
+                color: #666;
+            }
+            @bottom-right {
+                content: "Page " counter(page) " of " counter(pages);
+                font-size: 8pt;
+                color: #666;
+            }
+        }
+
+        /* ── Base ── */
+        body {
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 9pt;
+            color: #222;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* ── Report Header ── */
+        .report-header {
+            border-bottom: 2.5pt solid #1a56a0;
+            padding-bottom: 6pt;
+            margin-bottom: 12pt;
+        }
+        .report-header h1 {
+            font-size: 16pt;
+            color: #1a56a0;
+            margin: 0 0 2pt 0;
+        }
+        .report-header p {
+            font-size: 9pt;
+            color: #555;
+            margin: 0;
+        }
+        .report-meta {
+            float: right;
+            text-align: right;
+            font-size: 8pt;
+            color: #666;
+        }
+        .clearfix { clear: both; }
+
+        /* ── Metric boxes ── */
+        .metrics-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 12pt;
+        }
+        .metrics-table td {
+            width: 25%;
+            padding: 8pt 6pt;
+            text-align: center;
+            border: 0.75pt solid #dce3ec;
+            border-radius: 4pt;
+        }
+        .metric-label {
+            font-size: 7.5pt;
+            color: #666;
+            display: block;
+            margin-bottom: 3pt;
+        }
+        .metric-value {
+            font-size: 14pt;
+            font-weight: bold;
+        }
+        .metric-blue  { color: #1a56a0; }
+        .metric-green { color: #1a7a3e; }
+        .metric-teal  { color: #0e7490; }
+        .metric-amber { color: #b45309; }
+
+        /* ── Sale type summary row ── */
+        .sale-type-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 12pt;
+        }
+        .sale-type-table td {
+            width: 50%;
+            padding: 8pt 10pt;
+            border: 0.75pt solid #dce3ec;
+        }
+        .sale-type-label {
+            font-size: 8pt;
+            font-weight: bold;
+            color: #444;
+        }
+        .sale-type-amount {
+            font-size: 13pt;
+            font-weight: bold;
+            color: #222;
+        }
+        .sale-type-count {
+            font-size: 7.5pt;
+            color: #777;
+        }
+        .bg-blue-light  { background-color: #e8f0fb; }
+        .bg-green-light { background-color: #e8f5ed; }
+
+        /* ── Section heading ── */
+        .section-heading {
+            background-color: #1a56a0;
+            color: #fff;
+            padding: 4pt 8pt;
+            font-size: 9.5pt;
+            font-weight: bold;
+            margin-bottom: 0;
+        }
+
+        /* ── Two-column layout ── */
+        .two-col-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 12pt;
+        }
+        .two-col-table > tbody > tr > td {
+            vertical-align: top;
+            width: 50%;
+            padding: 0 5pt 0 0;
+        }
+        .two-col-table > tbody > tr > td:last-child {
+            padding: 0 0 0 5pt;
+        }
+
+        /* ── Data tables ── */
+        table.data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 8pt;
+        }
+        table.data-table thead tr {
+            background-color: #f0f4fa;
+        }
+        table.data-table th {
+            padding: 4pt 5pt;
+            text-align: left;
+            border: 0.5pt solid #ccd6e8;
+            font-weight: bold;
+            color: #333;
+        }
+        table.data-table th.r,
+        table.data-table td.r {
+            text-align: right;
+        }
+        table.data-table td {
+            padding: 3.5pt 5pt;
+            border: 0.5pt solid #dce3ec;
+            color: #333;
+        }
+        table.data-table tbody tr:nth-child(even) {
+            background-color: #f8fafd;
+        }
+
+        /* ── Transactions table specifics ── */
+        .tx-invoice { font-weight: bold; }
+        .tx-total   { font-weight: bold; color: #1a7a3e; }
+        .badge-counter {
+            background-color: #dbeafe;
+            color: #1d4ed8;
+            padding: 1pt 4pt;
+            font-size: 7.5pt;
+            border: 0.5pt solid #bfdbfe;
+        }
+        .badge-prescription {
+            background-color: #dcfce7;
+            color: #15803d;
+            padding: 1pt 4pt;
+            font-size: 7.5pt;
+            border: 0.5pt solid #bbf7d0;
+        }
+        .badge-count {
+            background-color: #e0f2fe;
+            color: #0369a1;
+            padding: 1pt 4pt;
+            font-size: 7.5pt;
+        }
+
+        /* ── Empty state ── */
+        .empty {
+            color: #888;
+            text-align: center;
+            padding: 8pt;
+            font-size: 8.5pt;
+        }
+
+        /* ── Footer note ── */
+        .footer-note {
+            margin-top: 10pt;
+            border-top: 0.5pt solid #ccc;
+            padding-top: 4pt;
+            font-size: 7.5pt;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ── Report Header ── -->
+    <div class="report-header">
+        <div class="report-meta">
+            Generated: {{ date|date:"d F, Y" }}<br>
+            Schedule filter: {{ selected_schedule|upper }}
+        </div>
+        <h1>Daily Sale Report</h1>
+        <p>Sales summary for {{ date|date:"d F, Y" }} &nbsp;&bull;&nbsp; {{ request.tenant }}</p>
+        <div class="clearfix"></div>
+    </div>
+
+    <!-- ── Key Metrics ── -->
+    <table class="metrics-table">
+        <tr>
+            <td>
+                <span class="metric-label">Total Sales</span>
+                <span class="metric-value metric-blue">{{ daily_stats.total_sales|default:"0" }}</span>
+            </td>
+            <td>
+                <span class="metric-label">Total Amount</span>
+                <span class="metric-value metric-green">&#8377;{{ daily_stats.total_amount|default:"0"|floatformat:2 }}</span>
+            </td>
+            <td>
+                <span class="metric-label">Tax Collected</span>
+                <span class="metric-value metric-teal">&#8377;{{ daily_stats.total_tax|default:"0"|floatformat:2 }}</span>
+            </td>
+            <td>
+                <span class="metric-label">Discount Given</span>
+                <span class="metric-value metric-amber">&#8377;{{ daily_stats.total_discount|default:"0"|floatformat:2 }}</span>
+            </td>
+        </tr>
+    </table>
+
+    <!-- ── Sale Type Breakdown ── -->
+    <table class="sale-type-table">
+        <tr>
+            <td class="bg-blue-light">
+                <div class="sale-type-label">Counter Sales (Fast Billing)</div>
+                <div class="sale-type-amount">&#8377;{{ counter_stats.amount|default:"0"|floatformat:2 }}</div>
+                <div class="sale-type-count">{{ counter_stats.count|default:"0" }} transactions</div>
+            </td>
+            <td class="bg-green-light">
+                <div class="sale-type-label">Prescription Sales</div>
+                <div class="sale-type-amount">&#8377;{{ prescription_stats.amount|default:"0"|floatformat:2 }}</div>
+                <div class="sale-type-count">{{ prescription_stats.count|default:"0" }} transactions</div>
+            </td>
+        </tr>
+    </table>
+
+    <!-- ── Payment Breakdown + Top Products ── -->
+    <table class="two-col-table">
+        <tr>
+            <!-- Payment Mode -->
+            <td>
+                <div class="section-heading">Payment Mode Breakdown</div>
+                {% if payment_breakdown %}
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Payment Mode</th>
+                            <th class="r">Count</th>
+                            <th class="r">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for payment in payment_breakdown %}
+                        <tr>
+                            <td>{{ payment.payment_mode }}</td>
+                            <td class="r">{{ payment.count }}</td>
+                            <td class="r">&#8377;{{ payment.amount|floatformat:2 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="empty">No payment data available</p>
+                {% endif %}
+            </td>
+
+            <!-- Top Products -->
+            <td>
+                <div class="section-heading">Top 10 Products Sold</div>
+                {% if top_products %}
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Product Name</th>
+                            <th class="r">Qty</th>
+                            <th class="r">Revenue</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in top_products %}
+                        <tr>
+                            <td>{{ product.product__product_name }}</td>
+                            <td class="r">{{ product.qty_sold }}</td>
+                            <td class="r">&#8377;{{ product.total_revenue|floatformat:2 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="empty">No product data available</p>
+                {% endif %}
+            </td>
+        </tr>
+    </table>
+
+    <!-- ── All Transactions ── -->
+    <div class="section-heading">All Sales Transactions</div>
+    {% if sales %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Invoice #</th>
+                <th>Customer / Patient</th>
+                <th>Type</th>
+                <th class="r">Items</th>
+                <th class="r">Subtotal</th>
+                <th class="r">Tax</th>
+                <th class="r">Discount</th>
+                <th class="r">Total</th>
+                <th>Payment</th>
+                <th>Time</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for sale in sales %}
+            <tr>
+                <td class="tx-invoice">{{ sale.invoice_number }}</td>
+                <td>
+                    {% if sale.patient_name %}{{ sale.patient_name }}
+                    {% elif sale.customer %}{{ sale.customer.name }}
+                    {% else %}N/A{% endif %}
+                </td>
+                <td>
+                    {% if sale.sale_type == 'Counter' %}
+                        <span class="badge-counter">Counter</span>
+                    {% else %}
+                        <span class="badge-prescription">Rx</span>
+                    {% endif %}
+                </td>
+                <td class="r"><span class="badge-count">{{ sale.items.count }}</span></td>
+                <td class="r">&#8377;{{ sale.sub_total|floatformat:2 }}</td>
+                <td class="r">&#8377;{{ sale.tax_amount|floatformat:2 }}</td>
+                <td class="r">&#8377;{{ sale.discount_amount|floatformat:2 }}</td>
+                <td class="r tx-total">&#8377;{{ sale.total_amount|floatformat:2 }}</td>
+                <td>{{ sale.payment_mode }}</td>
+                <td>{{ sale.created_at|date:"H:i" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">No sales recorded for this date.</p>
+    {% endif %}
+
+    <div class="footer-note">
+        Easy Pharma &bull; Report generated for {{ request.tenant }} &bull; {{ date|date:"d F, Y" }}
+    </div>
+
+</body>
+</html>
