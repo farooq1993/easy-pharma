@@ -45,6 +45,7 @@ from dataMigration.parsers import (
     parse_product_seed_csv,
 )
 
+logger = logging.getLogger(__name__)
 
 # =========================================================
 # FILE DECODER
@@ -299,25 +300,6 @@ def _batch_enrich(parsed_data, import_type, tenant):
             )
 
             existing_companies.update(rows)
-        # existing_products = set(
-        #     Products.objects.filter(
-        #         tenant=tenant,
-        #         product_name__in=incoming_product_names
-        #     ).values_list(
-        #         'product_name',
-        #         flat=True
-        #     )
-        # )
-
-        # existing_companies = set(
-        #     DrugCompany.objects.filter(
-        #         tenant=tenant,
-        #         company_name__in=incoming_company_names
-        #     ).values_list(
-        #         'company_name',
-        #         flat=True
-        #     )
-        # )
 
         existing_products_upper = {
             x.upper()
@@ -526,13 +508,6 @@ def _run_parse_job(
 
     try:
 
-        print("=" * 80, flush=True)
-        print(f"[PARSE JOB START] {job_id}", flush=True)
-        print(f"IMPORT TYPE={import_type}", flush=True)
-        print(f"INPUT METHOD={input_method}", flush=True)
-        print(f"CONTENT LEN={len(content)}", flush=True)
-        print("=" * 80, flush=True)
-
         cache.set(
             CACHE_KEY,
             {
@@ -575,10 +550,10 @@ def _run_parse_job(
                     drop_first_column=False
                 )
 
-            print(f"[COMPANY] TOTAL RAW ROWS={len(rows)}", flush=True)
+            logger.info(f"[COMPANY] TOTAL RAW ROWS={len(rows)}")
 
             if rows:
-                print(f"[COMPANY SAMPLE ROW] {rows[0]}", flush=True)
+                logger.info(f"[COMPANY SAMPLE ROW] {rows[0]}")
 
             # ==============================================
             # EXTRA CLEANING
@@ -619,19 +594,19 @@ def _run_parse_job(
                 except Exception:
                     skipped += 1
 
-            print(f"[COMPANY CLEANED ROWS]={len(cleaned_rows)}", flush=True)
-            print(f"[COMPANY SKIPPED]={skipped}", flush=True)
+            logger.info(f"[COMPANY CLEANED ROWS]={len(cleaned_rows)}")
+            logger.info(f"[COMPANY SKIPPED]={skipped}")
 
             parsed_data = parse_companies(
                 cleaned_rows
             )
 
-            print(f"[COMPANY PARSED]={len(parsed_data)}", flush=True)
+            logger.info(f"[COMPANY PARSED]={len(parsed_data)}")
 
             if parsed_data:
-                print(f"[COMPANY FIRST ITEM]={parsed_data[0]}", flush=True)
+                logger.info(f"[COMPANY FIRST ITEM]={parsed_data[0]}")
 
-            print("=" * 80, flush=True)
+            logger.info("=" * 80)
 
         # =====================================================
         # PRODUCT
