@@ -18,7 +18,8 @@ from io import BytesIO
 from django.conf import settings
 from django.template.loader import get_template
 from django.http import HttpResponse
-from xhtml2pdf import pisa
+#from xhtml2pdf import pisa
+#from weasyprint import HTML
 
 def link_callback(uri, rel):
     if uri.startswith(settings.STATIC_URL):
@@ -35,18 +36,18 @@ def link_callback(uri, rel):
         return path
     return uri
 
-def render_to_pdf(template_src, context_dict={}, filename="report.pdf"):
-    # Ensure PDF rendering doesn't load sidebar/navbar by telling the context
-    context_dict['is_pdf'] = True
-    template = get_template(template_src)
-    html = template.render(context_dict)
-    result = BytesIO()
-    pdf = pisa.pisaDocument(BytesIO(html.encode("utf-8")), result, link_callback=link_callback)
-    if not pdf.err:
-        response = HttpResponse(result.getvalue(), content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        return response
-    return HttpResponse("Error generating PDF", status=500)
+# def render_to_pdf(template_src, context_dict={}, filename="report.pdf"):
+#     # Ensure PDF rendering doesn't load sidebar/navbar by telling the context
+#     context_dict['is_pdf'] = True
+#     template = get_template(template_src)
+#     html = template.render(context_dict)
+#     result = BytesIO()
+#     pdf = pisa.pisaDocument(BytesIO(html.encode("utf-8")), result, link_callback=link_callback)
+#     if not pdf.err:
+#         response = HttpResponse(result.getvalue(), content_type='application/pdf')
+#         response['Content-Disposition'] = f'attachment; filename="{filename}"'
+#         return response
+#     return HttpResponse("Error generating PDF", status=500)
 
 
 class StockReportView(View):
@@ -164,9 +165,9 @@ class DailySaleReportView(View):
             'report_schedules': report_schedules,
             'selected_schedule': selected_schedule,
         }
-        PDF_TEMPLATE = 'reports/daily_sale_report_pdf.html'
-        if request.GET.get('pdf') == '1':
-            return render_to_pdf(PDF_TEMPLATE, context, filename=f"daily_sale_report_{date_obj}.pdf")
+        # PDF_TEMPLATE = 'reports/daily_sale_report_pdf.html'
+        # if request.GET.get('pdf') == '1':
+        #     return render_to_pdf(PDF_TEMPLATE, context, filename=f"daily_sale_report_{date_obj}.pdf")
 
         return render(request, self.template_name, context)
 

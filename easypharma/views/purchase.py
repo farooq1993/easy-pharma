@@ -309,7 +309,7 @@ class SupplierReportDataView(View):
 
 import csv
 from django.http import HttpResponse
-from easypharma.views.reports import render_to_pdf
+#from easypharma.views.reports import render_to_pdf
 
 
 def _get_filtered_purchases(request):
@@ -466,4 +466,4 @@ class PurchaseExportPDFView(View):
             'total_invoices': len(invoices_data),
         }
 
-        return render_to_pdf(self.template_name, context, filename='purchase_bills.pdf')
+        return render_to_pdf(self.template_name, context, filename='purchase_bills.pdf')
