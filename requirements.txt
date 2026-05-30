@@ -10,7 +10,7 @@ cssselect2==0.9.0
 dj-database-url==2.1.0
 Django==5.2.5
 django-redis==6.0.0
-django-restframework==0.0.1
+djangorestframework==3.16.1
 freetype-py==2.5.1
 gunicorn==23.0.0
 html5lib==1.1
@@ -31,7 +31,6 @@ python-dateutil==2.9.0.post0
 python-decouple==3.8
 PyYAML==6.0.3
 redis==8.0.0
-reportlab==4.5.1
 requests==2.34.2
 six==1.17.0
 sqlparse==0.5.3
@@ -43,5 +42,5 @@ uritools==6.1.2
 urllib3==2.7.0
 webencodings==0.5.1
 whitenoise==6.7.0
+reportlab==4.4.3
 xhtml2pdf==0.2.17
-reportlab==4.5.1
