@@ -602,12 +602,15 @@ def parse_products_fast(rows):
             product_name = ""
             packing = ""
             company = ""
+            drug_content = ""
 
             if len(cleaned) >= 2 and looks_like_packing(cleaned[1]):
                 product_name = cleaned[0]
                 packing = cleaned[1]
                 if len(cleaned) > 2:
                     company = cleaned[2]
+                if len(cleaned) > 3:
+                    drug_content = cleaned[3]
             elif looks_like_packing(cleaned[0]):
                 packing_as_name_skipped += 1
                 continue
@@ -617,6 +620,8 @@ def parse_products_fast(rows):
                     packing = cleaned[1]
                 if len(cleaned) > 2:
                     company = cleaned[2]
+                if len(cleaned) > 3:
+                    drug_content = cleaned[3]
 
             product_name = product_name.upper().strip()
             if len(product_name) < 3 or looks_like_packing(product_name):
@@ -628,6 +633,7 @@ def parse_products_fast(rows):
                 'product_name': product_name,
                 'product_packing': packing.upper(),
                 'company_name': company.upper(),
+                'drug_content': drug_content.strip(),
                 'hsn_code': '3004',
                 'conversion_factor': conv_factor,
                 'product_type': prod_type,
@@ -699,6 +705,127 @@ def parse_product_master_text(text_content):
     if len(products) == 0:
         _dbg("WARNING: parse_product_master_text produced 0 products!")
         _dbg("  Expected format per line: PRODUCT_NAME PACKING COMPANY")
+    return products
+
+
+# ============================================================
+# 3b. PRODUCT SEED CSV (structured catalog format)
+#     Columns: brand_name, manufacturer, dosage_form, pack_size,
+#              pack_unit, primary_ingredient, active_ingredients
+# ============================================================
+
+def parse_product_seed_csv(content):
+    """
+    Parse the structured seed CSV with active_ingredients as a Python-literal list.
+    Returns list-of-dicts compatible with _bulk_import_products in workers.py.
+    Each dict has:
+      product_name, product_packing, company_name, drug_content (primary_ingredient),
+      active_ingredients (list of {name, strength, full_description}),
+      hsn_code, conversion_factor, product_type
+    """
+    import ast
+    start_time = time.time()
+    _dbg("parse_product_seed_csv: content_len=%d chars", len(content))
+
+    products = []
+    skipped = 0
+
+    # Auto-detect delimiter: check first line for tabs vs commas
+    first_line = content.split('\n')[0] if content else ''
+    delimiter = '\t' if first_line.count('\t') >= 3 else ','
+    _dbg("parse_product_seed_csv: detected delimiter=%r (tabs=%d, commas=%d)",
+         delimiter, first_line.count('\t'), first_line.count(','))
+
+    reader = csv.DictReader(io.StringIO(content), delimiter=delimiter)
+
+    # Normalise header names (strip whitespace)
+    fieldnames = [f.strip() for f in (reader.fieldnames or [])]
+    _dbg("parse_product_seed_csv: detected columns=%s", fieldnames)
+
+    for idx, raw_row in enumerate(reader):
+        try:
+            row = {k.strip(): (v or '').strip() for k, v in raw_row.items() if k}
+
+            brand_name      = row.get('brand_name', '').upper().strip()
+            manufacturer    = row.get('manufacturer', '').strip()
+            dosage_form     = row.get('dosage_form', '').upper().strip()
+            pack_size       = row.get('pack_size', '').strip()
+            pack_unit       = row.get('pack_unit', '').strip()
+            primary_ingr    = row.get('primary_ingredient', '').strip()
+            active_raw      = row.get('active_ingredients', '[]').strip()
+
+            if not brand_name or len(brand_name) < 2:
+                skipped += 1
+                continue
+
+            # Build packing string  e.g. "10 STRIP"
+            packing = ''
+            if pack_size and pack_unit:
+                packing = f"{pack_size} {pack_unit.upper()}"
+            elif pack_size:
+                packing = pack_size
+
+            # Parse active_ingredients safely
+            active_ingredients = []
+            if active_raw and active_raw not in ('', '[]', 'None'):
+                try:
+                    parsed = ast.literal_eval(active_raw)
+                    if isinstance(parsed, list):
+                        active_ingredients = [
+                            {
+                                'name': str(item.get('name', '')).strip(),
+                                'strength': str(item.get('strength', '') or '').strip(),
+                                'full_description': str(item.get('full_description', '') or '').strip(),
+                            }
+                            for item in parsed
+                            if isinstance(item, dict) and item.get('name')
+                        ]
+                except Exception as parse_err:
+                    _dbg("  Row %d: active_ingredients parse error: %s", idx, parse_err)
+
+            # drug_content: join all active ingredient names
+            drug_content = primary_ingr
+            if not drug_content and active_ingredients:
+                drug_content = ', '.join(i['name'] for i in active_ingredients)
+
+            # Map dosage_form → product_type
+            form_map = {
+                'tablet': 'TABLET', 'capsule': 'CAPSULE',
+                'syrup': 'SYRUP', 'suspension': 'SYRUP',
+                'inhaler': 'OTHER', 'injection': 'INJECTION',
+                'cream': 'CREAM', 'gel': 'CREAM', 'ointment': 'CREAM',
+                'drop': 'DROP', 'drops': 'DROP',
+            }
+            product_type = form_map.get(dosage_form.lower(), 'OTHER')
+
+            # Conversion factor from pack_size
+            conv_factor = 1
+            try:
+                if pack_size:
+                    conv_factor = int(float(pack_size))
+            except (ValueError, TypeError):
+                conv_factor = 1
+
+            products.append({
+                'product_name':       brand_name,
+                'product_packing':    packing,
+                'company_name':       manufacturer.upper(),
+                'drug_content':       drug_content,
+                'active_ingredients': active_ingredients,
+                'hsn_code':           '3004',
+                'conversion_factor':  conv_factor,
+                'product_type':       product_type,
+            })
+
+        except Exception as e:
+            _dbg("parse_product_seed_csv ERROR row=%d err=%s", idx, e)
+            skipped += 1
+
+    elapsed = time.time() - start_time
+    _dbg("parse_product_seed_csv: accepted=%d, skipped=%d, time=%.2fs",
+         len(products), skipped, elapsed)
+    if products:
+        _dbg("parse_product_seed_csv sample: %s", products[0])
     return products
 
 

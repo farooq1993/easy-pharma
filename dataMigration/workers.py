@@ -21,7 +21,7 @@ from django.db import connection
 from django.utils import timezone
 
 from tenants.models import Tenant
-from easypharma.models.Items import Products, DrugCompany, ProductType
+from easypharma.models.Items import Products, DrugCompany, ProductType, ProductContent, ProductContent
 from easypharma.models.purchase_invoice import Supplier
 from easypharma.models.stock import StockBatch
 from dataMigration.models import MigrationLog
@@ -34,6 +34,7 @@ from dataMigration.parsers import (
     parse_stock_batches,
     parse_product_master_text,
     parse_products_fast,
+    parse_product_seed_csv,
 )
 
 logger = logging.getLogger(__name__)
@@ -134,18 +135,23 @@ class MigrationBackgroundWorker(threading.Thread):
             dbg("STEP 2: Bulk import — %d items for import_type=%s", total_items, import_type)
             import_start = time.time()
 
+            # ── 2. Bulk import ────────────────────────────────────
             if import_type == 'company':
                 created_primary_keys, created_dependency_keys = _bulk_import_companies(
                     all_parsed_items, tenant, log_entry, total_items)
+
             elif import_type == 'supplier':
                 created_primary_keys, created_dependency_keys = _bulk_import_suppliers(
                     all_parsed_items, tenant, log_entry, total_items)
-            elif import_type == 'product':
+
+            elif import_type in ('product', 'product_seed'):
                 created_primary_keys, created_dependency_keys = _bulk_import_products(
                     all_parsed_items, tenant, log_entry, total_items)
+
             elif import_type == 'stock':
                 created_primary_keys, created_dependency_keys = _bulk_import_stock(
                     all_parsed_items, tenant, log_entry, total_items)
+
             else:
                 dbg("ERROR: Unknown import_type=%s", import_type)
 
@@ -182,105 +188,6 @@ class MigrationBackgroundWorker(threading.Thread):
             connection.close()
             dbg("DB connection closed for thread %s", self.name)
 
-    # ── Parse dispatcher ─────────────────────────────────────────
-    # def _parse(self, import_type, log_entry):
-    #     """Route to the correct parser and return list-of-dicts."""
-
-    #     content = self.parsed_data
-
-    #     # ── Supplier (text-only path) ─────────────────────────────
-    #     if import_type == 'supplier':
-    #         dbg("Parser: supplier — using parse_suppliers_from_text")
-    #         result = parse_suppliers_from_text(content)
-    #         dbg("Supplier parse result: %d records", len(result))
-    #         return result
-
-    #     # ── Company ───────────────────────────────────────────────
-    #     if import_type == 'company':
-    #         dbg("Parser: company — input_method=%s", self.input_method)
-    #         if self.input_method == 'file':
-    #             rows = parse_csv_to_rows(content, drop_first_column=False)
-    #         else:
-    #             rows = parse_text_lines_to_rows(content, drop_first_column=False)
-    #         dbg("Company raw rows: %d", len(rows))
-    #         if rows:
-    #             dbg("Company sample row[0]: %s", rows[0])
-    #         result = parse_companies(rows)
-    #         dbg("Company parse result: %d records", len(result))
-    #         return result
-
-    #     # ── Product ───────────────────────────────────────────────
-    #     if import_type == 'product':
-    #         self.drop_first_col = False
-    #         dbg("Parser: product — input_method=%s", self.input_method)
-    #         if self.input_method == 'text':
-    #             result = parse_product_master_text(content)
-    #             dbg("Product (text) parse result: %d records", len(result))
-    #             return result
-    #         else:
-    #             # CSV / file path
-    #             if content.lstrip().startswith(('"', 'Code', 'Product', 'Name')):
-    #                 dbg("Product file looks like CSV — using parse_csv_to_rows")
-    #                 rows = parse_csv_to_rows(content, drop_first_column=False)
-    #             else:
-    #                 dbg("Product file looks like fixed-width text — using parse_text_lines_to_rows")
-    #                 rows = parse_text_lines_to_rows(content, drop_first_column=False)
-    #             dbg("Product raw rows: %d", len(rows))
-    #             if rows:
-    #                 dbg("Product sample row[0]: %s", rows[0])
-    #             # FIX #4: build cleaned_rows only for product (not for company/supplier)
-    #             junk_phrases = ["Page No", "Printed on", "Products Typewise"]
-
-    #             cleaned_rows = [
-    #                 [str(x).strip() for x in r]
-    #                 for r in rows
-    #                 if r and "".join(map(str, r)).strip()
-    #                 and not any(x in " ".join(map(str, r)) for x in junk_phrases)
-    #             ]
-    #             # df = pd.DataFrame(rows).fillna('').astype(str)
-    #             # junk_phrases = ["Page No", "Printed on", "Products Typewise"]
-    #             # cleaned_rows = [
-    #             #     r for r in df.values.tolist()
-    #             #     if "".join(r).strip() and not any(x in " ".join(r) for x in junk_phrases)
-    #             # ]
-    #             dbg("Product cleaned_rows after junk filter: %d (removed %d)",
-    #                 len(cleaned_rows), len(rows) - len(cleaned_rows))
-    #             result = parse_products_fast(cleaned_rows)
-    #             dbg("Product parse result: %d records", len(result))
-    #             return result
-
-    #     # ── Stock ─────────────────────────────────────────────────
-    #     if import_type == 'stock':
-    #         dbg("Parser: stock — input_method=%s, drop_first_col=%s",
-    #             self.input_method, self.drop_first_col)
-    #         if self.input_method == 'file' and content.lstrip().startswith(('"', 'Code', 'Product', 'Name')):
-    #             rows = parse_csv_to_rows(content, drop_first_column=self.drop_first_col)
-    #         else:
-    #             rows = parse_text_lines_to_rows(content, drop_first_column=self.drop_first_col)
-    #         dbg("Stock raw rows: %d", len(rows))
-    #         if rows:
-    #             dbg("Stock sample row[0]: %s", rows[0])
-    #         junk_phrases = ["Page No", "Printed on", "Products Typewise"]
-
-    #         cleaned_rows = [
-    #             [str(x).strip() for x in r]
-    #             for r in rows
-    #             if r and "".join(map(str, r)).strip()
-    #             and not any(x in " ".join(map(str, r)) for x in junk_phrases)
-    #         ]
-    #         # df = pd.DataFrame(rows).fillna('').astype(str)
-    #         # junk_phrases = ["Page No", "Printed on", "Products Typewise"]
-    #         # cleaned_rows = [
-    #         #     r for r in df.values.tolist()
-    #         #     if "".join(r).strip() and not any(x in " ".join(r) for x in junk_phrases)
-    #         # ]
-    #         dbg("Stock cleaned_rows: %d", len(cleaned_rows))
-    #         result = parse_stock_batches(cleaned_rows)
-    #         dbg("Stock parse result: %d records", len(result))
-    #         return result
-
-    #     dbg("ERROR: Unknown import_type=%s — returning empty list", import_type)
-    #     return []
 
 
 # ─────────────────────────────────────────────────────────────
@@ -319,6 +226,56 @@ def _resolve_types(tenant, names: set) -> dict:
     }
     dbg("_resolve_types: found %d / %d in %.3fs", len(result), len(names), time.time() - start)
     return result
+
+
+def _resolve_contents(tenant, names: set) -> dict:
+    start = time.time()
+    result = {
+        c.content_name.upper(): c
+        for c in ProductContent.objects.filter(tenant=tenant, content_name__in=list(names))
+    }
+    dbg("_resolve_contents: found %d / %d in %.3fs", len(result), len(names), time.time() - start)
+    return result
+
+
+def _ensure_contents(tenant, names: set, existing: dict):
+    start = time.time()
+    missing = names - set(existing.keys())
+    new_ids = []
+    if missing:
+        dbg("_ensure_contents: creating %d missing contents: %s", len(missing), list(missing)[:10])
+        objs = [ProductContent(tenant=tenant, content_name=n) for n in missing]
+        ProductContent.objects.bulk_create(objs, ignore_conflicts=True)
+        for c in ProductContent.objects.filter(tenant=tenant, content_name__in=list(missing)):
+            existing[c.content_name.upper()] = c
+            new_ids.append(c.id)
+    dbg("_ensure_contents: created %d in %.3fs", len(new_ids), time.time() - start)
+    return existing, new_ids
+
+
+def _resolve_contents(tenant, names: set) -> dict:
+    start = time.time()
+    result = {
+        c.content_name.upper(): c
+        for c in ProductContent.objects.filter(tenant=tenant, content_name__in=list(names))
+    }
+    dbg("_resolve_contents: found %d / %d in %.3fs", len(result), len(names), time.time() - start)
+    return result
+
+
+def _ensure_contents(tenant, names: set, existing: dict):
+    start = time.time()
+    missing = names - set(existing.keys())
+    new_ids = []
+    if missing:
+        dbg("_ensure_contents: creating %d missing contents: %s", len(missing), list(missing)[:10])
+        objs = [ProductContent(tenant=tenant, content_name=n) for n in missing]
+        ProductContent.objects.bulk_create(objs, ignore_conflicts=True)
+        for c in ProductContent.objects.filter(tenant=tenant, content_name__in=list(missing)):
+            existing[c.content_name.upper()] = c
+            new_ids.append(c.id)
+    dbg("_ensure_contents: created %d in %.3fs", len(new_ids), time.time() - start)
+    return existing, new_ids
 
 
 def _ensure_companies(tenant, names: set, existing: dict):
@@ -469,6 +426,7 @@ def _bulk_import_products(items, tenant, log_entry, total_items):
     dbg("--- _bulk_import_products: %d items ---", len(items))
     dep_company_ids = []
     dep_type_ids = []
+    dep_content_ids = []
     created_ids = []
 
     # A. Companies
@@ -477,7 +435,7 @@ def _bulk_import_products(items, tenant, log_entry, total_items):
     dbg("Unique company names in import: %d", len(all_comp_names))
     company_map = _resolve_companies(tenant, all_comp_names)
     company_map, dep_company_ids = _ensure_companies(tenant, all_comp_names, company_map)
-    log_entry.progress_percent = 30
+    log_entry.progress_percent = 25
     log_entry.save(update_fields=['progress_percent'])
 
     # B. Product types
@@ -486,11 +444,24 @@ def _bulk_import_products(items, tenant, log_entry, total_items):
     dbg("Unique product types in import: %s", all_type_names)
     type_map = _resolve_types(tenant, all_type_names)
     type_map, dep_type_ids = _ensure_types(tenant, all_type_names, type_map)
+    log_entry.progress_percent = 35
+    log_entry.save(update_fields=['progress_percent'])
+
+    # C. Drug contents (primary ingredient)
+    dbg("Step C: resolving drug contents")
+    all_content_names = {
+        item.get('drug_content', '').strip().upper()
+        for item in items
+        if item.get('drug_content', '').strip()
+    }
+    dbg("Unique drug contents in import: %d", len(all_content_names))
+    content_map = _resolve_contents(tenant, all_content_names)
+    content_map, dep_content_ids = _ensure_contents(tenant, all_content_names, content_map)
     log_entry.progress_percent = 40
     log_entry.save(update_fields=['progress_percent'])
 
-    # C. Existing products
-    dbg("Step C: fetching existing product names for tenant")
+    # D. Existing products
+    dbg("Step D: fetching existing product names for tenant")
     step_start = time.time()
     existing_upper = set(
     Products.objects.filter(
@@ -504,8 +475,8 @@ def _bulk_import_products(items, tenant, log_entry, total_items):
    
     dbg("Existing products in DB: %d (fetched in %.2fs)", len(existing_upper), time.time() - step_start)
 
-    # D. Bulk create
-    dbg("Step D: bulk creating products in chunks of %d", DB_CHUNK)
+    # E. Bulk create
+    dbg("Step E: bulk creating products in chunks of %d", DB_CHUNK)
     for chunk_idx, chunk in enumerate(_chunked(items, DB_CHUNK)):
         chunk_start = time.time()
         new_objs = []
@@ -515,14 +486,16 @@ def _bulk_import_products(items, tenant, log_entry, total_items):
             if not name or name in existing_upper:
                 skipped += 1
                 continue
-            comp_obj = company_map.get(item.get('company_name', '').strip().upper())
-            type_obj = type_map.get(item.get('product_type', 'OTHER').strip().upper())
+            comp_obj    = company_map.get(item.get('company_name', '').strip().upper())
+            type_obj    = type_map.get(item.get('product_type', 'OTHER').strip().upper())
+            content_obj = content_map.get(item.get('drug_content', '').strip().upper())
             new_objs.append(Products(
                 tenant=tenant,
                 product_name=name,
                 product_packing=item.get('product_packing', ''),
                 compny_name=comp_obj,
                 product_type=type_obj,
+                product_content=content_obj,
                 product_hsn_code=item.get('hsn_code') or '3004',
                 conversion_factor=item.get('conversion_factor') or 1,
             ))
@@ -545,7 +518,7 @@ def _bulk_import_products(items, tenant, log_entry, total_items):
         dbg("Chunk %d done in %.3fs", chunk_idx, time.time() - chunk_start)
 
     dbg("_bulk_import_products DONE: %.2fs, created %d", time.time() - start_all, len(created_ids))
-    return created_ids, {'DrugCompany': dep_company_ids, 'ProductType': dep_type_ids}
+    return created_ids, {'DrugCompany': dep_company_ids, 'ProductType': dep_type_ids, 'ProductContent': dep_content_ids}
 
 
 def _bulk_import_stock(items, tenant, log_entry, total_items):
