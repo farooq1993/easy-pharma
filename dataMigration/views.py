@@ -837,162 +837,106 @@ def _run_parse_job(
 # PARSE VIEW
 # =========================================================
 
-class MigrationParseView(
-    LoginRequiredMixin,
-    OrganizationRequiredMixin,
-    View
-):
-
+class MigrationParseView(LoginRequiredMixin, OrganizationRequiredMixin, View):
     def post(self, request, *args, **kwargs):
 
-        import_type = request.POST.get(
-            'import_type'
-        )
-
-        input_method = request.POST.get(
-            'input_method'
-        )
-
-        drop_first_col = (
-            request.POST.get(
-                'drop_first_column'
-            ) == 'true'
-        )
+        import_type = request.POST.get('import_type')
+        input_method = request.POST.get('input_method')
+        drop_first_col = request.POST.get('drop_first_column') == 'true'
 
         content = ''
 
         # =====================================================
-        # FILE
+        # FILE UPLOAD (Large File Support)
         # =====================================================
-
         if input_method == 'file':
-
-            uploaded_file = request.FILES.get(
-                'file'
-            )
-
+            uploaded_file = request.FILES.get('file')
             if not uploaded_file:
+                return JsonResponse({'success': False, 'error': 'No file uploaded'})
 
-                return JsonResponse({
-                    'success': False,
-                    'error': 'No file uploaded'
-                })
+            # Log file size
+            logger.info(f"[FILE UPLOAD] Received file: {uploaded_file.name} | Size: {uploaded_file.size / (1024*1024):.2f} MB")
 
-            content, enc = decode_uploaded_file(
-                uploaded_file
-            )
-
-            print(
-                f"[FILE DECODED] encoding={enc}",
-                flush=True
-            )
+            content, enc = decode_uploaded_file(uploaded_file)
+            logger.info(f"[FILE DECODED] encoding={enc} | Content length: {len(content)/1024/1024:.2f} MB")
 
         # =====================================================
-        # TEXT
+        # TEXT INPUT
         # =====================================================
-
         else:
-
-            content = request.POST.get(
-                'raw_text',
-                ''
-            )
+            content = request.POST.get('raw_text', '')
 
         if not content.strip():
+            return JsonResponse({'success': False, 'error': 'No content provided'})
 
-            return JsonResponse({
-                'success': False,
-                'error': 'No content'
-            })
-
-        tenant_id = request.POST.get(
-            'selected_tenant_id'
-        )
-
-        if tenant_id:
-
-            tenant = get_object_or_404(
-                Tenant,
-                id=tenant_id
-            )
-
-        else:
-
-            tenant = request.tenant
+        tenant_id = request.POST.get('selected_tenant_id')
+        tenant = get_object_or_404(Tenant, id=tenant_id) if tenant_id else request.tenant
 
         # =====================================================
-        # PRODUCT SEED — parse synchronously, return directly
-        # (avoids cache/thread issues for this fast structured CSV)
+        # PRODUCT SEED — Large File Optimized
         # =====================================================
-
         if import_type == 'product_seed':
             try:
-                print("[PRODUCT SEED] Synchronous parse start", flush=True)
-                parsed_data = parse_product_seed_csv(content)
-                print(f"[PRODUCT SEED] parsed={len(parsed_data)}", flush=True)
+                logger.info(f"[PRODUCT SEED] Starting parse - File size: {len(content)/1024/1024:.2f} MB")
 
+                # Parse
+                parsed_data = parse_product_seed_csv(content)
+                logger.info(f"[PRODUCT SEED] ✅ Successfully parsed {len(parsed_data)} records")
+
+                if not parsed_data:
+                    logger.warning("[PRODUCT SEED] No records parsed from file")
+
+                # Enrich (Preview)
                 preview_data, summary = _batch_enrich(parsed_data, import_type, tenant)
 
-                # Store full parsed data in cache for the later commit step
+                # Store in cache (only if reasonable size)
                 job_id = str(uuid.uuid4())
-                cache.set(f'parsed_data_{job_id}', parsed_data, timeout=3600)
+                cache.set(f'parsed_data_{job_id}', parsed_data, timeout=7200)  # 2 hours
+
+                logger.info(f"[PRODUCT SEED] Job created successfully: {job_id}")
 
                 return JsonResponse({
                     'success': True,
                     'status': 'done',
                     'progress': 100,
                     'job_id': job_id,
-                    'data': preview_data,
+                    'data': preview_data,      # Only preview (first 100 rows)
                     'summary': summary,
                 })
+
             except Exception as e:
+                logger.error(f"[PRODUCT SEED] Parsing failed: {str(e)}")
                 import traceback
-                traceback.print_exc()
+                logger.error(traceback.format_exc())
                 return JsonResponse({
                     'success': False,
                     'error': f'Parsing error: {str(e)}'
-                })
+                }, status=400)
 
         # =====================================================
-        # ALL OTHER TYPES — background thread + poll
+        # OTHER TYPES (Background Processing)
         # =====================================================
-
         job_id = str(uuid.uuid4())
 
         cache.set(
             f'parse_job_{job_id}',
-            {
-                'status': 'queued',
-                'progress': 5
-            },
-            timeout=3600
+            {'status': 'queued', 'progress': 5},
+            timeout=7200
         )
 
         t = threading.Thread(
             target=_run_parse_job,
-            args=(
-                job_id,
-                import_type,
-                input_method,
-                content,
-                drop_first_col,
-                tenant.id
-            ),
+            args=(job_id, import_type, input_method, content, drop_first_col, tenant.id),
             daemon=True
         )
-
         t.start()
 
-        print(
-            f"[THREAD STARTED] job_id={job_id}",
-            flush=True
-        )
+        logger.info(f"[BACKGROUND JOB] Started for {import_type} | Job ID: {job_id}")
 
         return JsonResponse({
             'success': True,
             'job_id': job_id
         })
-
 
 # =========================================================
 # PARSE STATUS VIEW
