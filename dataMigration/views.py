@@ -23,7 +23,8 @@ from tenants.models import Tenant
 from easypharma.models.Items import (
     Products,
     DrugCompany,
-    ProductType
+    ProductType,
+    ProductContent,
 )
 
 from easypharma.models.purchase_invoice import Supplier
@@ -41,6 +42,7 @@ from dataMigration.parsers import (
     parse_stock_batches,
     parse_product_master_text,
     parse_products_fast,
+    parse_product_seed_csv,
 )
 
 
@@ -361,6 +363,62 @@ def _batch_enrich(parsed_data, import_type, tenant):
                 )
 
     # =====================================================
+    # PRODUCT SEED  (structured catalog CSV)
+    # =====================================================
+
+    elif import_type == 'product_seed':
+
+        incoming_product_names = list({
+            item['product_name'].upper()
+            for item in parsed_data
+            if item.get('product_name')
+        })
+
+        incoming_company_names = list({
+            item.get('company_name', '').upper()
+            for item in parsed_data
+            if item.get('company_name')
+        })
+
+        existing_products = set()
+        DB_CHUNK = 500
+        for i in range(0, len(incoming_product_names), DB_CHUNK):
+            chunk = incoming_product_names[i:i + DB_CHUNK]
+            rows = Products.objects.filter(
+                tenant=tenant, product_name__in=chunk
+            ).values_list('product_name', flat=True)
+            existing_products.update(rows)
+
+        existing_companies = set()
+        for i in range(0, len(incoming_company_names), 500):
+            chunk = incoming_company_names[i:i + 500]
+            rows = DrugCompany.objects.filter(
+                tenant=tenant, company_name__in=chunk
+            ).values_list('company_name', flat=True)
+            existing_companies.update(rows)
+
+        existing_products_upper  = {x.upper() for x in existing_products}
+        existing_companies_upper = {x.upper() for x in existing_companies}
+
+        for item in parsed_data:
+            pname = item['product_name'].upper()
+            cname = item.get('company_name', '').upper()
+            active = item.get('active_ingredients', [])
+            ingredients_str = ', '.join(
+                i.get('full_description', '') for i in active if i.get('full_description')
+            ) if active else ''
+
+            # Attach formatted ingredient string for display
+            item['ingredients_display'] = ingredients_str or item.get('drug_content', '-')
+
+            if pname in existing_products_upper:
+                item.update(import_status='Exists', import_status_class='text-warning', notes='Product exists')
+            elif cname and cname not in existing_companies_upper:
+                item.update(import_status='Ready (Create Company)', import_status_class='text-info', notes='Company auto create')
+            else:
+                item.update(import_status='Ready', import_status_class='text-success', notes='')
+
+    # =====================================================
     # STOCK
     # =====================================================
 
@@ -484,6 +542,9 @@ def _run_parse_job(
             timeout=3600
         )
 
+        # Initialise so cache.set never raises NameError if a branch is skipped
+        parsed_data = []
+
         # =====================================================
         # SUPPLIER
         # =====================================================
@@ -595,7 +656,19 @@ def _run_parse_job(
                     rows
                 )
 
-        # =====================================================    
+        # =====================================================
+        # PRODUCT SEED  (structured catalog TSV/CSV)
+        # =====================================================
+
+        elif import_type == 'product_seed':
+
+            print("[PRODUCT SEED] Parsing structured catalog file", flush=True)
+            parsed_data = parse_product_seed_csv(content)
+            print(f"[PRODUCT SEED PARSED]={len(parsed_data)}", flush=True)
+            if parsed_data:
+                print(f"[PRODUCT SEED FIRST ITEM]={parsed_data[0]}", flush=True)
+
+        # =====================================================
         # STOCK
         # =====================================================
 
@@ -873,7 +946,40 @@ class MigrationParseView(
             tenant = request.tenant
 
         # =====================================================
-        # JOB
+        # PRODUCT SEED — parse synchronously, return directly
+        # (avoids cache/thread issues for this fast structured CSV)
+        # =====================================================
+
+        if import_type == 'product_seed':
+            try:
+                print("[PRODUCT SEED] Synchronous parse start", flush=True)
+                parsed_data = parse_product_seed_csv(content)
+                print(f"[PRODUCT SEED] parsed={len(parsed_data)}", flush=True)
+
+                preview_data, summary = _batch_enrich(parsed_data, import_type, tenant)
+
+                # Store full parsed data in cache for the later commit step
+                job_id = str(uuid.uuid4())
+                cache.set(f'parsed_data_{job_id}', parsed_data, timeout=3600)
+
+                return JsonResponse({
+                    'success': True,
+                    'status': 'done',
+                    'progress': 100,
+                    'job_id': job_id,
+                    'data': preview_data,
+                    'summary': summary,
+                })
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Parsing error: {str(e)}'
+                })
+
+        # =====================================================
+        # ALL OTHER TYPES — background thread + poll
         # =====================================================
 
         job_id = str(uuid.uuid4())
@@ -930,10 +1036,16 @@ class MigrationParseStatusView(
         )
 
         if not job:
-
+            # Job not in cache yet — two possibilities:
+            # 1. Thread hasn't started writing yet (race condition on fast poll) → return queued
+            # 2. Cache truly expired after long delay → return expired error
+            # We distinguish by checking if the job_id looks recent (can't reliably tell),
+            # so we return a "queued" status to keep the poller alive for a few more cycles.
+            # The frontend already handles "queued" by continuing to poll.
             return JsonResponse({
-                'success': False,
-                'error': 'Job expired'
+                'success': True,
+                'status': 'queued',
+                'progress': 5,
             })
 
         return JsonResponse({
@@ -954,42 +1066,81 @@ class MigrationImportView(
 
     def post(self, request, *args, **kwargs):
 
-        import_type = request.POST.get(
-            'import_type'
-        )
+        import_type = request.POST.get('import_type')
+        job_id = request.POST.get('job_id')
 
-        job_id = request.POST.get(
-            'job_id'
-        )
+        # Try cache first
+        parsed_data = cache.get(f'parsed_data_{job_id}')
 
-        parsed_data = cache.get(
-            f'parsed_data_{job_id}'
-        )
-
+        # ==================== FALLBACK RE-PARSING ====================
         if not parsed_data:
+            print("[IMPORT FALLBACK] Parsed data expired in cache → Re-parsing now...", flush=True)
+            
+            input_method = request.POST.get('input_method')
+            drop_first_col = request.POST.get('drop_first_column') == 'true'
+            content = ''
+            tenant_id = request.POST.get('selected_tenant_id')
 
-            return JsonResponse({
-                'success': False,
-                'error': 'Parsed data expired'
-            })
+            if input_method == 'file':
+                uploaded_file = request.FILES.get('file')
+                if uploaded_file:
+                    content, _ = decode_uploaded_file(uploaded_file)
+            else:
+                content = request.POST.get('raw_text', '')
 
-        tenant_id = request.POST.get(
-            'selected_tenant_id'
-        )
+            if not content.strip():
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Parsed data expired and no input found to re-parse'
+                })
 
+            # Re-parse based on type (same logic as parse job)
+            try:
+                if import_type == 'product_seed':
+                    parsed_data = parse_product_seed_csv(content)
+                elif import_type == 'supplier':
+                    parsed_data = parse_suppliers_from_text(content)
+                elif import_type == 'company':
+                    if input_method == 'file':
+                        rows = parse_csv_to_rows(content, drop_first_column=False)
+                    else:
+                        rows = parse_text_lines_to_rows(content, drop_first_column=False)
+                    parsed_data = parse_companies(rows)
+                elif import_type == 'product':
+                    if input_method == 'text':
+                        parsed_data = parse_product_master_text(content)
+                    else:
+                        rows = parse_csv_to_rows(content, drop_first_column=False)
+                        parsed_data = parse_products_fast(rows)
+                elif import_type == 'stock':
+                    if input_method == 'file' and (',' in content[:1000] or '\t' in content[:1000]):
+                        rows = parse_csv_to_rows(content, drop_first_column=False)
+                    else:
+                        rows = parse_text_lines_to_rows(content, drop_first_column=False)
+                    parsed_data = parse_stock_batches(rows)
+                else:
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'Unsupported import type: {import_type}'
+                    })
+                
+                print(f"[IMPORT FALLBACK] Successfully re-parsed {len(parsed_data)} records", flush=True)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Re-parsing failed: {str(e)}'
+                })
+
+        # Continue with normal flow
+        tenant_id = request.POST.get('selected_tenant_id')
         if tenant_id:
-
-            tenant = get_object_or_404(
-                Tenant,
-                id=tenant_id
-            )
-
+            tenant = get_object_or_404(Tenant, id=tenant_id)
         else:
-
             tenant = request.tenant
 
         try:
-
             log_entry = MigrationLog.objects.create(
                 tenant=tenant,
                 import_type=import_type,
@@ -1001,10 +1152,7 @@ class MigrationImportView(
                 metadata={}
             )
 
-            print("=" * 80, flush=True)
-            print("[IMPORT START]", flush=True)
-            print(f"TOTAL RECORDS={len(parsed_data)}", flush=True)
-            print("=" * 80, flush=True)
+            print(f"[IMPORT START] log_id={log_entry.id}, records={len(parsed_data)}", flush=True)
 
             start_background_migration(
                 log_id=log_entry.id,
@@ -1018,15 +1166,90 @@ class MigrationImportView(
             })
 
         except Exception as e:
-
             import traceback
-
             traceback.print_exc()
-
             return JsonResponse({
                 'success': False,
                 'error': str(e)
             })
+
+# class MigrationImportView(LoginRequiredMixin,OrganizationRequiredMixin,View):
+
+#     def post(self, request, *args, **kwargs):
+
+#         import_type = request.POST.get(
+#             'import_type'
+#         )
+
+#         job_id = request.POST.get(
+#             'job_id'
+#         )
+
+#         parsed_data = cache.get(
+#             f'parsed_data_{job_id}'
+#         )
+
+#         if not parsed_data:
+
+#             return JsonResponse({
+#                 'success': False,
+#                 'error': 'Parsed data expired'
+#             })
+
+#         tenant_id = request.POST.get(
+#             'selected_tenant_id'
+#         )
+
+#         if tenant_id:
+
+#             tenant = get_object_or_404(
+#                 Tenant,
+#                 id=tenant_id
+#             )
+
+#         else:
+
+#             tenant = request.tenant
+
+#         try:
+
+#             log_entry = MigrationLog.objects.create(
+#                 tenant=tenant,
+#                 import_type=import_type,
+#                 source_name='Migration',
+#                 records_count=0,
+#                 imported_by=request.user,
+#                 status='PENDING',
+#                 progress_percent=0,
+#                 metadata={}
+#             )
+
+#             print("=" * 80, flush=True)
+#             print("[IMPORT START]", flush=True)
+#             print(f"TOTAL RECORDS={len(parsed_data)}", flush=True)
+#             print("=" * 80, flush=True)
+
+#             start_background_migration(
+#                 log_id=log_entry.id,
+#                 parsed_data=parsed_data
+#             )
+
+#             return JsonResponse({
+#                 'success': True,
+#                 'message': 'Import started',
+#                 'log_id': log_entry.id
+#             })
+
+#         except Exception as e:
+
+#             import traceback
+
+#             traceback.print_exc()
+
+#             return JsonResponse({
+#                 'success': False,
+#                 'error': str(e)
+#             })
 
 class MigrationStatusView(LoginRequiredMixin, OrganizationRequiredMixin, View):
     """
@@ -1079,7 +1302,7 @@ class MigrationRollbackView(LoginRequiredMixin, OrganizationRequiredMixin, View)
                     DrugCompany.objects.filter(id__in=created_ids, tenant=tenant).delete()
                 elif log.import_type == 'supplier':
                     Supplier.objects.filter(id__in=created_ids, tenant=tenant).delete()
-                elif log.import_type == 'product':
+                elif log.import_type in ('product', 'product_seed'):
                     Products.objects.filter(id__in=created_ids, tenant=tenant).delete()
                 elif log.import_type == 'stock':
                     # Delete stock batches first
@@ -1095,6 +1318,8 @@ class MigrationRollbackView(LoginRequiredMixin, OrganizationRequiredMixin, View)
                         DrugCompany.objects.filter(id__in=ids, tenant=tenant).delete()
                     elif model_name == 'ProductType':
                         ProductType.objects.filter(id__in=ids, tenant=tenant).delete()
+                    elif model_name == 'ProductContent':
+                        ProductContent.objects.filter(id__in=ids, tenant=tenant).delete()
                         
                 # 3. Mark log as Rolled Back
                 log.status = 'ROLLED_BACK'
