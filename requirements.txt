@@ -24,7 +24,7 @@ packaging==25.0
 pandas==3.0.3
 pillow==12.2.0
 psycopg2-binary==2.9.10
-pycairo==1.29.0
+#pycairo==1.29.0
 pycparser==3.0
 pydyf==0.12.1
 pyHanko==0.35.1
@@ -38,10 +38,10 @@ PyYAML==6.0.3
 redis==8.0.0
 reportlab==4.4.3
 requests==2.34.2
-rlPyCairo==0.4.0
+#rlPyCairo==0.4.0
 six==1.17.0
 sqlparse==0.5.3
-svglib==1.6.0
+#svglib==1.6.0
 tinycss2==1.5.1
 tinyhtml5==2.1.0
 typing_extensions==4.15.0
@@ -52,5 +52,5 @@ urllib3==2.7.0
 weasyprint==68.1
 webencodings==0.5.1
 whitenoise==6.7.0
-xhtml2pdf==0.2.17
+#xhtml2pdf==0.2.17
 zopfli==0.4.2
