@@ -175,11 +175,11 @@ try:
     import django_redis
     CACHES = {
         "default": {
-            "BACKEND": "django_redis.cache.RedisCache",
-            "LOCATION": REDIS_URL,
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "easy-pharma-local-cache",
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
-                "IGNORE_EXCEPTIONS": True,
+                "IGNORE_EXCEPTIONS": False,
                 "SOCKET_CONNECT_TIMEOUT": 5,
                 "SOCKET_TIMEOUT": 5,
             }

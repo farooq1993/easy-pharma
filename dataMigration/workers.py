@@ -21,7 +21,7 @@ from django.db import connection
 from django.utils import timezone
 
 from tenants.models import Tenant
-from easypharma.models.Items import Products, DrugCompany, ProductType, ProductContent, ProductContent
+from easypharma.models.Items import Products, DrugCompany, ProductType, ProductContent, ProductContent,ProductTax
 from easypharma.models.purchase_invoice import Supplier
 from easypharma.models.stock import StockBatch
 from dataMigration.models import MigrationLog
@@ -48,7 +48,6 @@ PROGRESS_SAVE_EVERY = 5
 # ─────────────────────────────────────────────────────────────
 def dbg(msg, *args):
     formatted = msg % args if args else msg
-    print(f"[MIGRATION DEBUG] {formatted}", flush=True)
     logger.info(formatted)
 
 
@@ -369,6 +368,9 @@ def _bulk_import_companies(items, tenant, log_entry, total_items):
 def _bulk_import_suppliers(items, tenant, log_entry, total_items):
     start_all = time.time()
     dbg("--- _bulk_import_suppliers: %d items ---", len(items))
+    dbg("=== SUPPLIER IMPORT START ===")
+    dbg("Items received=%d", len(items))
+
     created_ids = []
     import_names = {
         item.get('name', '').strip().upper()
@@ -386,6 +388,7 @@ def _bulk_import_suppliers(items, tenant, log_entry, total_items):
     dbg("Existing suppliers in DB: %d", len(existing_names_upper))
 
     for chunk_idx, chunk in enumerate(_chunked(items, DB_CHUNK)):
+        dbg("Before bulk_create chunk=%d", chunk_idx)
         chunk_start = time.time()
         new_objs = []
         skipped = 0
@@ -404,13 +407,14 @@ def _bulk_import_suppliers(items, tenant, log_entry, total_items):
                 dl_number=item.get('dl', ''),
             ))
             existing_names_upper.add(name)
-
+            dbg("After bulk_create chunk=%d", chunk_idx)
         dbg("Chunk %d: %d items, %d new, %d skipped", chunk_idx, len(chunk), len(new_objs), skipped)
 
         if new_objs:
             Supplier.objects.bulk_create(new_objs, batch_size=5000, ignore_conflicts=True)
             inserted_names = [o.name for o in new_objs]
             ids = list(Supplier.objects.filter(tenant=tenant, name__in=inserted_names).values_list('id', flat=True))
+            
             created_ids.extend(ids)
             dbg("Chunk %d: inserted %d, fetched %d ids", chunk_idx, len(new_objs), len(ids))
 
@@ -440,10 +444,28 @@ def _bulk_import_products(items, tenant, log_entry, total_items):
 
     # B. Product types
     dbg("Step B: resolving product types")
-    all_type_names = {item.get('product_type', 'OTHER').strip().upper() for item in items}
-    dbg("Unique product types in import: %s", all_type_names)
-    type_map = _resolve_types(tenant, all_type_names)
-    type_map, dep_type_ids = _ensure_types(tenant, all_type_names, type_map)
+    all_type_names = {item.get('product_type', 'OTHER').strip().upper() for item in items if item.get('product_type')}
+
+    # tenant filter hata do
+    type_map = {t.name.upper(): t for t in ProductType.objects.all()}
+
+    missing_types = all_type_names - set(type_map.keys())
+
+    for type_name in missing_types:
+        obj, created = ProductType.objects.get_or_create(
+            name=type_name,
+            defaults={
+                'tenant': tenant
+            }
+        )
+
+        type_map[type_name] = obj
+
+        if created:
+            dep_type_ids.append(obj.id)
+
+    dbg("Resolved Product Types: %s", list(type_map.keys()))
+  
     log_entry.progress_percent = 35
     log_entry.save(update_fields=['progress_percent'])
 
@@ -454,11 +476,49 @@ def _bulk_import_products(items, tenant, log_entry, total_items):
         for item in items
         if item.get('drug_content', '').strip()
     }
+
     dbg("Unique drug contents in import: %d", len(all_content_names))
     content_map = _resolve_contents(tenant, all_content_names)
     content_map, dep_content_ids = _ensure_contents(tenant, all_content_names, content_map)
     log_entry.progress_percent = 40
     log_entry.save(update_fields=['progress_percent'])
+
+    # C1. Product Taxes
+    dbg("Step C1: resolving product taxes")
+
+    all_tax_rates = set()
+
+    for item in items:
+        try:
+            tax = item.get("product_tax")
+
+            if tax not in ("", None):
+                all_tax_rates.add(int(float(tax)))
+
+        except Exception:
+            pass
+
+    tax_map = {
+        t.tax_rate: t
+        for t in ProductTax.objects.filter(
+            tenant=tenant,
+            tax_rate__in=all_tax_rates
+        )
+    }
+
+    # Missing taxes create
+    missing_taxes = all_tax_rates - set(tax_map.keys())
+
+    for rate in missing_taxes:
+        obj = ProductTax.objects.create(
+            tenant=tenant,
+            tax_name=f"GST ({rate}%)",
+            tax_rate=rate
+        )
+
+        tax_map[rate] = obj
+
+    dbg("Resolved Product Taxes: %s", list(tax_map.keys()))
 
     # D. Existing products
     dbg("Step D: fetching existing product names for tenant")
@@ -489,6 +549,19 @@ def _bulk_import_products(items, tenant, log_entry, total_items):
             comp_obj    = company_map.get(item.get('company_name', '').strip().upper())
             type_obj    = type_map.get(item.get('product_type', 'OTHER').strip().upper())
             content_obj = content_map.get(item.get('drug_content', '').strip().upper())
+
+            tax_obj = None
+
+            try:
+                tax_rate = item.get('product_tax')
+
+                if tax_rate not in ("", None):
+                    tax_rate = int(float(tax_rate))
+                    tax_obj = tax_map.get(tax_rate)
+
+            except (ValueError, TypeError):
+                pass
+
             new_objs.append(Products(
                 tenant=tenant,
                 product_name=name,
@@ -496,6 +569,7 @@ def _bulk_import_products(items, tenant, log_entry, total_items):
                 compny_name=comp_obj,
                 product_type=type_obj,
                 product_content=content_obj,
+                product_tax=tax_obj, 
                 product_hsn_code=item.get('hsn_code') or '3004',
                 conversion_factor=item.get('conversion_factor') or 1,
             ))
