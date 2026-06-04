@@ -153,11 +153,11 @@ class ProductCreate(View):
         from django.db.models import Q
         context = {
             'product': product,
-            'product_types': ProductType.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
-            'product_schedules': ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
-            'product_taxes': ProductTax.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
-            'product_contents': ProductContent.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
-            'drug_companies': DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
+            'product_types': ProductType.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('name'),
+            'product_schedules': ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('schedule_name'),
+            'product_taxes': ProductTax.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('tax_rate'),
+            'product_contents': ProductContent.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('content_name'),
+            'drug_companies': DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('company_name'),
         }
         return render(request, self.template_name, context)
     
@@ -200,8 +200,8 @@ class QuickProductAPI(View):
             'product_taxes': ProductTax.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
             
             # ADD THESE TWO ↓
-            'product_schedules': ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
-            'drug_companies': DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
+            'product_schedules': ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('schedule_name'),
+            'drug_companies': DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('company_name'),
             
             'today': date.today(),
         }
