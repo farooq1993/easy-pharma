@@ -938,6 +938,45 @@ class MigrationParseView(LoginRequiredMixin, OrganizationRequiredMixin, View):
             'job_id': job_id
         })
 
+        def _handle_chunked_upload(self, request, import_type):
+            """Safe chunked upload for large files (55MB+)"""
+            try:
+                chunk_index = int(request.POST.get('chunk_index', 0))
+                total_chunks = int(request.POST.get('total_chunks', 1))
+                file_name = request.POST.get('file_name', 'upload.csv')
+                tenant_id = request.POST.get('selected_tenant_id')
+
+                chunk_file = request.FILES.get('chunk')
+                if not chunk_file:
+                    return JsonResponse({'success': False, 'error': 'No chunk received'}, status=400)
+
+                # Safe temporary directory
+                safe_filename = "".join(c for c in file_name if c.isalnum() or c in ('_', '-', '.'))
+                temp_dir = f"/tmp/migration_chunks/{tenant_id}/{safe_filename}"
+                os.makedirs(temp_dir, exist_ok=True)
+
+                chunk_path = os.path.join(temp_dir, f"chunk_{chunk_index:03d}")
+
+                with open(chunk_path, 'wb') as f:
+                    for chunk_data in chunk_file.chunks():
+                        f.write(chunk_data)
+
+                logger.info(f"[CHUNK UPLOAD] Chunk {chunk_index+1}/{total_chunks} saved | Size: {chunk_file.size/1024:.1f} KB")
+
+                # Last chunk - combine & process
+                if chunk_index == total_chunks - 1:
+                    return self._process_complete_file(temp_dir, total_chunks, import_type, tenant_id)
+
+                return JsonResponse({
+                    'success': True,
+                    'chunk_index': chunk_index,
+                    'progress': round(((chunk_index + 1) / total_chunks) * 100, 1),
+                    'message': f'Chunk {chunk_index + 1}/{total_chunks} uploaded'
+                })
+
+            except Exception as e:
+                logger.error(f"Chunk error: {e}")
+                return JsonResponse({'success': False, 'error': str(e)}, status=500)
 # =========================================================
 # PARSE STATUS VIEW
 # =========================================================

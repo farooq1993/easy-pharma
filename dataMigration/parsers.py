@@ -1,20 +1,3 @@
-"""
-dataMigration/parsers.py  — Debug Edition
-==========================================
-All parse functions now emit print() statements visible directly
-in the Django terminal (manage.py runserver output).
-
-Changes vs original:
-  - Every public parser function prints entry, key decisions, and exit counts
-  - parse_companies: prints sample accepted/rejected rows to debug column issues
-  - parse_products_fast: prints per-10k progress + final junk/short stats
-  - parse_suppliers_from_text: prints per-supplier found + any "no name" skips
-  - parse_stock_batches: prints first few parsed batches for sanity check
-  - Removed ThreadPoolExecutor (parse_products) — parse_products_fast is the
-    correct path and is already used by workers.py; the threaded version is kept
-    only for reference but prints a loud warning if called accidentally.
-"""
-
 import re
 import csv
 import io
@@ -31,7 +14,6 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────
 def _dbg(msg, *args):
     formatted = msg % args if args else msg
-    print(f"[PARSER DEBUG] {formatted}", flush=True)
     logger.debug(formatted)
 
 
@@ -231,8 +213,6 @@ def parse_companies(rows):
     import time
     start_time = time.time()
 
-    print("=" * 80, flush=True)
-    print(f"[COMPANY PARSER START] rows={len(rows)}", flush=True)
 
     companies = []
 
@@ -317,16 +297,7 @@ def parse_companies(rows):
             })
 
         except Exception as e:
-
-            print(f"[COMPANY PARSER ERROR] row={idx} err={e}", flush=True)
-
-    print(f"[COMPANY PARSER DONE] total={len(companies)}", flush=True)
-    print(f"[COMPANY PARSER SKIPPED] {skipped}", flush=True)
-
-    if companies:
-        print(f"[SAMPLE] {companies[0]}", flush=True)
-
-    print("=" * 80, flush=True)
+            _dbg("Error parsing company row %d: %s", idx, str(e))
 
     return companies
 
@@ -753,6 +724,8 @@ def parse_product_seed_csv(content):
             pack_unit       = row.get('pack_unit', '').strip()
             primary_ingr    = row.get('primary_ingredient', '').strip()
             active_raw      = row.get('active_ingredients', '[]').strip()
+            hsn_code        =  row.get('hsn_code', '').strip()
+            product_tax     = row.get('product_tax', '').strip()
 
             if not brand_name or len(brand_name) < 2:
                 skipped += 1
@@ -787,16 +760,11 @@ def parse_product_seed_csv(content):
             drug_content = primary_ingr
             if not drug_content and active_ingredients:
                 drug_content = ', '.join(i['name'] for i in active_ingredients)
+            
+            product_type = dosage_form.upper().strip()
 
-            # Map dosage_form → product_type
-            form_map = {
-                'tablet': 'TABLET', 'capsule': 'CAPSULE',
-                'syrup': 'SYRUP', 'suspension': 'SYRUP',
-                'inhaler': 'OTHER', 'injection': 'INJECTION',
-                'cream': 'CREAM', 'gel': 'CREAM', 'ointment': 'CREAM',
-                'drop': 'DROP', 'drops': 'DROP',
-            }
-            product_type = form_map.get(dosage_form.lower(), 'OTHER')
+            if not product_type:
+                product_type = "OTHER"
 
             # Conversion factor from pack_size
             conv_factor = 1
@@ -807,14 +775,15 @@ def parse_product_seed_csv(content):
                 conv_factor = 1
 
             products.append({
-                'product_name':       brand_name,
-                'product_packing':    packing,
-                'company_name':       manufacturer.upper(),
-                'drug_content':       drug_content,
-                'active_ingredients': active_ingredients,
-                'hsn_code':           '3004',
+                'product_name':   brand_name,
+                'product_packing':   packing,
+                'company_name':   manufacturer.upper(),
+                'drug_content': drug_content,
+                'primary_ingredient': primary_ingr,
+                'hsn_code': hsn_code,
+                'product_tax': product_tax,
                 'conversion_factor':  conv_factor,
-                'product_type':       product_type,
+                'product_type':    product_type,
             })
 
         except Exception as e:
@@ -885,7 +854,6 @@ def parse_products(rows):
     This function is kept only so old imports don't break.
     """
     _dbg("WARNING: parse_products (threaded) called — use parse_products_fast() instead!")
-    print("[PARSER WARNING] parse_products (ThreadPoolExecutor) called. Switch to parse_products_fast()!", flush=True)
     return parse_products_fast(rows)
 
 

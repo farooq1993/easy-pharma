@@ -11,7 +11,7 @@ class DrugCompany(TenantAwareModel):  # ✅ CHANGED: Inherit from TenantAwareMod
         verbose_name_plural = "Drug Companies"
 
 class ProductType(TenantAwareModel):  # ✅ CHANGED: Inherit from TenantAwareModel
-    name = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=100)
 
     def __str__(self):
         return self.name
