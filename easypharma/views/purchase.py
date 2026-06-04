@@ -17,8 +17,8 @@ class PurchaseEntryView(View):
     template_name = 'purchase/entry.html'
 
     def get(self, request, invoice_id=None):
-        suppliers = Supplier.objects.filter(tenant=request.tenant)
-        products = Products.objects.filter(tenant=request.tenant)
+        suppliers = Supplier.objects.filter(tenant=request.tenant).order_by('name')
+        products = Products.objects.filter(tenant=request.tenant).order_by('product_name')
         from easypharma.models.Items import ProductTax
         product_taxes = ProductTax.objects.filter(tenant=request.tenant)
         product_schedules = ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True))
@@ -309,7 +309,7 @@ class SupplierReportDataView(View):
 
 import csv
 from django.http import HttpResponse
-#from easypharma.views.reports import render_to_pdf
+from easypharma.views.reports import render_to_pdf
 
 
 def _get_filtered_purchases(request):

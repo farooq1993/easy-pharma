@@ -33,10 +33,15 @@
                     {% endfor %}
                 </select>
                 <button type="submit" class="btn btn-primary">Filter</button>
-                <a href="?half={{ half }}&year={{ year }}&start_date={{ start_date|default:'' }}&end_date={{ end_date|default:'' }}&schedule={{ selected_schedule }}&pdf=1" class="btn btn-danger">
-                    <i class="bi bi-file-earmark-pdf"></i> Export
-                </a>
+                <button type="button" id="downloadHalfYearlyCsvBtn" class="btn btn-success">
+                    <i class="bi bi-file-earmark-spreadsheet"></i> Export CSV
+                </button>
             </form>
+            <div class="mt-2">
+                <span class="text-muted">Quick filters:</span>
+                <a href="?half={{ half }}&year={{ year }}&schedule=H1" class="btn btn-outline-secondary btn-sm ms-2">H1</a>
+                <a href="?half={{ half }}&year={{ year }}&schedule=Narcotic" class="btn btn-outline-secondary btn-sm ms-2">Narcotic</a>
+            </div>
         </div>
     </div>
 
@@ -168,7 +173,7 @@
         <div class="card-body">
             {% if sale_details %}
             <div class="table-responsive">
-                <table class="table table-hover">
+                <table id="halfYearSaleDetailsTable" class="table table-hover">
                     <thead class="table-light">
                         <tr>
                             <th>Invoice #</th>
@@ -265,4 +270,31 @@
         border-radius: 0.5rem;
     }
 </style>
+<script>
+    function downloadTableAsCsv(tableId, filename) {
+        const table = document.getElementById(tableId);
+        if (!table) return;
+        const rows = Array.from(table.querySelectorAll('tr'));
+        const csv = rows.map(row => {
+            const cells = Array.from(row.querySelectorAll('th, td'));
+            return cells.map(cell => `"${cell.innerText.trim().replace(/"/g, '""')}"`).join(',');
+        }).join('\r\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const exportButton = document.getElementById('downloadHalfYearlyCsvBtn');
+        if (exportButton) {
+            exportButton.addEventListener('click', function () {
+                downloadTableAsCsv('halfYearSaleDetailsTable', 'half_yearly_sale_report_{{ start_date|date:"Y-m-d" }}_to_{{ end_date|date:"Y-m-d" }}.csv');
+            });
+        }
+    });
+</script>
 {% endblock %}

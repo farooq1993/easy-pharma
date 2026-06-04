@@ -55,6 +55,7 @@ class MasterCRUDView(View):
             'drug-supplier': [
                 {'name': 'name', 'label': 'Supplier Name', 'type': 'text'},
                 {'name': 'phone', 'label': 'Phone', 'type': 'text'},
+                {'name': 'address', 'label': 'Address', 'type': 'text'},
                 {'name': 'gst_number', 'label': 'GST Number', 'type': 'text'},
                 {'name': 'dl_number', 'label': 'DL Number', 'type': 'text'}
             ],
