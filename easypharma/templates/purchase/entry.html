@@ -57,10 +57,30 @@
                 </div>
             </div>
 
-            <!-- Add product row (enhanced keyboard + batch history) -->
+            <!-- CSV upload for supplier invoices -->
             <div class="ep-card">
                 <div class="ep-card-header">
                     <div class="step-badge">2</div>
+                    <h6>Import Purchase CSV</h6>
+                </div>
+                <div class="ep-card-body">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-6">
+                            <label class="ep-label">CSV File</label>
+                            <input type="file" id="purchaseCsvFile" class="ep-input" accept=".csv">
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <button id="loadPurchaseCsvBtn" class="btn btn-primary mt-1">Load CSV</button>
+                        </div>
+                    </div>
+                    <div id="csvImportWarnings" class="mt-3"></div>
+                </div>
+            </div>
+
+            <!-- Add product row (enhanced keyboard + batch history) -->
+            <div class="ep-card">
+                <div class="ep-card-header">
+                    <div class="step-badge">3</div>
                     <h6>Add Products</h6>
                     <button class="btn-quick-add ms-auto" data-bs-toggle="modal" data-bs-target="#quickAddModal"><i class="fas fa-plus-circle"></i> Quick Add</button>
                 </div>
@@ -252,8 +272,8 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button class="btn-save-modal btn btn-primary" onclick="saveQuickProduct()">
-                    <i class="fas fa-save me-1"></i> Save Medicine
+                <button class="btn-save-modal btn btn-primary" onclick="handleSaveProduct()">
+                    <i class="fas fa-save me-1"></i> <span id="saveButtonText">Save Medicine</span>
                 </button>
             </div>
         </div>
@@ -458,6 +478,148 @@
         });
         container.classList.add('show');
     }
+
+        // Global state for CSV import flow
+        let pendingCsvData = null;
+        let pendingMissingProducts = [];
+
+        // Quick product creation modal (global scope)
+        async function showProductCreationModal(productName) {
+            // Set product name and clear other fields
+            document.getElementById('quickName').value = productName;
+            document.getElementById('quickPacking').value = '';
+            document.getElementById('quickConv').value = 1;
+            document.getElementById('quickTax').value = '';
+            document.getElementById('quickSchedule').value = '';
+            document.getElementById('quickCompany').value = '';
+            document.getElementById('quickHsn').value = '';
+
+            // Update modal title to show progress
+            const remaining = pendingMissingProducts.length;
+            const total = (pendingCsvData && pendingCsvData.missing_products) ? pendingCsvData.missing_products.length : remaining;
+            const done = total - remaining;
+            const modalTitle = document.querySelector('#quickAddModal .modal-title');
+            if (modalTitle) {
+                modalTitle.innerHTML = `<i class="fas fa-plus-circle me-2" style="color:var(--brand);"></i>Create Missing Product <span class="badge bg-warning text-dark ms-2" style="font-size:0.75rem;">${done + 1} / ${total}</span>`;
+            }
+            // Make name field readonly so user knows which product is being created
+            document.getElementById('quickName').readOnly = true;
+            document.getElementById('quickName').classList.add('bg-light');
+
+            const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('quickAddModal'));
+            modal.show();
+        }
+
+        async function saveProductFromCsv() {
+            const productName = document.getElementById('quickName').value.trim();
+            const scheduleId = document.getElementById('quickSchedule').value;
+            const companyId = document.getElementById('quickCompany').value;
+            const hsn = document.getElementById('quickHsn').value.trim();
+            const taxId = document.getElementById('quickTax').value;
+            const packing = document.getElementById('quickPacking').value.trim();
+
+            if (!productName) {
+                showToast('Product name is required', 'error');
+                return;
+            }
+
+            try {
+                const resp = await fetch('{% url "quick_create_product" %}', {
+                    method: 'POST',
+                    headers: { 
+                        'X-CSRFToken': csrfToken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        product_name: productName,
+                        tax_id: taxId || null,
+                        schedule_id: scheduleId || null,
+                        company_id: companyId || null,
+                        hsn: hsn,
+                        packing: packing
+                    })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    // Remove from pending list first
+                    pendingMissingProducts = pendingMissingProducts.filter(p => p.product !== productName);
+                    
+                    // Restore modal title & name field
+                    const modalTitle = document.querySelector('#quickAddModal .modal-title');
+                    if (modalTitle) {
+                        modalTitle.innerHTML = `<i class="fas fa-plus-circle me-2" style="color:var(--brand);"></i>Quick Add Medicine`;
+                    }
+                    document.getElementById('quickName').readOnly = false;
+                    document.getElementById('quickName').classList.remove('bg-light');
+
+                    bootstrap.Modal.getInstance(document.getElementById('quickAddModal')).hide();
+
+                    if (pendingMissingProducts.length > 0) {
+                        // More products to create — update warning banner & open next
+                        updateMissingProductsWarning();
+                        showToast(`"${productName}" created. ${pendingMissingProducts.length} product(s) remaining.`, 'success');
+                        setTimeout(() => showProductCreationModal(pendingMissingProducts[0].product), 400);
+                    } else {
+                        // All products created — re-import CSV
+                        showToast(`All missing products created! Re-importing CSV...`, 'success');
+                        document.getElementById('csvImportWarnings').innerHTML = 
+                            `<div class="alert alert-info"><i class="fas fa-sync fa-spin me-1"></i> All products created. Re-importing CSV data...</div>`;
+                        if (pendingCsvData) {
+                            // Re-fetch CSV with original file
+                            const input = document.getElementById('purchaseCsvFile');
+                            if (input.files[0]) {
+                                const form = new FormData();
+                                form.append('csv_file', input.files[0]);
+                                try {
+                                    const reResp = await fetch('{% url "purchase_import_csv" %}', {
+                                        method: 'POST',
+                                        headers: { 'X-CSRFToken': csrfToken },
+                                        body: form
+                                    });
+                                    const reData = await reResp.json();
+                                    if (reData.success) {
+                                        pendingMissingProducts = [];
+                                        populatePurchaseFromCsv(reData);
+                                    } else {
+                                        document.getElementById('csvImportWarnings').innerHTML =
+                                            `<div class="alert alert-danger">${reData.error || 'Re-import failed.'}</div>`;
+                                    }
+                                } catch (err) {
+                                    document.getElementById('csvImportWarnings').innerHTML =
+                                        `<div class="alert alert-danger">Re-import error: ${err.message}</div>`;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    showToast(data.error || 'Failed to create product', 'error');
+                }
+            } catch (e) {
+                showToast('Error: ' + e.message, 'error');
+            }
+        }
+
+        function updateMissingProductsWarning() {
+            if (!pendingMissingProducts || pendingMissingProducts.length === 0) return;
+            const warningsContainer = document.getElementById('csvImportWarnings');
+            let html = '<div class="alert alert-warning"><strong>⚠️ Missing products detected:</strong><ul style="margin-bottom:12px;">';
+            pendingMissingProducts.forEach(item => {
+                html += `<li style="margin-bottom:8px;">Row ${item.row}: <strong>${item.product}</strong> — 
+                    <button type="button" class="btn btn-sm btn-warning py-0 px-2 ms-1" style="font-size:0.75rem;" 
+                        onclick="showProductCreationModal('${item.product.replace(/'/g, "\\'")}')">
+                        <i class="fas fa-plus me-1"></i>Add Product
+                    </button></li>`;
+            });
+            html += '</ul>';
+            if (items.length > 0) {
+                html += `<div class="text-muted small"><i class="fas fa-info-circle me-1"></i>${items.length} row(s) already imported. Create remaining products to import all rows.</div>`;
+            }
+            html += '</div>';
+            // Keep success message if present
+            const existingSuccess = warningsContainer.querySelector('.alert-success');
+            warningsContainer.innerHTML = html;
+            if (existingSuccess) warningsContainer.appendChild(existingSuccess);
+        }
 
         // Product search & selection logic
         document.addEventListener('DOMContentLoaded', function() {
@@ -679,6 +841,96 @@
                 });
             }
         });
+        // CSV import button handler
+        document.getElementById('loadPurchaseCsvBtn').addEventListener('click', async () => {
+            const input = document.getElementById('purchaseCsvFile');
+            const file = input.files[0];
+            if (!file) { showToast('Select a CSV file first', 'error'); return; }
+
+            const form = new FormData();
+            form.append('csv_file', file);
+
+            const warningsContainer = document.getElementById('csvImportWarnings');
+            warningsContainer.innerHTML = '<div class="loading">Loading CSV...</div>';
+
+            try {
+                const resp = await fetch('{% url "purchase_import_csv" %}', {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrfToken },
+                    body: form
+                });
+                const data = await resp.json();
+                if (!resp.ok || !data.success) {
+                    warningsContainer.innerHTML = `<div class="alert alert-danger">${data.error || 'Failed to parse CSV.'}</div>`;
+                    return;
+                }
+
+                populatePurchaseFromCsv(data);
+            } catch (err) {
+                warningsContainer.innerHTML = `<div class="alert alert-danger">Unable to upload CSV. Please try again.</div>`;
+                console.error(err);
+            }
+        });
+
+        function populatePurchaseFromCsv(data) {
+            // Store CSV data for retry after product creation
+            pendingCsvData = data;
+            pendingMissingProducts = data.missing_products || [];
+            
+            const warningsContainer = document.getElementById('csvImportWarnings');
+            let warningHtml = '';
+            let successHtml = '';
+
+            if (data.missing_products && data.missing_products.length) {
+                warningHtml = '<div class="alert alert-warning"><strong>⚠️ Missing products detected:</strong><ul style="margin-bottom:12px;">';
+                data.missing_products.forEach(item => {
+                    warningHtml += `<li style="margin-bottom:8px;">Row ${item.row}: <strong>${item.product}</strong> — 
+                        <button type="button" class="btn btn-sm btn-warning py-0 px-2 ms-1" style="font-size:0.75rem;"
+                            onclick="showProductCreationModal('${item.product.replace(/'/g, "\\'")}')">
+                            <i class="fas fa-plus me-1"></i>Add Product
+                        </button></li>`;
+                });
+                if (data.items && data.items.length) {
+                    warningHtml += `</ul><div class="text-muted small"><i class="fas fa-info-circle me-1"></i>${data.items.length} row(s) imported. Create missing products to import remaining rows.</div>`;
+                } else {
+                    warningHtml += '</ul>';
+                }
+                warningHtml += '</div>';
+            }
+
+            if (data.invoice_number) document.getElementById('invoiceNumber').value = data.invoice_number;
+            if (data.purchase_date) document.getElementById('purchaseDate').value = data.purchase_date;
+            if (data.supplier_name && !document.getElementById('supplierSearch')?.value) {
+                const el = document.getElementById('supplierSearch');
+                if (el) el.value = data.supplier_name;
+            }
+
+            if (data.items && data.items.length) {
+                data.items.forEach(item => {
+                    // Fix expiry_date: ensure it has "-01" day suffix for table display
+                    if (item.expiry_date && item.expiry_date.length === 7) {
+                        item.expiry_date = item.expiry_date + '-01';
+                    }
+                    // Fix total_units if missing
+                    if (!item.total_units) {
+                        item.total_units = (item.quantity + (item.free_quantity || 0)) * (item.conversion_factor || 1);
+                    }
+                    items.push(item);
+                });
+                renderTable();
+                successHtml = `<div class="alert alert-success"><i class="fas fa-check-circle me-1"></i> Imported ${data.items.length} rows from CSV.</div>`;
+            } else if (!data.missing_products || !data.missing_products.length) {
+                successHtml = '<div class="alert alert-info">CSV parsed but no valid purchase rows were imported.</div>';
+            }
+
+            warningsContainer.innerHTML = warningHtml + successHtml;
+            
+            // Open modal for first missing product
+            if (pendingMissingProducts.length > 0) {
+                setTimeout(() => showProductCreationModal(pendingMissingProducts[0].product), 500);
+            }
+        }
+
         // Add button click event
         document.getElementById('addItemBtn').addEventListener('click', () => addItem());
         // On qty/free qty change update unit preview
@@ -755,15 +1007,24 @@
         }
         tbody.innerHTML = '';
         items.forEach((item, idx) => {
-            const expiryShort = item.expiry_date.substring(0,7);
+            // Safe expiry display: handle YYYY-MM, YYYY-MM-DD, or missing
+            let expiryShort = '—';
+            if (item.expiry_date) {
+                const exp = String(item.expiry_date);
+                expiryShort = exp.length >= 7 ? exp.substring(0, 7) : exp;
+            }
+            // Safe total_units
+            const totalUnits = item.total_units != null && item.total_units !== undefined
+                ? item.total_units
+                : (item.quantity + (item.free_quantity || 0)) * (item.conversion_factor || 1);
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td><strong>${item.name}</strong><div class="small text-muted">${item.packing || ''}</div></td>
-                <td><span class="badge-batch">${item.batch_number}</span></td>
+                <td><span class="badge-batch">${item.batch_number || '—'}</span></td>
                 <td>${expiryShort}</td>
                 <td>${item.quantity}</td><td class="text-success">+${item.free_quantity || 0}</td>
-                <td class="fw-mono">${item.total_units}</td><td>₹${item.purchase_price.toFixed(2)}</td>
-                <td>₹${item.tax_amount.toFixed(2)}</td><td>₹${item.total.toFixed(2)}</td>
+                <td class="fw-mono">${totalUnits}</td><td>₹${(item.purchase_price || 0).toFixed(2)}</td>
+                <td>₹${(item.tax_amount || 0).toFixed(2)}</td><td>₹${(item.total || 0).toFixed(2)}</td>
                 <td><button class="btn-remove" onclick="removeItem(${idx})"><i class="fas fa-trash-alt"></i></button></td>
             `;
             tbody.appendChild(tr);
@@ -897,6 +1158,22 @@
             if(saveBtn) { saveBtn.disabled = false; saveBtn.classList.remove('disabled'); }
         }
     }
+
+    window.handleSaveProduct = function() {
+        // Check if this is from CSV import flow
+        if (pendingMissingProducts && pendingMissingProducts.length > 0) {
+            saveProductFromCsv();
+        } else {
+            // Reset readonly in case modal was previously used for CSV flow
+            document.getElementById('quickName').readOnly = false;
+            document.getElementById('quickName').classList.remove('bg-light');
+            const modalTitle = document.querySelector('#quickAddModal .modal-title');
+            if (modalTitle) {
+                modalTitle.innerHTML = `<i class="fas fa-plus-circle me-2" style="color:var(--brand);"></i>Quick Add Medicine`;
+            }
+            saveQuickProduct();
+        }
+    };
 
     window.saveQuickProduct = async function() {
         const name = document.getElementById('quickName').value.trim();
