@@ -27,10 +27,15 @@
                 <button type="submit" class="btn btn-primary">
                     <i class="bi bi-search"></i> Filter
                 </button>
-                <a href="?date={{ date|date:'Y-m-d' }}&schedule={{ selected_schedule }}&pdf=1" class="btn btn-danger">
-                    <i class="bi bi-file-earmark-pdf"></i> Export
-                </a>
+                <button type="button" id="downloadDailyCsvBtn" class="btn btn-success">
+                    <i class="bi bi-file-earmark-spreadsheet"></i> Export CSV
+                </button>
             </form>
+            <div class="mt-2">
+                <span class="text-muted">Quick filters:</span>
+                <a href="?date={{ date|date:'Y-m-d' }}&schedule=H1" class="btn btn-outline-secondary btn-sm ms-2">H1</a>
+                <a href="?date={{ date|date:'Y-m-d' }}&schedule=Narcotic" class="btn btn-outline-secondary btn-sm ms-2">Narcotic</a>
+            </div>
         </div>
     </div>
 
@@ -178,7 +183,7 @@
         <div class="card-body">
             {% if sales %}
             <div class="table-responsive">
-                <table class="table table-hover">
+                <table id="dailySalesTable" class="table table-hover">
                     <thead class="table-light">
                         <tr>
                             <th>Invoice #</th>
@@ -259,4 +264,31 @@
         font-weight: 600;
     }
 </style>
+<script>
+    function downloadTableAsCsv(tableId, filename) {
+        const table = document.getElementById(tableId);
+        if (!table) return;
+        const rows = Array.from(table.querySelectorAll('tr'));
+        const csv = rows.map(row => {
+            const cells = Array.from(row.querySelectorAll('th, td'));
+            return cells.map(cell => `"${cell.innerText.trim().replace(/"/g, '""')}"`).join(',');
+        }).join('\r\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const exportButton = document.getElementById('downloadDailyCsvBtn');
+        if (exportButton) {
+            exportButton.addEventListener('click', function () {
+                downloadTableAsCsv('dailySalesTable', 'daily_sale_report_{{ date|date:"Y-m-d" }}.csv');
+            });
+        }
+    });
+</script>
 {% endblock %}
