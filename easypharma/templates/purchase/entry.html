@@ -24,7 +24,7 @@
             <button class="btn btn-outline-secondary rounded-pill px-3 py-2 fw-bold" style="font-size: 0.85rem;" data-bs-toggle="modal" data-bs-target="#workflowModal">
                 <i class="fas fa-keyboard me-1"></i> Shortcuts
             </button>
-            <button class="btn-complete" onclick="savePurchase()"><i class="fas fa-check-circle"></i> Complete Purchase</button>
+            
         </div>
     </div>
 
@@ -38,17 +38,55 @@
                 </div>
                 <div class="ep-card-body">
                     <div class="row g-3">
-                        <div class="col-md-4"><label class="ep-label">Supplier</label><select id="supplierSelect" class="ep-input"><option value="">— Select —</option>{% for supplier in suppliers %}<option value="{{ supplier.id }}">{{ supplier.name }}</option>{% endfor %}</select></div>
+                        <div class="col-md-4">
+                            <label class="ep-label">Supplier</label>
+                            <!-- Hidden real select -->
+                            <select id="supplierSelect" style="display:none;">
+                                <option value="">— Select —</option>
+                                {% for supplier in suppliers %}
+                                    <option value="{{ supplier.id }}">{{ supplier.name }} | {{ supplier.address }}</option>
+                                {% endfor %}
+                            </select>
+                            <!-- Searchable supplier input -->
+                            <div class="position-relative" id="supplierSearchWrap">
+                                <input type="text" id="supplierSearchInput" class="ep-input" placeholder="Search supplier..." autocomplete="off">
+                                <div id="supplierDropdown" style="display:none; position:absolute; background:white; width:100%; z-index:1055; border-radius:12px; border:1px solid #dee2e6; box-shadow:0 4px 12px rgba(0,0,0,0.1); max-height:220px; overflow-y:auto;"></div>
+                            </div>
+                            <div class="d-flex align-items-center justify-content-between mt-1 gap-2">
+                                <div class="text-muted small">Can’t find supplier?</div>
+                                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#supplierModal">Add Supplier</button>
+                            </div>
+                        </div>
                         <div class="col-md-4"><label class="ep-label">Invoice No.</label><input type="text" id="invoiceNumber" class="ep-input" placeholder="INV-001"></div>
                         <div class="col-md-4"><label class="ep-label">Date</label><input type="date" id="purchaseDate" class="ep-input" value="{{ today|date:'Y-m-d' }}"></div>
                     </div>
                 </div>
             </div>
 
-            <!-- Add product row (enhanced keyboard + batch history) -->
+            <!-- CSV upload for supplier invoices -->
             <div class="ep-card">
                 <div class="ep-card-header">
                     <div class="step-badge">2</div>
+                    <h6>Import Purchase CSV</h6>
+                </div>
+                <div class="ep-card-body">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-6">
+                            <label class="ep-label">CSV File</label>
+                            <input type="file" id="purchaseCsvFile" class="ep-input" accept=".csv">
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <button id="loadPurchaseCsvBtn" class="btn btn-primary mt-1">Load CSV</button>
+                        </div>
+                    </div>
+                    <div id="csvImportWarnings" class="mt-3"></div>
+                </div>
+            </div>
+
+            <!-- Add product row (enhanced keyboard + batch history) -->
+            <div class="ep-card">
+                <div class="ep-card-header">
+                    <div class="step-badge">3</div>
                     <h6>Add Products</h6>
                     <button class="btn-quick-add ms-auto" data-bs-toggle="modal" data-bs-target="#quickAddModal"><i class="fas fa-plus-circle"></i> Quick Add</button>
                 </div>
@@ -105,7 +143,7 @@
                         <!-- Free -->
                         <div><label class="ep-label" style="color:var(--green)">Free</label><input type="number" id="itemFreeQty" class="ep-input" value="0" min="0"></div>
                         <!-- Cost per pack -->
-                        <div><label class="ep-label">Cost/Pack (₹)</label><input type="number" id="itemPrice" class="ep-input" step="0.01"></div>
+                        <div><label class="ep-label">Pur rate (₹)</label><input type="number" id="itemPrice" class="ep-input" step="0.01"></div>
                         <!-- GST (readonly but shows) -->
                         <div><label class="ep-label">GST %</label><input type="text" id="itemTax" class="ep-input" readonly></div>
                         <!-- MRP per pack -->
@@ -123,7 +161,7 @@
                 <div class="ep-card-body p-0">
                     <div class="items-table-wrap">
                         <table class="items-table" id="purchaseTable">
-                            <thead><tr><th>Product</th><th>Batch</th><th>Expiry</th><th>Qty</th><th>Free</th><th>Units</th><th>Cost</th><th>GST</th><th>Total</th><th></th></tr></thead>
+                            <thead><tr><th>Product</th><th>Batch</th><th>Expiry</th><th>Qty</th><th>Free</th><th>Units</th><th>Pur rate</th><th>MRP</th><th>GST</th><th>Total</th><th></th></tr></thead>
                             <tbody id="itemsTbody"><tr id="emptyRow"><td colspan="10"><div class="empty-state text-center p-4">No items added.</div></td></tr></tbody>
                         </table>
                     </div>
@@ -156,11 +194,20 @@
                         </div>
                     </div>
 
+                    <!-- Round Off row -->
+                    <div class="summary-row d-flex justify-content-between align-items-center" id="roundOffRow" style="display:none !important;">
+                        <span class="text-muted small">
+                            Round Off
+                            <span id="roundOffSign" class="ms-1 text-muted small"></span>
+                        </span>
+                        <span id="summaryRoundOff" class="small text-muted">₹0.00</span>
+                    </div>
                     <div class="summary-total-row"><span class="fw-bold">Grand Total</span><span class="fw-bold fs-5" id="summaryGrandTotal">₹0.00</span></div>
                     <div class="d-flex justify-content-between text-danger fw-bold d-none mt-2" id="summaryBalanceDueRow">
                         <span>Balance Due:</span>
                         <span id="summaryBalanceDue">₹0.00</span>
                     </div>
+                    <button class="btn-complete mt-2" onclick="savePurchase()"><i class="fas fa-check-circle"></i> Save Purchase</button>
                 </div>
             </div>
         </div>
@@ -240,9 +287,47 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button class="btn-save-modal btn btn-primary" onclick="saveQuickProduct()">
-                    <i class="fas fa-save me-1"></i> Save Medicine
+                <button class="btn-save-modal btn btn-primary" onclick="handleSaveProduct()">
+                    <i class="fas fa-save me-1"></i> <span id="saveButtonText">Save Medicine</span>
                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Supplier Add Modal -->
+<div class="modal fade ep-modal" id="supplierModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-md">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-truck-loading me-2" style="color:var(--brand);"></i>Add Supplier</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="ep-label">Supplier Name <span class="text-danger">*</span></label>
+                    <input type="text" id="supplierName" class="ep-input" placeholder="Supplier name">
+                </div>
+                <div class="mb-3">
+                    <label class="ep-label">Phone</label>
+                    <input type="text" id="supplierPhone" class="ep-input" placeholder="Phone number">
+                </div>
+                <div class="mb-3">
+                    <label class="ep-label">Supplier Address</label>
+                    <input type="text" id="supplierAddress" class="ep-input" placeholder="Supplier address">
+                </div>
+                <div class="mb-3">
+                    <label class="ep-label">GST Number</label>
+                    <input type="text" id="supplierGst" class="ep-input" placeholder="GST number">
+                </div>
+                <div class="mb-3">
+                    <label class="ep-label">DL Number</label>
+                    <input type="text" id="supplierDl" class="ep-input" placeholder="DL number">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveSupplier()"><i class="fas fa-save me-1"></i> Save Supplier</button>
             </div>
         </div>
     </div>
@@ -334,6 +419,13 @@
     function populateEditData(data) {
         if (!data) return;
         document.getElementById('supplierSelect').value = data.supplier_id || '';
+        // Sync supplier search input for edit mode
+        const _suppSel = document.getElementById('supplierSelect');
+        const _suppSI = document.getElementById('supplierSearchInput');
+        if (_suppSI && _suppSel.value) {
+            const _selOpt = _suppSel.options[_suppSel.selectedIndex];
+            if (_selOpt) _suppSI.value = _selOpt.text.split(' | ')[0];
+        }
         document.getElementById('invoiceNumber').value = data.invoice_number || '';
         document.getElementById('purchaseDate').value = data.purchase_date || '';
         document.getElementById('summaryDiscount').value = parseFloat(data.discount_amount || 0).toFixed(2);
@@ -409,6 +501,148 @@
         container.classList.add('show');
     }
 
+        // Global state for CSV import flow
+        let pendingCsvData = null;
+        let pendingMissingProducts = [];
+
+        // Quick product creation modal (global scope)
+        async function showProductCreationModal(productName) {
+            // Set product name and clear other fields
+            document.getElementById('quickName').value = productName;
+            document.getElementById('quickPacking').value = '';
+            document.getElementById('quickConv').value = 1;
+            document.getElementById('quickTax').value = '';
+            document.getElementById('quickSchedule').value = '';
+            document.getElementById('quickCompany').value = '';
+            document.getElementById('quickHsn').value = '';
+
+            // Update modal title to show progress
+            const remaining = pendingMissingProducts.length;
+            const total = (pendingCsvData && pendingCsvData.missing_products) ? pendingCsvData.missing_products.length : remaining;
+            const done = total - remaining;
+            const modalTitle = document.querySelector('#quickAddModal .modal-title');
+            if (modalTitle) {
+                modalTitle.innerHTML = `<i class="fas fa-plus-circle me-2" style="color:var(--brand);"></i>Create Missing Product <span class="badge bg-warning text-dark ms-2" style="font-size:0.75rem;">${done + 1} / ${total}</span>`;
+            }
+            // Make name field readonly so user knows which product is being created
+            document.getElementById('quickName').readOnly = true;
+            document.getElementById('quickName').classList.add('bg-light');
+
+            const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('quickAddModal'));
+            modal.show();
+        }
+
+        async function saveProductFromCsv() {
+            const productName = document.getElementById('quickName').value.trim();
+            const scheduleId = document.getElementById('quickSchedule').value;
+            const companyId = document.getElementById('quickCompany').value;
+            const hsn = document.getElementById('quickHsn').value.trim();
+            const taxId = document.getElementById('quickTax').value;
+            const packing = document.getElementById('quickPacking').value.trim();
+
+            if (!productName) {
+                showToast('Product name is required', 'error');
+                return;
+            }
+
+            try {
+                const resp = await fetch('{% url "quick_create_product" %}', {
+                    method: 'POST',
+                    headers: { 
+                        'X-CSRFToken': csrfToken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        product_name: productName,
+                        tax_id: taxId || null,
+                        schedule_id: scheduleId || null,
+                        company_id: companyId || null,
+                        hsn: hsn,
+                        packing: packing
+                    })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    // Remove from pending list first
+                    pendingMissingProducts = pendingMissingProducts.filter(p => p.product !== productName);
+                    
+                    // Restore modal title & name field
+                    const modalTitle = document.querySelector('#quickAddModal .modal-title');
+                    if (modalTitle) {
+                        modalTitle.innerHTML = `<i class="fas fa-plus-circle me-2" style="color:var(--brand);"></i>Quick Add Medicine`;
+                    }
+                    document.getElementById('quickName').readOnly = false;
+                    document.getElementById('quickName').classList.remove('bg-light');
+
+                    bootstrap.Modal.getInstance(document.getElementById('quickAddModal')).hide();
+
+                    if (pendingMissingProducts.length > 0) {
+                        // More products to create — update warning banner & open next
+                        updateMissingProductsWarning();
+                        showToast(`"${productName}" created. ${pendingMissingProducts.length} product(s) remaining.`, 'success');
+                        setTimeout(() => showProductCreationModal(pendingMissingProducts[0].product), 400);
+                    } else {
+                        // All products created — re-import CSV
+                        showToast(`All missing products created! Re-importing CSV...`, 'success');
+                        document.getElementById('csvImportWarnings').innerHTML = 
+                            `<div class="alert alert-info"><i class="fas fa-sync fa-spin me-1"></i> All products created. Re-importing CSV data...</div>`;
+                        if (pendingCsvData) {
+                            // Re-fetch CSV with original file
+                            const input = document.getElementById('purchaseCsvFile');
+                            if (input.files[0]) {
+                                const form = new FormData();
+                                form.append('csv_file', input.files[0]);
+                                try {
+                                    const reResp = await fetch('{% url "purchase_import_csv" %}', {
+                                        method: 'POST',
+                                        headers: { 'X-CSRFToken': csrfToken },
+                                        body: form
+                                    });
+                                    const reData = await reResp.json();
+                                    if (reData.success) {
+                                        pendingMissingProducts = [];
+                                        populatePurchaseFromCsv(reData);
+                                    } else {
+                                        document.getElementById('csvImportWarnings').innerHTML =
+                                            `<div class="alert alert-danger">${reData.error || 'Re-import failed.'}</div>`;
+                                    }
+                                } catch (err) {
+                                    document.getElementById('csvImportWarnings').innerHTML =
+                                        `<div class="alert alert-danger">Re-import error: ${err.message}</div>`;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    showToast(data.error || 'Failed to create product', 'error');
+                }
+            } catch (e) {
+                showToast('Error: ' + e.message, 'error');
+            }
+        }
+
+        function updateMissingProductsWarning() {
+            if (!pendingMissingProducts || pendingMissingProducts.length === 0) return;
+            const warningsContainer = document.getElementById('csvImportWarnings');
+            let html = '<div class="alert alert-warning"><strong>⚠️ Missing products detected:</strong><ul style="margin-bottom:12px;">';
+            pendingMissingProducts.forEach(item => {
+                html += `<li style="margin-bottom:8px;">Row ${item.row}: <strong>${item.product}</strong> — 
+                    <button type="button" class="btn btn-sm btn-warning py-0 px-2 ms-1" style="font-size:0.75rem;" 
+                        onclick="showProductCreationModal('${item.product.replace(/'/g, "\\'")}')">
+                        <i class="fas fa-plus me-1"></i>Add Product
+                    </button></li>`;
+            });
+            html += '</ul>';
+            if (items.length > 0) {
+                html += `<div class="text-muted small"><i class="fas fa-info-circle me-1"></i>${items.length} row(s) already imported. Create remaining products to import all rows.</div>`;
+            }
+            html += '</div>';
+            // Keep success message if present
+            const existingSuccess = warningsContainer.querySelector('.alert-success');
+            warningsContainer.innerHTML = html;
+            if (existingSuccess) warningsContainer.appendChild(existingSuccess);
+        }
+
         // Product search & selection logic
         document.addEventListener('DOMContentLoaded', function() {
             const searchInput = document.getElementById('productSearch');
@@ -416,6 +650,69 @@
             const batchInput = document.getElementById('itemBatch');
             const suggestionsDiv = document.getElementById('batchSuggestions');
             const supplierSelect = document.getElementById('supplierSelect');
+
+            // ── Searchable Supplier Dropdown ──
+            (function() {
+                const searchInput = document.getElementById('supplierSearchInput');
+                const dropdown = document.getElementById('supplierDropdown');
+                if (!searchInput || !dropdown) return;
+
+                // Build options list from hidden select
+                function getSupplierOptions() {
+                    return Array.from(supplierSelect.options)
+                        .filter(o => o.value !== '')
+                        .map(o => ({ value: o.value, text: o.text }));
+                }
+
+                function renderDropdown(filtered) {
+                    dropdown.innerHTML = '';
+                    if (filtered.length === 0) {
+                        dropdown.innerHTML = '<div style="padding:10px 14px; color:#888; font-size:0.85rem;">No suppliers found</div>';
+                    } else {
+                        filtered.forEach(opt => {
+                            const div = document.createElement('div');
+                            div.className = 'search-item';
+                            div.style.cssText = 'padding:9px 14px; font-size:0.88rem; border-left:3px solid transparent;';
+                            div.textContent = opt.text;
+                            div.addEventListener('mousedown', (e) => {
+                                e.preventDefault();
+                                supplierSelect.value = opt.value;
+                                supplierSelect.dispatchEvent(new Event('change'));
+                                searchInput.value = opt.text.split(' | ')[0];
+                                dropdown.style.display = 'none';
+                            });
+                            dropdown.appendChild(div);
+                        });
+                    }
+                    dropdown.style.display = 'block';
+                }
+
+                searchInput.addEventListener('input', function() {
+                    const q = this.value.toLowerCase().trim();
+                    if (!q) { dropdown.style.display = 'none'; supplierSelect.value = ''; return; }
+                    const filtered = getSupplierOptions().filter(o => o.text.toLowerCase().includes(q));
+                    renderDropdown(filtered);
+                });
+
+                searchInput.addEventListener('focus', function() {
+                    if (this.value.trim()) {
+                        const q = this.value.toLowerCase();
+                        renderDropdown(getSupplierOptions().filter(o => o.text.toLowerCase().includes(q)));
+                    }
+                });
+
+                document.addEventListener('click', function(e) {
+                    if (!document.getElementById('supplierSearchWrap').contains(e.target)) {
+                        dropdown.style.display = 'none';
+                    }
+                });
+
+                // If edit mode pre-selects supplier, also fill search input
+                if (supplierSelect.value) {
+                    const sel = supplierSelect.options[supplierSelect.selectedIndex];
+                    if (sel) searchInput.value = sel.text.split(' | ')[0];
+                }
+            })();
 
             supplierSelect.addEventListener('change', async function() {
                 const sid = this.value;
@@ -480,7 +777,10 @@
                             <div class="d-flex justify-content-between align-items-center w-100 py-1">
                                 <div><i class="fas fa-info-circle"></i> ${p.packing || 'Standard'} | Conv:×${p.conversion_factor} | GST:${p.tax_rate}%</div>
                                 <button type="button" class="btn btn-warning btn-sm py-0 px-2 rounded fw-bold text-dark border-0 shadow-sm" style="font-size: 0.7rem;" onclick="openPreviousPurchases(${p.id}, '${p.name.replace(/'/g,"\\'")}')">
-                                    <i class="fas fa-history me-1"></i>View Last Purchases
+                                    <i class="fas fa-history me-1"></i>History
+                                </button>
+                                <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2 rounded fw-bold" style="font-size:0.7rem;" onclick="openEditProductModal()">
+                                    <i class="fas fa-edit me-1"></i>Edit Product
                                 </button>
                             </div>
                         `;
@@ -629,6 +929,96 @@
                 });
             }
         });
+        // CSV import button handler
+        document.getElementById('loadPurchaseCsvBtn').addEventListener('click', async () => {
+            const input = document.getElementById('purchaseCsvFile');
+            const file = input.files[0];
+            if (!file) { showToast('Select a CSV file first', 'error'); return; }
+
+            const form = new FormData();
+            form.append('csv_file', file);
+
+            const warningsContainer = document.getElementById('csvImportWarnings');
+            warningsContainer.innerHTML = '<div class="loading">Loading CSV...</div>';
+
+            try {
+                const resp = await fetch('{% url "purchase_import_csv" %}', {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrfToken },
+                    body: form
+                });
+                const data = await resp.json();
+                if (!resp.ok || !data.success) {
+                    warningsContainer.innerHTML = `<div class="alert alert-danger">${data.error || 'Failed to parse CSV.'}</div>`;
+                    return;
+                }
+
+                populatePurchaseFromCsv(data);
+            } catch (err) {
+                warningsContainer.innerHTML = `<div class="alert alert-danger">Unable to upload CSV. Please try again.</div>`;
+                console.error(err);
+            }
+        });
+
+        function populatePurchaseFromCsv(data) {
+            // Store CSV data for retry after product creation
+            pendingCsvData = data;
+            pendingMissingProducts = data.missing_products || [];
+            
+            const warningsContainer = document.getElementById('csvImportWarnings');
+            let warningHtml = '';
+            let successHtml = '';
+
+            if (data.missing_products && data.missing_products.length) {
+                warningHtml = '<div class="alert alert-warning"><strong>⚠️ Missing products detected:</strong><ul style="margin-bottom:12px;">';
+                data.missing_products.forEach(item => {
+                    warningHtml += `<li style="margin-bottom:8px;">Row ${item.row}: <strong>${item.product}</strong> — 
+                        <button type="button" class="btn btn-sm btn-warning py-0 px-2 ms-1" style="font-size:0.75rem;"
+                            onclick="showProductCreationModal('${item.product.replace(/'/g, "\\'")}')">
+                            <i class="fas fa-plus me-1"></i>Add Product
+                        </button></li>`;
+                });
+                if (data.items && data.items.length) {
+                    warningHtml += `</ul><div class="text-muted small"><i class="fas fa-info-circle me-1"></i>${data.items.length} row(s) imported. Create missing products to import remaining rows.</div>`;
+                } else {
+                    warningHtml += '</ul>';
+                }
+                warningHtml += '</div>';
+            }
+
+            if (data.invoice_number) document.getElementById('invoiceNumber').value = data.invoice_number;
+            if (data.purchase_date) document.getElementById('purchaseDate').value = data.purchase_date;
+            if (data.supplier_name && !document.getElementById('supplierSearch')?.value) {
+                const el = document.getElementById('supplierSearch');
+                if (el) el.value = data.supplier_name;
+            }
+
+            if (data.items && data.items.length) {
+                data.items.forEach(item => {
+                    // Fix expiry_date: ensure it has "-01" day suffix for table display
+                    if (item.expiry_date && item.expiry_date.length === 7) {
+                        item.expiry_date = item.expiry_date + '-01';
+                    }
+                    // Fix total_units if missing
+                    if (!item.total_units) {
+                        item.total_units = (item.quantity + (item.free_quantity || 0)) * (item.conversion_factor || 1);
+                    }
+                    items.push(item);
+                });
+                renderTable();
+                successHtml = `<div class="alert alert-success"><i class="fas fa-check-circle me-1"></i> Imported ${data.items.length} rows from CSV.</div>`;
+            } else if (!data.missing_products || !data.missing_products.length) {
+                successHtml = '<div class="alert alert-info">CSV parsed but no valid purchase rows were imported.</div>';
+            }
+
+            warningsContainer.innerHTML = warningHtml + successHtml;
+            
+            // Open modal for first missing product
+            if (pendingMissingProducts.length > 0) {
+                setTimeout(() => showProductCreationModal(pendingMissingProducts[0].product), 500);
+            }
+        }
+
         // Add button click event
         document.getElementById('addItemBtn').addEventListener('click', () => addItem());
         // On qty/free qty change update unit preview
@@ -705,16 +1095,31 @@
         }
         tbody.innerHTML = '';
         items.forEach((item, idx) => {
-            const expiryShort = item.expiry_date.substring(0,7);
+            // Safe expiry display: handle YYYY-MM, YYYY-MM-DD, or missing
+            let expiryShort = '—';
+            if (item.expiry_date) {
+                const exp = String(item.expiry_date);
+                expiryShort = exp.length >= 7 ? exp.substring(0, 7) : exp;
+            }
+            // Safe total_units
+            const totalUnits = item.total_units != null && item.total_units !== undefined
+                ? item.total_units
+                : (item.quantity + (item.free_quantity || 0)) * (item.conversion_factor || 1);
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td><strong>${item.name}</strong><div class="small text-muted">${item.packing || ''}</div></td>
-                <td><span class="badge-batch">${item.batch_number}</span></td>
+                <td><span class="badge-batch">${item.batch_number || '—'}</span></td>
                 <td>${expiryShort}</td>
                 <td>${item.quantity}</td><td class="text-success">+${item.free_quantity || 0}</td>
-                <td class="fw-mono">${item.total_units}</td><td>₹${item.purchase_price.toFixed(2)}</td>
-                <td>₹${item.tax_amount.toFixed(2)}</td><td>₹${item.total.toFixed(2)}</td>
-                <td><button class="btn-remove" onclick="removeItem(${idx})"><i class="fas fa-trash-alt"></i></button></td>
+                <td class="fw-mono">${totalUnits}</td>
+                <td>₹${(item.purchase_price || 0).toFixed(2)}</td>
+                <td>₹${(item.mrp || 0).toFixed(2)}</td>
+                <td>₹${(item.tax_amount || 0).toFixed(2)}</td>
+                <td>₹${(item.total || 0).toFixed(2)}</td>
+                <td class="d-flex gap-1">
+                    <button class="btn-edit-item" onclick="openEditModal(${idx})" title="Edit"><i class="fas fa-pencil-alt"></i></button>
+                    <button class="btn-remove" onclick="removeItem(${idx})"><i class="fas fa-trash-alt"></i></button>
+                </td>
             `;
             tbody.appendChild(tr);
         });
@@ -742,8 +1147,10 @@
         const gstDiv = document.getElementById('gstBifurcationSection');
         gstDiv.innerHTML = Object.keys(gstMap).sort().map(r=>`<div class="d-flex justify-content-between small"><span>GST ${r}%</span><span>₹${gstMap[r].toFixed(2)}</span></div>`).join('');
         const disc = parseFloat(document.getElementById('summaryDiscount').value)||0;
-        const grand = (sub + taxSum) - disc;
-        
+        const grandRaw = (sub + taxSum) - disc;
+        const grandRounded = Math.round(grandRaw);
+        const roundOff = grandRounded - grandRaw;          // e.g. +0.40 or -0.30
+
         let totalCreditApplied = 0;
         document.querySelectorAll('.cn-amt-input').forEach(inp => {
             if(!inp.disabled) totalCreditApplied += (parseFloat(inp.value)||0);
@@ -752,11 +1159,26 @@
 
         document.getElementById('summarySubTotal').innerHTML = `₹${sub.toFixed(2)}`;
         document.getElementById('summaryTax').innerHTML = `₹${taxSum.toFixed(2)}`;
-        document.getElementById('summaryGrandTotal').innerHTML = `₹${grand.toFixed(2)}`;
+
+        // Round off row — show only when there's an actual difference
+        const roundOffRow = document.getElementById('roundOffRow');
+        const roundOffEl  = document.getElementById('summaryRoundOff');
+        const roundSignEl = document.getElementById('roundOffSign');
+        if (Math.abs(roundOff) >= 0.005) {
+            roundOffRow.style.display = 'flex';
+            const sign = roundOff > 0 ? '+' : '−';
+            roundSignEl.textContent = `(${sign}${Math.abs(roundOff).toFixed(2)})`;
+            roundOffEl.style.color  = roundOff > 0 ? '#198754' : '#dc3545';
+            roundOffEl.innerHTML    = `${roundOff > 0 ? '+' : '−'}₹${Math.abs(roundOff).toFixed(2)}`;
+        } else {
+            roundOffRow.style.display = 'none';
+        }
+
+        document.getElementById('summaryGrandTotal').innerHTML = `₹${grandRounded.toFixed(2)}`;
         
         if(totalCreditApplied > 0) {
             document.getElementById('summaryBalanceDueRow').classList.remove('d-none');
-            const balanceDue = Math.max(0, grand - totalCreditApplied);
+            const balanceDue = Math.max(0, grandRounded - totalCreditApplied);
             document.getElementById('summaryBalanceDue').innerHTML = `₹${balanceDue.toFixed(2)}`;
         } else {
             document.getElementById('summaryBalanceDueRow').classList.add('d-none');
@@ -827,6 +1249,7 @@
             discount_amount: parseFloat(document.getElementById('summaryDiscount').value) || 0,
             payment_mode: document.getElementById('summaryPaymentMode').value,
             total_amount: parseFloat(document.getElementById('summaryGrandTotal').innerText.replace('₹','')),
+            round_off: parseFloat(document.getElementById('summaryRoundOff').innerText.replace('₹','').replace('+','').replace('−','-')) || 0,
             applied_returns: applied_returns
         };
         const endpoint = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
@@ -835,8 +1258,7 @@
             const response = await fetch(endpoint, { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken}, body:JSON.stringify(data) });
             const result = await response.json();
             if(result.success) {
-                showToast('Purchase saved!');
-                setTimeout(()=> location.reload(), 1500);
+                showPurchaseConfirm(result);
             } else {
                 showToast('Error: '+ (result.error||'server'),'error');
             }
@@ -847,6 +1269,22 @@
             if(saveBtn) { saveBtn.disabled = false; saveBtn.classList.remove('disabled'); }
         }
     }
+
+    window.handleSaveProduct = function() {
+        // Check if this is from CSV import flow
+        if (pendingMissingProducts && pendingMissingProducts.length > 0) {
+            saveProductFromCsv();
+        } else {
+            // Reset readonly in case modal was previously used for CSV flow
+            document.getElementById('quickName').readOnly = false;
+            document.getElementById('quickName').classList.remove('bg-light');
+            const modalTitle = document.querySelector('#quickAddModal .modal-title');
+            if (modalTitle) {
+                modalTitle.innerHTML = `<i class="fas fa-plus-circle me-2" style="color:var(--brand);"></i>Quick Add Medicine`;
+            }
+            saveQuickProduct();
+        }
+    };
 
     window.saveQuickProduct = async function() {
         const name = document.getElementById('quickName').value.trim();
@@ -886,6 +1324,52 @@
             showToast('Error: ' + err.message, 'error');
         }
     };
+
+    window.saveSupplier = async function() {
+        const url = '{% url "master-crud" master_type="drug-supplier" %}';
+        const name = document.getElementById('supplierName').value.trim();
+        if (!name) return showToast('Supplier name is required', 'error');
+
+        const payload = new URLSearchParams();
+        payload.append('name', name);
+        payload.append('phone', document.getElementById('supplierPhone').value.trim());
+        payload.append('dl_number', document.getElementById('supplierDl').value.trim());
+        payload.append('gst_number', document.getElementById('supplierGst').value.trim());
+        payload.append('address', document.getElementById('supplierAddress').value.trim());
+
+        try {
+            const resp = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: payload.toString()
+            });
+            const res = await resp.json();
+            if (!res.success) {
+                return showToast('Error: ' + (res.error || 'Could not save supplier'), 'error');
+            }
+
+            const supplierSelect = document.getElementById('supplierSelect');
+            const option = document.createElement('option');
+            option.value = res.id;
+            option.text = res.name;
+            supplierSelect.appendChild(option);
+            supplierSelect.value = res.id;
+            // Update searchable input too
+            const si = document.getElementById('supplierSearchInput');
+            if (si) si.value = res.name;
+
+            ['supplierName', 'supplierPhone', 'supplierAddress', 'supplierGst', 'supplierDl'].forEach(id => document.getElementById(id).value = '');
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('supplierModal')).hide();
+            showToast(`Supplier "${res.name}" added`);
+        } catch (err) {
+            showToast('Error: ' + err.message, 'error');
+        }
+    };
+
     window.removeItem = removeItem;
     window.calculateDiscount = calculateDiscount;
     window.updateUnitPreview = updateUnitPreview;
@@ -1144,6 +1628,484 @@
         transform: translateX(3px);
         outline: none;
     }
+    /* Edit item button */
+    .btn-edit-item {
+        background: none;
+        border: 1px solid #4361ee;
+        color: #4361ee;
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 0.75rem;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+    .btn-edit-item:hover {
+        background: #4361ee;
+        color: white;
+    }
+    /* Supplier search dropdown item hover (reuse search-item styles) */
+    #supplierDropdown .search-item:hover {
+        background: linear-gradient(90deg, #e8f0fe 0%, #f3f6ff 100%);
+        border-left-color: #4361ee;
+        transform: translateX(2px);
+    }
 </style>
+
+
+<!-- Edit Item Modal -->
+<div class="modal fade ep-modal" id="editItemModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-md">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-pencil-alt me-2" style="color:var(--brand);"></i>Edit Item</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editItemIdx">
+                <div class="mb-2">
+                    <label class="ep-label">Product</label>
+                    <input type="text" id="editItemName" class="ep-input" readonly style="background:#f8f9fa;">
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="ep-label">Batch No.</label>
+                        <input type="text" id="editItemBatch" class="ep-input" style="text-transform:uppercase;">
+                    </div>
+                    <div class="col-6">
+                        <label class="ep-label">Expiry (MM/YYYY)</label>
+                        <div class="d-flex gap-1">
+                            <select id="editItemExpiryMonth" class="ep-input">
+                                <option value="">MM</option>
+                                <option value="01">01 Jan</option><option value="02">02 Feb</option>
+                                <option value="03">03 Mar</option><option value="04">04 Apr</option>
+                                <option value="05">05 May</option><option value="06">06 Jun</option>
+                                <option value="07">07 Jul</option><option value="08">08 Aug</option>
+                                <option value="09">09 Sep</option><option value="10">10 Oct</option>
+                                <option value="11">11 Nov</option><option value="12">12 Dec</option>
+                            </select>
+                            <input type="text" id="editItemExpiryYear" class="ep-input" placeholder="YYYY" maxlength="4" inputmode="numeric" style="width:80px;">
+                        </div>
+                    </div>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-4">
+                        <label class="ep-label">Qty</label>
+                        <input type="number" id="editItemQty" class="ep-input" min="1">
+                    </div>
+                    <div class="col-4">
+                        <label class="ep-label">Free</label>
+                        <input type="number" id="editItemFreeQty" class="ep-input" min="0">
+                    </div>
+                    <div class="col-4">
+                        <label class="ep-label">Cost/Pack (₹)</label>
+                        <input type="number" id="editItemPrice" class="ep-input" step="0.01">
+                    </div>
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-6">
+                        <label class="ep-label">MRP/Pack (₹)</label>
+                        <input type="number" id="editItemMrp" class="ep-input" step="0.01">
+                    </div>
+                    <div class="col-6">
+                        <label class="ep-label">GST %</label>
+                        <input type="text" id="editItemTax" class="ep-input" readonly style="background:#f8f9fa;">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveEditItem()"><i class="fas fa-save me-1"></i> Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function openEditModal(idx) {
+        const item = items[idx];
+        if (!item) return;
+        document.getElementById('editItemIdx').value = idx;
+        document.getElementById('editItemName').value = item.name;
+        document.getElementById('editItemBatch').value = item.batch_number || '';
+        // Parse expiry
+        const exp = String(item.expiry_date || '');
+        if (exp.length >= 7) {
+            document.getElementById('editItemExpiryMonth').value = exp.substring(5, 7);
+            document.getElementById('editItemExpiryYear').value = exp.substring(0, 4);
+        } else {
+            document.getElementById('editItemExpiryMonth').value = '';
+            document.getElementById('editItemExpiryYear').value = '';
+        }
+        document.getElementById('editItemQty').value = item.quantity;
+        document.getElementById('editItemFreeQty').value = item.free_quantity || 0;
+        document.getElementById('editItemPrice').value = (item.purchase_price || 0).toFixed(2);
+        document.getElementById('editItemMrp').value = (item.mrp || 0).toFixed(2);
+        document.getElementById('editItemTax').value = item.tax_percentage || 0;
+        const modal = new bootstrap.Modal(document.getElementById('editItemModal'));
+        modal.show();
+    }
+
+    function saveEditItem() {
+        const idx = parseInt(document.getElementById('editItemIdx').value);
+        const item = items[idx];
+        if (!item) return;
+
+        const batch = document.getElementById('editItemBatch').value.trim().toUpperCase();
+        const em = document.getElementById('editItemExpiryMonth').value;
+        const ey = document.getElementById('editItemExpiryYear').value;
+        const qty = parseFloat(document.getElementById('editItemQty').value);
+        const freeQty = parseFloat(document.getElementById('editItemFreeQty').value) || 0;
+        const price = parseFloat(document.getElementById('editItemPrice').value);
+        const mrp = parseFloat(document.getElementById('editItemMrp').value);
+        const taxPerc = parseFloat(document.getElementById('editItemTax').value) || 0;
+
+        if (!batch) { showToast('Batch number required', 'error'); return; }
+        if (!em || !ey || ey.length < 4) { showToast('Valid expiry required', 'error'); return; }
+        if (isNaN(qty) || qty <= 0) { showToast('Valid quantity required', 'error'); return; }
+        if (isNaN(price) || price <= 0) { showToast('Valid cost price required', 'error'); return; }
+
+        const subTotal = qty * price;
+        const taxAmount = (subTotal * taxPerc) / 100;
+        const totalWithTax = subTotal + taxAmount;
+        const totalUnits = (qty + freeQty) * (item.conversion_factor || 1);
+
+        items[idx] = {
+            ...item,
+            batch_number: batch,
+            expiry_date: `${ey}-${em}-01`,
+            quantity: qty,
+            free_quantity: freeQty,
+            total_units: totalUnits,
+            purchase_price: price,
+            mrp: isNaN(mrp) ? price * 1.2 : mrp,
+            sale_price: (isNaN(mrp) ? price * 1.2 : mrp) / (item.conversion_factor || 1),
+            tax_amount: taxAmount,
+            total: totalWithTax
+        };
+
+        renderTable();
+        bootstrap.Modal.getInstance(document.getElementById('editItemModal')).hide();
+        showToast('Item updated successfully');
+    }
+</script>
+
+
+<!-- ══════════════════════════════════════════
+     Edit Product Modal  (GST / Schedule / Company / Packing real-time update)
+     ══════════════════════════════════════════ -->
+<div class="modal fade ep-modal" id="editProductModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-md">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title mb-0">
+                        <i class="fas fa-edit me-2" style="color:var(--brand);"></i>Edit Product Details
+                    </h5>
+                    <small class="text-muted" id="editProdSubtitle">Updates saved instantly — no page refresh needed</small>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editProdId">
+
+                <!-- Name (readonly) -->
+                <div class="mb-3">
+                    <label class="ep-label">Medicine Name</label>
+                    <input type="text" id="editProdName" class="ep-input" readonly
+                           style="background:#f8f9fa; font-weight:600; color:var(--brand);">
+                </div>
+
+                <!-- Packing + Conv Factor -->
+                <div class="row g-2 mb-3">
+                    <div class="col-7">
+                        <label class="ep-label">Packing</label>
+                        <input type="text" id="editProdPacking" class="ep-input" placeholder="e.g. 10 tablets / strip">
+                    </div>
+                    <div class="col-5">
+                        <label class="ep-label">Conv. Factor <span class="text-muted small">(units/pack)</span></label>
+                        <input type="number" id="editProdConv" class="ep-input" min="1" step="1">
+                    </div>
+                </div>
+
+                <!-- GST — most important field -->
+                <div class="mb-3">
+                    <label class="ep-label">
+                        GST Rate
+                        <span class="badge bg-warning text-dark ms-1" style="font-size:0.7rem;">
+                            <i class="fas fa-bolt me-1"></i>Updates all items in bill
+                        </span>
+                    </label>
+                    <select id="editProdTax" class="ep-input">
+                        <option value="">— Select Tax —</option>
+                        {% for tax in product_taxes %}
+                        <option value="{{ tax.id }}" data-rate="{{ tax.tax_rate }}">
+                            {{ tax.tax_name }} ({{ tax.tax_rate }}%)
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Schedule + Company -->
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="ep-label">Drug Schedule</label>
+                        <select id="editProdSchedule" class="ep-input">
+                            <option value="">— Select Schedule —</option>
+                            {% for schedule in product_schedules %}
+                            <option value="{{ schedule.id }}">{{ schedule.schedule_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="ep-label">Company</label>
+                        <select id="editProdCompany" class="ep-input">
+                            <option value="">— Select Company —</option>
+                            {% for company in drug_companies %}
+                            <option value="{{ company.id }}">{{ company.company_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <!-- HSN Code -->
+                <div class="mb-1">
+                    <label class="ep-label">HSN Code</label>
+                    <input type="text" id="editProdHsn" class="ep-input" placeholder="e.g. 30049099"
+                           maxlength="8" inputmode="numeric"
+                           oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
+                </div>
+
+                <!-- Live feedback bar -->
+                <div id="editProdFeedback" class="mt-3" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="editProdSaveBtn" onclick="saveEditProduct()">
+                    <i class="fas fa-save me-1"></i> Save & Apply
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ─── Edit Product (real-time) ─────────────────────────────────────────────────
+
+function openEditProductModal() {
+    if (!selectedProduct) { showToast('Select a product first', 'error'); return; }
+    const p = selectedProduct;
+
+    document.getElementById('editProdId').value      = p.id;
+    document.getElementById('editProdName').value    = p.name;
+    document.getElementById('editProdPacking').value = p.packing || '';
+    document.getElementById('editProdConv').value    = p.conversion_factor || 1;
+    document.getElementById('editProdHsn').value     = p.hsn_code || '';
+    document.getElementById('editProdSubtitle').textContent =
+        'Editing: ' + p.name + ' — changes apply instantly';
+    document.getElementById('editProdFeedback').style.display = 'none';
+
+    // Pre-select Tax — match by rate since we only store rate in selectedProduct
+    const taxSel = document.getElementById('editProdTax');
+    let matched = false;
+    Array.from(taxSel.options).forEach(opt => {
+        const rate = parseFloat(opt.dataset.rate);
+        if (!isNaN(rate) && rate === parseFloat(p.tax_rate)) {
+            taxSel.value = opt.value;
+            matched = true;
+        }
+    });
+    if (!matched) taxSel.value = '';
+
+    // Pre-select Schedule & Company if stored in product object
+    const schedSel = document.getElementById('editProdSchedule');
+    schedSel.value = p.schedule_id || '';
+    const compSel = document.getElementById('editProdCompany');
+    compSel.value = p.company_id || '';
+
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('editProductModal')).show();
+}
+
+async function saveEditProduct() {
+    const id = document.getElementById('editProdId').value;
+    if (!id) return;
+
+    const packing   = document.getElementById('editProdPacking').value.trim();
+    const conv      = parseFloat(document.getElementById('editProdConv').value) || 1;
+    const taxId     = document.getElementById('editProdTax').value || null;
+    const schedId   = document.getElementById('editProdSchedule').value || null;
+    const compId    = document.getElementById('editProdCompany').value || null;
+    const hsn       = document.getElementById('editProdHsn').value.trim() || null;
+
+    // Get new tax rate from selected option's data-rate
+    const taxSel    = document.getElementById('editProdTax');
+    const selOpt    = taxSel.options[taxSel.selectedIndex];
+    const newTaxRate = selOpt && selOpt.dataset.rate ? parseFloat(selOpt.dataset.rate) : null;
+
+    const saveBtn = document.getElementById('editProdSaveBtn');
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
+
+    const feedback = document.getElementById('editProdFeedback');
+
+    try {
+        const resp = await fetch(`/api/products/quick-add/${id}/`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({
+                packing,
+                conversion_factor: conv,
+                tax_id:     taxId,
+                schedule_id: schedId,
+                company_id:  compId,
+                hsn_code:    hsn,
+            })
+        });
+        const res = await resp.json();
+
+        if (!resp.ok || !res.success) {
+            feedback.className = 'alert alert-danger py-2';
+            feedback.innerHTML = '<i class="fas fa-exclamation-circle me-1"></i>' + (res.error || 'Could not update product');
+            feedback.style.display = 'block';
+        } else {
+            // ── Update in-memory selectedProduct ──
+            selectedProduct.packing           = packing;
+            selectedProduct.conversion_factor = conv;
+            selectedProduct.hsn_code          = hsn;
+            if (newTaxRate !== null) selectedProduct.tax_rate = newTaxRate;
+            if (schedId)  selectedProduct.schedule_id = schedId;
+            if (compId)   selectedProduct.company_id  = compId;
+
+            // ── Sync the GST readonly field in the Add Product form ──
+            if (newTaxRate !== null) {
+                document.getElementById('itemTax').value = newTaxRate;
+            }
+
+            // ── Update productInfo bar text ──
+            const infoText = document.getElementById('productInfoText');
+            if (infoText) {
+                infoText.innerHTML = `<i class="fas fa-info-circle"></i> ${packing || 'Standard'} | Conv:×${conv} | GST:${newTaxRate !== null ? newTaxRate : selectedProduct.tax_rate}%`;
+            }
+
+            // ── Re-calculate tax for any items already in the bill from this product ──
+            if (newTaxRate !== null) {
+                let recalcCount = 0;
+                items.forEach(item => {
+                    if (item.product_id == id) {
+                        const subTotal  = item.quantity * item.purchase_price;
+                        item.tax_percentage = newTaxRate;
+                        item.tax_amount     = (subTotal * newTaxRate) / 100;
+                        item.total          = subTotal + item.tax_amount;
+                        recalcCount++;
+                    }
+                });
+                if (recalcCount > 0) renderTable();
+            }
+
+            showToast(`"${selectedProduct.name}" updated successfully`);
+            bootstrap.Modal.getInstance(document.getElementById('editProductModal')).hide();
+        }
+    } catch (err) {
+        feedback.className = 'alert alert-danger py-2';
+        feedback.innerHTML = '<i class="fas fa-exclamation-circle me-1"></i>' + err.message;
+        feedback.style.display = 'block';
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i class="fas fa-save me-1"></i> Save & Apply';
+    }
+}
+</script>
+
+
+<!-- ══════════════════════════════════════════
+     Purchase Saved — Confirmation Modal
+     ══════════════════════════════════════════ -->
+<div class="modal fade" id="purchaseConfirmModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:420px;">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:20px; overflow:hidden;">
+
+            <!-- Green success header -->
+            <div style="background:linear-gradient(135deg,#1a7a4a 0%,#22c55e 100%); padding:32px 24px 24px; text-align:center;">
+                <div style="width:64px;height:64px;background:rgba(255,255,255,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
+                    <i class="fas fa-check-circle" style="font-size:2rem;color:#fff;"></i>
+                </div>
+                <h5 style="color:#fff;font-weight:700;margin:0;font-size:1.15rem;">Purchase Saved Successfully!</h5>
+                <p style="color:rgba(255,255,255,0.82);margin:4px 0 0;font-size:0.85rem;">Entry has been recorded in the system</p>
+            </div>
+
+            <!-- Purchase number badge -->
+            <div style="background:#f0fdf4;padding:20px 24px 0;text-align:center;">
+                <div style="font-size:0.75rem;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Purchase Voucher Number</div>
+                <div id="confirmPurchaseNumber"
+                     style="display:inline-block;background:#fff;border:2px dashed #22c55e;border-radius:12px;
+                            padding:10px 28px;font-size:1.45rem;font-weight:800;
+                            color:#1a7a4a;letter-spacing:0.06em;font-family:monospace;">
+                    —
+                </div>
+                <div style="font-size:0.75rem;color:#9ca3af;margin-top:8px;">Note this number for future reference</div>
+            </div>
+
+            <!-- Summary strip -->
+            <div style="background:#f0fdf4;padding:16px 24px 20px;">
+                <div style="background:#fff;border-radius:12px;border:1px solid #dcfce7;padding:12px 16px;">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span style="font-size:0.8rem;color:#6b7280;">Supplier</span>
+                        <span id="confirmSupplier" style="font-size:0.82rem;font-weight:600;color:#111;max-width:200px;text-align:right;"></span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span style="font-size:0.8rem;color:#6b7280;">Invoice No.</span>
+                        <span id="confirmInvoice" style="font-size:0.82rem;font-weight:600;color:#111;"></span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span style="font-size:0.8rem;color:#6b7280;">Items</span>
+                        <span id="confirmItems" style="font-size:0.82rem;font-weight:600;color:#111;"></span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span style="font-size:0.8rem;color:#6b7280;">Grand Total</span>
+                        <span id="confirmTotal" style="font-size:0.95rem;font-weight:800;color:#1a7a4a;"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action button -->
+            <div style="padding:0 24px 24px;background:#f0fdf4;">
+                <button type="button" onclick="location.reload()"
+                        style="width:100%;padding:12px;border:none;border-radius:10px;
+                               background:linear-gradient(135deg,#1a7a4a,#22c55e);
+                               color:#fff;font-weight:700;font-size:0.9rem;cursor:pointer;">
+                    <i class="fas fa-check me-1"></i> OK
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+function showPurchaseConfirm(result) {
+    // Fill purchase number (backend may send as purchase_number, voucher_number, or id)
+    const pvNum = result.purchase_number || result.voucher_number || result.purchase_id
+                  ? (result.purchase_number || result.voucher_number || ('PV-' + result.purchase_id))
+                  : '—';
+    document.getElementById('confirmPurchaseNumber').textContent = pvNum;
+
+    // Fill summary from current form state
+    const suppSel = document.getElementById('supplierSelect');
+    const suppName = suppSel.options[suppSel.selectedIndex]
+                     ? suppSel.options[suppSel.selectedIndex].text.split(' | ')[0]
+                     : '—';
+    document.getElementById('confirmSupplier').textContent = suppName;
+    document.getElementById('confirmInvoice').textContent  =
+        document.getElementById('invoiceNumber').value || '—';
+    document.getElementById('confirmItems').textContent    =
+        items.length + ' item' + (items.length !== 1 ? 's' : '');
+    document.getElementById('confirmTotal').textContent    =
+        document.getElementById('summaryGrandTotal').innerText;
+
+    hideLoader();
+    bootstrap.Modal.getOrCreateInstance(
+        document.getElementById('purchaseConfirmModal')
+    ).show();
+}
+</script>
 
 {% endblock %}

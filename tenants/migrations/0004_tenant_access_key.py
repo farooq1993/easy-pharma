@@ -6,14 +6,19 @@ from django.db import migrations, models, connection
 def add_access_key_field(apps, schema_editor):
     """Safely add access_key field if it doesn't already exist."""
     with connection.cursor() as cursor:
-        cursor.execute("""
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name = 'tenants_tenant' 
-                AND column_name = 'access_key'
-            );
-        """)
-        column_exists = cursor.fetchone()[0]
+        if connection.vendor == 'sqlite':
+            cursor.execute("PRAGMA table_info(tenants_tenant);")
+            columns = [row[1] for row in cursor.fetchall()]
+            column_exists = 'access_key' in columns
+        else:
+            cursor.execute("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'tenants_tenant' 
+                    AND column_name = 'access_key'
+                );
+            """)
+            column_exists = cursor.fetchone()[0]
     
     if not column_exists:
         # Column doesn't exist, add it
@@ -26,14 +31,19 @@ def add_access_key_field(apps, schema_editor):
 def reverse_add_access_key(apps, schema_editor):
     """Reverse: remove access_key field if it exists."""
     with connection.cursor() as cursor:
-        cursor.execute("""
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name = 'tenants_tenant' 
-                AND column_name = 'access_key'
-            );
-        """)
-        column_exists = cursor.fetchone()[0]
+        if connection.vendor == 'sqlite':
+            cursor.execute("PRAGMA table_info(tenants_tenant);")
+            columns = [row[1] for row in cursor.fetchall()]
+            column_exists = 'access_key' in columns
+        else:
+            cursor.execute("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'tenants_tenant' 
+                    AND column_name = 'access_key'
+                );
+            """)
+            column_exists = cursor.fetchone()[0]
     
     if column_exists:
         schema_editor.remove_field(

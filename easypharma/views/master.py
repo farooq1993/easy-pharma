@@ -55,6 +55,7 @@ class MasterCRUDView(View):
             'drug-supplier': [
                 {'name': 'name', 'label': 'Supplier Name', 'type': 'text'},
                 {'name': 'phone', 'label': 'Phone', 'type': 'text'},
+                {'name': 'address', 'label': 'Address', 'type': 'text'},
                 {'name': 'gst_number', 'label': 'GST Number', 'type': 'text'},
                 {'name': 'dl_number', 'label': 'DL Number', 'type': 'text'}
             ],
@@ -153,11 +154,11 @@ class ProductCreate(View):
         from django.db.models import Q
         context = {
             'product': product,
-            'product_types': ProductType.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
-            'product_schedules': ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
-            'product_taxes': ProductTax.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
-            'product_contents': ProductContent.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
-            'drug_companies': DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
+            'product_types': ProductType.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('name'),
+            'product_schedules': ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('schedule_name'),
+            'product_taxes': ProductTax.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('tax_rate'),
+            'product_contents': ProductContent.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('content_name'),
+            'drug_companies': DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('company_name'),
         }
         return render(request, self.template_name, context)
     
@@ -200,8 +201,8 @@ class QuickProductAPI(View):
             'product_taxes': ProductTax.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
             
             # ADD THESE TWO ↓
-            'product_schedules': ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
-            'drug_companies': DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)),
+            'product_schedules': ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('schedule_name'),
+            'drug_companies': DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('company_name'),
             
             'today': date.today(),
         }
@@ -224,6 +225,37 @@ class QuickProductAPI(View):
             return JsonResponse({'success': True, 'id': product.id, 'name': product.product_name})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
+    
+    def patch(self, request, pk=None):
+        try:
+            data = json.loads(request.body)
+    
+            # pk comes from URL: /api/products/quick-add/<pk>/
+            product_id = pk or data.get('id')
+            product = get_object_or_404(Products, id=product_id, tenant=request.tenant)
+    
+            product.product_packing     = data.get('packing', product.product_packing)
+            product.product_hsn_code    = data.get('hsn_code', product.product_hsn_code)
+            product.product_tax_id      = data.get('tax_id') or None
+            product.product_schedule_id = data.get('schedule_id') or None
+            product.compny_name_id      = data.get('company_id') or None
+    
+            try:
+                conv = data.get('conversion_factor')
+                product.conversion_factor = int(conv) if conv and int(conv) > 0 else 1
+            except (ValueError, TypeError):
+                pass
+    
+            product.save()
+    
+            new_tax_rate = None
+            if product.product_tax:
+                new_tax_rate = float(product.product_tax.tax_rate)
+    
+            return JsonResponse({'success': True, 'tax_rate': new_tax_rate})
+    
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
 class ProductMasterSearchAPI(View):
     def get(self, request):

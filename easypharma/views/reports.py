@@ -14,12 +14,12 @@ from decimal import Decimal
 logger = logging.getLogger('easypharma.reports')
 
 import os
+import csv
 from io import BytesIO
 from django.conf import settings
 from django.template.loader import get_template
 from django.http import HttpResponse
-#from xhtml2pdf import pisa
-#from weasyprint import HTML
+
 
 def link_callback(uri, rel):
     if uri.startswith(settings.STATIC_URL):
@@ -36,18 +36,77 @@ def link_callback(uri, rel):
         return path
     return uri
 
-# def render_to_pdf(template_src, context_dict={}, filename="report.pdf"):
-#     # Ensure PDF rendering doesn't load sidebar/navbar by telling the context
-#     context_dict['is_pdf'] = True
-#     template = get_template(template_src)
-#     html = template.render(context_dict)
-#     result = BytesIO()
-#     pdf = pisa.pisaDocument(BytesIO(html.encode("utf-8")), result, link_callback=link_callback)
-#     if not pdf.err:
-#         response = HttpResponse(result.getvalue(), content_type='application/pdf')
-#         response['Content-Disposition'] = f'attachment; filename="{filename}"'
-#         return response
-#     return HttpResponse("Error generating PDF", status=500)
+
+def render_to_pdf(request, template_src, context_dict={}, filename="report.pdf"):
+    try:
+        from weasyprint import HTML
+    except Exception as err:
+        logger.warning('WeasyPrint import failed: %s', err)
+        return HttpResponse(
+            "PDF export is unavailable because WeasyPrint is not installed or its native libraries are missing.",
+            content_type='text/plain',
+            status=503
+        )
+
+    context_dict = dict(context_dict)
+    context_dict['is_pdf'] = True
+    template = get_template(template_src)
+    html_string = template.render(context_dict)
+
+    try:
+        html = HTML(string=html_string, base_url=request.build_absolute_uri('/'))
+        pdf_data = html.write_pdf()
+    except Exception as err:
+        logger.error('WeasyPrint PDF generation failed: %s', err, exc_info=True)
+        return HttpResponse(
+            "PDF export is unavailable because the server is missing required WeasyPrint libraries.",
+            content_type='text/plain',
+            status=503
+        )
+
+    response = HttpResponse(pdf_data, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+def export_sales_csv(request, sales, filename='sales_report.csv'):
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    writer = csv.writer(response)
+
+    writer.writerow([
+        'Invoice Number', 'Date', 'Customer/Patient', 'Sale Type',
+        'Product', 'Schedule', 'Quantity', 'Unit Price', 'Tax Amount',
+        'Item Total', 'Subtotal', 'Discount', 'Total', 'Payment Mode', 'Time'
+    ])
+
+    items = SaleItem.objects.filter(
+        tenant=request.tenant,
+        sale_invoice__in=sales
+    ).select_related('sale_invoice', 'product', 'product__product_schedule').order_by('sale_invoice__created_at')
+
+    for item in items:
+        invoice = item.sale_invoice
+        customer_name = invoice.patient_name or (invoice.customer.name if invoice.customer else 'N/A')
+        writer.writerow([
+            invoice.invoice_number,
+            invoice.created_at.strftime('%Y-%m-%d'),
+            customer_name,
+            invoice.sale_type,
+            item.product.product_name,
+            item.product.product_schedule.schedule_name if item.product.product_schedule else '',
+            item.quantity,
+            float(item.sale_price),
+            float(item.tax_amount or 0),
+            float(item.total_amount),
+            float(invoice.sub_total or 0),
+            float(invoice.discount_amount or 0),
+            float(invoice.total_amount or 0),
+            invoice.payment_mode,
+            invoice.created_at.strftime('%H:%M:%S'),
+        ])
+
+    return response
 
 
 class StockReportView(View):
@@ -165,9 +224,13 @@ class DailySaleReportView(View):
             'report_schedules': report_schedules,
             'selected_schedule': selected_schedule,
         }
-        # PDF_TEMPLATE = 'reports/daily_sale_report_pdf.html'
-        # if request.GET.get('pdf') == '1':
-        #     return render_to_pdf(PDF_TEMPLATE, context, filename=f"daily_sale_report_{date_obj}.pdf")
+
+        if request.GET.get('csv') == '1':
+            filename = f"daily_sale_report_{date_obj}.csv"
+            return export_sales_csv(request, sales, filename=filename)
+
+        if request.GET.get('pdf') == '1':
+            return render_to_pdf(request, self.template_name, context, filename=f"daily_sale_report_{date_obj}.pdf")
 
         return render(request, self.template_name, context)
 
@@ -323,9 +386,14 @@ class HalfYearlySaleReportView(View):
             'report_schedules': report_schedules,
             'selected_schedule': selected_schedule,
         }
+        if request.GET.get('csv') == '1':
+            filename_suffix = selected_schedule if selected_schedule != 'all' else 'all'
+            filename = f"half_yearly_sale_report_{filename_suffix}_{start_date}_{end_date}.csv"
+            return export_sales_csv(request, sales, filename=filename)
+
         if request.GET.get('pdf') == '1':
             fn = f"sale_report_{selected_schedule}.pdf" if selected_schedule != 'all' else "sale_report.pdf"
-            return render_to_pdf(self.template_name, context, filename=fn)
+            return render_to_pdf(request, self.template_name, context, filename=fn)
 
         return render(request, self.template_name, context)
 
@@ -362,12 +430,40 @@ class ProfitReportView(View):
             created_at__date__lte=end_date
         )
 
-        # Purchase in period
-        purchases = PurchaseInvoice.objects.filter(
+        # Cost of goods sold and profit based on MRP minus purchase price
+        sale_items = SaleItem.objects.filter(
             tenant=request.tenant,
-            created_at__date__gte=start_date,
-            created_at__date__lte=end_date
-        )
+            sale_invoice__created_at__date__gte=start_date,
+            sale_invoice__created_at__date__lte=end_date
+        ).select_related('sale_invoice', 'product')
+
+        cost_by_date = {}
+        profit_by_date = {}
+        for item in sale_items:
+            sale_date = item.sale_invoice.created_at.date()
+            batch_cost = Decimal('0')
+            batch_mrp = Decimal('0')
+            if item.batch_number:
+                batch = StockBatch.objects.filter(
+                    tenant=request.tenant,
+                    product=item.product,
+                    batch_number=item.batch_number
+                ).first()
+                if batch:
+                    if batch.purchase_price is not None:
+                        batch_cost = batch.purchase_price
+                    if batch.mrp is not None:
+                        batch_mrp = batch.mrp
+
+            conv_factor = Decimal(str(item.product.conversion_factor or 1))
+            unit_cost = batch_cost / conv_factor
+            item_cost = unit_cost * item.quantity
+            cost_by_date[sale_date] = cost_by_date.get(sale_date, Decimal('0')) + item_cost
+            sale_value = item.total_amount or Decimal('0')
+            profit_by_date[sale_date] = (
+                            profit_by_date.get(sale_date, Decimal('0'))
+                            + (sale_value - item_cost)
+                        )
 
         # Daily profit data
         daily_profit = []
@@ -377,21 +473,17 @@ class ProfitReportView(View):
                 total=Sum('total_amount'),
                 subtotal=Sum('sub_total')
             )
-            
-            day_purchases = purchases.filter(created_at__date=current_date).aggregate(
-                total=Sum('total_amount')
-            )
 
-            revenue = day_sales['subtotal'] or Decimal('0')
-            cost = day_purchases['total'] or Decimal('0')
-            profit = revenue - cost
+            revenue = day_sales['total'] or Decimal('0')
+            cost = cost_by_date.get(current_date, Decimal('0'))
+            profit = profit_by_date.get(current_date, Decimal('0'))
 
             daily_profit.append({
                 'date': current_date,
                 'revenue': revenue,
                 'cost': cost,
                 'profit': profit,
-                'tax': (day_sales['total'] or Decimal('0')) - revenue,
+                'tax': (day_sales['total'] or Decimal('0')) - (day_sales['subtotal'] or Decimal('0')),
             })
 
             current_date += timedelta(days=1)
@@ -399,8 +491,8 @@ class ProfitReportView(View):
         # Summary stats
         total_revenue = sum(d['revenue'] for d in daily_profit)
         total_cost = sum(d['cost'] for d in daily_profit)
-        total_profit = total_revenue - total_cost
-        profit_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
+        total_profit = sum(d['profit'] for d in daily_profit)
+        profit_margin = ((total_profit / total_revenue) * 100 if total_revenue > 0 else 0)
 
         context = {
             'start_date': start_date,
