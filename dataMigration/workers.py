@@ -21,7 +21,7 @@ from django.db import connection
 from django.utils import timezone
 
 from tenants.models import Tenant
-from easypharma.models.Items import Products, DrugCompany, ProductType, ProductContent, ProductContent,ProductTax
+from easypharma.models.Items import Products, DrugCompany, ProductType, ProductContent, ProductContent,ProductTax,ProductSchedule
 from easypharma.models.purchase_invoice import Supplier
 from easypharma.models.stock import StockBatch
 from dataMigration.models import MigrationLog
@@ -483,6 +483,31 @@ def _bulk_import_products(items, tenant, log_entry, total_items):
     log_entry.progress_percent = 40
     log_entry.save(update_fields=['progress_percent'])
 
+
+    all_schedules = {item.get('schedule', '').strip().upper() for item in items if item.get('schedule', '').strip()}
+
+    try:
+        schedule_map = {
+            s.schedule_name.strip().upper(): s
+            for s in ProductSchedule.objects.filter(tenant=tenant)
+            if s.schedule_name
+        }
+    except Exception as e:
+        import traceback
+        dbg("Created Product Schedule: %s", e)
+        traceback.print_exc()
+
+    for schedule_name in all_schedules:
+        if schedule_name not in schedule_map:
+            obj, created = ProductSchedule.objects.get_or_create(
+                tenant=tenant,
+                schedule_name=schedule_name.title()
+            )
+            schedule_map[schedule_name] = obj
+
+            if created:
+                dbg("Created Product Schedule: %s", obj.schedule_name)
+   
     # C1. Product Taxes
     dbg("Step C1: resolving product taxes")
 
@@ -548,6 +573,7 @@ def _bulk_import_products(items, tenant, log_entry, total_items):
                 continue
             comp_obj    = company_map.get(item.get('company_name', '').strip().upper())
             type_obj    = type_map.get(item.get('product_type', 'OTHER').strip().upper())
+            schedule_obj = schedule_map.get(item.get('schedule', '').strip().upper())
             content_obj = content_map.get(item.get('drug_content', '').strip().upper())
 
             tax_obj = None
@@ -568,6 +594,7 @@ def _bulk_import_products(items, tenant, log_entry, total_items):
                 product_packing=item.get('product_packing', ''),
                 compny_name=comp_obj,
                 product_type=type_obj,
+                product_schedule=schedule_obj,
                 product_content=content_obj,
                 product_tax=tax_obj, 
                 product_hsn_code=item.get('hsn_code') or '3004',

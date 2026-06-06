@@ -17,7 +17,10 @@ class ProductType(TenantAwareModel):  # ✅ CHANGED: Inherit from TenantAwareMod
         return self.name
 
 class ProductSchedule(TenantAwareModel):  # ✅ CHANGED: Inherit from TenantAwareModel
-    schedule_name = models.CharField(max_length=100, unique=True)
+    schedule_name = models.CharField(max_length=100)
+
+    class Meta:
+        unique_together = ('tenant', 'schedule_name')
 
     def __str__(self):
         return self.schedule_name
