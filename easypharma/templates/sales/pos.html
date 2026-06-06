@@ -585,6 +585,7 @@
         document.getElementById('patientAddress').value = data.patient_address || '';
         document.getElementById('patientPhone').value = data.patient_phone || '';
         document.getElementById('doctorName').value = data.doctor_name || '';
+        console.log('pateint address:', data.patient_address);
         if (data.payment_mode) {
             const paymentOption = document.querySelector(`input[name="paymentMethod"][value="${data.payment_mode}"]`);
             if (paymentOption) paymentOption.checked = true;
@@ -1203,6 +1204,7 @@
             invoice_id: editData?.invoice_id || null,
             patient_name: document.getElementById('patientName').value,
             patient_address: document.getElementById('patientAddress').value,
+            
             patient_phone: document.getElementById('patientPhone').value,
             doctor_name: document.getElementById('doctorName').value,
             payment_mode: document.querySelector('input[name="paymentMethod"]:checked').value,

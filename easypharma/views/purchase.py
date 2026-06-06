@@ -416,8 +416,12 @@ class PurchaseEntryView(View):
                     credit=invoice.total_amount,
                     remarks="Purchase Invoice"
                 )
-
-                return JsonResponse({'success': True, 'invoice_id': invoice.id})
+                return JsonResponse({
+                        'success': True,
+                        'invoice_id': invoice.id,
+                        'voucher_number': invoice.voucher_number,
+                    })
+                #return JsonResponse({'success': True, 'invoice_id': invoice.id})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
