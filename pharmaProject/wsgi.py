@@ -27,7 +27,7 @@ except ProgrammingError as exc:
         raise RuntimeError('Automatic startup migration failed - critical error') from exc
 except Exception as exc:
     logger.error(f'✗ Unexpected migration error: {type(exc).__name__}: {exc}')
-    raise RuntimeError('Automatic startup migration failed') from exc
+    raise RuntimeError('Automatic startup migration failed')
 
 application = get_wsgi_application()
 app = application
