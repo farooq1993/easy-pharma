@@ -4,14 +4,19 @@ from django.db import migrations, models, connection
 def add_invoice_message_field(apps, schema_editor):
     """Safely add invoice_message field if it doesn't already exist."""
     with connection.cursor() as cursor:
-        cursor.execute("""
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name = 'tenants_tenant' 
-                AND column_name = 'invoice_message'
-            );
-        """)
-        column_exists = cursor.fetchone()[0]
+        if connection.vendor == 'sqlite':
+            cursor.execute("PRAGMA table_info(tenants_tenant);")
+            columns = [row[1] for row in cursor.fetchall()]
+            column_exists = 'invoice_message' in columns
+        else:
+            cursor.execute("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'tenants_tenant' 
+                    AND column_name = 'invoice_message'
+                );
+            """)
+            column_exists = cursor.fetchone()[0]
     
     if not column_exists:
         # Column doesn't exist, add it
@@ -24,14 +29,19 @@ def add_invoice_message_field(apps, schema_editor):
 def reverse_add_invoice_message(apps, schema_editor):
     """Reverse: remove invoice_message field if it exists."""
     with connection.cursor() as cursor:
-        cursor.execute("""
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name = 'tenants_tenant' 
-                AND column_name = 'invoice_message'
-            );
-        """)
-        column_exists = cursor.fetchone()[0]
+        if connection.vendor == 'sqlite':
+            cursor.execute("PRAGMA table_info(tenants_tenant);")
+            columns = [row[1] for row in cursor.fetchall()]
+            column_exists = 'invoice_message' in columns
+        else:
+            cursor.execute("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'tenants_tenant' 
+                    AND column_name = 'invoice_message'
+                );
+            """)
+            column_exists = cursor.fetchone()[0]
     
     if column_exists:
         schema_editor.remove_field(

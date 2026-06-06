@@ -417,11 +417,6 @@ class PurchaseEntryView(View):
                     remarks="Purchase Invoice"
                 )
 
-                # If there are applied returns, create a ledger entry representing the adjustment (payment) against this invoice?
-                # Actually, ExpiryReturn ALREADY created a Debit in the ledger when it was created!
-                # We do NOT create another ledger entry here because the return is already in the ledger.
-                # Applying it just links them and reduces the outstanding balance.
-
                 return JsonResponse({'success': True, 'invoice_id': invoice.id})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
