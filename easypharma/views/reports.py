@@ -455,11 +455,14 @@ class ProfitReportView(View):
                     if batch.mrp is not None:
                         batch_mrp = batch.mrp
 
-            cost_by_date[sale_date] = cost_by_date.get(sale_date, Decimal('0')) + (batch_cost * item.quantity)
+            conv_factor = Decimal(str(item.product.conversion_factor or 1))
+            unit_cost = batch_cost / conv_factor
+            item_cost = unit_cost * item.quantity
+            cost_by_date[sale_date] = cost_by_date.get(sale_date, Decimal('0')) + item_cost
             sale_value = item.total_amount or Decimal('0')
             profit_by_date[sale_date] = (
                             profit_by_date.get(sale_date, Decimal('0'))
-                            + (sale_value - (batch_cost * item.quantity))
+                            + (sale_value - item_cost)
                         )
 
         # Daily profit data
