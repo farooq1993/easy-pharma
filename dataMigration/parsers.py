@@ -686,14 +686,7 @@ def parse_product_master_text(text_content):
 # ============================================================
 
 def parse_product_seed_csv(content):
-    """
-    Parse the structured seed CSV with active_ingredients as a Python-literal list.
-    Returns list-of-dicts compatible with _bulk_import_products in workers.py.
-    Each dict has:
-      product_name, product_packing, company_name, drug_content (primary_ingredient),
-      active_ingredients (list of {name, strength, full_description}),
-      hsn_code, conversion_factor, product_type
-    """
+  
     import ast
     start_time = time.time()
     _dbg("parse_product_seed_csv: content_len=%d chars", len(content))
@@ -726,17 +719,17 @@ def parse_product_seed_csv(content):
             active_raw      = row.get('active_ingredients', '[]').strip()
             hsn_code        =  row.get('hsn_code', '').strip()
             product_tax     = row.get('product_tax', '').strip()
-
+            schedule        = row.get('schedule', '').strip()
             if not brand_name or len(brand_name) < 2:
                 skipped += 1
                 continue
 
             # Build packing string  e.g. "10 STRIP"
-            packing = ''
-            if pack_size and pack_unit:
-                packing = f"{pack_size} {pack_unit.upper()}"
-            elif pack_size:
-                packing = pack_size
+            # packing = ''
+            # if pack_size and pack_unit:
+            #     packing = f"{pack_size} {pack_unit.upper()}"
+            # elif pack_size:
+            #     packing = pack_size
 
             # Parse active_ingredients safely
             active_ingredients = []
@@ -762,18 +755,48 @@ def parse_product_seed_csv(content):
                 drug_content = ', '.join(i['name'] for i in active_ingredients)
             
             product_type = dosage_form.upper().strip()
+            pack_unit_upper = (pack_unit or '').upper().strip()
 
             if not product_type:
                 product_type = "OTHER"
 
             # Conversion factor from pack_size
-            conv_factor = 1
             try:
-                if pack_size:
-                    conv_factor = int(float(pack_size))
+                pack_qty = int(float(pack_size))
             except (ValueError, TypeError):
+                pack_qty = 1
+
+            packing = ''
+            conv_factor = 1
+
+            # Tablets / Capsules
+            if product_type in ['TABLET', 'CAPSULE'] and pack_unit_upper == 'STRIP':
+                packing = f"{pack_qty}X10"
+                conv_factor = pack_qty
+
+            # Suspensions / Syrups
+            elif product_type in ['SUSPENSION', 'SYRUP']:
+                packing = f"{pack_qty} ML"
                 conv_factor = 1
 
+            # Injections
+            elif product_type == 'INJECTION':
+                if pack_unit_upper == 'ML':
+                    packing = f"{pack_qty} ML"
+                else:
+                    packing = f"{pack_qty} {pack_unit_upper}"
+                conv_factor = 1
+
+            # Gel / Cream / Ointment
+            elif product_type in ['GEL', 'CREAM', 'OINTMENT']:
+                packing = f"{pack_qty} GM"
+                conv_factor = 1
+
+            # Default
+            else:
+                packing = f"{pack_qty} {pack_unit_upper}".strip()
+                conv_factor = 1
+                
             products.append({
                 'product_name':   brand_name,
                 'product_packing':   packing,
@@ -781,11 +804,12 @@ def parse_product_seed_csv(content):
                 'drug_content': drug_content,
                 'primary_ingredient': primary_ingr,
                 'hsn_code': hsn_code,
+                'schedule': schedule,
                 'product_tax': product_tax,
                 'conversion_factor':  conv_factor,
                 'product_type':    product_type,
             })
-
+            _dbg("Sample parsed row: %s", products[0])
         except Exception as e:
             _dbg("parse_product_seed_csv ERROR row=%d err=%s", idx, e)
             skipped += 1
