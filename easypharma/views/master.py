@@ -225,6 +225,37 @@ class QuickProductAPI(View):
             return JsonResponse({'success': True, 'id': product.id, 'name': product.product_name})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
+    
+    def patch(self, request, pk=None):
+        try:
+            data = json.loads(request.body)
+    
+            # pk comes from URL: /api/products/quick-add/<pk>/
+            product_id = pk or data.get('id')
+            product = get_object_or_404(Products, id=product_id, tenant=request.tenant)
+    
+            product.product_packing     = data.get('packing', product.product_packing)
+            product.product_hsn_code    = data.get('hsn_code', product.product_hsn_code)
+            product.product_tax_id      = data.get('tax_id') or None
+            product.product_schedule_id = data.get('schedule_id') or None
+            product.compny_name_id      = data.get('company_id') or None
+    
+            try:
+                conv = data.get('conversion_factor')
+                product.conversion_factor = int(conv) if conv and int(conv) > 0 else 1
+            except (ValueError, TypeError):
+                pass
+    
+            product.save()
+    
+            new_tax_rate = None
+            if product.product_tax:
+                new_tax_rate = float(product.product_tax.tax_rate)
+    
+            return JsonResponse({'success': True, 'tax_rate': new_tax_rate})
+    
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
 class ProductMasterSearchAPI(View):
     def get(self, request):
