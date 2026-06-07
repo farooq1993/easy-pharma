@@ -274,7 +274,7 @@ class PurchaseEntryView(View):
         product_schedules = ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True))
         drug_companies = DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True))
         product_contents = ProductContent.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('content_name')
-        print("====== Product Contents =====:", product_contents)
+        
         edit_data = None
         if invoice_id:
             try:
