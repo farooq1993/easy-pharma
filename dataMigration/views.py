@@ -15,6 +15,7 @@ from django.http import JsonResponse
 from django.contrib import messages
 from django.db import transaction, connection
 from django.core.cache import cache
+import os
 
 logger = logging.getLogger('easypharma')
 
