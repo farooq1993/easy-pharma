@@ -273,7 +273,8 @@ class PurchaseEntryView(View):
         product_taxes = ProductTax.objects.filter(tenant=request.tenant)
         product_schedules = ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True))
         drug_companies = DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True))
-
+        product_contents = ProductContent.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('content_name')
+        print("====== Product Contents =====:", product_contents)
         edit_data = None
         if invoice_id:
             try:
@@ -315,6 +316,7 @@ class PurchaseEntryView(View):
             'product_taxes': product_taxes,
             'product_schedules': product_schedules,
             'drug_companies': drug_companies,
+            'product_contents': product_contents,
             'edit_data': edit_data,
             'today': now().date()
         })

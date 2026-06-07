@@ -235,21 +235,52 @@
                 <div class="row g-3 mb-3">
                     <div class="col-md-6">
                         <label class="ep-label">Tax Rate</label>
-                        <select id="quickTax" class="ep-input">
+                        <!-- hidden select keeps the real value -->
+                        <select id="quickTax" style="display:none;">
                             <option value="">— Select Tax —</option>
                             {% for tax in product_taxes %}
                             <option value="{{ tax.id }}">{{ tax.tax_name }} ({{ tax.tax_rate }}%)</option>
                             {% endfor %}
                         </select>
+                        <div class="qs-wrap" id="qs-wrap-quickTax">
+                            <div class="qs-input-row">
+                                <input type="text" class="ep-input qs-input" id="qs-input-quickTax" placeholder="Search tax rate..." autocomplete="off">
+                                <button type="button" class="qs-clear-btn" id="qs-clear-quickTax" onclick="qsClear('quickTax')" style="display:none;" title="Clear">&#x2715;</button>
+                            </div>
+                            <div class="qs-dropdown" id="qs-drop-quickTax" style="display:none;"></div>
+                        </div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-3">
                         <label class="ep-label">Drug Schedule</label>
-                        <select id="quickSchedule" class="ep-input">
+                        <select id="quickSchedule" style="display:none;">
                             <option value="">— Select Schedule —</option>
                             {% for schedule in product_schedules %}
                             <option value="{{ schedule.id }}">{{ schedule.schedule_name }}</option>
                             {% endfor %}
                         </select>
+                        <div class="qs-wrap" id="qs-wrap-quickSchedule">
+                            <div class="qs-input-row">
+                                <input type="text" class="ep-input qs-input" id="qs-input-quickSchedule" placeholder="Search schedule..." autocomplete="off">
+                                <button type="button" class="qs-clear-btn" id="qs-clear-quickSchedule" onclick="qsClear('quickSchedule')" style="display:none;" title="Clear">&#x2715;</button>
+                            </div>
+                            <div class="qs-dropdown" id="qs-drop-quickSchedule" style="display:none;"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="ep-label">Product Content</label>
+                        <select id="quickContent" style="display:none;">
+                            <option value="">— Select Content —</option>
+                            {% for content in product_contents %}
+                            <option value="{{ content.id }}">{{ content.content_name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="qs-wrap" id="qs-wrap-quickContent">
+                            <div class="qs-input-row">
+                                <input type="text" class="ep-input qs-input" id="qs-input-quickContent" placeholder="Search content..." autocomplete="off">
+                                <button type="button" class="qs-clear-btn" id="qs-clear-quickContent" onclick="qsClear('quickContent')" style="display:none;" title="Clear">&#x2715;</button>
+                            </div>
+                            <div class="qs-dropdown" id="qs-drop-quickContent" style="display:none;"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -257,12 +288,19 @@
                 <div class="row g-3 mb-1">
                     <div class="col-md-6">
                         <label class="ep-label">Company Name</label>
-                        <select id="quickCompany" class="ep-input">
+                        <select id="quickCompany" style="display:none;">
                             <option value="">— Select Company —</option>
                             {% for company in drug_companies %}
                             <option value="{{ company.id }}">{{ company.company_name }}</option>
                             {% endfor %}
                         </select>
+                        <div class="qs-wrap" id="qs-wrap-quickCompany">
+                            <div class="qs-input-row">
+                                <input type="text" class="ep-input qs-input" id="qs-input-quickCompany" placeholder="Search company..." autocomplete="off">
+                                <button type="button" class="qs-clear-btn" id="qs-clear-quickCompany" onclick="qsClear('quickCompany')" style="display:none;" title="Clear">&#x2715;</button>
+                            </div>
+                            <div class="qs-dropdown" id="qs-drop-quickCompany" style="display:none;"></div>
+                        </div>
                     </div>
                     <div class="col-md-6">
                         <label class="ep-label">HSN Code</label>
@@ -322,6 +360,190 @@
 </div>
 
 <div class="ep-toast" id="epToast"></div>
+
+<style>
+/* ── Quick-Select Searchable Dropdown ── */
+.qs-wrap { position: relative; }
+.qs-input-row { position: relative; display: flex; align-items: center; }
+.qs-input-row .qs-input { padding-right: 30px; }
+.qs-clear-btn {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; color: #9ca3af; font-size: 0.85rem;
+    cursor: pointer; padding: 0; line-height: 1;
+    transition: color 0.15s;
+}
+.qs-clear-btn:hover { color: #ef4444; }
+.qs-dropdown {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    background: #fff; border: 1.5px solid #c7d2fe;
+    border-radius: 12px; box-shadow: 0 8px 24px rgba(99,102,241,0.13);
+    max-height: 200px; overflow-y: auto; z-index: 1090;
+    padding: 4px 0;
+}
+.qs-item {
+    padding: 8px 14px; font-size: 0.86rem; cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: background 0.12s, border-color 0.12s;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.qs-item:hover { background: #e8edff; border-left-color: #6366f1; }
+.qs-item.qs-active {
+    background: linear-gradient(90deg,#6366f1,#818cf8);
+    color: #fff; border-left-color: #4338ca; font-weight: 600;
+}
+.qs-empty { padding: 10px 14px; font-size: 0.84rem; color: #9ca3af; font-style: italic; }
+.qs-input:focus { border-color: #6366f1 !important; box-shadow: 0 0 0 3px rgba(99,102,241,0.15) !important; }
+</style>
+
+<script>
+// ══════════════════════════════════════════════════
+//  Quick-Select: reusable searchable <select> widget
+//  Usage: initQuickSelect('quickTax')
+//  — hides real <select>, shows search input + dropdown
+//  — supports Arrow keys, Enter, Escape, Tab
+// ══════════════════════════════════════════════════
+(function() {
+    function initQuickSelect(selectId) {
+        const sel   = document.getElementById(selectId);
+        const input = document.getElementById('qs-input-' + selectId);
+        const drop  = document.getElementById('qs-drop-'  + selectId);
+        const clearBtn = document.getElementById('qs-clear-' + selectId);
+        if (!sel || !input || !drop) return;
+
+        let activeIdx = -1;
+        let filtered  = [];
+
+        function getOptions() {
+            return Array.from(sel.options)
+                .filter(o => o.value !== '')
+                .map(o => ({ value: o.value, text: o.text.trim() }));
+        }
+
+        function highlight(items) {
+            items.forEach((el, i) => {
+                el.classList.toggle('qs-active', i === activeIdx);
+                if (i === activeIdx) el.scrollIntoView({ block: 'nearest' });
+            });
+        }
+
+        function renderDrop(opts) {
+            filtered  = opts;
+            activeIdx = opts.length > 0 ? 0 : -1;
+            drop.innerHTML = '';
+            if (opts.length === 0) {
+                drop.innerHTML = '<div class="qs-empty">No results found</div>';
+            } else {
+                opts.forEach((opt, i) => {
+                    const div = document.createElement('div');
+                    div.className = 'qs-item' + (i === 0 ? ' qs-active' : '');
+                    div.textContent = opt.text;
+                    div.addEventListener('mousedown', e => { e.preventDefault(); pick(opt); });
+                    div.addEventListener('mouseover', () => {
+                        activeIdx = i;
+                        highlight(drop.querySelectorAll('.qs-item'));
+                    });
+                    drop.appendChild(div);
+                });
+            }
+            drop.style.display = 'block';
+        }
+
+        function pick(opt) {
+            sel.value    = opt.value;
+            input.value  = opt.text;
+            drop.style.display = 'none';
+            clearBtn.style.display = 'inline-block';
+            activeIdx = -1;
+            input.blur();
+        }
+
+        function openAll() { renderDrop(getOptions()); }
+
+        function openFiltered(q) {
+            const lo = q.toLowerCase();
+            renderDrop(getOptions().filter(o => o.text.toLowerCase().includes(lo)));
+        }
+
+        input.addEventListener('focus', () => {
+            input.value ? openFiltered(input.value) : openAll();
+        });
+
+        input.addEventListener('input', () => {
+            const q = input.value.trim();
+            if (!q) { sel.value = ''; clearBtn.style.display = 'none'; }
+            openFiltered(q);
+        });
+
+        input.addEventListener('keydown', e => {
+            const items = drop.querySelectorAll('.qs-item');
+            if (drop.style.display === 'none') {
+                if (e.key === 'ArrowDown' || e.key === 'Enter') { e.preventDefault(); openAll(); }
+                return;
+            }
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                activeIdx = Math.min(activeIdx + 1, filtered.length - 1);
+                highlight(items);
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                activeIdx = Math.max(activeIdx - 1, 0);
+                highlight(items);
+            } else if (e.key === 'Enter' || e.key === 'Tab') {
+                if (activeIdx >= 0 && filtered[activeIdx]) {
+                    e.preventDefault();
+                    pick(filtered[activeIdx]);
+                }
+            } else if (e.key === 'Escape') {
+                drop.style.display = 'none';
+                activeIdx = -1;
+            }
+        });
+
+        document.addEventListener('mousedown', e => {
+            const wrap = document.getElementById('qs-wrap-' + selectId);
+            if (wrap && !wrap.contains(e.target)) drop.style.display = 'none';
+        });
+    }
+
+    // Global clear helper
+    window.qsClear = function(selectId) {
+        const sel   = document.getElementById(selectId);
+        const input = document.getElementById('qs-input-' + selectId);
+        const btn   = document.getElementById('qs-clear-' + selectId);
+        const drop  = document.getElementById('qs-drop-'  + selectId);
+        if (sel)   sel.value   = '';
+        if (input) input.value = '';
+        if (btn)   btn.style.display = 'none';
+        if (drop)  drop.style.display = 'none';
+        input && input.focus();
+    };
+
+    // Global reset helper — call when modal opens/resets
+    window.qsReset = function(selectId) {
+        window.qsClear(selectId);
+    };
+
+    // Init all 4 selects when DOM ready
+    document.addEventListener('DOMContentLoaded', function() {
+        ['quickTax', 'quickSchedule', 'quickContent', 'quickCompany'].forEach(initQuickSelect);
+
+        // Re-sync inputs when modal is shown (edit/CSV flow pre-sets select values)
+        document.getElementById('quickAddModal').addEventListener('show.bs.modal', function() {
+            ['quickTax', 'quickSchedule', 'quickContent', 'quickCompany'].forEach(function(id) {
+                const sel   = document.getElementById(id);
+                const input = document.getElementById('qs-input-' + id);
+                const btn   = document.getElementById('qs-clear-' + id);
+                if (!sel || !input) return;
+                const selOpt = Array.from(sel.options).find(o => o.value === sel.value && o.value !== '');
+                if (selOpt) {
+                    input.value = selOpt.text.trim();
+                    if (btn) btn.style.display = 'inline-block';
+                }
+            });
+        });
+    });
+})();
+</script>
 
 <script>
     let items = [];
@@ -525,6 +747,8 @@
             document.getElementById('quickSchedule').value = '';
             document.getElementById('quickCompany').value = '';
             document.getElementById('quickHsn').value = '';
+            // Reset searchable selects UI
+            ['quickTax','quickSchedule','quickContent','quickCompany'].forEach(id => typeof qsReset === 'function' && qsReset(id));
 
             // Update modal title to show progress
             const remaining = pendingMissingProducts.length;
@@ -1556,7 +1780,10 @@
                 // Reset modal fields for next use
                 ['quickName','quickPacking','quickHsn'].forEach(id => document.getElementById(id).value = '');
                 document.getElementById('quickConv').value = 1;
-                ['quickTax','quickSchedule','quickCompany'].forEach(id => document.getElementById(id).value = '');
+                ['quickTax','quickSchedule','quickContent','quickCompany'].forEach(id => {
+                    document.getElementById(id).value = '';
+                    typeof qsReset === 'function' && qsReset(id);
+                });
                 showToast(`Medicine "${res.name}" added successfully`);
                 // Populate search so user can immediately add to invoice
                 document.getElementById('productSearch').value = res.name;
