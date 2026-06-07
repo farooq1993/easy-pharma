@@ -942,45 +942,91 @@ class MigrationParseView(LoginRequiredMixin, OrganizationRequiredMixin, View):
             'job_id': job_id
         })
 
-        def _handle_chunked_upload(self, request, import_type):
-            try:
-                chunk_index = int(request.POST.get('chunk_index', 0))
-                total_chunks = int(request.POST.get('total_chunks', 1))
-                file_name = request.POST.get('file_name', 'upload.csv')
-                tenant_id = request.POST.get('selected_tenant_id')
-                job_id = request.POST.get('job_id') or str(uuid.uuid4())
+            def _handle_chunked_upload(self, request, import_type):
+        try:
+            chunk_index = int(request.POST.get('chunk_index', 0))
+            total_chunks = int(request.POST.get('total_chunks', 1))
+            file_name = request.POST.get('file_name', 'upload.csv')
+            tenant_id = request.POST.get('selected_tenant_id')
+            job_id = request.POST.get('job_id') or str(uuid.uuid4())
 
-                chunk_file = request.FILES.get('chunk')
-                if not chunk_file:
-                    return JsonResponse({'success': False, 'error': 'No chunk received'}, status=400)
+            chunk_file = request.FILES.get('chunk')
+            if not chunk_file:
+                return JsonResponse({'success': False, 'error': 'No chunk received'}, status=400)
 
-                # Temporary directory
-                import os
-                temp_dir = f"/tmp/migration_chunks/{tenant_id}/{job_id}"
-                os.makedirs(temp_dir, exist_ok=True)
+            import os
+            temp_dir = f"/tmp/migration_chunks/{tenant_id}/{job_id}"
+            os.makedirs(temp_dir, exist_ok=True)
 
-                chunk_path = os.path.join(temp_dir, f"chunk_{chunk_index:03d}.part")
+            chunk_path = os.path.join(temp_dir, f"chunk_{chunk_index:03d}.part")
 
-                with open(chunk_path, 'wb') as f:
-                    for chunk_data in chunk_file.chunks():
-                        f.write(chunk_data)
+            with open(chunk_path, 'wb') as f:
+                for chunk_data in chunk_file.chunks():
+                    f.write(chunk_data)
 
-                # Last chunk - combine and process
-                if chunk_index == total_chunks - 1:
-                    return self._process_complete_file(temp_dir, total_chunks, import_type, tenant_id, job_id, file_name)
+            logger.info(f"[CHUNK] {chunk_index+1}/{total_chunks} saved | Size: {chunk_file.size/1024:.1f} KB")
 
-                return JsonResponse({
-                    'success': True,
-                    'chunk_index': chunk_index,
-                    'progress': round(((chunk_index + 1) / total_chunks) * 100, 1),
-                    'job_id': job_id,
-                    'message': f'Chunk {chunk_index + 1}/{total_chunks} uploaded'
-                })
+            # Last chunk - combine & process
+            if chunk_index == total_chunks - 1:
+                return self._process_complete_file(temp_dir, total_chunks, import_type, tenant_id, job_id, file_name)
 
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                return JsonResponse({'success': False, 'error': str(e)}, status=500)
+            return JsonResponse({
+                'success': True,
+                'chunk_index': chunk_index,
+                'progress': round(((chunk_index + 1) / total_chunks) * 100, 1),
+                'job_id': job_id,
+                'message': f'Chunk {chunk_index + 1}/{total_chunks} uploaded'
+            })
+
+        except Exception as e:
+            logger.error(f"Chunk error: {e}")
+            import traceback
+            traceback.print_exc()
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+    def _process_complete_file(self, temp_dir, total_chunks, import_type, tenant_id, job_id, original_name):
+        try:
+            final_path = os.path.join(temp_dir, f"combined_{original_name}")
+
+            with open(final_path, 'wb') as outfile:
+                for i in range(total_chunks):
+                    chunk_path = os.path.join(temp_dir, f"chunk_{i:03d}.part")
+                    with open(chunk_path, 'rb') as infile:
+                        outfile.write(infile.read())
+
+            # Read full file
+            with open(final_path, 'r', encoding='utf-8', errors='replace') as f:
+                content = f.read()
+
+            # Parse as product_seed
+            parsed_data = parse_product_seed_csv(content)
+
+            # Cache
+            cache.set(f'parsed_data_{job_id}', parsed_data, timeout=7200)
+
+            # Cleanup
+            import shutil
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+            tenant = Tenant.objects.get(id=tenant_id)
+            preview_data, summary = _batch_enrich(parsed_data, import_type, tenant)
+
+            logger.info(f"[CHUNKED UPLOAD SUCCESS] {len(parsed_data)} records parsed")
+
+            return JsonResponse({
+                'success': True,
+                'status': 'done',
+                'job_id': job_id,
+                'data': preview_data[:100],
+                'summary': summary,
+                'total_records': len(parsed_data)
+            })
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
 # =========================================================
 # PARSE STATUS VIEW
 # =========================================================
