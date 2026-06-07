@@ -638,6 +638,58 @@
     let activeTenantId = "{{ selected_tenant.id }}";
     let pollInterval = null;
 
+    function handleLargeFileSelect(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        selectedFile = file;
+        document.getElementById("selectedFileName").innerHTML = 
+            `✅ ${file.name} <span class="text-muted">(${(file.size/1024/1024).toFixed(2)} MB)</span>`;
+    }
+
+    async function uploadFileInChunks(file) {
+        const chunkSize = 1 * 1024 * 1024; // 1MB
+        const totalChunks = Math.ceil(file.size / chunkSize);
+        const jobId = 'job_' + Date.now();
+
+        document.getElementById("parseSpinner").classList.remove("d-none");
+        document.getElementById("btnParse").disabled = true;
+
+        for (let i = 0; i < totalChunks; i++) {
+            const start = i * chunkSize;
+            const end = Math.min(start + chunkSize, file.size);
+            const chunk = file.slice(start, end);
+
+            const formData = new FormData();
+            formData.append('chunk', chunk, file.name);
+            formData.append('chunk_index', i);
+            formData.append('total_chunks', totalChunks);
+            formData.append('file_name', file.name);
+            formData.append('import_type', 'product_seed');
+            formData.append('selected_tenant_id', activeTenantId);
+            formData.append('is_chunked', 'true');
+            formData.append('job_id', jobId);
+
+            try {
+                const res = await fetch("{% url 'migration_parse' %}", {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'X-CSRFToken': getCookie('csrftoken') }
+                });
+                const data = await res.json();
+                console.log(`Chunk ${i+1}/${totalChunks}`, data);
+                if (data.success && data.status === 'done') {
+                    alert(`🎉 File Successfully Uploaded! Total Records: ${data.total_records || 'N/A'}`);
+                    break;
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        document.getElementById("parseSpinner").classList.add("d-none");
+        document.getElementById("btnParse").disabled = false;
+    }
+
     function switchTenant(tenantId) {
         if (tenantId) {
             window.location.href = `?selected_tenant_id=${tenantId}`;
