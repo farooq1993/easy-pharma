@@ -64,24 +64,6 @@
             </div>
 
             <!-- CSV upload for supplier invoices -->
-            <div class="ep-card">
-                <div class="ep-card-header">
-                    <div class="step-badge">2</div>
-                    <h6>Import Purchase CSV</h6>
-                </div>
-                <div class="ep-card-body">
-                    <div class="row g-3 align-items-end">
-                        <div class="col-md-6">
-                            <label class="ep-label">CSV File</label>
-                            <input type="file" id="purchaseCsvFile" class="ep-input" accept=".csv">
-                        </div>
-                        <div class="col-md-6 text-end">
-                            <button id="loadPurchaseCsvBtn" class="btn btn-primary mt-1">Load CSV</button>
-                        </div>
-                    </div>
-                    <div id="csvImportWarnings" class="mt-3"></div>
-                </div>
-            </div>
 
             <!-- Add product row (enhanced keyboard + batch history) -->
             <div class="ep-card">
@@ -146,9 +128,15 @@
                         <div><label class="ep-label">Pur rate (₹)</label><input type="number" id="itemPrice" class="ep-input" step="0.01"></div>
                         <!-- GST (readonly but shows) -->
                         <div><label class="ep-label">GST %</label><input type="text" id="itemTax" class="ep-input" readonly></div>
+                        <!-- Item Total (readonly, auto-calculated) -->
+                        
                         <!-- MRP per pack -->
-                        <div><label class="ep-label">MRP/Pack (₹)</label><input type="number" id="itemMrp" class="ep-input" step="0.01"></div>
+                        <div><label class="ep-label">MRP/Pack (&#8377;)</label><input type="number" id="itemMrp" class="ep-input" step="0.01"></div>
                         <!-- Add button -->
+                         <div>
+                            <label class="ep-label" style="color:#1a7a4a;">Total (&#8377;)</label>
+                            <div id="itemTotalDisplay" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1.5px solid #22c55e;border-radius:10px;padding:9px 12px;font-size:0.95rem;font-weight:700;color:#1a7a4a;min-height:42px;display:flex;align-items:center;">&#8377;0.00</div>
+                        </div>
                         <div><button class="btn-add-item" id="addItemBtn" type="button"><i class="fas fa-plus"></i> Add</button></div>
                     </div>
                     <div class="unit-preview" id="unitPreview"></div>
@@ -386,6 +374,28 @@
         let free = parseFloat(document.getElementById('itemFreeQty').value) || 0;
         let units = (qty + free) * (selectedProduct.conversion_factor || 1);
         document.getElementById('unitPreview').innerHTML = `<i class="fas fa-cubes"></i> Total units: ${units} units`;
+        updateItemTotal();
+    }
+
+    // Real-time item total = qty * price + gst
+    function updateItemTotal() {
+        const qty    = parseFloat(document.getElementById('itemQty').value)   || 0;
+        const price  = parseFloat(document.getElementById('itemPrice').value) || 0;
+        const taxPct = parseFloat(document.getElementById('itemTax').value)   || 0;
+        const el     = document.getElementById('itemTotalDisplay');
+        if (!el) return;
+        const subTotal  = qty * price;
+        const taxAmt    = (subTotal * taxPct) / 100;
+        const total     = subTotal + taxAmt;
+        el.textContent  = '\u20b9' + total.toFixed(2);
+        // Visual cue — pulse green when non-zero
+        if (total > 0) {
+            el.style.borderColor = '#16a34a';
+            el.style.color       = '#15803d';
+        } else {
+            el.style.borderColor = '#22c55e';
+            el.style.color       = '#1a7a4a';
+        }
     }
 
     // Update active dropdown search result highlight and scroll it into view
@@ -651,53 +661,130 @@
             const suggestionsDiv = document.getElementById('batchSuggestions');
             const supplierSelect = document.getElementById('supplierSelect');
 
-            // ── Searchable Supplier Dropdown ──
+            // ── Searchable Supplier Dropdown with full keyboard navigation ──
             (function() {
                 const searchInput = document.getElementById('supplierSearchInput');
-                const dropdown = document.getElementById('supplierDropdown');
+                const dropdown    = document.getElementById('supplierDropdown');
                 if (!searchInput || !dropdown) return;
+                let supplierActiveIdx = -1;
+                let filteredOptions   = [];
 
-                // Build options list from hidden select
                 function getSupplierOptions() {
                     return Array.from(supplierSelect.options)
                         .filter(o => o.value !== '')
                         .map(o => ({ value: o.value, text: o.text }));
                 }
 
+                function selectSupplier(opt) {
+                    supplierSelect.value = opt.value;
+                    supplierSelect.dispatchEvent(new Event('change'));
+                    searchInput.value = opt.text.split(' | ')[0];
+                    dropdown.style.display = 'none';
+                    supplierActiveIdx = -1;
+                    // Move focus to Invoice Number after supplier selection
+                    setTimeout(() => {
+                        const invEl = document.getElementById('invoiceNumber');
+                        if (invEl) { invEl.focus(); invEl.select(); }
+                    }, 50);
+                }
+
+                function updateSupplierHighlight() {
+                    const items = dropdown.querySelectorAll('.supplier-item');
+                    items.forEach((el, i) => {
+                        if (i === supplierActiveIdx) {
+                            el.classList.add('supplier-item-active');
+                            el.scrollIntoView({ block: 'nearest' });
+                        } else {
+                            el.classList.remove('supplier-item-active');
+                        }
+                    });
+                }
+
                 function renderDropdown(filtered) {
+                    filteredOptions = filtered;
+                    supplierActiveIdx = -1;
                     dropdown.innerHTML = '';
                     if (filtered.length === 0) {
-                        dropdown.innerHTML = '<div style="padding:10px 14px; color:#888; font-size:0.85rem;">No suppliers found</div>';
+                        dropdown.innerHTML = '<div style="padding:10px 14px; color:#888; font-size:0.85rem;"><i class="fas fa-search me-1"></i> No suppliers found</div>';
                     } else {
-                        filtered.forEach(opt => {
+                        filtered.forEach((opt, i) => {
                             const div = document.createElement('div');
-                            div.className = 'search-item';
-                            div.style.cssText = 'padding:9px 14px; font-size:0.88rem; border-left:3px solid transparent;';
-                            div.textContent = opt.text;
-                            div.addEventListener('mousedown', (e) => {
-                                e.preventDefault();
-                                supplierSelect.value = opt.value;
-                                supplierSelect.dispatchEvent(new Event('change'));
-                                searchInput.value = opt.text.split(' | ')[0];
-                                dropdown.style.display = 'none';
-                            });
+                            div.className = 'supplier-item';
+                            div.style.cssText = 'padding:9px 14px; font-size:0.88rem; cursor:pointer; border-left:3px solid transparent; transition:all 0.15s;';
+                            const name = opt.text.split(' | ')[0];
+                            const addr = opt.text.split(' | ')[1] || '';
+                            div.innerHTML = `<div style="font-weight:600;">${name}</div>${addr ? `<div style="font-size:0.75rem;color:#888;">${addr}</div>` : ''}`;
+                            div.addEventListener('mouseover', () => { supplierActiveIdx = i; updateSupplierHighlight(); });
+                            div.addEventListener('mousedown', (e) => { e.preventDefault(); selectSupplier(opt); });
                             dropdown.appendChild(div);
                         });
+                        // Auto-highlight first result
+                        supplierActiveIdx = 0;
+                        updateSupplierHighlight();
                     }
                     dropdown.style.display = 'block';
                 }
 
+                // Add hover styles dynamically
+                const style = document.createElement('style');
+                style.textContent = `
+                    .supplier-item { transition: background 0.12s, border-left-color 0.12s; }
+                    .supplier-item:hover { background:#e8edff !important; border-left-color:#6366f1 !important; }
+                    .supplier-item-active {
+                        background: linear-gradient(90deg, #6366f1 0%, #818cf8 100%) !important;
+                        border-left: 4px solid #4338ca !important;
+                        color: #fff !important;
+                        font-weight: 700 !important;
+                    }
+                    .supplier-item-active div { color: rgba(255,255,255,0.85) !important; }
+                `;
+                document.head.appendChild(style);
+
                 searchInput.addEventListener('input', function() {
                     const q = this.value.toLowerCase().trim();
                     if (!q) { dropdown.style.display = 'none'; supplierSelect.value = ''; return; }
-                    const filtered = getSupplierOptions().filter(o => o.text.toLowerCase().includes(q));
-                    renderDropdown(filtered);
+                    renderDropdown(getSupplierOptions().filter(o => o.text.toLowerCase().includes(q)));
                 });
 
                 searchInput.addEventListener('focus', function() {
-                    if (this.value.trim()) {
-                        const q = this.value.toLowerCase();
-                        renderDropdown(getSupplierOptions().filter(o => o.text.toLowerCase().includes(q)));
+                    const q = this.value.toLowerCase().trim();
+                    if (q) renderDropdown(getSupplierOptions().filter(o => o.text.toLowerCase().includes(q)));
+                    else renderDropdown(getSupplierOptions()); // show all on empty focus
+                });
+
+                // ── Arrow / Enter / Escape keyboard control ──
+                searchInput.addEventListener('keydown', function(e) {
+                    const items = dropdown.querySelectorAll('.supplier-item');
+                    if (dropdown.style.display === 'none' || items.length === 0) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            // No dropdown open — move to invoice field
+                            document.getElementById('invoiceNumber')?.focus();
+                        }
+                        return;
+                    }
+                    if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        supplierActiveIdx = Math.min(supplierActiveIdx + 1, items.length - 1);
+                        updateSupplierHighlight();
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        supplierActiveIdx = Math.max(supplierActiveIdx - 1, 0);
+                        updateSupplierHighlight();
+                    } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (supplierActiveIdx >= 0 && filteredOptions[supplierActiveIdx]) {
+                            selectSupplier(filteredOptions[supplierActiveIdx]);
+                        }
+                    } else if (e.key === 'Escape') {
+                        dropdown.style.display = 'none';
+                        supplierActiveIdx = -1;
+                    } else if (e.key === 'Tab') {
+                        // Tab confirms first result
+                        if (supplierActiveIdx >= 0 && filteredOptions[supplierActiveIdx]) {
+                            e.preventDefault();
+                            selectSupplier(filteredOptions[supplierActiveIdx]);
+                        }
                     }
                 });
 
@@ -707,7 +794,7 @@
                     }
                 });
 
-                // If edit mode pre-selects supplier, also fill search input
+                // Edit mode — pre-fill
                 if (supplierSelect.value) {
                     const sel = supplierSelect.options[supplierSelect.selectedIndex];
                     if (sel) searchInput.value = sel.text.split(' | ')[0];
@@ -802,23 +889,27 @@
 
         // Keydown listener on searchInput for keyboard dropdown navigation
         searchInput.addEventListener('keydown', (e) => {
-            const items = searchResultsDiv.querySelectorAll('button.search-item');
-            if (items.length === 0 || searchResultsDiv.style.display === 'none') return;
+            const srItems = searchResultsDiv.querySelectorAll('button.search-item');
+            const dropOpen = searchResultsDiv.style.display !== 'none' && srItems.length > 0;
 
             if (e.key === 'ArrowDown') {
+                if (!dropOpen) return;
                 e.preventDefault();
-                searchSelectedIndex = Math.min(searchSelectedIndex + 1, items.length - 1);
+                searchSelectedIndex = Math.min(searchSelectedIndex + 1, srItems.length - 1);
                 updateSearchSelection();
             } else if (e.key === 'ArrowUp') {
+                if (!dropOpen) return;
                 e.preventDefault();
                 searchSelectedIndex = Math.max(searchSelectedIndex - 1, 0);
                 updateSearchSelection();
             } else if (e.key === 'Enter') {
-                if (searchSelectedIndex > -1 && searchSelectedIndex < items.length) {
+                if (dropOpen) {
                     e.preventDefault();
-                    items[searchSelectedIndex].click();
+                    const targetIdx = searchSelectedIndex >= 0 ? searchSelectedIndex : 0;
+                    srItems[targetIdx]?.click();
                     searchSelectedIndex = -1;
                 }
+                // If no dropdown, the formInputs handler above takes over
             } else if (e.key === 'Escape') {
                 searchResultsDiv.style.display = 'none';
                 searchSelectedIndex = -1;
@@ -901,33 +992,114 @@
             }
         });
 
-        // ----- KEYBOARD NAVIGATION (Enter to move to next field in add form) -----
+        // ══════════════════════════════════════════════════════════
+        // GLOBAL ENTER-KEY NAVIGATION — Supplier → Invoice → Date
+        //                              → Medicine → Batch → Expiry Month
+        //                              → Expiry Year → Qty → Free → Price
+        //                              → GST (skip) → MRP → ADD ITEM
+        // ══════════════════════════════════════════════════════════
+
+        // Invoice Number → Date on Enter
+        document.getElementById('invoiceNumber').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const dateEl = document.getElementById('purchaseDate');
+                dateEl.focus();
+            }
+        });
+
+        // Date → Medicine search on Enter
+        document.getElementById('purchaseDate').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                document.getElementById('productSearch').focus();
+            }
+        });
+
+        // ── Product form: Enter moves to next enabled field ──
         const formInputs = [
-            'productSearch', 'itemBatch', 'itemExpiryMonth', 'itemExpiryYear', 'itemQty', 'itemFreeQty', 'itemPrice', 'itemTax', 'itemMrp'
+            'productSearch', 'itemBatch', 'itemExpiryMonth', 'itemExpiryYear',
+            'itemQty', 'itemFreeQty', 'itemPrice', 'itemTax', 'itemMrp'
         ];
+
         formInputs.forEach((id, idx) => {
             const el = document.getElementById(id);
-            if (el) {
-                el.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        let nextIdx = idx + 1;
-                        while (nextIdx < formInputs.length) {
-                            const nextEl = document.getElementById(formInputs[nextIdx]);
-                            if (nextEl && !nextEl.disabled && nextEl.readOnly !== true) {
-                                nextEl.focus();
-                                break;
-                            }
-                            nextIdx++;
-                        }
-                        if (nextIdx >= formInputs.length) {
-                            // if last field, trigger add item
-                            document.getElementById('addItemBtn').focus();
-                            document.getElementById('addItemBtn').click();
-                        }
+            if (!el) return;
+
+            el.addEventListener('keydown', (e) => {
+                if (e.key !== 'Enter') return;
+
+                // If product search dropdown is open & item highlighted → select it, don't advance
+                if (id === 'productSearch') {
+                    const srDiv = document.getElementById('searchResults');
+                    const srItems = srDiv.querySelectorAll('button.search-item');
+                    if (srDiv.style.display !== 'none' && srItems.length > 0 && searchSelectedIndex > -1) {
+                        return; // let existing keydown handler select it
                     }
-                });
-            }
+                    // No dropdown or nothing highlighted — move to batch
+                    e.preventDefault();
+                    if (!selectedProduct) { showToast('Select a medicine from the list', 'error'); return; }
+                    const batchEl = document.getElementById('itemBatch');
+                    batchEl.focus(); batchEl.select();
+                    return;
+                }
+
+                // Batch: if batch suggestions open → select highlighted; else advance
+                if (id === 'itemBatch') {
+                    const bsDiv = document.getElementById('batchSuggestions');
+                    const bsItems = bsDiv.querySelectorAll('.batch-suggestion-item');
+                    if (bsDiv.classList.contains('show') && bsItems.length > 0 && batchSelectedIndex > -1) {
+                        return; // let existing keydown handler select it
+                    }
+                    e.preventDefault();
+                    document.getElementById('itemExpiryMonth').focus();
+                    return;
+                }
+
+                // Expiry month select: on Enter move to year
+                if (id === 'itemExpiryMonth') {
+                    e.preventDefault();
+                    const yearEl = document.getElementById('itemExpiryYear');
+                    yearEl.focus(); yearEl.select();
+                    return;
+                }
+
+                // Expiry year: on Enter move to Qty
+                if (id === 'itemExpiryYear') {
+                    e.preventDefault();
+                    const qtyEl = document.getElementById('itemQty');
+                    qtyEl.focus(); qtyEl.select();
+                    return;
+                }
+
+                // itemTax is readonly — skip it
+                if (id === 'itemTax') {
+                    e.preventDefault();
+                    const mrpEl = document.getElementById('itemMrp');
+                    mrpEl.focus(); mrpEl.select();
+                    return;
+                }
+
+                // MRP (last field) → click Add button
+                if (id === 'itemMrp') {
+                    e.preventDefault();
+                    document.getElementById('addItemBtn').click();
+                    return;
+                }
+
+                // All other fields → go to next enabled field
+                e.preventDefault();
+                let nextIdx = idx + 1;
+                while (nextIdx < formInputs.length) {
+                    const nextEl = document.getElementById(formInputs[nextIdx]);
+                    if (nextEl && !nextEl.disabled && nextEl.readOnly !== true) {
+                        nextEl.focus();
+                        if (nextEl.select) nextEl.select();
+                        break;
+                    }
+                    nextIdx++;
+                }
+            });
         });
         // CSV import button handler
         document.getElementById('loadPurchaseCsvBtn').addEventListener('click', async () => {
@@ -1021,13 +1193,31 @@
 
         // Add button click event
         document.getElementById('addItemBtn').addEventListener('click', () => addItem());
-        // On qty/free qty change update unit preview
+        // On qty/free qty/price/tax change — update unit preview + item total
         ['itemQty', 'itemFreeQty'].forEach(id => {
             document.getElementById(id).addEventListener('input', () => updateUnitPreview());
+        });
+        // Price & tax change → update item total instantly
+        ['itemPrice', 'itemTax'].forEach(id => {
+            document.getElementById(id).addEventListener('input', () => updateItemTotal());
+            document.getElementById(id).addEventListener('change', () => updateItemTotal());
         });
 
         document.getElementById('summaryDiscount').addEventListener('input', () => calculateDiscount('amt'));
         document.getElementById('summaryDiscountPerc').addEventListener('input', () => calculateDiscount('perc'));
+
+        // Discount % → Discount ₹ on Enter
+        document.getElementById('summaryDiscountPerc').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); const el = document.getElementById('summaryDiscount'); el.focus(); el.select(); }
+        });
+        // Discount ₹ → Payment Mode on Enter
+        document.getElementById('summaryDiscount').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); document.getElementById('summaryPaymentMode').focus(); }
+        });
+        // Payment Mode → Save on Enter
+        document.getElementById('summaryPaymentMode').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); savePurchase(); }
+        });
 
         if (editData) {
             populateEditData(editData);
@@ -1082,6 +1272,9 @@
         suggestionsDiv.innerHTML = '';
         suggestionsDiv.classList.remove('show');
         currentBatchHistory = [];
+        // Reset item total display
+        const totalDisp = document.getElementById('itemTotalDisplay');
+        if (totalDisp) { totalDisp.textContent = '\u20b90.00'; totalDisp.style.borderColor='#22c55e'; totalDisp.style.color='#1a7a4a'; }
         document.getElementById('productSearch').focus();
     }
 
@@ -1129,36 +1322,87 @@
     function removeItem(index) { items.splice(index,1); renderTable(); showToast('Item removed'); }
 
     function calculateDiscount(changed) {
-        const sub = items.reduce((s,i)=> s + (i.quantity * i.purchase_price),0);
-        const taxSum = items.reduce((s,i)=> s + i.tax_amount,0);
-        const gross = sub + taxSum;
-        let discAmt = parseFloat(document.getElementById('summaryDiscount').value) || 0;
+        const sub    = items.reduce((s,i) => s + (i.quantity * i.purchase_price), 0);
+        const taxSum = items.reduce((s,i) => s + i.tax_amount, 0);
+        const gross  = sub + taxSum;
+        let discAmt  = parseFloat(document.getElementById('summaryDiscount').value) || 0;
         let discPerc = parseFloat(document.getElementById('summaryDiscountPerc').value) || 0;
-        if(changed === 'perc') { discAmt = (gross * discPerc)/100; document.getElementById('summaryDiscount').value = discAmt.toFixed(2); }
-        else { if(gross>0) discPerc = (discAmt/gross)*100; document.getElementById('summaryDiscountPerc').value = discPerc.toFixed(2); }
+        if (changed === 'perc') {
+            discAmt = (gross * discPerc) / 100;
+            document.getElementById('summaryDiscount').value = discAmt.toFixed(2);
+        } else {
+            if (gross > 0) discPerc = (discAmt / gross) * 100;
+            document.getElementById('summaryDiscountPerc').value = discPerc.toFixed(2);
+        }
         calculateSummary();
     }
 
     function calculateSummary() {
-        const sub = items.reduce((s,i)=> s + (i.quantity * i.purchase_price),0);
-        const taxSum = items.reduce((s,i)=> s + i.tax_amount,0);
+        const sub    = items.reduce((s,i) => s + (i.quantity * i.purchase_price), 0);
+        const taxSum = items.reduce((s,i) => s + i.tax_amount, 0);
+        const gross  = sub + taxSum;
+
+        const disc          = parseFloat(document.getElementById('summaryDiscount').value) || 0;
+        const discountRatio = gross > 0 ? disc / gross : 0;
+
+        // Discount ke baad effective sub & tax
+        const effectiveSub = sub    * (1 - discountRatio);
+        const effectiveTax = taxSum * (1 - discountRatio);
+
+        // ── GST Bifurcation: CGST + SGST (each = GST% / 2) ──────────────────
+        // gstMap[rate] = { total, cgst, sgst }
         const gstMap = {};
-        items.forEach(i=>{ gstMap[i.tax_percentage] = (gstMap[i.tax_percentage]||0)+ i.tax_amount; });
+        items.forEach(i => {
+            const rate           = parseFloat(i.tax_percentage) || 0;
+            const adjustedTax    = i.tax_amount * (1 - discountRatio);
+            const cgst           = adjustedTax / 2;
+            const sgst           = adjustedTax / 2;
+            if (!gstMap[rate]) gstMap[rate] = { total: 0, cgst: 0, sgst: 0 };
+            gstMap[rate].total  += adjustedTax;
+            gstMap[rate].cgst   += cgst;
+            gstMap[rate].sgst   += sgst;
+        });
+
         const gstDiv = document.getElementById('gstBifurcationSection');
-        gstDiv.innerHTML = Object.keys(gstMap).sort().map(r=>`<div class="d-flex justify-content-between small"><span>GST ${r}%</span><span>₹${gstMap[r].toFixed(2)}</span></div>`).join('');
-        const disc = parseFloat(document.getElementById('summaryDiscount').value)||0;
-        const grandRaw = (sub + taxSum) - disc;
+        if (Object.keys(gstMap).length === 0) {
+            gstDiv.innerHTML = '';
+        } else {
+            let html = '';
+            Object.keys(gstMap).sort((a,b) => parseFloat(a) - parseFloat(b)).forEach(rate => {
+                const g      = gstMap[rate];
+                const cgstR  = parseFloat(rate) / 2;
+                const sgstR  = parseFloat(rate) / 2;
+                html += `
+                <div style="background:#f8f9ff; border-radius:8px; padding:6px 10px; margin-bottom:6px; border-left:3px solid #6366f1;">
+                    <div class="d-flex justify-content-between fw-semibold" style="font-size:0.78rem; color:#4338ca;">
+                        <span>GST @ ${rate}%</span>
+                        <span>₹${g.total.toFixed(2)}</span>
+                    </div>
+                    <div class="d-flex justify-content-between" style="font-size:0.72rem; color:#6b7280; padding-left:8px;">
+                        <span>CGST @ ${cgstR}%</span>
+                        <span>₹${g.cgst.toFixed(2)}</span>
+                    </div>
+                    <div class="d-flex justify-content-between" style="font-size:0.72rem; color:#6b7280; padding-left:8px;">
+                        <span>SGST @ ${sgstR}%</span>
+                        <span>₹${g.sgst.toFixed(2)}</span>
+                    </div>
+                </div>`;
+            });
+            gstDiv.innerHTML = html;
+        }
+
+        const grandRaw     = effectiveSub + effectiveTax;
         const grandRounded = Math.round(grandRaw);
-        const roundOff = grandRounded - grandRaw;          // e.g. +0.40 or -0.30
+        const roundOff     = grandRounded - grandRaw;
 
         let totalCreditApplied = 0;
         document.querySelectorAll('.cn-amt-input').forEach(inp => {
-            if(!inp.disabled) totalCreditApplied += (parseFloat(inp.value)||0);
+            if (!inp.disabled) totalCreditApplied += (parseFloat(inp.value) || 0);
         });
         document.getElementById('summaryCreditApplied').innerText = `₹${totalCreditApplied.toFixed(2)}`;
 
-        document.getElementById('summarySubTotal').innerHTML = `₹${sub.toFixed(2)}`;
-        document.getElementById('summaryTax').innerHTML = `₹${taxSum.toFixed(2)}`;
+        document.getElementById('summarySubTotal').innerHTML = `₹${effectiveSub.toFixed(2)}`;
+        document.getElementById('summaryTax').innerHTML      = `₹${effectiveTax.toFixed(2)}`;
 
         // Round off row — show only when there's an actual difference
         const roundOffRow = document.getElementById('roundOffRow');
@@ -1175,8 +1419,8 @@
         }
 
         document.getElementById('summaryGrandTotal').innerHTML = `₹${grandRounded.toFixed(2)}`;
-        
-        if(totalCreditApplied > 0) {
+
+        if (totalCreditApplied > 0) {
             document.getElementById('summaryBalanceDueRow').classList.remove('d-none');
             const balanceDue = Math.max(0, grandRounded - totalCreditApplied);
             document.getElementById('summaryBalanceDue').innerHTML = `₹${balanceDue.toFixed(2)}`;
