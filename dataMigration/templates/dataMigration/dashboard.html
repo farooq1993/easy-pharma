@@ -363,10 +363,10 @@
                         <div id="fileUploadContainer" style="display: none;">
                             <div class="drag-drop-area mb-4" id="dropzone" onclick="document.getElementById('fileInput').click()">
                                 <i class="bi bi-file-earmark-arrow-up fs-1 text-info mb-2 d-block"></i>
-                                <span class="d-block text-white fw-bold mb-1">Drag and drop file here</span>
-                                <span class="d-block text-muted small">Supports .csv or raw report .txt files</span>
-                                <input type="file" id="fileInput" class="d-none" accept=".csv,.txt" onchange="handleFileSelect(event)">
-                                <div id="selectedFileName" class="mt-2 text-info fw-bold font-monospace small"></div>
+                                <span class="d-block text-white fw-bold mb-1">Badi CSV File Upload Karein (20MB+)</span>
+                                <span class="d-block text-muted small">Chunked Upload - Vercel Safe</span>
+                                <input type="file" id="fileInput" class="d-none" accept=".csv" onchange="handleLargeFileSelect(event)">
+                                <div id="selectedFileName" class="mt-2 text-success fw-bold font-monospace small"></div>
                             </div>
                         </div>
 
@@ -631,13 +631,71 @@
     }
     
     // Global App State
-    let activeImportType = "company";
+    //let activeImportType = "company";
+    let activeImportType = "product_seed";
     let activeInputMethod = "text";
     let parsedRecords = [];
     let selectedFile = null;
     let activeTenantId = "{{ selected_tenant.id }}";
     let pollInterval = null;
 
+    function handleLargeFileSelect(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        selectedFile = file;
+        document.getElementById("selectedFileName").innerHTML = 
+            `✅ ${file.name} <span class="text-muted">(${(file.size/1024/1024).toFixed(2)} MB)</span>`;
+    }
+
+    async function uploadFileInChunks(file) {
+        const chunkSize = 1024 * 1024; // 1 MB chunks
+        const totalChunks = Math.ceil(file.size / chunkSize);
+        const jobId = 'job_' + Date.now();
+
+        document.getElementById("parseSpinner").classList.remove("d-none");
+        document.getElementById("btnParse").disabled = true;
+
+        console.log(`🚀 Uploading ${file.name} in ${totalChunks} chunks...`);
+
+        for (let i = 0; i < totalChunks; i++) {
+            const start = i * chunkSize;
+            const end = Math.min(start + chunkSize, file.size);
+            const chunk = file.slice(start, end);
+
+            const formData = new FormData();
+            formData.append('chunk', chunk, file.name);
+            formData.append('chunk_index', i);
+            formData.append('total_chunks', totalChunks);
+            formData.append('file_name', file.name);
+            formData.append('import_type', 'product_seed');
+            formData.append('selected_tenant_id', activeTenantId);
+            formData.append('is_chunked', 'true');
+            formData.append('job_id', jobId);
+
+            try {
+                const res = await fetch("{% url 'migration_parse' %}", {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'X-CSRFToken': getCookie('csrftoken') }
+                });
+
+                const data = await res.json();
+                const percent = Math.round(((i + 1) / totalChunks) * 100);
+                console.log(`✅ Chunk ${i+1}/${totalChunks} (${percent}%)`, data);
+
+                if (data.success && data.status === 'done') {
+                    console.log('%c🎉 SUCCESS!', 'color:lime;font-size:18px');
+                    alert("File successfully uploaded and parsed! Total Records: " + (data.total_records || 'N/A'));
+                    break;
+                }
+            } catch (err) {
+                console.error("Chunk failed", err);
+            }
+        }
+
+        document.getElementById("parseSpinner").classList.add("d-none");
+        document.getElementById("btnParse").disabled = false;
+    }
     function switchTenant(tenantId) {
         if (tenantId) {
             window.location.href = `?selected_tenant_id=${tenantId}`;
@@ -740,11 +798,18 @@ Prod.Type : []AYURVEDIC[]
     }
 
     // Step 1: Hit Backend API to Parse Competitor Data
-    function parseInputData() {
-        if (!activeTenantId) {
-            alert("Please register or select a target pharmacy first!");
+    async function parseInputData() {
+        if (activeImportType === 'product_seed' && selectedFile) {
+            await uploadFileInChunks(selectedFile);
             return;
         }
+        alert("Please select Seed Catalog tab and upload CSV file");
+    }
+    // function parseInputData() {
+    //     if (!activeTenantId) {
+    //         alert("Please register or select a target pharmacy first!");
+    //         return;
+    //     }
 
         const formData = new FormData();
         formData.append("import_type", activeImportType);
