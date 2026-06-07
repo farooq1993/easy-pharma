@@ -798,6 +798,18 @@ Prod.Type : []AYURVEDIC[]
             return;
         }
 
+        // For large files use chunk upload
+        if (activeInputMethod === "file") {
+
+            if (!selectedFile) {
+                alert("Please select a file!");
+                return;
+            }
+
+            handleChunkedUpload(selectedFile);
+            return;
+        }
+
         const formData = new FormData();
         formData.append("import_type", activeImportType);
         formData.append("input_method", activeInputMethod);
@@ -1049,7 +1061,7 @@ Prod.Type : []AYURVEDIC[]
             chunkForm.append("file_name", file.name);
             chunkForm.append("import_type", activeImportType);
             chunkForm.append("selected_tenant_id", activeTenantId);
-            chunkForm.append("is_chunk", "true");
+            chunkForm.append("is_chunked", "true");
 
             try {
                 const response = await fetch("{% url 'migration_parse' %}", {
