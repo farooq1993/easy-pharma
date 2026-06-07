@@ -1039,6 +1039,7 @@ Prod.Type : []AYURVEDIC[]
     }
 
     async function handleChunkedUpload(file) {
+         const jobId = crypto.randomUUID();
         const chunkSize = 3 * 1024 * 1024;   // 3 MB per chunk (Vercel safe)
         const totalChunks = Math.ceil(file.size / chunkSize);
         
@@ -1058,6 +1059,7 @@ Prod.Type : []AYURVEDIC[]
             chunkForm.append("chunk", chunk, file.name);
             chunkForm.append("chunk_index", currentChunk);
             chunkForm.append("total_chunks", totalChunks);
+            chunkForm.append("job_id", jobId);
             chunkForm.append("file_name", file.name);
             chunkForm.append("import_type", activeImportType);
             chunkForm.append("selected_tenant_id", activeTenantId);
@@ -1098,6 +1100,13 @@ Prod.Type : []AYURVEDIC[]
         // Optional: location.reload();
     }
 
+    function resetParseUI() {
+        document.getElementById("parseSpinner")
+            .classList.add("d-none");
+
+        document.getElementById("btnParse")
+            .disabled = false;
+    }
     // Step 3: Stream Data and Launch Background Thread
     function commitImport() {
         if (!activeTenantId) {
