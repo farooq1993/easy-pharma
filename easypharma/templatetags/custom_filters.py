@@ -30,3 +30,11 @@ def url_replace(context, **kwargs):
 @register.filter
 def tag_icon(tag):
     return 'check-circle' if tag == 'success' else 'exclamation-triangle'
+
+
+@register.filter
+def get_item(dictionary, key):
+    """Allow dict[key] lookup in templates: {{ my_dict|get_item:some_var }}"""
+    if dictionary is None:
+        return None
+    return dictionary.get(key)

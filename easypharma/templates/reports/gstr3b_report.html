@@ -1,0 +1,275 @@
+{% extends 'includes/base.html' %}
+{% load static %}
+
+{% block title %}GSTR-3B Report — {{ month_name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4" id="gstr3b-page">
+
+  <!-- ── Header ─────────────────────────────────────────────────────── -->
+  <div class="row align-items-center mb-4">
+    <div class="col-md-7">
+      <h1 class="h2 fw-bold mb-0">
+        <i class="bi bi-file-earmark-bar-graph text-info me-2"></i>GSTR-3B Report
+      </h1>
+      <p class="text-muted mb-0">Monthly Summary Return &mdash; Auto-computed from actual transactions</p>
+    </div>
+    <div class="col-md-5">
+      <form method="GET" class="d-flex gap-2 justify-content-md-end">
+        <select name="month" class="form-select form-select-sm" style="max-width:130px;">
+          <option value="1"  {% if month == 1  %}selected{% endif %}>January</option>
+          <option value="2"  {% if month == 2  %}selected{% endif %}>February</option>
+          <option value="3"  {% if month == 3  %}selected{% endif %}>March</option>
+          <option value="4"  {% if month == 4  %}selected{% endif %}>April</option>
+          <option value="5"  {% if month == 5  %}selected{% endif %}>May</option>
+          <option value="6"  {% if month == 6  %}selected{% endif %}>June</option>
+          <option value="7"  {% if month == 7  %}selected{% endif %}>July</option>
+          <option value="8"  {% if month == 8  %}selected{% endif %}>August</option>
+          <option value="9"  {% if month == 9  %}selected{% endif %}>September</option>
+          <option value="10" {% if month == 10 %}selected{% endif %}>October</option>
+          <option value="11" {% if month == 11 %}selected{% endif %}>November</option>
+          <option value="12" {% if month == 12 %}selected{% endif %}>December</option>
+        </select>
+        <input type="number" name="year" class="form-control form-control-sm" value="{{ year }}" min="2020" max="2030" style="max-width:90px;">
+        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i> View</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Pharmacy Info ──────────────────────────────────────────────── -->
+  <div class="card mb-4 border-0 shadow-sm" style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);color:#fff;">
+    <div class="card-body py-3">
+      <div class="row">
+        <div class="col-md-4">
+          <small class="text-muted d-block">GSTIN</small>
+          <strong>{{ pharmacy.gst_number|default:"Not Configured" }}</strong>
+        </div>
+        <div class="col-md-4">
+          <small class="text-muted d-block">Legal Name</small>
+          <strong>{{ pharmacy.pharmacy_name|default:"—" }}</strong>
+        </div>
+        <div class="col-md-4">
+          <small class="text-muted d-block">Filing Period</small>
+          <strong>{{ month_name }}</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── KPI Strip ──────────────────────────────────────────────────── -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card text-center border-0 shadow-sm h-100" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb);">
+        <div class="card-body py-3">
+          <small class="text-muted fw-semibold d-block">Total Invoices</small>
+          <h3 class="fw-bold text-primary mb-0">{{ total_invoices }}</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card text-center border-0 shadow-sm h-100" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9);">
+        <div class="card-body py-3">
+          <small class="text-muted fw-semibold d-block">Output Tax (Sales)</small>
+          <h3 class="fw-bold text-success mb-0">₹{{ total_out_tax|floatformat:2 }}</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card text-center border-0 shadow-sm h-100" style="background:linear-gradient(135deg,#fff3e0,#ffe0b2);">
+        <div class="card-body py-3">
+          <small class="text-muted fw-semibold d-block">ITC Available (Purchases)</small>
+          <h3 class="fw-bold text-warning mb-0">₹{{ total_itc_tax|floatformat:2 }}</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card text-center border-0 shadow-sm h-100" {% if net_tax_payable > 0 %}style="background:linear-gradient(135deg,#fce4ec,#f8bbd0);"{% else %}style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9);"{% endif %}>
+        <div class="card-body py-3">
+          <small class="text-muted fw-semibold d-block">Net Tax Payable</small>
+          <h3 class="fw-bold {% if net_tax_payable > 0 %}text-danger{% else %}text-success{% endif %} mb-0">₹{{ net_tax_payable|floatformat:2 }}</h3>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Section 3.1 — Outward Supplies ────────────────────────────── -->
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header text-white border-0 py-3" style="background:linear-gradient(135deg,#0d6efd,#0a58ca);">
+      <h5 class="mb-0 fw-bold"><i class="bi bi-arrow-up-circle me-2"></i>3.1 — Outward Supplies (Sales)</h5>
+      <small class="opacity-75">Details of Outward Supplies and inward supplies liable to reverse charge</small>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle">
+          <thead class="table-dark">
+            <tr>
+              <th>Nature of Supply / GST Rate</th>
+              <th class="text-end">Taxable Value (₹)</th>
+              <th class="text-end">CGST (₹)</th>
+              <th class="text-end">SGST (₹)</th>
+              <th class="text-end">IGST (₹)</th>
+              <th class="text-end">Total Tax (₹)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if outward_rows %}
+              {% for row in outward_rows %}
+              <tr>
+                <td>
+                  <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 fw-semibold">{{ row.rate }}% GST</span>
+                  &nbsp; Outward Taxable Supply
+                </td>
+                <td class="text-end fw-semibold">₹{{ row.taxable|floatformat:2 }}</td>
+                <td class="text-end text-info">₹{{ row.cgst|floatformat:2 }}</td>
+                <td class="text-end text-info">₹{{ row.sgst|floatformat:2 }}</td>
+                <td class="text-end text-muted">₹{{ row.igst|floatformat:2 }}</td>
+                <td class="text-end fw-bold text-success">₹{{ row.total_tax|floatformat:2 }}</td>
+              </tr>
+              {% endfor %}
+            {% endif %}
+            {% if nil_exempt_taxable > 0 %}
+            <tr class="table-secondary">
+              <td><span class="badge bg-secondary bg-opacity-25 text-secondary fw-semibold">0% GST</span> &nbsp; Nil / Exempt Supplies</td>
+              <td class="text-end fw-semibold">₹{{ nil_exempt_taxable|floatformat:2 }}</td>
+              <td class="text-end text-muted">₹0.00</td>
+              <td class="text-end text-muted">₹0.00</td>
+              <td class="text-end text-muted">₹0.00</td>
+              <td class="text-end text-muted">₹0.00</td>
+            </tr>
+            {% endif %}
+            {% if not outward_rows and not nil_exempt_taxable %}
+            <tr><td colspan="6" class="text-center text-muted py-4"><i class="bi bi-inbox fs-4 d-block mb-2"></i>No sales transactions for {{ month_name }}</td></tr>
+            {% endif %}
+          </tbody>
+          <tfoot class="table-primary fw-bold">
+            <tr>
+              <td>TOTAL OUTWARD TAX LIABILITY</td>
+              <td class="text-end">₹{{ total_out_taxable|floatformat:2 }}</td>
+              <td class="text-end">₹{{ total_out_cgst|floatformat:2 }}</td>
+              <td class="text-end">₹{{ total_out_sgst|floatformat:2 }}</td>
+              <td class="text-end">₹0.00</td>
+              <td class="text-end fs-5">₹{{ total_out_tax|floatformat:2 }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Section 4 — ITC Available ─────────────────────────────────── -->
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header text-white border-0 py-3" style="background:linear-gradient(135deg,#198754,#146c43);">
+      <h5 class="mb-0 fw-bold"><i class="bi bi-arrow-down-circle me-2"></i>4 — Eligible ITC (Input Tax Credit from Purchases)</h5>
+      <small class="opacity-75">ITC Available from inward supplies (other than imports and inward supplies liable to reverse charge)</small>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle">
+          <thead class="table-dark">
+            <tr>
+              <th>GST Rate / Source</th>
+              <th class="text-end">Taxable Purchase Value (₹)</th>
+              <th class="text-end">CGST ITC (₹)</th>
+              <th class="text-end">SGST ITC (₹)</th>
+              <th class="text-end">IGST ITC (₹)</th>
+              <th class="text-end">Total ITC (₹)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if itc_rows %}
+              {% for row in itc_rows %}
+              <tr>
+                <td>
+                  <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 fw-semibold">{{ row.rate }}% GST</span>
+                  &nbsp; B2B Purchases
+                </td>
+                <td class="text-end fw-semibold">₹{{ row.taxable|floatformat:2 }}</td>
+                <td class="text-end text-success">₹{{ row.cgst|floatformat:2 }}</td>
+                <td class="text-end text-success">₹{{ row.sgst|floatformat:2 }}</td>
+                <td class="text-end text-muted">₹{{ row.igst|floatformat:2 }}</td>
+                <td class="text-end fw-bold text-success">₹{{ row.total_tax|floatformat:2 }}</td>
+              </tr>
+              {% endfor %}
+            {% else %}
+            <tr><td colspan="6" class="text-center text-muted py-4"><i class="bi bi-inbox fs-4 d-block mb-2"></i>No purchase transactions for {{ month_name }}</td></tr>
+            {% endif %}
+          </tbody>
+          <tfoot class="table-success fw-bold">
+            <tr>
+              <td>TOTAL ELIGIBLE ITC</td>
+              <td class="text-end">₹{{ total_itc_tv|floatformat:2 }}</td>
+              <td class="text-end">₹{{ total_itc_cgst|floatformat:2 }}</td>
+              <td class="text-end">₹{{ total_itc_sgst|floatformat:2 }}</td>
+              <td class="text-end">₹0.00</td>
+              <td class="text-end fs-5">₹{{ total_itc_tax|floatformat:2 }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Net Tax Payable Summary ────────────────────────────────────── -->
+  <div class="card border-0 shadow mb-4" style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);">
+    <div class="card-body p-4">
+      <h5 class="text-white fw-bold mb-4"><i class="bi bi-calculator me-2 text-warning"></i>5 — Net Tax Payable</h5>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <div class="bg-white bg-opacity-10 rounded-3 p-3 text-center">
+            <small class="text-white-50 d-block mb-1">Output CGST</small>
+            <div class="text-white fs-5 fw-bold">₹{{ total_out_cgst|floatformat:2 }}</div>
+            <div class="border-top border-white border-opacity-25 pt-2 mt-2">
+              <small class="text-white-50">Less: ITC CGST</small>
+              <div class="text-warning fw-bold">₹{{ total_itc_cgst|floatformat:2 }}</div>
+            </div>
+            <div class="border-top border-white border-opacity-25 pt-2 mt-2">
+              <small class="text-white-50">Net CGST Payable</small>
+              <div class="fs-5 fw-bold {% if net_cgst > 0 %}text-danger{% else %}text-success{% endif %}">₹{{ net_cgst|floatformat:2 }}</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="bg-white bg-opacity-10 rounded-3 p-3 text-center">
+            <small class="text-white-50 d-block mb-1">Output SGST</small>
+            <div class="text-white fs-5 fw-bold">₹{{ total_out_sgst|floatformat:2 }}</div>
+            <div class="border-top border-white border-opacity-25 pt-2 mt-2">
+              <small class="text-white-50">Less: ITC SGST</small>
+              <div class="text-warning fw-bold">₹{{ total_itc_sgst|floatformat:2 }}</div>
+            </div>
+            <div class="border-top border-white border-opacity-25 pt-2 mt-2">
+              <small class="text-white-50">Net SGST Payable</small>
+              <div class="fs-5 fw-bold {% if net_sgst > 0 %}text-danger{% else %}text-success{% endif %}">₹{{ net_sgst|floatformat:2 }}</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="rounded-3 p-3 text-center {% if net_tax_payable > 0 %}bg-danger{% else %}bg-success{% endif %} bg-opacity-25 border {% if net_tax_payable > 0 %}border-danger{% else %}border-success{% endif %} border-opacity-50">
+            <small class="text-white-50 d-block mb-1">TOTAL NET TAX PAYABLE</small>
+            <div class="text-white display-6 fw-bold">₹{{ net_tax_payable|floatformat:2 }}</div>
+            <small class="{% if net_tax_payable > 0 %}text-danger-emphasis{% else %}text-success-emphasis{% endif %}">
+              {% if net_tax_payable > 0 %}Amount to be paid to Government{% else %}No tax payable (ITC covers output){% endif %}
+            </small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="text-muted small text-center">
+    <i class="bi bi-info-circle me-1"></i>
+    This GSTR-3B is auto-generated from actual sales &amp; purchase records for <strong>{{ month_name }}</strong>.
+    All supplies treated as <strong>Intra-state</strong> (CGST + SGST). IGST = ₹0.
+    Please verify before filing on the GST portal.
+  </div>
+
+</div>
+
+<style>
+@media print {
+  .sidebar, nav, .btn, form { display: none !important; }
+  .container-fluid { padding: 0 !important; }
+  .card { break-inside: avoid; }
+}
+</style>
+{% endblock %}

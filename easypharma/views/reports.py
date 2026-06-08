@@ -1,4 +1,5 @@
 import logging
+import json as json_module
 from django.db.models import Prefetch
 from django.views import View
 from django.shortcuts import render
@@ -6,7 +7,7 @@ from easypharma.models.stock import StockBatch
 from easypharma.models.Items import Products, ProductSchedule
 from easypharma.models.purchase_invoice import PurchaseInvoice, PurchaseItem
 from easypharma.models.sales import SaleInvoice, SaleItem
-from django.db.models import Sum, F, DecimalField, ExpressionWrapper, Q, Count
+from django.db.models import Sum, F, DecimalField, ExpressionWrapper, Q, Count, Avg, Max, Min
 from django.utils.timezone import now
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -213,6 +214,43 @@ class DailySaleReportView(View):
 
         report_schedules = ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('schedule_name')
 
+        # ── Bill-wise Profit Calculation ──────────────────────────────────────
+        bill_profit_data = {}
+        sales_with_items = sales.prefetch_related(
+            Prefetch('items', queryset=SaleItem.objects.select_related('product'))
+        )
+        for invoice in sales_with_items:
+            bill_cost = Decimal('0')
+            for item in invoice.items.all():
+                batch_cost = Decimal('0')
+                if item.batch_number:
+                    batch = StockBatch.objects.filter(
+                        tenant=request.tenant,
+                        product=item.product,
+                        batch_number=item.batch_number
+                    ).first()
+                    if batch and batch.purchase_price:
+                        conv = Decimal(str(item.product.conversion_factor or 1))
+                        unit_cost = Decimal(str(batch.purchase_price)) / conv
+                        batch_cost = unit_cost * Decimal(str(item.quantity))
+                bill_cost += batch_cost
+            revenue = invoice.total_amount or Decimal('0')
+            profit = revenue - bill_cost
+            margin = round(float(profit / revenue * 100), 1) if revenue > 0 else 0.0
+            bill_profit_data[invoice.pk] = {
+                'cost': bill_cost,
+                'profit': profit,
+                'margin': margin,
+            }
+
+        total_daily_profit = sum(v['profit'] for v in bill_profit_data.values())
+        total_daily_cost = sum(v['cost'] for v in bill_profit_data.values())
+        total_daily_revenue = daily_stats.get('total_amount') or Decimal('0')
+        total_daily_margin = round(
+            float(total_daily_profit / total_daily_revenue * 100), 1
+        ) if total_daily_revenue > 0 else 0.0
+        # ─────────────────────────────────────────────────────────────────────
+
         context = {
             'date': date_obj,
             'sales': sales,
@@ -223,6 +261,11 @@ class DailySaleReportView(View):
             'top_products': top_products,
             'report_schedules': report_schedules,
             'selected_schedule': selected_schedule,
+            # profit data
+            'bill_profit_data': bill_profit_data,
+            'total_daily_profit': total_daily_profit,
+            'total_daily_cost': total_daily_cost,
+            'total_daily_margin': total_daily_margin,
         }
 
         if request.GET.get('csv') == '1':
@@ -983,3 +1026,439 @@ class NarcoticDrugReportView(View):
 
         return render(request, self.template_name, context)
 
+
+# ============================================================
+#  GSTR-3B REPORT — Auto-computed from actual transactions
+# ============================================================
+
+class GSTR3BReportView(View):
+    """
+    GSTR-3B: Monthly return showing outward supply summary (Section 3.1)
+    and Input Tax Credit available (Section 4), both auto-filled from
+    SaleItem and PurchaseItem records (Option A — live data).
+    """
+    template_name = 'reports/gstr3b_report.html'
+
+    def get(self, request):
+        month = int(request.GET.get('month', now().month))
+        year  = int(request.GET.get('year',  now().year))
+
+        # ── OUTWARD (Section 3.1) — from SaleItem ────────────────────────────
+        sale_items = SaleItem.objects.filter(
+            tenant=request.tenant,
+            sale_invoice__created_at__year=year,
+            sale_invoice__created_at__month=month,
+        ).select_related('product')
+
+        outward_by_rate = {}
+        nil_exempt_taxable = Decimal('0')
+
+        for item in sale_items:
+            rate = float(item.tax_percentage)
+            tv = Decimal(str(item.quantity)) * Decimal(str(item.unit_price))
+            tax = Decimal(str(item.tax_amount or 0))
+            if rate == 0:
+                nil_exempt_taxable += tv
+                continue
+            if rate not in outward_by_rate:
+                outward_by_rate[rate] = {'taxable': Decimal('0'), 'tax': Decimal('0')}
+            outward_by_rate[rate]['taxable'] += tv
+            outward_by_rate[rate]['tax']     += tax
+
+        outward_rows = []
+        total_out_taxable = Decimal('0')
+        total_out_cgst    = Decimal('0')
+        total_out_sgst    = Decimal('0')
+        total_out_tax     = Decimal('0')
+
+        for rate in sorted(outward_by_rate.keys()):
+            tv  = outward_by_rate[rate]['taxable'].quantize(Decimal('0.01'))
+            tax = outward_by_rate[rate]['tax'].quantize(Decimal('0.01'))
+            cgst = (tax / 2).quantize(Decimal('0.01'))
+            sgst = (tax / 2).quantize(Decimal('0.01'))
+            total_out_taxable += tv
+            total_out_cgst    += cgst
+            total_out_sgst    += sgst
+            total_out_tax     += tax
+            outward_rows.append({
+                'rate': rate, 'taxable': tv,
+                'cgst': cgst, 'sgst': sgst, 'igst': Decimal('0'), 'total_tax': tax,
+            })
+
+        # ── INWARD / ITC (Section 4) — from PurchaseItem ─────────────────────
+        purchase_items = PurchaseItem.objects.filter(
+            tenant=request.tenant,
+            purchase_invoice__purchase_date__year=year,
+            purchase_invoice__purchase_date__month=month,
+        )
+
+        itc_by_rate = {}
+        for item in purchase_items:
+            rate = float(item.tax_percentage)
+            if rate == 0:
+                continue
+            tv  = Decimal(str(item.quantity)) * Decimal(str(item.purchase_price))
+            tax = (tv * Decimal(str(rate)) / 100).quantize(Decimal('0.01'))
+            if rate not in itc_by_rate:
+                itc_by_rate[rate] = {'taxable': Decimal('0'), 'tax': Decimal('0')}
+            itc_by_rate[rate]['taxable'] += tv
+            itc_by_rate[rate]['tax']     += tax
+
+        itc_rows = []
+        total_itc_cgst = Decimal('0')
+        total_itc_sgst = Decimal('0')
+        total_itc_tax  = Decimal('0')
+        total_itc_tv   = Decimal('0')
+
+        for rate in sorted(itc_by_rate.keys()):
+            tv   = itc_by_rate[rate]['taxable'].quantize(Decimal('0.01'))
+            tax  = itc_by_rate[rate]['tax'].quantize(Decimal('0.01'))
+            cgst = (tax / 2).quantize(Decimal('0.01'))
+            sgst = (tax / 2).quantize(Decimal('0.01'))
+            total_itc_cgst += cgst
+            total_itc_sgst += sgst
+            total_itc_tax  += tax
+            total_itc_tv   += tv
+            itc_rows.append({
+                'rate': rate, 'taxable': tv,
+                'cgst': cgst, 'sgst': sgst, 'igst': Decimal('0'), 'total_tax': tax,
+            })
+
+        # ── Net Tax Payable ───────────────────────────────────────────────────
+        net_cgst        = (total_out_cgst - total_itc_cgst).quantize(Decimal('0.01'))
+        net_sgst        = (total_out_sgst - total_itc_sgst).quantize(Decimal('0.01'))
+        net_tax_payable = (total_out_tax  - total_itc_tax ).quantize(Decimal('0.01'))
+
+        month_name = datetime(year, month, 1).strftime('%B %Y')
+
+        # Total sales invoices count for reference
+        total_invoices = SaleInvoice.objects.filter(
+            tenant=request.tenant,
+            created_at__year=year,
+            created_at__month=month,
+        ).count()
+
+        context = {
+            'month': month, 'year': year, 'month_name': month_name,
+            # Outward
+            'outward_rows':     outward_rows,
+            'nil_exempt_taxable': nil_exempt_taxable,
+            'total_out_taxable':  total_out_taxable,
+            'total_out_cgst':     total_out_cgst,
+            'total_out_sgst':     total_out_sgst,
+            'total_out_tax':      total_out_tax,
+            # ITC
+            'itc_rows':        itc_rows,
+            'total_itc_tv':    total_itc_tv,
+            'total_itc_cgst':  total_itc_cgst,
+            'total_itc_sgst':  total_itc_sgst,
+            'total_itc_tax':   total_itc_tax,
+            # Net
+            'net_cgst':        net_cgst,
+            'net_sgst':        net_sgst,
+            'net_tax_payable': net_tax_payable,
+            # Meta
+            'total_invoices':  total_invoices,
+            'pharmacy':        request.tenant,
+        }
+
+        return render(request, self.template_name, context)
+
+
+# ============================================================
+#  GSTR-1 BILL-WISE REPORT — with CSV Export
+# ============================================================
+
+class GSTR1ReportView(View):
+    """
+    GSTR-1: Invoice-level outward supply report.
+    Each row = one SaleInvoice with aggregated CGST / SGST / taxable value.
+    Export via ?csv=1.
+    """
+    template_name = 'reports/gstr1_report.html'
+
+    def get(self, request):
+        month = int(request.GET.get('month', now().month))
+        year  = int(request.GET.get('year',  now().year))
+
+        sales = SaleInvoice.objects.filter(
+            tenant=request.tenant,
+            created_at__year=year,
+            created_at__month=month,
+        ).prefetch_related(
+            Prefetch('items', queryset=SaleItem.objects.select_related('product'))
+        ).order_by('created_at')
+
+        # ── Build bill-wise rows ─────────────────────────────────────────────
+        bill_rows = []
+        for invoice in sales:
+            taxable_value = Decimal('0')
+            total_cgst    = Decimal('0')
+            total_sgst    = Decimal('0')
+            total_tax     = Decimal('0')
+            rate_map      = {}
+
+            for item in invoice.items.all():
+                rate = float(item.tax_percentage)
+                tv   = Decimal(str(item.quantity)) * Decimal(str(item.unit_price))
+                tax  = Decimal(str(item.tax_amount or 0))
+                cgst = (tax / 2).quantize(Decimal('0.01'))
+                sgst = (tax / 2).quantize(Decimal('0.01'))
+                taxable_value += tv
+                total_cgst    += cgst
+                total_sgst    += sgst
+                total_tax     += tax
+                if rate not in rate_map:
+                    rate_map[rate] = {'taxable': Decimal('0'), 'cgst': Decimal('0'), 'sgst': Decimal('0')}
+                rate_map[rate]['taxable'] += tv
+                rate_map[rate]['cgst']    += cgst
+                rate_map[rate]['sgst']    += sgst
+
+            customer_name = (
+                invoice.patient_name
+                or (invoice.customer.name if invoice.customer else 'Walk-in')
+            )
+
+            bill_rows.append({
+                'invoice_number': invoice.invoice_number,
+                'date':           invoice.created_at.strftime('%d/%m/%Y'),
+                'customer':       customer_name,
+                'sale_type':      invoice.sale_type,
+                'payment_mode':   invoice.payment_mode,
+                'taxable_value':  taxable_value.quantize(Decimal('0.01')),
+                'cgst':           total_cgst.quantize(Decimal('0.01')),
+                'sgst':           total_sgst.quantize(Decimal('0.01')),
+                'igst':           Decimal('0'),
+                'total_tax':      total_tax.quantize(Decimal('0.01')),
+                'total':          invoice.total_amount,
+                'rate_map':       rate_map,
+            })
+
+        # ── Summary totals ───────────────────────────────────────────────────
+        total_invoices    = len(bill_rows)
+        grand_taxable     = sum(r['taxable_value'] for r in bill_rows)
+        grand_cgst        = sum(r['cgst']          for r in bill_rows)
+        grand_sgst        = sum(r['sgst']          for r in bill_rows)
+        grand_total       = sum(r['total']         for r in bill_rows)
+
+        # ── CSV Export ───────────────────────────────────────────────────────
+        if request.GET.get('csv') == '1':
+            response = HttpResponse(content_type='text/csv')
+            label = datetime(year, month, 1).strftime('%B_%Y')
+            response['Content-Disposition'] = f'attachment; filename="GSTR1_{label}.csv"'
+            writer = csv.writer(response)
+            writer.writerow([
+                'Invoice No', 'Date', 'Customer / Patient', 'Sale Type',
+                'Payment Mode', 'Taxable Value (₹)', 'CGST (₹)', 'SGST (₹)',
+                'IGST (₹)', 'Total Tax (₹)', 'Invoice Total (₹)'
+            ])
+            for row in bill_rows:
+                writer.writerow([
+                    row['invoice_number'],
+                    row['date'],
+                    row['customer'],
+                    row['sale_type'],
+                    row['payment_mode'],
+                    float(row['taxable_value']),
+                    float(row['cgst']),
+                    float(row['sgst']),
+                    0,
+                    float(row['total_tax']),
+                    float(row['total']),
+                ])
+            writer.writerow([])
+            writer.writerow([
+                'TOTAL', '', '', '', '',
+                float(grand_taxable),
+                float(grand_cgst),
+                float(grand_sgst),
+                0,
+                float(grand_cgst + grand_sgst),
+                float(grand_total),
+            ])
+            return response
+
+        month_name = datetime(year, month, 1).strftime('%B %Y')
+
+        context = {
+            'month': month, 'year': year, 'month_name': month_name,
+            'bill_rows':       bill_rows,
+            'total_invoices':  total_invoices,
+            'grand_taxable':   grand_taxable,
+            'grand_cgst':      grand_cgst,
+            'grand_sgst':      grand_sgst,
+            'grand_total':     grand_total,
+            'pharmacy':        request.tenant,
+        }
+
+        return render(request, self.template_name, context)
+
+
+# ============================================================
+#  PURCHASE ANALYSIS DASHBOARD
+# ============================================================
+
+class PurchaseAnalysisView(View):
+    """
+    Advanced purchase analytics: KPIs, supplier spending, GST breakdown,
+    monthly trend, top products, expiry risk, payment mode split.
+    """
+    template_name = 'reports/purchase_analysis.html'
+
+    def get(self, request):
+        # ── Date range (default = current month) ─────────────────────────────
+        today = now().date()
+        start_date_str = request.GET.get('start_date')
+        end_date_str   = request.GET.get('end_date')
+
+        start_date = today.replace(day=1)
+        end_date   = today
+
+        if start_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+        if end_date_str:
+            try:
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                pass
+
+        purchases = PurchaseInvoice.objects.filter(
+            tenant=request.tenant,
+            purchase_date__gte=start_date,
+            purchase_date__lte=end_date,
+        ).select_related('supplier')
+
+        purchase_items = PurchaseItem.objects.filter(
+            tenant=request.tenant,
+            purchase_invoice__purchase_date__gte=start_date,
+            purchase_invoice__purchase_date__lte=end_date,
+        ).select_related('product', 'purchase_invoice', 'purchase_invoice__supplier')
+
+        # ── KPI Aggregates ────────────────────────────────────────────────────
+        kpi = purchases.aggregate(
+            count=Count('id'),
+            total=Sum('total_amount'),
+            total_tax=Sum('tax_amount'),
+        )
+        kpi['count']     = kpi['count'] or 0
+        kpi['total']     = kpi['total'] or Decimal('0')
+        kpi['total_tax'] = kpi['total_tax'] or Decimal('0')
+        kpi['avg']       = (kpi['total'] / kpi['count']).quantize(Decimal('0.01')) if kpi['count'] else Decimal('0')
+        kpi['unique_suppliers'] = purchases.exclude(supplier=None).values('supplier').distinct().count()
+
+        # ── Supplier-wise spending (top 10) ───────────────────────────────────
+        supplier_spending = list(
+            purchases.values('supplier__name').annotate(
+                total=Sum('total_amount'),
+                count=Count('id'),
+            ).order_by('-total')[:10]
+        )
+
+        # ── GST-rate breakdown ────────────────────────────────────────────────
+        gst_breakdown = list(
+            purchase_items.values('tax_percentage').annotate(
+                taxable_value=Sum(
+                    ExpressionWrapper(
+                        F('quantity') * F('purchase_price'),
+                        output_field=DecimalField(max_digits=15, decimal_places=2)
+                    )
+                ),
+                tax_collected=Sum(
+                    ExpressionWrapper(
+                        F('quantity') * F('purchase_price') * F('tax_percentage') / 100,
+                        output_field=DecimalField(max_digits=15, decimal_places=2)
+                    )
+                ),
+            ).order_by('tax_percentage')
+        )
+
+        # ── Monthly trend (last 6 months) ─────────────────────────────────────
+        monthly_trend = []
+        for i in range(5, -1, -1):
+            m = (today.month - i - 1) % 12 + 1
+            y = today.year - ((today.month - i - 1) // 12)
+            m_start = datetime(y, m, 1).date()
+            if m == 12:
+                m_end = datetime(y + 1, 1, 1).date() - timedelta(days=1)
+            else:
+                m_end = datetime(y, m + 1, 1).date() - timedelta(days=1)
+            m_total = PurchaseInvoice.objects.filter(
+                tenant=request.tenant,
+                purchase_date__gte=m_start,
+                purchase_date__lte=m_end,
+            ).aggregate(t=Sum('total_amount'))['t'] or Decimal('0')
+            monthly_trend.append({
+                'month': datetime(y, m, 1).strftime('%b %Y'),
+                'total': float(m_total),
+            })
+
+        # ── Top purchased products (by qty) ───────────────────────────────────
+        top_products = list(
+            purchase_items.values('product__product_name').annotate(
+                qty=Sum('quantity'),
+                value=Sum(
+                    ExpressionWrapper(
+                        F('quantity') * F('purchase_price'),
+                        output_field=DecimalField(max_digits=15, decimal_places=2)
+                    )
+                ),
+            ).order_by('-qty')[:10]
+        )
+
+        # ── Payment mode split ────────────────────────────────────────────────
+        payment_mode = list(
+            purchases.values('payment_mode').annotate(
+                count=Count('id'),
+                total=Sum('total_amount'),
+            )
+        )
+
+        # ── Expiry risk — stock expiring in next 90 days ──────────────────────
+        expiry_threshold = today + timedelta(days=90)
+        expiry_risk = StockBatch.objects.filter(
+            tenant=request.tenant,
+            current_quantity__gt=0,
+            expiry_date__lte=expiry_threshold,
+            expiry_date__gte=today,
+        ).select_related('product').order_by('expiry_date')[:20]
+
+        expiry_value = Decimal('0')
+        for b in expiry_risk:
+            conv = Decimal(str(b.product.conversion_factor or 1))
+            pp   = Decimal(str(b.purchase_price or 0))
+            expiry_value += (pp / conv) * b.current_quantity
+
+        # ── JSON for Chart.js ─────────────────────────────────────────────────
+        supplier_labels = json_module.dumps([s['supplier__name'] or 'Unknown' for s in supplier_spending])
+        supplier_values = json_module.dumps([float(s['total'] or 0) for s in supplier_spending])
+
+        gst_labels = json_module.dumps([f"{g['tax_percentage']}%" for g in gst_breakdown])
+        gst_values = json_module.dumps([float(g['taxable_value'] or 0) for g in gst_breakdown])
+
+        trend_labels = json_module.dumps([m['month'] for m in monthly_trend])
+        trend_values = json_module.dumps([m['total'] for m in monthly_trend])
+
+        context = {
+            'start_date': start_date,
+            'end_date':   end_date,
+            'kpi':               kpi,
+            'supplier_spending': supplier_spending,
+            'gst_breakdown':     gst_breakdown,
+            'monthly_trend':     monthly_trend,
+            'top_products':      top_products,
+            'payment_mode':      payment_mode,
+            'expiry_risk':       expiry_risk,
+            'expiry_value':      expiry_value,
+            # chart JSON
+            'supplier_labels': supplier_labels,
+            'supplier_values': supplier_values,
+            'gst_labels':      gst_labels,
+            'gst_values':      gst_values,
+            'trend_labels':    trend_labels,
+            'trend_values':    trend_values,
+        }
+
+        return render(request, self.template_name, context)

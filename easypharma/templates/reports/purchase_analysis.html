@@ -1,0 +1,405 @@
+{% extends 'includes/base.html' %}
+{% load static %}
+
+{% block title %}Purchase Analysis Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4" id="purchase-analysis-page">
+
+  <!-- ── Header ─────────────────────────────────────────────────────── -->
+  <div class="row align-items-center mb-4">
+    <div class="col-md-7">
+      <h1 class="h2 fw-bold mb-0">
+        <i class="bi bi-graph-up-arrow text-warning me-2"></i>Purchase Analysis
+      </h1>
+      <p class="text-muted mb-0">Intelligent purchase insights &amp; cost analytics</p>
+    </div>
+    <div class="col-md-5">
+      <form method="GET" class="d-flex gap-2 justify-content-md-end flex-wrap">
+        <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date|date:'Y-m-d' }}" style="max-width:150px;">
+        <input type="date" name="end_date"   class="form-control form-control-sm" value="{{ end_date|date:'Y-m-d' }}"   style="max-width:150px;">
+        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i> Analyze</button>
+      </form>
+      <div class="text-end mt-1">
+        <small class="text-muted">
+          {{ start_date|date:"d M Y" }} &mdash; {{ end_date|date:"d M Y" }}
+        </small>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── KPI Cards ──────────────────────────────────────────────────── -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-xl-3">
+      <div class="card border-0 shadow-sm h-100 kpi-card" style="background:linear-gradient(135deg,#1a1a2e,#16213e);">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="rounded-circle d-flex align-items-center justify-content-center text-white flex-shrink-0"
+               style="width:52px;height:52px;background:rgba(13,110,253,.35);">
+            <i class="bi bi-bag-check fs-4"></i>
+          </div>
+          <div>
+            <div class="small text-white-50 fw-semibold">Total Purchases</div>
+            <div class="h4 fw-bold text-white mb-0">{{ kpi.count }}</div>
+            <div class="small text-info">invoices</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card border-0 shadow-sm h-100 kpi-card" style="background:linear-gradient(135deg,#1b4332,#2d6a4f);">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="rounded-circle d-flex align-items-center justify-content-center text-white flex-shrink-0"
+               style="width:52px;height:52px;background:rgba(25,135,84,.35);">
+            <i class="bi bi-currency-rupee fs-4"></i>
+          </div>
+          <div>
+            <div class="small text-white-50 fw-semibold">Total Spent</div>
+            <div class="h4 fw-bold text-white mb-0">₹{{ kpi.total|floatformat:0 }}</div>
+            <div class="small text-success-emphasis">including tax</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card border-0 shadow-sm h-100 kpi-card" style="background:linear-gradient(135deg,#4a1942,#6b2a62);">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="rounded-circle d-flex align-items-center justify-content-center text-white flex-shrink-0"
+               style="width:52px;height:52px;background:rgba(220,53,69,.3);">
+            <i class="bi bi-receipt fs-4"></i>
+          </div>
+          <div>
+            <div class="small text-white-50 fw-semibold">Avg Invoice Value</div>
+            <div class="h4 fw-bold text-white mb-0">₹{{ kpi.avg|floatformat:0 }}</div>
+            <div class="small text-warning">per purchase</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card border-0 shadow-sm h-100 kpi-card" style="background:linear-gradient(135deg,#7f4012,#9c4f1a);">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="rounded-circle d-flex align-items-center justify-content-center text-white flex-shrink-0"
+               style="width:52px;height:52px;background:rgba(255,193,7,.25);">
+            <i class="bi bi-people fs-4"></i>
+          </div>
+          <div>
+            <div class="small text-white-50 fw-semibold">Active Suppliers</div>
+            <div class="h4 fw-bold text-white mb-0">{{ kpi.unique_suppliers }}</div>
+            <div class="small text-warning">in this period</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Row 1: Trend Chart + Payment Mode ─────────────────────────── -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-8">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header border-0 py-3" style="background:linear-gradient(135deg,#0d6efd15,#0a58ca10);">
+          <h6 class="fw-bold mb-0"><i class="bi bi-graph-up me-2 text-primary"></i>6-Month Purchase Trend</h6>
+        </div>
+        <div class="card-body">
+          <canvas id="trendChart" height="100"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header border-0 py-3" style="background:linear-gradient(135deg,#19875415,#146c4310);">
+          <h6 class="fw-bold mb-0"><i class="bi bi-pie-chart me-2 text-success"></i>Payment Mode Split</h6>
+        </div>
+        <div class="card-body">
+          {% if payment_mode %}
+          <div class="mb-3">
+            {% for pm in payment_mode %}
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div class="d-flex align-items-center gap-2">
+                <div class="rounded-circle" style="width:10px;height:10px;background:{% if pm.payment_mode == 'Cash' %}#198754{% else %}#0d6efd{% endif %};"></div>
+                <span class="fw-semibold small">{{ pm.payment_mode }}</span>
+              </div>
+              <div class="text-end">
+                <span class="fw-bold">₹{{ pm.total|floatformat:0 }}</span>
+                <small class="text-muted d-block">{{ pm.count }} invoice{{ pm.count|pluralize }}</small>
+              </div>
+            </div>
+            {% with pct=pm.total|default:0 %}
+            <div class="progress mb-2" style="height:6px;">
+              <div class="progress-bar {% if pm.payment_mode == 'Cash' %}bg-success{% else %}bg-primary{% endif %}"
+                   style="width:{{ pct|floatformat:0 }}%;"></div>
+            </div>
+            {% endwith %}
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="text-muted text-center py-4">No data</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Row 2: Supplier Spending + GST Breakdown ───────────────────── -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-7">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header border-0 py-3" style="background:linear-gradient(135deg,#ff670015,#e5600010);">
+          <h6 class="fw-bold mb-0"><i class="bi bi-bar-chart-horizontal me-2 text-warning"></i>Top Suppliers by Spend</h6>
+        </div>
+        <div class="card-body">
+          <canvas id="supplierChart" height="160"></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-5">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header border-0 py-3" style="background:linear-gradient(135deg,#6f42c115,#59359a10);">
+          <h6 class="fw-bold mb-0"><i class="bi bi-donut me-2 text-purple"></i>GST Rate Breakdown</h6>
+        </div>
+        <div class="card-body d-flex flex-column">
+          <canvas id="gstChart" style="max-height:200px;"></canvas>
+          <div class="mt-3">
+            {% for g in gst_breakdown %}
+            <div class="d-flex justify-content-between small mb-1">
+              <span class="fw-semibold">{{ g.tax_percentage }}% GST</span>
+              <span class="text-muted">₹{{ g.taxable_value|floatformat:0 }} taxable &nbsp;|&nbsp; ₹{{ g.tax_collected|floatformat:0 }} tax</span>
+            </div>
+            {% empty %}
+            <p class="text-muted small text-center">No data</p>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Row 3: Top Products + Expiry Risk ─────────────────────────── -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header border-0 py-3 d-flex justify-content-between align-items-center"
+             style="background:linear-gradient(135deg,#0d6efd15,#0a58ca08);">
+          <h6 class="fw-bold mb-0"><i class="bi bi-boxes me-2 text-primary"></i>Top Purchased Products</h6>
+          <span class="badge bg-primary">by Qty</span>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0 align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th>#</th>
+                  <th>Product</th>
+                  <th class="text-end">Qty</th>
+                  <th class="text-end">Value (₹)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for p in top_products %}
+                <tr>
+                  <td class="text-muted small">{{ forloop.counter }}</td>
+                  <td class="fw-semibold small">{{ p.product__product_name }}</td>
+                  <td class="text-end">
+                    <span class="badge bg-primary bg-opacity-15 text-primary fw-bold">{{ p.qty }}</span>
+                  </td>
+                  <td class="text-end fw-semibold text-success small">₹{{ p.value|floatformat:0 }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="text-center text-muted py-3">No data</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header border-0 py-3 d-flex justify-content-between align-items-center"
+             style="background:linear-gradient(135deg,#dc354515,#b0203510);">
+          <h6 class="fw-bold mb-0"><i class="bi bi-exclamation-triangle me-2 text-danger"></i>Expiry Risk (Next 90 Days)</h6>
+          <span class="badge bg-danger">Value at Risk: ₹{{ expiry_value|floatformat:0 }}</span>
+        </div>
+        <div class="card-body p-0">
+          {% if expiry_risk %}
+          <div class="table-responsive" style="max-height:280px;overflow-y:auto;">
+            <table class="table table-hover table-sm mb-0 align-middle">
+              <thead class="table-danger sticky-top">
+                <tr>
+                  <th>Product</th>
+                  <th>Batch</th>
+                  <th class="text-end">Expiry</th>
+                  <th class="text-end">Qty</th>
+                  <th class="text-end">Risk (₹)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for b in expiry_risk %}
+                <tr class="{% if b.expiry_date|date:'Y-m-d' <= expiry_critical %}table-danger{% endif %}">
+                  <td class="fw-semibold small">{{ b.product.product_name }}</td>
+                  <td class="small text-muted">{{ b.batch_number }}</td>
+                  <td class="text-end small">
+                    <span class="badge bg-danger bg-opacity-15 text-danger">{{ b.expiry_date|date:"M Y" }}</span>
+                  </td>
+                  <td class="text-end fw-bold">{{ b.current_quantity }}</td>
+                  <td class="text-end fw-semibold text-danger small">
+                    ₹{% widthratio b.purchase_price b.product.conversion_factor b.current_quantity %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="text-center py-4 text-success">
+            <i class="bi bi-check-circle-fill display-4 d-block mb-2"></i>
+            <strong>No expiry risk!</strong>
+            <p class="small text-muted mb-0">No items expiring in the next 90 days.</p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Supplier Details Table ────────────────────────────────────── -->
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-header border-0 py-3" style="background:linear-gradient(135deg,#33333315,#22222210);">
+      <h6 class="fw-bold mb-0"><i class="bi bi-table me-2"></i>Supplier-wise Spending Summary</h6>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-dark">
+            <tr>
+              <th>#</th>
+              <th>Supplier</th>
+              <th class="text-end">No. of Invoices</th>
+              <th class="text-end">Total Spend (₹)</th>
+              <th class="text-end">Avg per Invoice (₹)</th>
+              <th>Spend Share</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in supplier_spending %}
+            {% with total_spend=kpi.total %}
+            <tr>
+              <td class="text-muted small">{{ forloop.counter }}</td>
+              <td class="fw-semibold">{{ s.supplier__name|default:"Unknown" }}</td>
+              <td class="text-end">{{ s.count }}</td>
+              <td class="text-end fw-bold text-success">₹{{ s.total|floatformat:0 }}</td>
+              <td class="text-end text-muted small">
+                {% if s.count > 0 %}₹{% widthratio s.total s.count 1 %}{% else %}—{% endif %}
+              </td>
+              <td style="min-width:120px;">
+                <div class="d-flex align-items-center gap-2">
+                  <div class="progress flex-grow-1" style="height:6px;">
+                    <div class="progress-bar bg-warning" style="width:{% if total_spend and total_spend > 0 %}{% widthratio s.total total_spend 100 %}{% else %}0{% endif %}%;"></div>
+                  </div>
+                  <small class="text-muted fw-semibold" style="min-width:32px;">
+                    {% if total_spend and total_spend > 0 %}{% widthratio s.total total_spend 100 %}%{% else %}0%{% endif %}
+                  </small>
+                </div>
+              </td>
+            </tr>
+            {% endwith %}
+            {% empty %}
+            <tr><td colspan="6" class="text-center text-muted py-4">No purchase data for selected period</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Styles ──────────────────────────────────────────────────────── -->
+<style>
+.kpi-card { transition: transform 0.2s, box-shadow 0.2s; }
+.kpi-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,.15) !important; }
+thead.sticky-top th { position: sticky; top: 0; z-index: 1; }
+</style>
+
+<!-- ── Chart.js ────────────────────────────────────────────────────── -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const supplierLabels = {{ supplier_labels|safe }};
+const supplierValues = {{ supplier_values|safe }};
+const gstLabels      = {{ gst_labels|safe }};
+const gstValues      = {{ gst_values|safe }};
+const trendLabels    = {{ trend_labels|safe }};
+const trendValues    = {{ trend_values|safe }};
+
+// ── Trend Line Chart ────────────────────────────────────────────────
+new Chart(document.getElementById('trendChart'), {
+  type: 'line',
+  data: {
+    labels: trendLabels,
+    datasets: [{
+      label: 'Purchase Amount (₹)',
+      data: trendValues,
+      borderColor: '#0d6efd',
+      backgroundColor: 'rgba(13,110,253,0.1)',
+      tension: 0.4,
+      fill: true,
+      pointBackgroundColor: '#0d6efd',
+      pointRadius: 5,
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: {
+        ticks: { callback: v => '₹' + v.toLocaleString('en-IN') },
+        grid: { color: 'rgba(0,0,0,0.05)' }
+      }
+    }
+  }
+});
+
+// ── Supplier Bar Chart ──────────────────────────────────────────────
+new Chart(document.getElementById('supplierChart'), {
+  type: 'bar',
+  data: {
+    labels: supplierLabels,
+    datasets: [{
+      label: 'Spend (₹)',
+      data: supplierValues,
+      backgroundColor: supplierLabels.map((_, i) => `hsl(${30 + i * 15}, 75%, 50%)`),
+      borderRadius: 6,
+    }]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { callback: v => '₹' + v.toLocaleString('en-IN') } }
+    }
+  }
+});
+
+// ── GST Donut Chart ─────────────────────────────────────────────────
+new Chart(document.getElementById('gstChart'), {
+  type: 'doughnut',
+  data: {
+    labels: gstLabels,
+    datasets: [{
+      data: gstValues,
+      backgroundColor: ['#0d6efd','#198754','#ffc107','#dc3545','#6f42c1','#20c997'],
+      borderWidth: 2,
+      borderColor: '#fff',
+    }]
+  },
+  options: {
+    responsive: true,
+    cutout: '65%',
+    plugins: {
+      legend: { position: 'bottom', labels: { boxWidth: 12, padding: 10 } }
+    }
+  }
+});
+</script>
+{% endblock %}
