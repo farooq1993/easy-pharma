@@ -165,7 +165,7 @@
                                         <i class="fas fa-edit"></i>
                                     </a>
                                     <button class="btn btn-sm btn-outline-danger border-0"
-                                        onclick="deleteInvoice({{ invoice.id }}, '{{ invoice.voucher_number|default:invoice.invoice_number }}')"
+                                        onclick="deleteInvoice({{ invoice.id }}, { voucher:'{{ invoice.voucher_number|default:invoice.invoice_number }}', supplier:'{{ invoice.supplier.name|escapejs }}', invoice:'{{ invoice.invoice_number|escapejs }}' })"
                                         title="Delete">
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
@@ -299,33 +299,112 @@
     <span id="listToastMsg"></span>
 </div>
 
+<!-- ── Delete Confirmation Modal ──────────────────────────────────────────── -->
+<div class="modal fade" id="purchaseDeleteModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:400px;">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:20px; overflow:hidden;">
+
+            <!-- Red header -->
+            <div style="background:linear-gradient(135deg,#991b1b 0%,#ef4444 100%); padding:28px 24px 20px; text-align:center;">
+                <div style="width:60px;height:60px;background:rgba(255,255,255,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+                    <i class="fas fa-trash-alt" style="font-size:1.7rem;color:#fff;"></i>
+                </div>
+                <h5 style="color:#fff;font-weight:700;margin:0;font-size:1.05rem;">Delete Purchase Invoice?</h5>
+                <p style="color:rgba(255,255,255,0.82);margin:4px 0 0;font-size:0.82rem;">This will reverse all stock entries</p>
+            </div>
+
+            <!-- Details strip -->
+            <div style="background:#fef2f2;padding:20px 24px;">
+                <div style="background:#fff;border-radius:12px;border:1px solid #fecaca;padding:12px 16px;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span style="font-size:0.8rem;color:#6b7280;">Voucher No.</span>
+                        <span id="delConfirmVoucher" style="font-size:0.85rem;font-weight:700;color:#111;font-family:monospace;"></span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span style="font-size:0.8rem;color:#6b7280;">Supplier</span>
+                        <span id="delConfirmSupplier" style="font-size:0.82rem;font-weight:600;color:#111;max-width:200px;text-align:right;"></span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span style="font-size:0.8rem;color:#6b7280;">Invoice No.</span>
+                        <span id="delConfirmInvoice" style="font-size:0.82rem;font-weight:600;color:#111;"></span>
+                    </div>
+                </div>
+                <p style="font-size:0.78rem;color:#dc2626;margin:12px 0 0;text-align:center;">
+                    <i class="fas fa-exclamation-triangle me-1"></i>
+                    Stock quantities will be reduced. This cannot be undone.
+                </p>
+            </div>
+
+            <!-- Buttons -->
+            <div style="padding:0 24px 24px;background:#fef2f2;display:flex;gap:10px;">
+                <button type="button" data-bs-dismiss="modal"
+                        style="flex:1;padding:11px;border:1.5px solid #d1d5db;border-radius:10px;
+                               background:#fff;color:#374151;font-weight:600;font-size:0.88rem;cursor:pointer;">
+                    <i class="fas fa-times me-1"></i> Cancel
+                </button>
+                <button type="button" id="confirmDeleteBtn" onclick="executeDelete()"
+                        style="flex:1;padding:11px;border:none;border-radius:10px;
+                               background:linear-gradient(135deg,#991b1b,#ef4444);
+                               color:#fff;font-weight:700;font-size:0.88rem;cursor:pointer;">
+                    <i class="fas fa-trash-alt me-1"></i> Delete
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
 <script>
-// ── Delete invoice ────────────────────────────────────────────────────────
-async function deleteInvoice(id, label) {
-    if (!confirm(`Delete ${label}?\n\nThis will remove the invoice AND revert stock levels. This cannot be undone.`)) return;
+let _deleteId = null;
+
+// ── Open delete modal ─────────────────────────────────────────────────────
+function deleteInvoice(id, meta) {
+    _deleteId = id;
+    document.getElementById('delConfirmVoucher').textContent  = meta.voucher  || '—';
+    document.getElementById('delConfirmSupplier').textContent = meta.supplier || '—';
+    document.getElementById('delConfirmInvoice').textContent  = meta.invoice  || '—';
+    bootstrap.Modal.getOrCreateInstance(
+        document.getElementById('purchaseDeleteModal')
+    ).show();
+}
+
+// ── Execute delete after confirmation ─────────────────────────────────────
+async function executeDelete() {
+    if (!_deleteId) return;
+
+    const btn = document.getElementById('confirmDeleteBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Deleting...';
 
     try {
-        const response = await fetch(`/purchase/delete/${id}/`, {
-            method: 'DELETE',
-            headers: {
-                'X-CSRFToken': '{{ csrf_token }}',
-                'Content-Type': 'application/json'
-            }
+        const resp = await fetch(`/delete/${_deleteId}/`, {
+            method:  'DELETE',
+            headers: { 'X-CSRFToken': '{{ csrf_token }}' },
         });
-        const result = await response.json();
+        const result = await resp.json();
+
+        bootstrap.Modal.getInstance(
+            document.getElementById('purchaseDeleteModal')
+        ).hide();
+
         if (result.success) {
-            const row = document.getElementById(`invoice-${id}`);
+            const row = document.getElementById(`invoice-${_deleteId}`);
             if (row) {
-                row.style.transition = 'opacity 0.3s';
-                row.style.opacity = '0';
-                setTimeout(() => row.remove(), 300);
+                row.style.transition = 'opacity 0.35s, transform 0.35s';
+                row.style.opacity    = '0';
+                row.style.transform  = 'translateX(30px)';
+                setTimeout(() => row.remove(), 350);
             }
-            showToast('Invoice deleted and stock reverted.');
+            showToast('Invoice deleted — stock reverted.');
         } else {
-            alert('Error: ' + result.error);
+            showToast('Error: ' + (result.error || 'Delete failed'), 'error');
         }
     } catch (err) {
-        alert('Network error: ' + err.message);
+        showToast('Network error: ' + err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-trash-alt me-1"></i> Delete';
+        _deleteId = null;
     }
 }
 
@@ -359,12 +438,15 @@ function jumpToPage() {
 }
 
 // ── Toast helper ─────────────────────────────────────────────────────────
-function showToast(msg) {
+function showToast(msg, type = 'success') {
     const toast = document.getElementById('listToast');
     document.getElementById('listToastMsg').textContent = msg;
+    toast.style.background = type === 'error' ? '#DC2626' : '#16A34A';
+    const icon = toast.querySelector('i');
+    if (icon) icon.className = type === 'error' ? 'fas fa-exclamation-circle' : 'fas fa-check-circle';
     toast.style.display = 'flex';
     clearTimeout(toast._t);
-    toast._t = setTimeout(() => { toast.style.display = 'none'; }, 2500);
+    toast._t = setTimeout(() => { toast.style.display = 'none'; }, 3000);
 }
 
 // ── Live search (debounced) ───────────────────────────────────────────────
