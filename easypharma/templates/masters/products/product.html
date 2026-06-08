@@ -197,9 +197,9 @@
       </div>
       <div class="modal-body">
         <form id="quickAddForm" onsubmit="event.preventDefault(); submitQuickAdd();">
-            <input type="hidden" id="qaMasterType">
-            <input type="hidden" id="qaSelectId">
-            <input type="hidden" id="qaFieldName">
+            <input type="hidden" id="qaMasterType" autocomplete="off">
+            <input type="hidden" id="qaSelectId" autocomplete="off">
+            <input type="hidden" id="qaFieldName" autocomplete="off">
             
             <div class="mb-3">
                 <label id="qaNameLabel" class="form-label fw-bold small text-uppercase">Name *</label>
@@ -254,55 +254,57 @@ function openQuickAdd(masterType, selectId, title, fieldName) {
 
 function submitQuickAdd() {
     const masterType = document.getElementById('qaMasterType').value;
-    const selectId = document.getElementById('qaSelectId').value;
-    const fieldName = document.getElementById('qaFieldName').value;
-    const nameVal = document.getElementById('qaNameInput').value.trim();
-    
-    if (!nameVal) {
-        alert('Please enter a name');
-        return;
-    }
-    
+    const selectId   = document.getElementById('qaSelectId').value;  
+    const fieldName  = document.getElementById('qaFieldName').value.toLowerCase();
+    const nameVal    = document.getElementById('qaNameInput').value.trim();
+
+    if (!nameVal) { alert('Please enter a name'); return; }
+
     const formData = new FormData();
     formData.append(fieldName, nameVal);
     formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
-    
+
     if (masterType === 'drug-company') {
         formData.append('sht_name', document.getElementById('qaShortNameInput').value.trim());
     }
-    
+
     const saveBtn = document.getElementById('qaSaveBtn');
-    const originalText = saveBtn.innerText;
     saveBtn.innerText = 'Saving...';
-    saveBtn.disabled = true;
-    
+    saveBtn.disabled  = true;
+
     fetch('/type/' + masterType + '/', {
         method: 'POST',
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-        },
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
         body: formData
     })
-    .then(response => response.json())
+    .then(r => r.json())
     .then(data => {
-        saveBtn.innerText = originalText;
-        saveBtn.disabled = false;
-        
+        saveBtn.innerText = 'Save';
+        saveBtn.disabled  = false;
+
         if (data.success) {
-            const select = document.getElementById(selectId);
-            const option = new Option(data.name, data.id, true, true);
-            select.add(option);
-            
+            // ← case-insensitive id match — browser autocomplete uppercases hidden inputs
+            const select = [...document.querySelectorAll('select')].find(
+                el => el.id.toLowerCase() === selectId.toLowerCase()
+            );
+
+            if (select) {
+                const option = new Option(data.name, data.id, true, true);
+                select.add(option);
+                select.value = String(data.id);  // auto-select the new item
+            } else {
+                console.warn('Select not found:', selectId);
+            }
             qaModal.hide();
         } else {
             alert('Error: ' + data.error);
         }
     })
-    .catch(error => {
-        saveBtn.innerText = originalText;
-        saveBtn.disabled = false;
+    .catch(err => {
+        saveBtn.innerText = 'Save';
+        saveBtn.disabled  = false;
         alert('An error occurred while saving.');
-        console.error(error);
+        console.error(err);
     });
 }
 

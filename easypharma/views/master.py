@@ -17,6 +17,11 @@ class MasterCRUDView(View):
     Generic view to handle CRUD for all master models.
     """
     http_method_names = ['get', 'post', 'patch', 'delete']
+
+    def dispatch(self, request, *args, **kwargs):
+        if 'master_type' in kwargs:
+            kwargs['master_type'] = kwargs['master_type'].lower()
+        return super().dispatch(request, *args, **kwargs)
     
     def get_model(self, master_type):
         models_map = {
