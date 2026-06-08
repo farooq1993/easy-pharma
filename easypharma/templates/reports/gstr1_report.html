@@ -1,0 +1,203 @@
+{% extends 'includes/base.html' %}
+{% load static %}
+
+{% block title %}GSTR-1 Bill Report — {{ month_name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4" id="gstr1-page">
+
+  <!-- ── Header ─────────────────────────────────────────────────────── -->
+  <div class="row align-items-center mb-4">
+    <div class="col-md-7">
+      <h1 class="h2 fw-bold mb-0">
+        <i class="bi bi-file-earmark-spreadsheet text-success me-2"></i>GSTR-1 Bill-wise Report
+      </h1>
+      <p class="text-muted mb-0">Invoice-wise Outward Supply Details &mdash; {{ month_name }}</p>
+    </div>
+    <div class="col-md-5">
+      <form method="GET" class="d-flex gap-2 justify-content-md-end flex-wrap" id="gstr1FilterForm">
+        <select name="month" class="form-select form-select-sm" style="max-width:130px;">
+          <option value="1"  {% if month == 1  %}selected{% endif %}>January</option>
+          <option value="2"  {% if month == 2  %}selected{% endif %}>February</option>
+          <option value="3"  {% if month == 3  %}selected{% endif %}>March</option>
+          <option value="4"  {% if month == 4  %}selected{% endif %}>April</option>
+          <option value="5"  {% if month == 5  %}selected{% endif %}>May</option>
+          <option value="6"  {% if month == 6  %}selected{% endif %}>June</option>
+          <option value="7"  {% if month == 7  %}selected{% endif %}>July</option>
+          <option value="8"  {% if month == 8  %}selected{% endif %}>August</option>
+          <option value="9"  {% if month == 9  %}selected{% endif %}>September</option>
+          <option value="10" {% if month == 10 %}selected{% endif %}>October</option>
+          <option value="11" {% if month == 11 %}selected{% endif %}>November</option>
+          <option value="12" {% if month == 12 %}selected{% endif %}>December</option>
+        </select>
+        <input type="number" name="year" class="form-control form-control-sm" value="{{ year }}" min="2020" max="2030" style="max-width:90px;">
+        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i> View</button>
+        <button type="button" id="exportCsvBtn" class="btn btn-sm btn-success">
+          <i class="bi bi-file-earmark-arrow-down me-1"></i>Export CSV
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Pharmacy strip ────────────────────────────────────────────── -->
+  <div class="card mb-4 border-0 shadow-sm" style="background:linear-gradient(135deg,#1b4332,#2d6a4f);color:#fff;">
+    <div class="card-body py-3">
+      <div class="row">
+        <div class="col-md-3">
+          <small class="opacity-60 d-block">GSTIN</small>
+          <strong>{{ pharmacy.gst_number|default:"Not Configured" }}</strong>
+        </div>
+        <div class="col-md-3">
+          <small class="opacity-60 d-block">Pharmacy</small>
+          <strong>{{ pharmacy.pharmacy_name|default:"—" }}</strong>
+        </div>
+        <div class="col-md-3">
+          <small class="opacity-60 d-block">Period</small>
+          <strong>{{ month_name }}</strong>
+        </div>
+        <div class="col-md-3">
+          <small class="opacity-60 d-block">Return Type</small>
+          <strong>GSTR-1 (B2C Retail)</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Summary Cards ─────────────────────────────────────────────── -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card h-100 border-0 shadow-sm text-center" style="background:linear-gradient(135deg,#e3f2fd,#bbdefb);">
+        <div class="card-body py-3">
+          <i class="bi bi-receipt fs-3 text-primary mb-1"></i>
+          <div class="small text-muted fw-semibold">Total Invoices</div>
+          <div class="h3 fw-bold text-primary mb-0">{{ total_invoices }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card h-100 border-0 shadow-sm text-center" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9);">
+        <div class="card-body py-3">
+          <i class="bi bi-currency-rupee fs-3 text-success mb-1"></i>
+          <div class="small text-muted fw-semibold">Taxable Value</div>
+          <div class="h4 fw-bold text-success mb-0">₹{{ grand_taxable|floatformat:2 }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card h-100 border-0 shadow-sm text-center" style="background:linear-gradient(135deg,#fff3e0,#ffe0b2);">
+        <div class="card-body py-3">
+          <i class="bi bi-percent fs-3 text-warning mb-1"></i>
+          <div class="small text-muted fw-semibold">CGST + SGST</div>
+          <div class="h4 fw-bold text-warning mb-0">₹{% widthratio grand_cgst 1 1 %}{{ grand_cgst|floatformat:2 }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card h-100 border-0 shadow-sm text-center" style="background:linear-gradient(135deg,#fce4ec,#f8bbd0);">
+        <div class="card-body py-3">
+          <i class="bi bi-cash-stack fs-3 text-danger mb-1"></i>
+          <div class="small text-muted fw-semibold">Total Invoice Value</div>
+          <div class="h4 fw-bold text-danger mb-0">₹{{ grand_total|floatformat:2 }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Bill-wise Table ───────────────────────────────────────────── -->
+  <div class="card border-0 shadow-sm">
+    <div class="card-header border-0 py-3 d-flex align-items-center justify-content-between"
+         style="background:linear-gradient(135deg,#198754,#146c43);">
+      <h5 class="text-white fw-bold mb-0">
+        <i class="bi bi-table me-2"></i>Bill-wise Details (B2CS — B2C Retail Supplies)
+      </h5>
+      <span class="badge bg-light text-dark fw-semibold">{{ total_invoices }} Invoice{{ total_invoices|pluralize }}</span>
+    </div>
+    <div class="card-body p-0">
+      {% if bill_rows %}
+      <div class="table-responsive">
+        <table class="table table-hover table-sm align-middle mb-0" id="gstr1Table">
+          <thead class="table-dark sticky-top">
+            <tr>
+              <th>#</th>
+              <th>Invoice No</th>
+              <th>Date</th>
+              <th>Customer / Patient</th>
+              <th>Sale Type</th>
+              <th>Payment</th>
+              <th class="text-end">Taxable Value (₹)</th>
+              <th class="text-end">CGST (₹)</th>
+              <th class="text-end">SGST (₹)</th>
+              <th class="text-end">IGST (₹)</th>
+              <th class="text-end">Total Tax (₹)</th>
+              <th class="text-end">Invoice Total (₹)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in bill_rows %}
+            <tr>
+              <td class="text-muted small">{{ forloop.counter }}</td>
+              <td><strong class="text-primary">{{ row.invoice_number }}</strong></td>
+              <td class="small">{{ row.date }}</td>
+              <td class="small">{{ row.customer }}</td>
+              <td>
+                {% if row.sale_type == 'Counter' %}
+                  <span class="badge bg-primary bg-opacity-10 text-primary">Counter</span>
+                {% else %}
+                  <span class="badge bg-success bg-opacity-10 text-success">Rx</span>
+                {% endif %}
+              </td>
+              <td><span class="badge bg-secondary bg-opacity-15 text-secondary small">{{ row.payment_mode }}</span></td>
+              <td class="text-end fw-semibold">{{ row.taxable_value|floatformat:2 }}</td>
+              <td class="text-end text-info">{{ row.cgst|floatformat:2 }}</td>
+              <td class="text-end text-info">{{ row.sgst|floatformat:2 }}</td>
+              <td class="text-end text-muted">0.00</td>
+              <td class="text-end text-warning fw-semibold">{{ row.total_tax|floatformat:2 }}</td>
+              <td class="text-end fw-bold text-success">{{ row.total|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot class="table-success fw-bold">
+            <tr>
+              <td colspan="6" class="text-end">GRAND TOTAL</td>
+              <td class="text-end">₹{{ grand_taxable|floatformat:2 }}</td>
+              <td class="text-end">₹{{ grand_cgst|floatformat:2 }}</td>
+              <td class="text-end">₹{{ grand_sgst|floatformat:2 }}</td>
+              <td class="text-end">₹0.00</td>
+              <td class="text-end">₹{% with t=grand_cgst|add:grand_sgst %}{{ t|floatformat:2 }}{% endwith %}</td>
+              <td class="text-end fs-6">₹{{ grand_total|floatformat:2 }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      {% else %}
+      <div class="text-center py-5 text-muted">
+        <i class="bi bi-inbox display-4 d-block mb-3 opacity-40"></i>
+        <h5>No invoices found for {{ month_name }}</h5>
+        <p class="small">Try selecting a different month or year.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="text-muted small text-center mt-3">
+    <i class="bi bi-info-circle me-1"></i>
+    All supplies are treated as <strong>B2C (Intra-state)</strong> — CGST + SGST split. IGST = ₹0.
+    Export this report as CSV to upload on the GST portal.
+  </div>
+
+</div>
+
+<style>
+  thead.sticky-top th { position: sticky; top: 0; z-index: 1; }
+  @media print { .sidebar, nav, .btn, form { display:none !important; } }
+</style>
+
+<script>
+document.getElementById('exportCsvBtn').addEventListener('click', function () {
+  const form = document.getElementById('gstr1FilterForm');
+  const month = form.querySelector('[name="month"]').value;
+  const year  = form.querySelector('[name="year"]').value;
+  window.location.href = `?month=${month}&year=${year}&csv=1`;
+});
+</script>
+{% endblock %}
