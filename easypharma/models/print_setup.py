@@ -8,6 +8,7 @@ class PrintSetup(models.Model):
         ('80mm', '80mm Thermal'),
         ('58mm', '58mm Thermal'),
         ('8x4', 'Epson LX310 Standard (8" × 4" Dot Matrix)'),
+        ('4x6',  'Epson LX310 — 4" × 6" Standard Bill')
     ]
 
     tenant = models.OneToOneField(Tenant, on_delete=models.CASCADE, related_name='print_setup')

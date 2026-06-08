@@ -690,7 +690,11 @@ def parse_product_seed_csv(content):
     import ast
     start_time = time.time()
     _dbg("parse_product_seed_csv: content_len=%d chars", len(content))
+    _dbg("=" * 80)
+    _dbg("CONTENT FIRST 500 CHARS:")
+    _dbg(content[:500])
 
+    
     products = []
     skipped = 0
 
@@ -702,11 +706,33 @@ def parse_product_seed_csv(content):
 
     reader = csv.DictReader(io.StringIO(content), delimiter=delimiter)
 
+    _dbg("FIELDNAMES RAW=%s", reader.fieldnames)
+
+    # BOM cleanup
+    if reader.fieldnames:
+        reader.fieldnames = [
+            str(f).replace('\ufeff', '').strip()
+            for f in reader.fieldnames
+        ]
+    _dbg("FIELDNAMES CLEAN=%s", reader.fieldnames)
+
     # Normalise header names (strip whitespace)
     fieldnames = [f.strip() for f in (reader.fieldnames or [])]
     _dbg("parse_product_seed_csv: detected columns=%s", fieldnames)
 
     for idx, raw_row in enumerate(reader):
+        if idx < 5:
+            _dbg("RAW ROW %d = %s", idx, raw_row)
+
+        row = {
+            str(k).replace('\ufeff', '').strip():
+            (v or '').strip()
+            for k, v in raw_row.items()
+            if k
+        }
+
+        if idx < 5:
+            _dbg("NORMALIZED ROW %d = %s", idx, row)
         try:
             row = {k.strip(): (v or '').strip() for k, v in raw_row.items() if k}
 
@@ -724,12 +750,6 @@ def parse_product_seed_csv(content):
                 skipped += 1
                 continue
 
-            # Build packing string  e.g. "10 STRIP"
-            # packing = ''
-            # if pack_size and pack_unit:
-            #     packing = f"{pack_size} {pack_unit.upper()}"
-            # elif pack_size:
-            #     packing = pack_size
 
             # Parse active_ingredients safely
             active_ingredients = []
