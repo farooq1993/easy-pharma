@@ -753,11 +753,19 @@ Prod.Type : []AYURVEDIC[]
         formData.append("selected_tenant_id", activeTenantId);
         formData.append("csrfmiddlewaretoken", "{{ csrf_token }}");
 
-        if (activeInputMethod === "file") {
+       if (activeInputMethod === "file") {
             if (!selectedFile) {
                 alert("Please select a file to import!");
                 return;
             }
+
+            // Large file => chunk upload
+            if (selectedFile.size > (1024 * 1024)) { // 1MB+
+                handleChunkedUpload(selectedFile);
+                return;
+            }
+
+            // Small file => normal upload
             formData.append("file", selectedFile);
         } else {
             const rawText = document.getElementById("rawTextArea").value;
@@ -810,6 +818,18 @@ Prod.Type : []AYURVEDIC[]
         });
     }
 
+
+    function resetParseUI() {
+
+        document.getElementById("parseSpinner")
+            .classList.add("d-none");
+
+        document.getElementById("parseIcon")
+            .classList.remove("d-none");
+
+        document.getElementById("btnParse")
+            .removeAttribute("disabled");
+    }
     // Poll /migration/parse/status/<job_id>/ until the background parse job completes
     function pollParseJob(jobId) {
         let pollCount = 0;
@@ -975,63 +995,72 @@ Prod.Type : []AYURVEDIC[]
     }
 
     async function handleChunkedUpload(file) {
-        const chunkSize = 3 * 1024 * 1024;   // 3 MB per chunk (Vercel safe)
-        const totalChunks = Math.ceil(file.size / chunkSize);
-        
-        console.log(`Uploading ${file.name} (${(file.size/1024/1024).toFixed(2)} MB) in ${totalChunks} chunks`);
 
-        document.getElementById("parseSpinner").classList.remove("d-none");
-        document.getElementById("btnParse").disabled = true;
+        const uploadJobId = crypto.randomUUID();
+        const chunkSize = 3 * 1024 * 1024;
+        const totalChunks = Math.ceil(file.size / chunkSize);
+
+        let finalResponse = null;
 
         let currentChunk = 0;
 
         while (currentChunk < totalChunks) {
+
             const start = currentChunk * chunkSize;
             const end = Math.min(start + chunkSize, file.size);
+
             const chunk = file.slice(start, end);
 
             const chunkForm = new FormData();
+            
+            chunkForm.append("job_id", uploadJobId);
             chunkForm.append("chunk", chunk, file.name);
             chunkForm.append("chunk_index", currentChunk);
             chunkForm.append("total_chunks", totalChunks);
             chunkForm.append("file_name", file.name);
             chunkForm.append("import_type", activeImportType);
             chunkForm.append("selected_tenant_id", activeTenantId);
-            chunkForm.append("is_chunk", "true");
+            chunkForm.append("is_chunked", "true");
 
-            try {
-                const response = await fetch("{% url 'migration_parse' %}", {
+            const response = await fetch(
+                "{% url 'migration_parse' %}",
+                {
                     method: "POST",
                     headers: {
-                        'X-CSRFToken': getCookie('csrftoken'),
+                        "X-CSRFToken": getCookie("csrftoken")
                     },
                     body: chunkForm
-                });
-
-                const data = await response.json();
-
-                if (!data.success) {
-                    alert("Upload failed: " + (data.error || "Unknown error"));
-                    resetParseUI();
-                    return;
                 }
+            );
 
-                const progress = Math.round(((currentChunk + 1) / totalChunks) * 100);
-                console.log(`✅ Chunk ${currentChunk + 1}/${totalChunks} uploaded - ${progress}%`);
+            const data = await response.json();
 
-                currentChunk++;
-
-            } catch (err) {
-                console.error(err);
-                alert("Chunk upload failed. Please try again.");
+            if (!data.success) {
+                alert(data.error);
                 resetParseUI();
                 return;
             }
+
+            finalResponse = data;
+
+            currentChunk++;
         }
 
-        alert("✅ File successfully uploaded and being processed!");
+        if (finalResponse &&
+            finalResponse.status === "done") {
+
+            parsedRecords = finalResponse.data;
+
+            window.currentParseJobId =
+                finalResponse.job_id;
+
+            renderPreviewTable(
+                finalResponse.data,
+                finalResponse.summary
+            );
+        }
+
         resetParseUI();
-        // Optional: location.reload();
     }
 
     // Step 3: Stream Data and Launch Background Thread
