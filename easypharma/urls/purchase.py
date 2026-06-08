@@ -3,7 +3,7 @@ from easypharma.views.purchase import (PurchaseEntryView, PurchaseListView,
                                         SupplierAutocomplete, SupplierWisePurchaseReportView,
                                         SupplierReportDataView, PurchaseExportCSVView,
                                         PurchaseExportPDFView, PurchaseImportCSVView,
-                                        QuickCreateProductView)
+                                        QuickCreateProductView, ProductBatchHistoryView)
 
 urlpatterns = [
     path('entry/', PurchaseEntryView.as_view(), name='purchase_entry'),
@@ -19,4 +19,5 @@ urlpatterns = [
     path('export/csv/', PurchaseExportCSVView.as_view(), name='purchase_export_csv'),
     path('export/pdf/', PurchaseExportPDFView.as_view(), name='purchase_export_pdf'),
     path('import/csv/', PurchaseImportCSVView.as_view(), name='purchase_import_csv'),
+    path('api/products/batch-history/', ProductBatchHistoryView.as_view(), name='batch_history'),
 ]

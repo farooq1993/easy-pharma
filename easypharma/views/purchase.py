@@ -933,3 +933,27 @@ class PurchaseExportPDFView(View):
         }
 
         return render_to_pdf(self.template_name, context, filename='purchase_bills.pdf')
+
+class ProductBatchHistoryView(View):
+    def get(self, request):
+        product_id = request.GET.get('product_id')
+        if not product_id:
+            return JsonResponse([], safe=False)
+        
+        batches = (
+            StockBatch.objects
+            .filter(tenant=request.tenant, product_id=product_id)
+            .order_by('-expiry_date')
+            .values('batch_number', 'expiry_date', 'mrp', 'purchase_price', 'current_quantity')[:10]
+        )
+        result = [
+            {
+                'batch_number': b['batch_number'],
+                'expiry_date':  b['expiry_date'].strftime('%Y-%m') if b['expiry_date'] else '',
+                'mrp':          float(b['mrp'] or 0),
+                'purchase_price': float(b['purchase_price'] or 0),
+                'stock_quantity': b['current_quantity'],
+            }
+            for b in batches
+        ]
+        return JsonResponse(result, safe=False)
