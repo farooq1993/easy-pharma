@@ -1093,22 +1093,32 @@ Prod.Type : []AYURVEDIC[]
         payload.append("selected_tenant_id", activeTenantId);
         payload.append("csrfmiddlewaretoken", "{{ csrf_token }}");
 
-        if (activeInputMethod === "file") {
-            if (!selectedFile) {
-                alert("Please select a file to import!");
-                return;
-            }
-            payload.append("file", selectedFile);
-            payload.append("filename", selectedFile.name);
-        } else {
-            const rawText = document.getElementById("rawTextArea").value;
-            if (!rawText.trim()) {
-                alert("Please paste some text reports to import!");
-                return;
-            }
-            payload.append("raw_text", rawText);
-            payload.append("filename", "Direct Copy-Paste");
-        }
+        // if (activeInputMethod === "file") {
+        //     if (!selectedFile) {
+        //         alert("Please select a file to import!");
+        //         return;
+        //     }
+        //     payload.append("file", selectedFile);
+        //     payload.append("filename", selectedFile.name);
+        // } else {
+        //     const rawText = document.getElementById("rawTextArea").value;
+        //     if (!rawText.trim()) {
+        //         alert("Please paste some text reports to import!");
+        //         return;
+        //     }
+        //     payload.append("raw_text", rawText);
+        //     payload.append("filename", "Direct Copy-Paste");
+        // }
+
+        payload.append(
+            "job_id",
+            window.currentParseJobId
+        );
+
+        payload.append(
+            "selected_rows",
+            JSON.stringify(selectedIndices)
+        );
 
         // Open and reset progress modal
         const modalElement = document.getElementById("migrationProgressModal");

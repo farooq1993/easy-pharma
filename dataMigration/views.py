@@ -147,10 +147,6 @@ def _batch_enrich(parsed_data, import_type, tenant):
 
     PREVIEW_LIMIT = 100
 
-    print("=" * 80, flush=True)
-    print(f"[ENRICH START] type={import_type}", flush=True)
-    print(f"TOTAL PARSED={len(parsed_data)}", flush=True)
-
     # =====================================================
     # COMPANY
     # =====================================================
