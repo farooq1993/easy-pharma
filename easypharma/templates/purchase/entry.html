@@ -1326,35 +1326,35 @@
             });
         });
         // CSV import button handler
-        document.getElementById('loadPurchaseCsvBtn').addEventListener('click', async () => {
-            const input = document.getElementById('purchaseCsvFile');
-            const file = input.files[0];
-            if (!file) { showToast('Select a CSV file first', 'error'); return; }
+        // document.getElementById('loadPurchaseCsvBtn').addEventListener('click', async () => {
+        //     const input = document.getElementById('purchaseCsvFile');
+        //     const file = input.files[0];
+        //     if (!file) { showToast('Select a CSV file first', 'error'); return; }
 
-            const form = new FormData();
-            form.append('csv_file', file);
+        //     const form = new FormData();
+        //     form.append('csv_file', file);
 
-            const warningsContainer = document.getElementById('csvImportWarnings');
-            warningsContainer.innerHTML = '<div class="loading">Loading CSV...</div>';
+        //     const warningsContainer = document.getElementById('csvImportWarnings');
+        //     warningsContainer.innerHTML = '<div class="loading">Loading CSV...</div>';
 
-            try {
-                const resp = await fetch('{% url "purchase_import_csv" %}', {
-                    method: 'POST',
-                    headers: { 'X-CSRFToken': csrfToken },
-                    body: form
-                });
-                const data = await resp.json();
-                if (!resp.ok || !data.success) {
-                    warningsContainer.innerHTML = `<div class="alert alert-danger">${data.error || 'Failed to parse CSV.'}</div>`;
-                    return;
-                }
+        //     try {
+        //         const resp = await fetch('{% url "purchase_import_csv" %}', {
+        //             method: 'POST',
+        //             headers: { 'X-CSRFToken': csrfToken },
+        //             body: form
+        //         });
+        //         const data = await resp.json();
+        //         if (!resp.ok || !data.success) {
+        //             warningsContainer.innerHTML = `<div class="alert alert-danger">${data.error || 'Failed to parse CSV.'}</div>`;
+        //             return;
+        //         }
 
-                populatePurchaseFromCsv(data);
-            } catch (err) {
-                warningsContainer.innerHTML = `<div class="alert alert-danger">Unable to upload CSV. Please try again.</div>`;
-                console.error(err);
-            }
-        });
+        //         populatePurchaseFromCsv(data);
+        //     } catch (err) {
+        //         warningsContainer.innerHTML = `<div class="alert alert-danger">Unable to upload CSV. Please try again.</div>`;
+        //         console.error(err);
+        //     }
+        // });
 
         function populatePurchaseFromCsv(data) {
             // Store CSV data for retry after product creation
