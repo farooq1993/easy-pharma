@@ -257,7 +257,7 @@
 
     /* ── @media print ── */
     @media print {
-      body { background: #fff; font-size: 11px; }
+      body { background: #fff; }
       .action-bar { display: none !important; }
       .page-wrapper {
         max-width: 100%;
@@ -265,8 +265,12 @@
         border-radius: 0;
         box-shadow: none;
       }
+
       @page {
-        {% if ps.paper_size == '8x4' %}
+        {% if ps.paper_size == '4x6' %}
+          size: 4in auto;
+          margin: 3mm;
+        {% elif ps.paper_size == '8x4' %}
           size: 8in 4in;
           margin: 3mm 4mm;
         {% elif ps.paper_size == '80mm' %}
@@ -274,25 +278,66 @@
           margin: 2mm 3mm;
         {% elif ps.paper_size == '58mm' %}
           size: 58mm auto;
-          margin: 2mm 2mm;
+          margin: 2mm;
         {% else %}
           size: A4 portrait;
           margin: {{ ps.margin_top|default:10 }}mm {{ ps.margin_sides|default:10 }}mm;
         {% endif %}
       }
-      {% if ps.paper_size == '8x4' %}
-        body { font-size: 9px !important; }
-        .inv-pharmacy-info h1 { font-size: 12px !important; }
-        .inv-pharmacy-info p { font-size: 8px !important; }
-        .inv-header { padding-bottom: 6px !important; margin-bottom: 5px !important; }
-        table th, table td { padding: 2px 3px !important; font-size: 8px !important; }
-        .inv-meta-grid { gap: 6px !important; }
-        .inv-totals { margin-top: 5px !important; }
+
+      {% if ps.paper_size == '4x6' %}
+        body { font-family: 'Courier New', monospace !important; font-size: 8pt !important; color: #000 !important; }
+        .invoice-body { padding: 2mm !important; }
+        .inv-header { gap: 6px !important; padding-bottom: 4px !important; margin-bottom: 4px !important; border-bottom: 1px solid #000 !important; }
+        .inv-pharmacy-info h1 { font-size: 11pt !important; }
+        .inv-pharmacy-info p { font-size: 7pt !important; }
+        .inv-title-strip { padding: 3px 6px !important; margin-bottom: 5px !important; border-radius: 0 !important; background: #eee !important; -webkit-print-color-adjust: exact; }
+        .inv-title-strip h2 { font-size: 9pt !important; }
+        .inv-title-strip .inv-meta { font-size: 7pt !important; }
+        .patient-grid { padding: 4px 6px !important; gap: 3px 10px !important; margin-bottom: 6px !important; border-radius: 0 !important; }
+        .patient-field label { font-size: 6.5pt !important; }
+        .patient-field p { font-size: 8pt !important; }
+        .items-table { font-size: 7.5pt !important; margin-bottom: 6px !important; }
+        .items-table th { padding: 2px 3px !important; font-size: 7pt !important; }
+        .items-table td { padding: 2px 3px !important; }
+        .med-name { font-size: 7.5pt !important; }
+        .med-pack { font-size: 6pt !important; }
+        .totals-box { width: 180px !important; }
+        .total-row { padding: 3px 8px !important; font-size: 8pt !important; }
+        .total-row.grand { font-size: 9pt !important; }
+        .sig-block { margin-top: 10px !important; padding-top: 6px !important; }
+        .sig-line { margin-top: 20px !important; }
+        .sig-label { font-size: 7pt !important; }
+        .inv-footer { margin-top: 8px !important; padding-top: 6px !important; }
+        .inv-footer p { font-size: 7pt !important; }
+      {% elif ps.paper_size == '8x4' %}
+        body { font-size: 8pt !important; }
+        .inv-pharmacy-info h1 { font-size: 11pt !important; }
+        .inv-pharmacy-info p { font-size: 7pt !important; }
+        .inv-header { padding-bottom: 4px !important; margin-bottom: 4px !important; }
+        .items-table th, .items-table td { padding: 2px 3px !important; font-size: 7pt !important; }
+      {% elif ps.paper_size == '80mm' %}
+        body { font-family: 'Courier New', monospace !important; font-size: 7.5pt !important; }
+        .invoice-body { padding: 2mm !important; }
+        .inv-pharmacy-info h1 { font-size: 10pt !important; }
+        .inv-pharmacy-info p { font-size: 6.5pt !important; }
+        .items-table th, .items-table td { padding: 1px 2px !important; font-size: 7pt !important; }
+        .totals-box { width: 160px !important; }
+        .total-row { padding: 2px 6px !important; font-size: 7.5pt !important; }
+      {% elif ps.paper_size == '58mm' %}
+        body { font-family: 'Courier New', monospace !important; font-size: 6.5pt !important; }
+        .invoice-body { padding: 1mm !important; }
+        .inv-pharmacy-info h1 { font-size: 8pt !important; }
+        .inv-pharmacy-info p { font-size: 6pt !important; }
+        .patient-grid { grid-template-columns: 1fr !important; }
+        .items-table th, .items-table td { padding: 1px !important; font-size: 6pt !important; }
+        .totals-box { width: 140px !important; }
+        .total-row { padding: 1px 4px !important; font-size: 6.5pt !important; }
       {% endif %}
     }
   </style>
 </head>
-<body onload="window.print()">
+<body>
 
   <!-- ── Action Bar (no-print) ── -->
   <div class="action-bar no-print">
@@ -468,6 +513,37 @@
 
     </div>
   </div>
-
+<script>
+  window.addEventListener('load', function () {
+    {% if ps.paper_size == '4x6' %}
+      // Force 4x6 page size via CSS before printing
+      const style = document.createElement('style');
+      style.textContent = `
+        @page {
+          size: 4in auto !important;
+          margin: 3mm !important;
+        }
+        body {
+          width: 4in !important;
+          font-family: 'Courier New', monospace !important;
+          font-size: 8pt !important;
+        }
+        .page-wrapper {
+          width: 4in !important;
+          max-width: 4in !important;
+          margin: 0 !important;
+          box-shadow: none !important;
+          border-radius: 0 !important;
+          overflow: visible !important;
+        }
+        .invoice-body {
+          padding: 2mm !important;
+        }
+      `;
+      document.head.appendChild(style);
+    {% endif %}
+    window.print();
+  });
+</script>
 </body>
 </html>

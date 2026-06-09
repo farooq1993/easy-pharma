@@ -133,80 +133,39 @@
 #invoicePreview .inv-sig-line { border-top: 1px solid #000; padding-top: 4px; margin-top: 28px; }
 #invoicePreview .inv-footer { text-align: center; margin-top: 14px; padding-top: 8px; border-top: 1px dashed #000; font-size: 9px; }
 
-/* ── Print @page rules per paper size ── */
+/* ── Print: common rules ── */
 @media print {
-
-    @page {
-        size: 4in 6in;
-        margin: 0;
-    }
-
-    html,
-    body {
-        width: 101.6mm;
-        height: 152.4mm;
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-
-    body * {
-        visibility: hidden;
-    }
+    body * { visibility: hidden; }
 
     #invoicePreview,
-    #invoicePreview * {
-        visibility: visible;
-    }
+    #invoicePreview * { visibility: visible; }
 
     #invoicePreview {
         position: fixed;
-        left: 0;
-        top: 0;
-
-        width: 101.6mm !important;
-        min-height: 152.4mm !important;
-
+        left: 0; top: 0;
         margin: 0 !important;
-        padding: 3mm !important;
-
         box-sizing: border-box;
-        overflow: hidden;
-
         font-family: "Courier New", monospace;
-        font-size: 8pt;
         line-height: 1.15;
     }
 
     #invoicePreview table {
         width: 100%;
         border-collapse: collapse;
-        font-size: 7pt;
     }
 
     #invoicePreview th,
-    #invoicePreview td {
-        padding: 1px 2px;
-    }
+    #invoicePreview td { padding: 1px 2px; }
+
+    /* size + dimensions are injected by JS into a <style id="printPageRule"> tag */
 }
 
-  body.print-4x6 * {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-
-@page {
-  size: A4;
-  margin: 10mm;
-}
-
-@page {
-    size: 4in 6in;
-    margin: 0;
-}
-body.print-4x6 {
-  --page-w: 101.6mm;
-  --page-h: 152.4mm;
-}
+/* ── Per-size print dimensions (applied via JS before window.print()) ── */
+body.print-size-a4        #invoicePreview { width:210mm !important; min-height:297mm !important; padding:10mm !important; font-size:9pt; }
+body.print-size-4x6       #invoicePreview { width:101.6mm !important; min-height:152.4mm !important; padding:3mm !important; font-size:8pt; }
+body.print-size-8x4       #invoicePreview { width:203.2mm !important; min-height:101.6mm !important; padding:3mm 4mm !important; font-size:8pt; }
+body.print-size-80mm      #invoicePreview { width:80mm !important; min-height:100mm !important; padding:2mm !important; font-size:7pt; }
+body.print-size-58mm      #invoicePreview { width:58mm !important; min-height:80mm !important; padding:2mm !important; font-size:6pt; }
 /* Applied dynamically by JS when printing with 4x6 selected */
 .print-size-4x6 {
     width: 380px;
@@ -397,7 +356,13 @@ body.print-4x6 {
         <div class="preview-wrap">
           <div class="preview-header-bar">
             <span><i class="bi bi-eye me-2"></i>LIVE INVOICE PREVIEW</span>
-            <span style="font-size:10px;opacity:.7;">Updates as you type</span>
+            <div class="d-flex align-items-center gap-2">
+              <span style="font-size:10px;opacity:.7;">Updates as you type</span>
+              <button type="button" id="printInvoiceBtn"
+                style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:6px;padding:4px 12px;font-size:11px;cursor:pointer;">
+                <i class="bi bi-printer me-1"></i>Print
+              </button>
+            </div>
           </div>
           <div class="preview-scale p-3">
             <div id="invoicePreview">
@@ -539,68 +504,64 @@ document.getElementById('customFooter').addEventListener('input', function(){
   document.getElementById('prev-footer-text').textContent = this.value || 'Thank you for choosing {{ request.tenant.pharmacy_name }}';
 });
 
-// ── Paper Size Preview Scaling ──
-document.getElementById('paperSizeSelect').addEventListener('change', function(){
+// ── Paper size config map ──
+const PAPER_SIZES = {
+  'A4':   { cssSize: 'A4',           w: '210mm',    h: '297mm',    previewW: '100%',  previewH: '',      fs: '',      lh: '',    pad: '' },
+  '4x6':  { cssSize: '4in 6in',      w: '101.6mm',  h: '152.4mm',  previewW: '380px', previewH: '570px', fs: '11px',  lh: '1.3', pad: '12px' },
+  '8x4':  { cssSize: '203.2mm 101.6mm', w: '203.2mm', h: '101.6mm', previewW: '380px', previewH: '180px', fs: '9px',  lh: '1.3', pad: '8px' },
+  '80mm': { cssSize: '80mm 200mm',   w: '80mm',     h: '200mm',    previewW: '300px', previewH: '',      fs: '',      lh: '',    pad: '' },
+  '58mm': { cssSize: '58mm 160mm',   w: '58mm',     h: '160mm',    previewW: '218px', previewH: '',      fs: '',      lh: '',    pad: '' },
+};
+
+// ── Dynamic @page rule injector ──
+function injectPageRule(size) {
+  const cfg = PAPER_SIZES[size] || PAPER_SIZES['A4'];
+  let tag = document.getElementById('printPageRule');
+  if (!tag) { tag = document.createElement('style'); tag.id = 'printPageRule'; document.head.appendChild(tag); }
+  tag.textContent = `@media print { @page { size: ${cfg.cssSize}; margin: 0; } }`;
+}
+
+// ── Apply preview dimensions ──
+function applyPreview(size) {
+  const cfg = PAPER_SIZES[size] || PAPER_SIZES['A4'];
   const preview = document.getElementById('invoicePreview');
-    if (this.value === '4x6') {
+  preview.style.width      = cfg.previewW;
+  preview.style.maxWidth   = cfg.previewW;
+  preview.style.minHeight  = cfg.previewH;
+  preview.style.fontSize   = cfg.fs;
+  preview.style.lineHeight = cfg.lh;
+  preview.style.padding    = cfg.pad;
+  preview.style.margin     = cfg.previewW === '100%' ? '' : '0 auto';
 
-      preview.classList.remove(
-          'print-size-8x4'
-      );
+  // Remove all print-size-* classes then add the right one
+  preview.className = preview.className.replace(/\bprint-size-\S+/g, '').trim();
+  preview.classList.add('print-size-' + size.toLowerCase().replace(/[^a-z0-9]/g, ''));
+}
 
-      preview.classList.add('print-size-4x6');
+// ── Paper size select handler ──
+document.getElementById('paperSizeSelect').addEventListener('change', function () {
+  applyPreview(this.value);
+  injectPageRule(this.value);
+});
 
-      preview.style.width = '380px';
-      preview.style.minHeight = '570px';
-      preview.style.maxWidth = '380px';
+// ── Print button: set body class so print CSS applies, then print ──
+document.getElementById('printInvoiceBtn').addEventListener('click', function () {
+  const size = document.getElementById('paperSizeSelect').value;
+  const cfg  = PAPER_SIZES[size] || PAPER_SIZES['A4'];
+  injectPageRule(size);
 
-      preview.style.fontSize = '11px';
-      preview.style.lineHeight = '1.3';
+  // Swap body print-size class
+  document.body.className = document.body.className.replace(/\bprint-size-\S+/g, '').trim();
+  document.body.classList.add('print-size-' + size.toLowerCase().replace(/[^a-z0-9]/g, ''));
 
-      preview.style.padding = '12px';
-      preview.style.margin = '0 auto';
-
-      preview.title = 'Epson LX310 4x6';
-  } else if (this.value === '8x4') {
-    // Epson LX310 8"x4" — wide landscape-like compact layout
-    preview.style.maxWidth = '380px';
-    preview.style.margin = '0 auto';
-    preview.style.minHeight = '180px';
-    preview.style.fontSize = '9px';
-    preview.style.lineHeight = '1.3';
-    preview.style.padding = '';
-    preview.title = 'Epson LX310 – 8×4 inch dot matrix layout';
-  } else if (this.value === '80mm') {
-    preview.style.maxWidth = '300px';
-    preview.style.margin = '0 auto';
-    preview.style.minHeight = '';
-    preview.style.fontSize = '';
-    preview.style.lineHeight = '';
-    preview.style.padding = '';
-    preview.title = '80mm Thermal';
-  } else if (this.value === '58mm') {
-    preview.style.maxWidth = '218px';
-    preview.style.margin = '0 auto';
-    preview.style.minHeight = '';
-    preview.style.fontSize = '';
-    preview.style.lineHeight = '';
-    preview.style.padding = '';
-    preview.title = '58mm Thermal';
-  } else {
-    // A4
-    preview.style.maxWidth = '100%';
-    preview.style.margin = '';
-    preview.style.minHeight = '';
-    preview.style.fontSize = '';
-    preview.style.lineHeight = '';
-    preview.style.padding = '';
-    preview.title = 'A4';
-  }
+  window.print();
 });
 
 // Run on page load
-window.addEventListener('DOMContentLoaded', function(){
-  document.getElementById('paperSizeSelect').dispatchEvent(new Event('change'));
+window.addEventListener('DOMContentLoaded', function () {
+  const sel = document.getElementById('paperSizeSelect');
+  applyPreview(sel.value);
+  injectPageRule(sel.value);
 });
 </script>
 {% endblock %}
