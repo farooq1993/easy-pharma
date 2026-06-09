@@ -9,8 +9,9 @@ from easypharma.models.purchase_invoice import PurchaseInvoice, PurchaseItem
 from easypharma.models.sales import SaleInvoice, SaleItem
 from django.db.models import Sum, F, DecimalField, ExpressionWrapper, Q, Count, Avg, Max, Min
 from django.utils.timezone import now
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta,date
 from decimal import Decimal
+
 
 logger = logging.getLogger('easypharma.reports')
 
@@ -1459,6 +1460,102 @@ class PurchaseAnalysisView(View):
             'gst_values':      gst_values,
             'trend_labels':    trend_labels,
             'trend_values':    trend_values,
+        }
+
+        return render(request, self.template_name, context)
+
+
+class SaleBillWiseProfit(View):
+    template_name = 'reports/sale_billwise_profit.html'
+
+    def get(self, request):
+        today = now().date()
+
+        # Default: today only
+        date_from_str = request.GET.get('date_from', today.strftime('%Y-%m-%d'))
+        date_to_str   = request.GET.get('date_to',   today.strftime('%Y-%m-%d'))
+
+        try:
+            date_from = datetime.strptime(date_from_str, '%Y-%m-%d').date()
+            date_to   = datetime.strptime(date_to_str,   '%Y-%m-%d').date()
+        except ValueError:
+            date_from = date_to = today
+
+        sales = SaleInvoice.objects.filter(
+            tenant=request.tenant,
+            created_at__date__gte=date_from,
+            created_at__date__lte=date_to,
+        ).prefetch_related(
+            Prefetch(
+                'items',
+                queryset=SaleItem.objects.select_related('product').prefetch_related(
+                    Prefetch(
+                        'product__batches',
+                        queryset=StockBatch.objects.filter(
+                            tenant=request.tenant,
+                            current_quantity__gt=0,
+                        ).order_by('-expiry_date'),
+                        to_attr='active_batches'
+                    )
+                )
+            )
+        ).order_by('created_at')
+
+        bill_rows = []
+        for invoice in sales:
+            total_sale = Decimal('0')
+            total_cost = Decimal('0')
+
+            for item in invoice.items.all():
+                total_sale += Decimal(str(item.total_amount))
+
+                purchase_price = Decimal('0')
+                active_batches = getattr(item.product, 'active_batches', [])
+
+                if item.batch_number:
+                    matched = next(
+                        (b for b in active_batches if b.batch_number == item.batch_number),
+                        None
+                    )
+                    if matched:
+                        purchase_price = Decimal(str(matched.purchase_price))
+
+                if purchase_price == Decimal('0') and active_batches:
+                    purchase_price = Decimal(str(active_batches[0].purchase_price))
+
+                conversion = Decimal(str(item.product.conversion_factor or 1))
+                unit_purchase_price = purchase_price / conversion
+                total_cost += unit_purchase_price * Decimal(str(item.quantity))
+
+            profit = total_sale - total_cost
+
+            bill_rows.append({
+                'invoice_number': invoice.invoice_number,
+                'date':           invoice.created_at.strftime('%d/%m/%Y'),
+                'customer':       invoice.patient_name or (
+                                      invoice.customer.name if invoice.customer else 'Walk-in'
+                                  ),
+                'total_sale':     total_sale.quantize(Decimal('0.01')),
+                'total_cost':     total_cost.quantize(Decimal('0.01')),
+                'profit':         profit.quantize(Decimal('0.01')),
+                'profit_pct':     (
+                    (profit / total_sale * 100).quantize(Decimal('0.1'))
+                    if total_sale else Decimal('0')
+                ),
+            })
+
+        grand_sale   = sum(r['total_sale'] for r in bill_rows)
+        grand_cost   = sum(r['total_cost'] for r in bill_rows)
+        grand_profit = sum(r['profit']     for r in bill_rows)
+
+        context = {
+            'date_from':    date_from.strftime('%Y-%m-%d'),
+            'date_to':      date_to.strftime('%Y-%m-%d'),
+            'bill_rows':    bill_rows,
+            'grand_sale':   grand_sale,
+            'grand_cost':   grand_cost,
+            'grand_profit': grand_profit,
+            'pharmacy':     request.tenant,
         }
 
         return render(request, self.template_name, context)

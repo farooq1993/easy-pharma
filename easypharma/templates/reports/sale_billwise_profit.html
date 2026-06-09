@@ -1,0 +1,181 @@
+{% extends 'includes/base.html' %}
+{% load static %}
+
+{% block title %}Bill-wise Profit Report{% endblock %}
+
+{% block extra_css %}
+<style>
+  @media print {
+    body * { visibility: hidden; }
+    #print-zone, #print-zone * { visibility: visible; }
+    #print-zone {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+    }
+    #print-zone table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    #print-zone th,
+    #print-zone td {
+      border: 1px solid #000 !important;
+      padding: 5px 8px !important;
+      color: #000 !important;
+      background: none !important;
+    }
+    #print-zone tfoot td {
+      font-weight: bold;
+      border-top: 2px solid #000 !important;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h4 class="mb-0 fw-bold">Bill-wise Profit Report</h4>
+      <small class="text-muted">{{ pharmacy }}</small>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary" onclick="window.print()">
+      <i class="fas fa-print me-1"></i> Print
+    </button>
+  </div>
+
+  <!-- Filter Form -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body py-2">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-auto">
+          <label class="form-label mb-1 small fw-semibold">From Date</label>
+          <input type="date" name="date_from" class="form-control form-control-sm"
+                 value="{{ date_from }}">
+        </div>
+        <div class="col-auto">
+          <label class="form-label mb-1 small fw-semibold">To Date</label>
+          <input type="date" name="date_to" class="form-control form-control-sm"
+                 value="{{ date_to }}">
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+        </div>
+        <div class="col-auto">
+          <a href="?date_from={% now "Y-m-d" %}&date_to={% now "Y-m-d" %}"
+             class="btn btn-outline-secondary btn-sm">Today</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm bg-primary text-white">
+        <div class="card-body py-3">
+          <div class="small opacity-75">Total Bills</div>
+          <div class="fs-4 fw-bold">{{ bill_rows|length }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm bg-info text-white">
+        <div class="card-body py-3">
+          <div class="small opacity-75">Total Sale</div>
+          <div class="fs-4 fw-bold">&#8377; {{ grand_sale }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm bg-warning text-dark">
+        <div class="card-body py-3">
+          <div class="small opacity-75">Total Cost</div>
+          <div class="fs-4 fw-bold">&#8377; {{ grand_cost }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm {% if grand_profit >= 0 %}bg-success{% else %}bg-danger{% endif %} text-white">
+        <div class="card-body py-3">
+          <div class="small opacity-75">Net Profit</div>
+          <div class="fs-4 fw-bold">&#8377; {{ grand_profit }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table wrapped in print-zone -->
+  <div id="print-zone">
+
+    <!-- Print header: hidden on screen, visible when printing -->
+    <div style="display:none" class="d-print-block text-center mb-3">
+      <h5 class="fw-bold mb-0">{{ pharmacy }}</h5>
+      <p class="mb-1 small">Bill-wise Profit Report</p>
+      <p class="mb-0 small">{{ date_from }} &nbsp;to&nbsp; {{ date_to }}</p>
+      <hr>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        {% if bill_rows %}
+        <div class="table-responsive">
+          <table class="table table-hover table-bordered mb-0 align-middle small">
+            <thead class="table-dark">
+              <tr>
+                <th>#</th>
+                <th>Invoice No.</th>
+                <th>Date</th>
+                <th>Customer</th>
+                <th class="text-end">Sale Amt (&#8377;)</th>
+                <th class="text-end">Cost Amt (&#8377;)</th>
+                <th class="text-end">Profit (&#8377;)</th>
+                <th class="text-end">Margin %</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in bill_rows %}
+              <tr>
+                <td class="text-muted">{{ forloop.counter }}</td>
+                <td class="fw-semibold">{{ row.invoice_number }}</td>
+                <td>{{ row.date }}</td>
+                <td>{{ row.customer }}</td>
+                <td class="text-end">{{ row.total_sale }}</td>
+                <td class="text-end">{{ row.total_cost }}</td>
+                <td class="text-end fw-semibold {% if row.profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+                  {% if row.profit >= 0 %}+{% endif %}{{ row.profit }}
+                </td>
+                <td class="text-end {% if row.profit_pct >= 0 %}text-success{% else %}text-danger{% endif %}">
+                  {{ row.profit_pct }}%
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot class="table-secondary fw-bold">
+              <tr>
+                <td colspan="4">Grand Total</td>
+                <td class="text-end">{{ grand_sale }}</td>
+                <td class="text-end">{{ grand_cost }}</td>
+                <td class="text-end {% if grand_profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+                  {% if grand_profit >= 0 %}+{% endif %}{{ grand_profit }}
+                </td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-muted">
+          <i class="fas fa-inbox fa-2x mb-2"></i>
+          <p class="mb-0">No sales found for the selected date range.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div><!-- /#print-zone -->
+
+</div>
+{% endblock %}
