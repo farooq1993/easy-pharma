@@ -1,11 +1,13 @@
 from django.views import View
+from django.utils import timezone
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.contrib import messages
 from django.db import transaction
 from django.db.models import F, Q
 from easypharma.models.Items import Products
-from easypharma.models.sales import SaleInvoice, SaleItem, Customer, SalesReturn, SalesReturnItem
+from easypharma.models.sales import (SaleInvoice, SaleItem,
+                                    Customer, SalesReturn, SalesReturnItem,PrescriptionReminder)
 import json
 from datetime import datetime
 from urllib.parse import quote_plus
@@ -112,6 +114,7 @@ class POSView(View):
                         user=request.user,
                         invoice_number=invoice_no
                     )
+                
 
                 invoice.patient_name = data.get('patient_name')
                 invoice.patient_address = data.get('patient_address')
@@ -549,3 +552,99 @@ class PatientWiseSalesAPI(View):
             })
         
         return JsonResponse(data, safe=False)
+
+
+class PrescriptionReminderView(View):
+    template_name = "sales/prescription_reminders.html"
+
+    def get(self, request):
+        reminders = PrescriptionReminder.objects.filter(tenant=request.tenant).order_by('reminder_date')
+        customers = SaleInvoice.objects.filter(tenant=request.tenant).exclude(patient_name__isnull=True).exclude(
+                    patient_name='').values_list('patient_name',flat=True).distinct().order_by('patient_name')
+
+        inv_items = SaleItem.objects.filter(sale_invoice__tenant=request.tenant).select_related('sale_invoice', 'product')
+        reminders = PrescriptionReminder.objects.filter(tenant=request.tenant).order_by('reminder_date')
+
+        
+        return render(request, self.template_name, {
+            'reminders': reminders,
+            'customers': customers,
+            'inv_items': inv_items,
+            'today': timezone.now().date()   # for status badge
+        })
+    
+    def post(self, request):
+        patient_name = request.POST.get('customer_id')
+        prescription_date = request.POST.get('prescription_date')
+        reminder_date = request.POST.get('reminder_date')
+        notes = request.POST.get('notes', '').strip()
+        
+        if not (patient_name and prescription_date and reminder_date):
+            messages.error(request, 'Customer, prescription date, and reminder date are required.')
+            return redirect('prescription_reminders')
+        
+        try:
+            patient_name = request.POST.get('customer_id')
+            reminder = PrescriptionReminder.objects.create(
+                tenant=request.tenant,
+                patient_name=patient_name,
+                prescription_date=prescription_date,
+                reminder_date=reminder_date,
+                notes=notes
+            )
+            messages.success(request, f"Reminder set for {patient_name} on {reminder.reminder_date}.")
+        except Customer.DoesNotExist:
+            messages.error(request, 'Customer not found.')
+        except Exception as e:
+            messages.error(request, f"Error creating reminder: {e}")
+        
+        return redirect('prescription_reminders')
+    
+class PrescriptionReminderDeleteView(View):
+
+    def post(self, request, reminder_id):
+
+        try:
+            reminder = PrescriptionReminder.objects.get(
+                id=reminder_id,
+                tenant=request.tenant
+            )
+
+            reminder.delete()
+
+            return JsonResponse({
+                'success': True
+            })
+
+        except PrescriptionReminder.DoesNotExist:
+
+            return JsonResponse({
+                'success': False,
+                'error': 'Reminder not found'
+            })
+
+# ==================== NEW AJAX VIEW ====================
+def get_customer_invoices(request):
+
+    patient_name = request.GET.get('patient_name')
+
+    items = SaleItem.objects.filter(
+        sale_invoice__tenant=request.tenant,
+        sale_invoice__patient_name=patient_name
+    ).select_related(
+        'sale_invoice',
+        'product'
+    )
+
+    data = []
+
+    for item in items:
+        data.append({
+            'id': item.id,
+            'product_name': item.product.product_name,
+            'invoice_number': item.sale_invoice.invoice_number,
+        })
+
+    return JsonResponse({
+        'products': data
+    })

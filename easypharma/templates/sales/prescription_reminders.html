@@ -1,0 +1,208 @@
+{% extends "includes/base.html" %}
+
+{% block title %}Prescription Reminders{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="mb-4">Prescription Reminders</h1>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Add New Reminder</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" id="reminderForm">
+                {% csrf_token %}
+
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Customer <span class="text-danger">*</span></label>
+                        <select class="form-select" id="customer_id" name="customer_id" required>
+                            <option value="">Select Customer</option>
+                            {% for customer in customers %}
+                                <option value="{{ customer }}">
+                                    {{ customer }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Invoice Items <span class="text-danger">*</span></label>
+                        <select class="form-select" id="invoice_item_id" name="invoice_item_id" multiple required>
+                            <option value="">Select Customer First</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Prescription Date <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" name="prescription_date" required>
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Reminder Date <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" name="reminder_date" required>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control" name="notes" rows="3"></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-success">
+                    <i class="fas fa-bell"></i> Set Reminder
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Reminders List -->
+    <div class="card">
+        <div class="card-header">
+            <h5>All Reminders</h5>
+        </div>
+        <div class="card-body">
+            {% if reminders %}
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Customer</th>
+                            <th>Prescription Date</th>
+                            <th>Reminder Date</th>
+                            <th>Notes</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for reminder in reminders %}
+                        <tr>
+                            <td><strong>{{ reminder.patient_name }}</strong></td>
+                            <td>{{ reminder.prescription_date|date:"d M, Y" }}</td>
+                            <td>{{ reminder.reminder_date|date:"d M, Y" }}</td>
+                            <td>{{ reminder.notes|truncatechars:60|default:"-" }}</td>
+                            <td>
+                                {% if reminder.reminder_date|date:"Y-m-d" >= today|date:"Y-m-d" %}
+                                    <span class="badge bg-warning">Upcoming</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Past</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="#" class="btn btn-sm btn-outline-danger" onclick="deleteReminder({{ reminder.id }})">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p class="text-center text-muted py-5">No reminders found.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+
+document.addEventListener('DOMContentLoaded', function() {
+    const customerSelect = document.getElementById('customer_id');
+    const itemsSelect = document.getElementById('invoice_item_id');
+
+    // Default reminder date +7 days
+    const reminderInput = document.querySelector('input[name="reminder_date"]');
+    if (reminderInput) {
+        const date = new Date();
+        date.setDate(date.getDate() + 7);
+        reminderInput.value = date.toISOString().split('T')[0];
+    }
+
+    
+    customerSelect.addEventListener('change', function() {
+
+        const patientName = this.value;
+
+        itemsSelect.innerHTML = '<option value="">Loading...</option>';
+
+        if (!patientName) {
+            itemsSelect.innerHTML = '<option value="">Select Customer First</option>';
+            return;
+        }
+
+        fetch(`/sales/get-customer-invoices/?patient_name=${encodeURIComponent(patientName)}`)
+            .then(res => res.json())
+            .then(data => {
+
+                itemsSelect.innerHTML = '<option value="">Select Product</option>';
+
+                if (data.products && data.products.length > 0) {
+
+                    data.products.forEach(product => {
+
+                        const opt = new Option(
+                            product.product_name,
+                            product.id
+                        );
+
+                        itemsSelect.appendChild(opt);
+                    });
+
+                } else {
+
+                    itemsSelect.innerHTML =
+                        '<option value="">No products found</option>';
+                }
+            })
+            .catch(() => {
+                itemsSelect.innerHTML =
+                    '<option value="">Error loading products</option>';
+            });
+    });
+});
+
+function deleteReminder(id) {
+
+    if (!confirm('Delete this reminder?')) {
+        return;
+    }
+
+    fetch(
+        `/sales/prescription-reminders/delete/${id}/`,
+        {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken':
+                    document.querySelector(
+                        '[name=csrfmiddlewaretoken]'
+                    ).value
+            }
+        }
+    )
+    .then(response => response.json())
+    .then(data => {
+
+        if (data.success) {
+
+            location.reload();
+
+        } else {
+
+            alert(data.error);
+        }
+    });
+}
+</script>
+{% endblock %}
