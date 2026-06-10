@@ -29,14 +29,16 @@
                         <select class="form-select" id="customer_id" name="customer_id" required>
                             <option value="">Select Customer</option>
                             {% for customer in customers %}
-                                <option value="{{ customer.id }}">{{ customer.patient_name }} ({{ customer.phone|default:"N/A" }})</option>
+                                <option value="{{ customer }}">
+                                    {{ customer }}
+                                </option>
                             {% endfor %}
                         </select>
                     </div>
 
                     <div class="col-md-4 mb-3">
                         <label class="form-label">Invoice Items <span class="text-danger">*</span></label>
-                        <select class="form-select" id="invoice_item_id" name="invoice_item_id">
+                        <select class="form-select" id="invoice_item_id" name="invoice_item_id" multiple required>
                             <option value="">Select Customer First</option>
                         </select>
                     </div>
@@ -85,7 +87,7 @@
                     <tbody>
                         {% for reminder in reminders %}
                         <tr>
-                            <td><strong>{{ reminder.customer.name }}</strong></td>
+                            <td><strong>{{ reminder.patient_name }}</strong></td>
                             <td>{{ reminder.prescription_date|date:"d M, Y" }}</td>
                             <td>{{ reminder.reminder_date|date:"d M, Y" }}</td>
                             <td>{{ reminder.notes|truncatechars:60|default:"-" }}</td>
@@ -115,6 +117,7 @@
 
 {% block extra_js %}
 <script>
+
 document.addEventListener('DOMContentLoaded', function() {
     const customerSelect = document.getElementById('customer_id');
     const itemsSelect = document.getElementById('invoice_item_id');
@@ -127,41 +130,79 @@ document.addEventListener('DOMContentLoaded', function() {
         reminderInput.value = date.toISOString().split('T')[0];
     }
 
+    
     customerSelect.addEventListener('change', function() {
-        const customerId = this.value;
+
+        const patientName = this.value;
+
         itemsSelect.innerHTML = '<option value="">Loading...</option>';
 
-        if (!customerId) {
+        if (!patientName) {
             itemsSelect.innerHTML = '<option value="">Select Customer First</option>';
             return;
         }
 
-        fetch(`/sales/get-customer-invoices/${customerId}/`)
+        fetch(`/sales/get-customer-invoices/?patient_name=${encodeURIComponent(patientName)}`)
             .then(res => res.json())
             .then(data => {
-                itemsSelect.innerHTML = '<option value="">Select Invoice</option>';
-                if (data.invoices && data.invoices.length > 0) {
-                    data.invoices.forEach(inv => {
+
+                itemsSelect.innerHTML = '<option value="">Select Product</option>';
+
+                if (data.products && data.products.length > 0) {
+
+                    data.products.forEach(product => {
+
                         const opt = new Option(
-                            `${inv.invoice_number} - ${inv.patient_name} (${inv.items_count} items)`,
-                            inv.id
+                            product.product_name,
+                            product.id
                         );
+
                         itemsSelect.appendChild(opt);
                     });
+
                 } else {
-                    itemsSelect.innerHTML = '<option value="">No invoices found for this customer</option>';
+
+                    itemsSelect.innerHTML =
+                        '<option value="">No products found</option>';
                 }
             })
             .catch(() => {
-                itemsSelect.innerHTML = '<option value="">Error loading invoices</option>';
+                itemsSelect.innerHTML =
+                    '<option value="">Error loading products</option>';
             });
     });
 });
 
 function deleteReminder(id) {
-    if (confirm('Delete this reminder?')) {
-        alert('Delete functionality coming soon!');
+
+    if (!confirm('Delete this reminder?')) {
+        return;
     }
+
+    fetch(
+        `/sales/prescription-reminders/delete/${id}/`,
+        {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken':
+                    document.querySelector(
+                        '[name=csrfmiddlewaretoken]'
+                    ).value
+            }
+        }
+    )
+    .then(response => response.json())
+    .then(data => {
+
+        if (data.success) {
+
+            location.reload();
+
+        } else {
+
+            alert(data.error);
+        }
+    });
 }
 </script>
 {% endblock %}

@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import User
 from easypharma.models.Items import *
 from easypharma.models.purchase_invoice import PurchaseInvoice, Supplier
-from easypharma.models.sales import SaleInvoice
+from easypharma.models.sales import SaleInvoice,PrescriptionReminder
 
 # Register your models here.
 admin.site.register(User)
@@ -15,4 +15,5 @@ admin.site.register(Products)
 admin.site.register(PurchaseInvoice)
 admin.site.register(SaleInvoice)
 admin.site.register(Supplier)
+admin.site.register(PrescriptionReminder)
 
