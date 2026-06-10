@@ -115,4 +115,13 @@ class SalesReturnItem(TenantAwareModel):
         if self.returned_quantity > self.sale_item.quantity:
             raise ValueError("Returned quantity cannot exceed sold quantity")
         super().save(*args, **kwargs)
-    
+
+class PrescriptionReminder(TenantAwareModel):
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
+    prescription_date = models.DateField()
+    reminder_date = models.DateField()
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Reminder for {self.customer.name} on {self.reminder_date}"

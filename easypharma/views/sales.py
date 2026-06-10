@@ -1,11 +1,13 @@
 from django.views import View
+from django.utils import timezone
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.contrib import messages
 from django.db import transaction
 from django.db.models import F, Q
 from easypharma.models.Items import Products
-from easypharma.models.sales import SaleInvoice, SaleItem, Customer, SalesReturn, SalesReturnItem
+from easypharma.models.sales import (SaleInvoice, SaleItem,
+                                    Customer, SalesReturn, SalesReturnItem,PrescriptionReminder)
 import json
 from datetime import datetime
 from urllib.parse import quote_plus
@@ -549,3 +551,67 @@ class PatientWiseSalesAPI(View):
             })
         
         return JsonResponse(data, safe=False)
+
+
+class PrescriptionReminderView(View):
+    template_name = "sales/prescription_reminders.html"
+
+    def get(self, request):
+        reminders = PrescriptionReminder.objects.filter(tenant=request.tenant).order_by('reminder_date')
+        customers = SaleInvoice.objects.filter(tenant=request.tenant).order_by('patient_name')
+        inv_items = SaleItem.objects.filter(sale_invoice__tenant=request.tenant).select_related('sale_invoice', 'product')
+        reminders = PrescriptionReminder.objects.filter(tenant=request.tenant).order_by('reminder_date')
+        return render(request, self.template_name, {
+            'reminders': reminders,
+            'customers': customers,
+            'inv_items': inv_items,
+            'today': timezone.now().date()   # for status badge
+        })
+    
+    def post(self, request):
+        customer_id = request.POST.get('customer_id')
+        prescription_date = request.POST.get('prescription_date')
+        reminder_date = request.POST.get('reminder_date')
+        notes = request.POST.get('notes', '').strip()
+        
+        if not (customer_id and prescription_date and reminder_date):
+            messages.error(request, 'Customer, prescription date, and reminder date are required.')
+            return redirect('prescription_reminders')
+        
+        try:
+            customer = Customer.objects.get(id=customer_id, tenant=request.tenant)
+            reminder = PrescriptionReminder.objects.create(
+                tenant=request.tenant,
+                customer=customer,
+                prescription_date=prescription_date,
+                reminder_date=reminder_date,
+                notes=notes
+            )
+            messages.success(request, f"Reminder set for {customer.name} on {reminder.reminder_date}.")
+        except Customer.DoesNotExist:
+            messages.error(request, 'Customer not found.')
+        except Exception as e:
+            messages.error(request, f"Error creating reminder: {e}")
+        
+        return redirect('prescription_reminders')
+
+# ==================== NEW AJAX VIEW ====================
+def get_customer_invoices(request, customer_id):
+    if not request.tenant:
+        return JsonResponse({'invoices': []})
+
+    invoices = SaleInvoice.objects.filter(
+        tenant=request.tenant,
+        customer_id=customer_id
+    ).prefetch_related('items').order_by('-created_at')
+
+    data = []
+    for inv in invoices:
+        data.append({
+            'id': inv.id,
+            'invoice_number': inv.invoice_number,
+            'patient_name': inv.patient_name or inv.customer.name if inv.customer else '',
+            'items_count': inv.items.count(),
+        })
+
+    return JsonResponse({'invoices': data})
