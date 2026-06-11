@@ -22,6 +22,7 @@ def home_view(request):
         'total_customers': total_customers,
         'low_stock_count': low_stock_count,
         'prescriptions_count': prescriptions_count,
+        'today_str': date.today().strftime('%Y-%m')
     }
     return render(request, "home.html", context)
 
