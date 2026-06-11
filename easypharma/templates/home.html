@@ -125,7 +125,7 @@
     <!-- Charts Row 1: Revenue Trends -->
     <div class="row g-4 mb-4">
         <!-- Monthly Revenue Trend -->
-        <div class="col-lg-8">
+        <div class="col-lg-4">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
                     <h6 class="m-0 fw-bold text-dark"><i class="fas fa-chart-line me-2 text-primary"></i>Revenue Trend (12 Months)</h6>
@@ -152,43 +152,7 @@
                 </div>
             </div>
         </div>
-    </div>
-
-    <!-- Charts Row 2: Daily Sales & Top Products -->
-    <div class="row g-4 mb-4">
-        <!-- Daily Sales -->
-        <div class="col-lg-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-white border-0 py-3">
-                    <h6 class="m-0 fw-bold text-dark"><i class="fas fa-calendar-days me-2 text-info"></i>Daily Sales (Last 7 Days)</h6>
-                </div>
-                <div class="card-body">
-                    <div style="height: 280px;">
-                        <canvas id="dailySalesChart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Top Selling Products -->
-        <div class="col-lg-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-white border-0 py-3">
-                    <h6 class="m-0 fw-bold text-dark"><i class="fas fa-star me-2 text-warning"></i>Top 5 Selling Products</h6>
-                </div>
-                <div class="card-body">
-                    <div style="height: 280px;">
-                        <canvas id="topProductsChart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Alerts & Inventory Health Row -->
-    <div class="row g-4 mb-4">
-        <!-- Expiry Alerts -->
-        <div class="col-xl-6">
+        <div class="col-lg-4">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
                     <h6 class="m-0 fw-bold text-danger"><i class="fas fa-calendar-times me-2"></i>Expiry Alerts (Next 90 Days)</h6>
@@ -228,9 +192,38 @@
                 </div>
             </div>
         </div>
+    </div>
 
-        <!-- Quick Stats -->
-        <div class="col-xl-6">
+    <!-- Charts Row 2: Daily Sales & Top Products -->
+    <div class="row g-4 mb-4">
+        <!-- Daily Sales -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0 py-3">
+                    <h6 class="m-0 fw-bold text-dark"><i class="fas fa-calendar-days me-2 text-info"></i>Daily Sales (Last 7 Days)</h6>
+                </div>
+                <div class="card-body">
+                    <div style="height: 280px;">
+                        <canvas id="dailySalesChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Selling Products -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0 py-3">
+                    <h6 class="m-0 fw-bold text-dark"><i class="fas fa-star me-2 text-warning"></i>Top 5 Selling Products</h6>
+                </div>
+                <div class="card-body">
+                    <div style="height: 280px;">
+                        <canvas id="topProductsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header bg-white border-0 py-3">
                     <h6 class="m-0 fw-bold text-dark"><i class="fas fa-chart-bar me-2"></i>Business Metrics</h6>
@@ -304,6 +297,54 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Alerts & Inventory Health Row -->
+    <div class="row g-4 mb-4">
+        <!-- Expiry Alerts -->
+        <!-- <div class="col-xl-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 fw-bold text-danger"><i class="fas fa-calendar-times me-2"></i>Expiry Alerts (Next 90 Days)</h6>
+                    <span class="badge bg-danger rounded-pill">{{ near_expiry_batches|length }} Items</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0 small">
+                            <thead class="bg-light text-muted">
+                                <tr>
+                                    <th class="ps-3">Medicine</th>
+                                    <th>Batch</th>
+                                    <th>Expiry</th>
+                                    <th>Stock</th>
+                                    <th class="pe-3">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for batch in near_expiry_batches %}
+                                <tr>
+                                    <td class="ps-3 fw-bold">{{ batch.product.product_name }}</td>
+                                    <td><span class="badge bg-light text-dark border">{{ batch.batch_number }}</span></td>
+                                    <td class="text-danger fw-bold">{{ batch.expiry_date|date:"M Y" }}</td>
+                                    <td>{{ batch.current_quantity }} Units</td>
+                                    <td class="pe-3">
+                                        <span class="badge bg-warning text-dark">Expiring Soon</span>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center py-4 text-muted">✓ No items expiring soon. Great inventory management!</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div> -->
+
+        <!-- Quick Stats -->
+        
     </div>
 </div>
 
