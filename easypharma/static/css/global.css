@@ -19,8 +19,8 @@ body {
 }
 
 #content.active {
-    width: 100%;
-    margin-left: 0;
+    width: calc(100% - 70px);
+    margin-left: 70px;
 }
 
 @media (max-width: 768px) {

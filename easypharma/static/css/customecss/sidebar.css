@@ -4,7 +4,7 @@
     --sidebar-active: #0d6efd; /* Blue for active */
     --sidebar-text: #e7e1cb; /* Cream text */
     --sidebar-width: 280px;
-    --sidebar-collapsed-width: 0px; /* Hide on toggle for full focus */
+    --sidebar-collapsed-width: 70px; /* Hide on toggle for full focus */
 }
 
 body {
@@ -13,6 +13,31 @@ body {
 }
 
 /* Sidebar styling */
+
+/* Expand on hover when collapsed */
+.sidebar.collapsed:hover {
+    width: var(--sidebar-width);
+}
+
+.sidebar.collapsed:hover .sidebar-text,
+.sidebar.collapsed:hover h6.sidebar-text,
+.sidebar.collapsed:hover .bi-caret-down-fill {
+    display: block;
+}
+
+.sidebar.collapsed:hover .nav-link {
+    justify-content: flex-start;
+    padding: 12px 20px;
+}
+
+.sidebar.collapsed:hover .nav-link i {
+    margin-right: 15px;
+}
+
+.sidebar.collapsed:hover h5 {
+    padding: 20px 10px;
+}
+
 .sidebar {
     height: 100vh;
     background-color: var(--sidebar-bg);
@@ -27,7 +52,13 @@ body {
 }
 
 .sidebar.collapsed {
-    left: calc(var(--sidebar-width) * -1);
+    width: var(--sidebar-collapsed-width);
+    left: 0; /* sidebar visible rahe, sirf narrow */
+}
+
+/* Hide text labels when collapsed */
+.sidebar.collapsed .sidebar-text {
+    display: none;
 }
 
 .sidebar .nav-link {
@@ -87,7 +118,7 @@ body {
 }
 
 .sidebar.collapsed + .sidebar-toggle {
-    left: 20px;
+    left: calc(var(--sidebar-collapsed-width) - 20px);
 }
 
 /* Responsive adjustments */
@@ -104,4 +135,26 @@ body {
 .mobile-sidebar {
     background-color: var(--sidebar-bg);
     z-index: 1000;
+}
+
+/* Center icons when collapsed */
+.sidebar.collapsed .nav-link {
+    justify-content: center;
+    padding: 12px 0;
+}
+
+
+/* Hide dropdown arrows when collapsed */
+.sidebar.collapsed .bi-caret-down-fill {
+    display: none;
+}
+
+/* Hide submenus when collapsed */
+.sidebar.collapsed:not(:hover) .collapse {
+    display: none !important;
+}
+
+/* Hide section headers (Administration, Inventory, etc) when collapsed */
+.sidebar.collapsed h6.sidebar-text {
+    display: none;
 }
