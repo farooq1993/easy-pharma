@@ -28,7 +28,7 @@
                 <input type="text" id="productSearch"
                     class="form-control py-3 ps-5 rounded-pill border-0 bg-light shadow-md"
                     placeholder="🔍 Search by medicine name (Press / to focus)..."
-                    style="font-size: 1rem; min-height: 50px; border: 2px solid transparent; transition: all 0.3s;">
+                    style="font-size: 1rem; min-height: 50px; border: 2px solid transparent; transition: all 0.3s;" autoComplete="off">
                 <i class="fas fa-search position-absolute top-50 start-0 translate-middle-y ms-4 text-muted"></i>
                 <span class="position-absolute top-50 end-0 translate-middle-y me-4 text-muted x-small fw-bold">Press
                     <kbd>↓</kbd> | <kbd>↑</kbd> | <kbd>↵</kbd> to Add</span>
@@ -149,6 +149,11 @@
                                         id="summaryDiscountPerc" value="0" placeholder="%"
                                         oninput="calculateDiscount('perc')">
                                 </div>
+                            </div>
+                            <hr class="opacity-10">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="text-muted small">Round Off</span>
+                                <span class="fw-bold small" id="summaryRoundOff">0.00</span>
                             </div>
                             <hr class="opacity-10">
                             <div class="d-flex justify-content-between align-items-center">
@@ -449,6 +454,36 @@
     </div>
 </div>
 
+<!-- Schedule H1 / Narcotic Drug Alert Modal -->
+<div class="modal fade" id="h1AlertModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+            <div class="modal-body p-0">
+                <div class="text-center pt-4 pb-3 px-4" style="background: linear-gradient(135deg, #fff3e0, #ffe0b2);">
+                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-white shadow-sm mb-2"
+                         style="width: 64px; height: 64px;">
+                        <i class="fas fa-exclamation-triangle fa-2x text-warning"></i>
+                    </div>
+                    <h5 class="fw-bold mb-0" style="color:#e65100;">Schedule H1</h5>
+                </div>
+                <div class="p-4 text-center">
+                    <p class="mb-1 text-muted small text-uppercase fw-bold">Product</p>
+                    <h6 class="fw-bold mb-3" id="h1AlertProductName">—</h6>
+                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle px-3 py-2 mb-3 fs-6" id="h1AlertScheduleLabel">SCHEDULE H1</span>
+                    <p class="text-muted small mb-0 mt-2">
+                        Please ensure prescription details (Doctor Name, Patient Name &amp; Address) are correctly recorded for this sale as per regulations.
+                    </p>
+                </div>
+                <div class="modal-footer border-0 pt-0 justify-content-center pb-4">
+                    <button type="button" class="btn btn-warning rounded-pill px-5 fw-bold text-white" data-bs-dismiss="modal">
+                        <i class="fas fa-check me-1"></i> Understood
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     let cart = [];
     let searchSelectedIndex = -1;
@@ -539,6 +574,14 @@
     // Keyboard Shortcuts
     document.addEventListener('keydown', (e) => {
         const results = document.querySelectorAll('.batch-item');
+
+        // Close H1/Narcotic alert modal on Enter
+        const h1ModalEl = document.getElementById('h1AlertModal');
+        if (e.key === 'Enter' && h1ModalEl.classList.contains('show')) {
+            e.preventDefault();
+            bootstrap.Modal.getInstance(h1ModalEl).hide();
+            return;
+        }
 
         // ESC close search dropdown
         if (e.key === 'Escape') {
@@ -696,7 +739,8 @@
                             expiry: "${b.expiry}", 
                             price: ${b.price}, 
                             tax_rate: ${product.tax_rate}, 
-                            stock: ${b.stock}
+                            stock: ${b.stock},
+                            schedule: "${(product.schedule || '').replace(/"/g,'&quot;')}"
                         })'>+ ADD</button>
                 </div>`;
             });
@@ -769,7 +813,7 @@
                     <div class="d-flex align-items-center gap-2">
                         <span class="fw-bold text-success">₹${b.price.toFixed(2)}</span>
                         <button class="btn btn-success btn-sm px-3 rounded-pill fw-bold"
-                            onclick='addToCart({id:${s.id},batch_id:${b.batch_id},name:"${s.name.replace(/"/g,"&quot;")}",batch_no:"${b.batch_no}",expiry:"${b.expiry}",price:${b.price},tax_rate:${s.tax_rate},stock:${b.stock}}); bootstrap.Modal.getInstance(document.getElementById("substituteModal")).hide();'>
+                            onclick='addToCart({id:${s.id},batch_id:${b.batch_id},name:"${s.name.replace(/"/g,"&quot;")}",batch_no:"${b.batch_no}",expiry:"${b.expiry}",price:${b.price},tax_rate:${s.tax_rate},stock:${b.stock},schedule:"${(s.schedule || '').replace(/"/g,'&quot;')}"}); bootstrap.Modal.getInstance(document.getElementById("substituteModal")).hide();'>
                             + ADD
                         </button>
                     </div>
@@ -860,9 +904,22 @@
         }
     }
 
+    function showH1Alert(productName, scheduleLabel) {
+        document.getElementById('h1AlertProductName').textContent = productName;
+        document.getElementById('h1AlertScheduleLabel').textContent = scheduleLabel || 'SCHEDULE H1';
+        const modal = new bootstrap.Modal(document.getElementById('h1AlertModal'));
+        modal.show();
+    }
+
     function addToCart(product) {
         if (product.stock <= 0) {
             return alert('Out of stock!');
+        }
+
+        // ── Schedule H1 / Narcotic Drug Alert ──
+        const scheduleStr = (product.schedule || '').toUpperCase();
+        if (scheduleStr.includes('H1') || scheduleStr.includes('NARCOTIC')) {
+            showH1Alert(product.name, product.schedule);
         }
 
         const existing = cart.find(
@@ -1096,10 +1153,21 @@
             return sum + (taxPerItem * item.quantity);
         }, 0);
         const discount = parseFloat(document.getElementById('summaryDiscount').value) || 0;
-        const grandTotal = (subTotal + totalTax) - discount;
+        let grandTotal = (subTotal + totalTax) - discount;
+
+        // ── Round Off ──
+        const roundedTotal = Math.round(grandTotal);
+        const roundOff = roundedTotal - grandTotal;
+        grandTotal = roundedTotal;
+
         document.getElementById('summarySubTotal').innerText = subTotal.toFixed(2);
         document.getElementById('summaryTax').innerText = totalTax.toFixed(2);
         document.getElementById('summaryGrandTotal').innerText = grandTotal.toFixed(2);
+
+        const roundOffEl = document.getElementById('summaryRoundOff');
+        if (roundOffEl) {
+            roundOffEl.innerText = (roundOff >= 0 ? '+' : '') + roundOff.toFixed(2);
+        }
 
         // Update footer counters
         const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -1219,6 +1287,7 @@
             sub_total: parseFloat(document.getElementById('summarySubTotal').innerText),
             tax_amount: parseFloat(document.getElementById('summaryTax').innerText),
             discount_amount: parseFloat(document.getElementById('summaryDiscount').value) || 0,
+            round_off: parseFloat(document.getElementById('summaryRoundOff').innerText) || 0,
             total_amount: parseFloat(document.getElementById('summaryGrandTotal').innerText),
             sale_type: !document.getElementById('counterSaleBanner').classList.contains('d-none') ? 'Counter' : 'Prescription'
         };
