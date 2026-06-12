@@ -246,8 +246,6 @@
                             <td>₹{{ sale.tax_amount|floatformat:2 }}</td>
                             <td>₹{{ sale.discount_amount|floatformat:2 }}</td>
                             <td><strong class="text-success">₹{{ sale.total_amount|floatformat:2 }}</strong></td>
-                            {% with bp=bill_profit_data|default:{} %}
-                            {% with bdata=bp|default:{} %}
                             <td>
                                 {% if bill_profit_data %}
                                   {% for k, v in bill_profit_data.items %}
@@ -266,7 +264,6 @@
                                   {% endfor %}
                                 {% else %}—{% endif %}
                             </td>
-                            {% endwith %}{% endwith %}
                             <td>{{ sale.payment_mode }}</td>
                             <td>{{ sale.created_at|date:"H:i" }}</td>
                         </tr>
