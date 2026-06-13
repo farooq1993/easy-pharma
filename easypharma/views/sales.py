@@ -23,7 +23,7 @@ class POSView(View):
         customers = Customer.objects.filter(tenant=request.tenant)
         product_taxes = ProductTax.objects.filter(tenant=request.tenant)
         default_doctor = DoctorModel.objects.filter(tenant=request.tenant, is_default=True).first()
-
+    
         edit_invoice = None
         edit_data = None
         if invoice_id:
@@ -240,7 +240,6 @@ class ProductSearchAPI(View):
             tenant=request.tenant,
             product_name__icontains=query
         ).select_related('product_tax', 'product_content', 'compny_name').prefetch_related('batches')[:10]
-        
         data = []
         for p in products:
             batches = p.batches.filter(current_quantity__gt=0).order_by('expiry_date')
@@ -282,13 +281,13 @@ class ProductSearchAPI(View):
                 'name': p.product_name,
                 'packing': p.product_packing,
                 'content': p.product_content.content_name if p.product_content else None,
+                'schedule': p.product_schedule.schedule_name if p.product_schedule else None,
                 'company': p.compny_name.company_name if p.compny_name else None,
                 'tax_rate': p.product_tax.tax_rate if p.product_tax else 0,
                 'conversion_factor': p.conversion_factor,
                 'out_of_stock': False,
                 'batches': batch_list
             })
-            
         return JsonResponse(data, safe=False)
 
 

@@ -5,11 +5,19 @@
 
 {% block content %}
 <div class="container-fluid py-4">
+    <!-- Firm Details (used for PDF header, hidden on screen) -->
+    <div id="firmDetailsForPdf" class="d-none">
+        <div data-field="name">{{ request.tenant.name|default:request.tenant.pharmacy_name|default:'' }}</div>
+        <div data-field="address">{{ request.tenant.address|default:'' }}</div>
+        <div data-field="phone">{{ request.tenant.phone|default:request.tenant.phone|default:'' }}</div>
+        <div data-field="gst">{{ request.tenant.gst_number|default:request.tenant.gst_number|default:'' }}</div>
+        <div data-field="license">{{ request.tenant.license_number|default:request.tenant.license_number|default:'' }}</div>
+    </div>
     <!-- Header -->
     <div class="row mb-4">
         <div class="col-md-8">
             <h1 class="h2">
-                <i class="bi bi-calendar-month"></i> {{ half_label }}
+                <i class="bi bi-calendar-month"></i> {{ start_date|date:'d M Y' }} - {{ end_date|date:'d M Y' }}
             </h1>
             <p class="text-muted">Sales analysis for the period</p>
         </div>
@@ -23,8 +31,8 @@
                     <input type="number" name="year" class="form-control" value="{{ year }}" min="2020" max="2100">
                 </div>
                 <div class="d-flex gap-2">
-                    <input type="date" name="start_date" class="form-control" value="{{ start_date|default:'' }}" placeholder="Start Date">
-                    <input type="date" name="end_date" class="form-control" value="{{ end_date|default:'' }}" placeholder="End Date">
+                    <input type="date" name="start_date" class="form-control" value="{{ start_date|date:'Y-m-d' }}" placeholder="Start Date">
+                    <input type="date" name="end_date" class="form-control" value="{{ end_date|date:'Y-m-d' }}" placeholder="End Date">
                 </div>
                 <select name="schedule" class="form-select">
                     <option value="all" {% if selected_schedule == 'all' %}selected{% endif %}>All Drug Types</option>
@@ -35,6 +43,9 @@
                 <button type="submit" class="btn btn-primary">Filter</button>
                 <button type="button" id="downloadHalfYearlyCsvBtn" class="btn btn-success">
                     <i class="bi bi-file-earmark-spreadsheet"></i> Export CSV
+                </button>
+                <button type="button" id="downloadHalfYearlyPdfBtn" class="btn btn-danger">
+                    <i class="bi bi-file-earmark-pdf"></i> Export PDF
                 </button>
             </form>
             <div class="mt-2">
@@ -83,89 +94,7 @@
         </div>
     </div>
 
-    <!-- Monthly Breakdown -->
-    <div class="card mb-4">
-        <div class="card-header bg-dark text-white">
-            <h5 class="mb-0">Monthly Breakdown</h5>
-        </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Month</th>
-                            <th class="text-center">Transactions</th>
-                            <th class="text-end">Subtotal</th>
-                            <th class="text-end">Tax</th>
-                            <th class="text-end">Discount</th>
-                            <th class="text-end">Total</th>
-                            <th class="text-end">Avg Sale</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for month in monthly_data %}
-                        <tr>
-                            <td><strong>{{ month.month }}</strong></td>
-                            <td class="text-center">
-                                <span class="badge bg-info">{{ month.sales_count }}</span>
-                            </td>
-                            <td class="text-end">₹{{ month.total|floatformat:2 }}</td>
-                            <td class="text-end">₹{{ month.tax|floatformat:2 }}</td>
-                            <td class="text-end">₹{{ month.discount|floatformat:2 }}</td>
-                            <td class="text-end">
-                                <strong class="text-success">₹{{ month.total|floatformat:2 }}</strong>
-                            </td>
-                            <td class="text-end">
-                                {% if month.sales_count > 0 %}
-                                    ₹{{ month.avg_sale|floatformat:2 }}
-                                {% else %}
-                                    ₹0.00
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- Product Summary -->
-    <div class="card mb-4">
-        <div class="card-header bg-dark text-white">
-            <h5 class="mb-0">Product Summary</h5>
-        </div>
-        <div class="card-body">
-            {% if product_summary %}
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Product</th>
-                            <th>Schedule</th>
-                            <th class="text-end">Quantity Sold</th>
-                            <th class="text-end">Revenue</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in product_summary %}
-                        <tr>
-                            <td>{{ item.product__product_name }}</td>
-                            <td>{{ item.product__product_schedule__schedule_name|default:'N/A' }}</td>
-                            <td class="text-end">{{ item.quantity_sold }}</td>
-                            <td class="text-end">₹{{ item.revenue|floatformat:2 }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-                <p class="text-muted">No product sale details found for this range.</p>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- Sale Details -->
+     <!-- Sale Details -->
     <div class="card mb-4">
         <div class="card-header bg-dark text-white">
             <h5 class="mb-0">Sale Details H1</h5>
@@ -223,6 +152,88 @@
         </div>
     </div>
 
+     <!-- Product Summary -->
+    <div class="card mb-4">
+        <div class="card-header bg-dark text-white">
+            <h5 class="mb-0">Product Summary</h5>
+        </div>
+        <div class="card-body">
+            {% if product_summary %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Product</th>
+                            <th>Schedule</th>
+                            <th class="text-end">Quantity Sold</th>
+                            <th class="text-end">Revenue</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in product_summary %}
+                        <tr>
+                            <td>{{ item.product__product_name }}</td>
+                            <td>{{ item.product__product_schedule__schedule_name|default:'N/A' }}</td>
+                            <td class="text-end">{{ item.quantity_sold }}</td>
+                            <td class="text-end">₹{{ item.revenue|floatformat:2 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+                <p class="text-muted">No product sale details found for this range.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Monthly Breakdown -->
+    <div class="card mb-4">
+        <div class="card-header bg-dark text-white">
+            <h5 class="mb-0">Monthly Breakdown</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Month</th>
+                            <th class="text-center">Transactions</th>
+                            <th class="text-end">Subtotal</th>
+                            <th class="text-end">Tax</th>
+                            <th class="text-end">Discount</th>
+                            <th class="text-end">Total</th>
+                            <th class="text-end">Avg Sale</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for month in monthly_data %}
+                        <tr>
+                            <td><strong>{{ month.month }}</strong></td>
+                            <td class="text-center">
+                                <span class="badge bg-info">{{ month.sales_count }}</span>
+                            </td>
+                            <td class="text-end">₹{{ month.total|floatformat:2 }}</td>
+                            <td class="text-end">₹{{ month.tax|floatformat:2 }}</td>
+                            <td class="text-end">₹{{ month.discount|floatformat:2 }}</td>
+                            <td class="text-end">
+                                <strong class="text-success">₹{{ month.total|floatformat:2 }}</strong>
+                            </td>
+                            <td class="text-end">
+                                {% if month.sales_count > 0 %}
+                                    ₹{{ month.avg_sale|floatformat:2 }}
+                                {% else %}
+                                    ₹0.00
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <div class="row">
         <div class="col-md-12">
             <div class="card">
@@ -270,6 +281,8 @@
         border-radius: 0.5rem;
     }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script>
     function downloadTableAsCsv(tableId, filename) {
         const table = document.getElementById(tableId);
@@ -288,11 +301,85 @@
         link.remove();
     }
 
+    function downloadTableAsPdf(tableId, filename, title) {
+        const table = document.getElementById(tableId);
+        if (!table) return;
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'landscape' });
+
+        // ── Firm Details Header ──
+        const firmEl = document.getElementById('firmDetailsForPdf');
+        let y = 15;
+        if (firmEl) {
+            const getField = (f) => {
+                const el = firmEl.querySelector(`[data-field="${f}"]`);
+                return el ? el.textContent.trim() : '';
+            };
+            const name = getField('name');
+            const address = getField('address');
+            const phone = getField('phone');
+            const gst = getField('gst');
+            const license = getField('license');
+
+            if (name) {
+                doc.setFontSize(16);
+                doc.setFont(undefined, 'bold');
+                doc.text(name, 14, y);
+                y += 7;
+            }
+            doc.setFontSize(9);
+            doc.setFont(undefined, 'normal');
+            if (address) { doc.text(address, 14, y); y += 5; }
+            const lineParts = [];
+            if (phone) lineParts.push('Phone: ' + phone);
+            if (gst) lineParts.push('GSTIN: ' + gst);
+            if (license) lineParts.push('License: ' + license);
+            if (lineParts.length) { doc.text(lineParts.join('   |   '), 14, y); y += 5; }
+            if (name || address || lineParts.length) {
+                y += 2;
+                doc.setLineWidth(0.3);
+                doc.line(14, y, doc.internal.pageSize.getWidth() - 14, y);
+                y += 6;
+            }
+        }
+
+        doc.setFontSize(13);
+        doc.setFont(undefined, 'bold');
+        doc.text(title, 14, y);
+        y += 3;
+
+        doc.autoTable({
+            html: '#' + tableId,
+            startY: y + 4,
+            styles: { fontSize: 8 },
+            headStyles: { fillColor: [33, 37, 41] },
+            didParseCell: function (data) {
+                // Replace rupee symbol with "Rs." to avoid font glyph issues
+                if (typeof data.cell.text !== 'undefined') {
+                    data.cell.text = data.cell.text.map(t => String(t).replace(/₹/g, 'Rs. '));
+                }
+            }
+        });
+
+        doc.save(filename);
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         const exportButton = document.getElementById('downloadHalfYearlyCsvBtn');
         if (exportButton) {
             exportButton.addEventListener('click', function () {
                 downloadTableAsCsv('halfYearSaleDetailsTable', 'half_yearly_sale_report_{{ start_date|date:"Y-m-d" }}_to_{{ end_date|date:"Y-m-d" }}.csv');
+            });
+        }
+
+        const exportPdfButton = document.getElementById('downloadHalfYearlyPdfBtn');
+        if (exportPdfButton) {
+            exportPdfButton.addEventListener('click', function () {
+                downloadTableAsPdf(
+                    'halfYearSaleDetailsTable',
+                    'half_yearly_sale_report_{{ start_date|date:"Y-m-d" }}_to_{{ end_date|date:"Y-m-d" }}.pdf',
+                    'Sale Details - {{ start_date|date:"d M Y" }} - {{ end_date|date:"d M Y" }}'
+                );
             });
         }
     });

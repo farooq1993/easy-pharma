@@ -11,7 +11,7 @@ from django.db.models import Sum, F, DecimalField, ExpressionWrapper, Q, Count, 
 from django.utils.timezone import now
 from datetime import datetime, timedelta,date
 from decimal import Decimal
-
+from tenants.models import Tenant
 
 logger = logging.getLogger('easypharma.reports')
 
@@ -165,7 +165,7 @@ class DailySaleReportView(View):
             date_obj = date_str
 
         logger.debug('DailySaleReportView.get date=%s schedule=%s tenant=%s user=%s', date_obj, selected_schedule, request.tenant, request.user)
-
+        
         # Get sales for the day
         sales = SaleInvoice.objects.filter(
             tenant=request.tenant,
@@ -308,7 +308,7 @@ class HalfYearlySaleReportView(View):
 
         today = now().date()
         current_month = today.month
-
+        
         if start_date is None or end_date is None:
             if half == 'H1' or (half == 'current' and current_month <= 6):
                 start_month = 1
@@ -322,7 +322,11 @@ class HalfYearlySaleReportView(View):
             start_date = datetime(year, start_month, 1).date()
             last_day = datetime(year, end_month, 1).replace(day=28) + timedelta(days=4)
             last_day = last_day.replace(day=1) - timedelta(days=1)
-            end_date = last_day.date()
+            computed_end = last_day.date()
+
+            # ── If the computed period extends into the future, cap end_date at today ──
+            end_date = min(computed_end, today)
+            half_label = f"{half_label} (as on {today.strftime('%d %b %Y')})" if end_date < computed_end else half_label
         else:
             half_label = date_range_label
 

@@ -48,7 +48,8 @@ class Products(TenantAwareModel):  # ✅ CHANGED: Inherit from TenantAwareModel
     product_content = models.ForeignKey(ProductContent, on_delete=models.CASCADE, null=True, blank=True)
     compny_name = models.ForeignKey(DrugCompany, on_delete=models.CASCADE, null=True, blank=True)
     conversion_factor = models.PositiveIntegerField(default=1, help_text="Number of units per pack (e.g. 10 tablets per strip)")
-
+    minimum_stock_level = models.PositiveIntegerField(default=0, help_text="Minimum stock level to trigger restocking alerts")
+    
     def __str__(self):
         return self.product_name
 

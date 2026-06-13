@@ -12,6 +12,7 @@ class Supplier(TenantAwareModel):
     phone = models.CharField(max_length=20)
     email = models.EmailField(null=True, blank=True)
     address = models.TextField(null=True, blank=True)
+    state = models.CharField(max_length=20, null=True, blank=True)
     gst_number = models.CharField(max_length=20, null=True, blank=True)
     dl_number = models.CharField(max_length=50, null=True, blank=True, help_text="Drug License Number")
     
