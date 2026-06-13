@@ -1,0 +1,398 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block title %}Purchase Suggestions{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4 ps-page">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div>
+            <h1 class="ps-title mb-1">Purchase Suggestions</h1>
+            <p class="ps-subtitle mb-0">Based on recent sales velocity vs. current stock on hand.</p>
+        </div>
+        <button id="refreshBtn" class="btn btn-outline-primary">
+            <i class="fa fa-sync"></i> Refresh
+        </button>
+    </div>
+
+    <div id="loadingMsg" class="text-center my-5">
+        <div class="spinner-border" role="status"></div>
+        <p class="mt-2 text-muted">Crunching the numbers…</p>
+    </div>
+
+    <div id="noDataMsg" class="alert alert-success d-none">
+        🎉 All products are sufficiently stocked. No purchase needed today.
+    </div>
+
+    <div class="table-responsive d-none ps-table-wrap" id="tableWrapper">
+        <table class="table table-hover align-middle mb-0 ps-table">
+            <thead>
+                <tr>
+                    <th style="width:28px;"></th>
+                    <th>Product</th>
+                    <th class="text-end">Stock</th>
+                    <th class="text-end">Avg/Day</th>
+                    <th class="text-end">Reorder Qty</th>
+                    <th>Best Supplier</th>
+                    <th class="text-end">Price</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="suggestionTableBody">
+                <!-- Rows injected via JS -->
+            </tbody>
+        </table>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mt-3 d-none" id="paginationWrapper">
+        <small class="text-muted" id="paginationInfo"></small>
+        <div class="btn-group">
+            <button id="prevPageBtn" class="btn btn-outline-secondary btn-sm">
+                <i class="fa fa-chevron-left"></i> Previous
+            </button>
+            <button id="nextPageBtn" class="btn btn-outline-secondary btn-sm">
+                Next <i class="fa fa-chevron-right"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .ps-title {
+        font-weight: 700;
+        font-size: 1.6rem;
+        letter-spacing: -0.01em;
+        color: #1a1a2e;
+    }
+    .ps-subtitle {
+        font-size: 0.85rem;
+        color: #8a8a9a;
+    }
+
+    .ps-table-wrap {
+        background: #fff;
+        border-radius: 12px;
+        border: 1px solid #edeef2;
+        box-shadow: 0 1px 2px rgba(20, 20, 40, 0.03);
+        overflow: hidden;
+    }
+
+    .ps-table {
+        font-size: 0.875rem;
+    }
+    .ps-table thead th {
+        background: #f7f7fb;
+        color: #6c6c80;
+        font-weight: 600;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        border-bottom: 1px solid #edeef2;
+        padding: 12px 14px;
+        white-space: nowrap;
+    }
+    .ps-table tbody td {
+        padding: 12px 14px;
+        border-bottom: 1px solid #f3f3f7;
+        vertical-align: middle;
+    }
+    .ps-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    /* Severity strip on the left edge of each row */
+    .ps-row {
+        position: relative;
+        cursor: pointer;
+        transition: background 0.12s ease;
+    }
+    .ps-row:hover {
+        background: #fafaff;
+    }
+    .ps-row td:first-child {
+        position: relative;
+    }
+    .ps-row .severity-bar {
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        width: 4px;
+    }
+    .ps-row.sev-critical .severity-bar { background: #e5484d; }
+    .ps-row.sev-low .severity-bar { background: #f5a524; }
+    .ps-row.sev-ok .severity-bar { background: #2dd4bf; }
+
+    .ps-toggle-icon {
+        color: #b4b4c4;
+        transition: transform 0.15s ease;
+        font-size: 0.75rem;
+    }
+    .ps-row.expanded .ps-toggle-icon {
+        transform: rotate(90deg);
+        color: #6c6c80;
+    }
+
+    .ps-product-name {
+        font-weight: 600;
+        color: #1a1a2e;
+    }
+    .ps-product-meta {
+        font-size: 0.75rem;
+        color: #9a9aae;
+    }
+
+    .ps-stock-pill {
+        display: inline-block;
+        min-width: 38px;
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-weight: 700;
+        font-size: 0.8rem;
+    }
+    .sev-critical .ps-stock-pill { background: #fdeaea; color: #c4352e; }
+    .sev-low .ps-stock-pill { background: #fef3e0; color: #b3760a; }
+    .sev-ok .ps-stock-pill { background: #e6fbf6; color: #14897f; }
+
+    .ps-reorder-qty {
+        font-weight: 700;
+        color: #1a1a2e;
+    }
+
+    .ps-supplier-name {
+        font-weight: 600;
+        color: #1a1a2e;
+        font-size: 0.85rem;
+    }
+    .ps-profit-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: #14897f;
+        background: #e6fbf6;
+        padding: 1px 6px;
+        border-radius: 5px;
+        margin-left: 6px;
+    }
+
+    .ps-price {
+        font-weight: 600;
+        color: #1a1a2e;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .ps-detail-row td {
+        background: #fafaff;
+        padding: 0;
+        border-bottom: 1px solid #f3f3f7;
+    }
+    .ps-detail-inner {
+        padding: 16px 20px 18px 38px;
+        font-size: 0.85rem;
+        color: #4a4a5a;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px 28px;
+    }
+    .ps-detail-block .ps-detail-label {
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #b4b4c4;
+        font-weight: 700;
+        margin-bottom: 3px;
+    }
+    .ps-detail-block .ps-detail-value {
+        color: #2a2a3a;
+    }
+    .ps-reason-block {
+        grid-column: 1 / -1;
+        background: #fff;
+        border: 1px solid #edeef2;
+        border-radius: 8px;
+        padding: 10px 14px;
+        color: #5a5a6e;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage = 1;
+const PAGE_SIZE = 20;
+
+document.addEventListener('DOMContentLoaded', function () {
+    loadSuggestions(currentPage);
+
+    document.getElementById('refreshBtn').addEventListener('click', function () {
+        loadSuggestions(currentPage);
+    });
+
+    document.getElementById('prevPageBtn').addEventListener('click', function () {
+        if (currentPage > 1) {
+            currentPage -= 1;
+            loadSuggestions(currentPage);
+        }
+    });
+
+    document.getElementById('nextPageBtn').addEventListener('click', function () {
+        currentPage += 1;
+        loadSuggestions(currentPage);
+    });
+});
+
+function severityClass(item) {
+    if (item.total_stock <= 0) return 'sev-critical';
+    if (item.total_stock <= item.reorder_qty) return 'sev-low';
+    return 'sev-ok';
+}
+
+function loadSuggestions(page = 1) {
+    const loadingMsg = document.getElementById('loadingMsg');
+    const noDataMsg = document.getElementById('noDataMsg');
+    const tableWrapper = document.getElementById('tableWrapper');
+    const paginationWrapper = document.getElementById('paginationWrapper');
+    const tbody = document.getElementById('suggestionTableBody');
+
+    loadingMsg.classList.remove('d-none');
+    noDataMsg.classList.add('d-none');
+    tableWrapper.classList.add('d-none');
+    paginationWrapper.classList.add('d-none');
+    tbody.innerHTML = '';
+
+    const url = `{% url 'smart_purchase_suggest' %}?page=${page}&page_size=${PAGE_SIZE}`;
+
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            loadingMsg.classList.add('d-none');
+
+            const results = data.results || [];
+
+            if (!results || results.length === 0) {
+                noDataMsg.classList.remove('d-none');
+                return;
+            }
+
+            results.forEach((item, idx) => {
+                const sev = severityClass(item);
+
+                const supplier = item.suggested_supplier;
+                const supplierCell = supplier
+                    ? `<span class="ps-supplier-name">${supplier.name}</span>`
+                    : '<span class="text-muted">No supplier yet</span>';
+
+                const priceCell = supplier
+                    ? `₹${supplier.purchase_price}`
+                    : '-';
+
+                const profitTag = (item.profit_difference && item.profit_difference > 0)
+                    ? `<span class="ps-profit-tag"><i class="fa fa-arrow-down"></i> ₹${item.profit_difference} cheaper</span>`
+                    : '';
+
+                // Main row
+                const row = document.createElement('tr');
+                row.className = `ps-row ${sev}`;
+                row.dataset.rowIndex = idx;
+
+                row.innerHTML = `
+                    <td><div class="severity-bar"></div><i class="fa fa-chevron-right ps-toggle-icon"></i></td>
+                    <td>
+                        <div class="ps-product-name">${item.name}</div>
+                        <div class="ps-product-meta">${item.packing || '—'}</div>
+                    </td>
+                    <td class="text-end"><span class="ps-stock-pill">${item.total_stock}</span></td>
+                    <td class="text-end">${item.avg_daily_sale}</td>
+                    <td class="text-end"><span class="ps-reorder-qty">${item.reorder_qty}</span></td>
+                    <td>${supplierCell}${profitTag}</td>
+                    <td class="text-end ps-price">${priceCell}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary add-to-purchase"
+                            data-product-id="${item.id}"
+                            data-supplier-id="${supplier ? supplier.id : ''}"
+                            data-conversion-factor="${item.conversion_factor}">
+                            Add
+                        </button>
+                    </td>
+                `;
+
+                // Detail row (hidden by default)
+                const detailRow = document.createElement('tr');
+                detailRow.className = 'ps-detail-row d-none';
+                detailRow.dataset.rowIndex = idx;
+
+                const lastSupplierText = item.last_supplier
+                    ? `${item.last_supplier.name} — ₹${item.last_purchase_price}/unit`
+                    : 'No previous purchase';
+
+                const lastPurchaseText = item.last_purchase || 'Never';
+
+                detailRow.innerHTML = `
+                    <td colspan="8">
+                        <div class="ps-detail-inner">
+                            <div class="ps-detail-block">
+                                <div class="ps-detail-label">Last Purchase</div>
+                                <div class="ps-detail-value">${lastPurchaseText}</div>
+                            </div>
+                            <div class="ps-detail-block">
+                                <div class="ps-detail-label">Last Supplier</div>
+                                <div class="ps-detail-value">${lastSupplierText}</div>
+                            </div>
+                            <div class="ps-detail-block">
+                                <div class="ps-detail-label">Conversion Factor</div>
+                                <div class="ps-detail-value">${item.conversion_factor} units / pack</div>
+                            </div>
+                            <div class="ps-reason-block">
+                                ${item.compare_reason || 'No additional notes.'}
+                            </div>
+                        </div>
+                    </td>
+                `;
+
+                tbody.appendChild(row);
+                tbody.appendChild(detailRow);
+
+                // Toggle expand/collapse on row click (ignore clicks on the Add button)
+                row.addEventListener('click', function (e) {
+                    if (e.target.closest('.add-to-purchase')) return;
+                    row.classList.toggle('expanded');
+                    detailRow.classList.toggle('d-none');
+                });
+            });
+
+            tableWrapper.classList.remove('d-none');
+
+            // Pagination controls
+            currentPage = data.page || 1;
+            const totalPages = data.total_pages || 1;
+            const totalCount = data.count || 0;
+
+            document.getElementById('paginationInfo').textContent =
+                `Page ${currentPage} of ${totalPages} (${totalCount} items)`;
+
+            document.getElementById('prevPageBtn').disabled = !data.has_previous;
+            document.getElementById('nextPageBtn').disabled = !data.has_next;
+
+            paginationWrapper.classList.remove('d-none');
+
+            // Attach click handlers for "Add to Purchase" buttons
+            document.querySelectorAll('.add-to-purchase').forEach(btn => {
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    const productId = this.dataset.productId;
+                    const supplierId = this.dataset.supplierId;
+
+                    // Redirect to purchase invoice creation page,
+                    // pre-filling product & supplier via query params
+                    window.location.href = `/purchase/create/?product_id=${productId}&supplier_id=${supplierId}`;
+                });
+            });
+        })
+        .catch(error => {
+            loadingMsg.classList.add('d-none');
+            console.error('Error loading suggestions:', error);
+            alert('Failed to load purchase suggestions. Please try again.');
+        });
+}
+</script>
+{% endblock %}

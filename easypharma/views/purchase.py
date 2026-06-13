@@ -2,15 +2,19 @@ from django.views import View
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Sum,F, Q, Min
+
 from easypharma.models.Items import (Products,DrugCompany, ProductContent, 
                                      ProductSchedule,
                                      ProductTax, ProductType)
 
 from easypharma.models.purchase_invoice import Supplier, PurchaseInvoice, PurchaseItem
 from easypharma.models.stock import StockBatch
+from easypharma.models.sales import SaleItem
 from django.db import transaction
 from django.utils.timezone import now
+from django.utils import timezone
+from datetime import timedelta
 import json
 import io
 import re
@@ -957,3 +961,221 @@ class ProductBatchHistoryView(View):
             for b in batches
         ]
         return JsonResponse(result, safe=False)
+
+
+
+
+class SmartPurchaseSuggestPageView(View):
+    """Renders the HTML page."""
+    template_name = 'purchase/purchase_suggestion.html'
+
+    def get(self, request):
+        return render(request, self.template_name)
+
+
+class SmartPurchaseSuggestAPIView(View):
+    """
+    Suggests products to purchase today based on:
+    - Average daily sales calculated over the actual number of active sale days
+      (not a fixed 30-day divisor, so new products with limited history are handled correctly)
+    - Current stock vs projected need (avg_daily_sale * reorder_days)
+    - Best supplier (lowest last purchase price = highest profit) vs last used supplier
+ 
+    Supports pagination via ?page=<n>&page_size=<n> query params.
+    No caching is applied — data is always computed fresh on each request.
+    """
+ 
+    DAYS_FOR_AVG = 30          # window to look back for sales history
+    REORDER_DAYS = 7           # how many days of stock you want to maintain
+    DEFAULT_PAGE_SIZE = 20
+    MAX_PAGE_SIZE = 100
+ 
+    def get(self, request):
+        tenant = request.tenant
+ 
+        cutoff_date = timezone.now() - timedelta(days=self.DAYS_FOR_AVG)
+ 
+        # Step 1: Get total sold + first sale date per product within the window
+        sales_data = (
+            SaleItem.objects
+            .filter(
+                tenant=tenant,
+                sale_invoice__created_at__gte=cutoff_date
+            )
+            .values('product_id')
+            .annotate(
+                total_sold=Sum('quantity'),
+                first_sale_date=Min('sale_invoice__created_at')
+            )
+        )
+ 
+        sales_map = {}
+        for row in sales_data:
+            days_active = (timezone.now() - row['first_sale_date']).days
+            days_active = max(days_active, 1)  # avoid division by zero for same-day sales
+            sales_map[row['product_id']] = {
+                'total_sold': row['total_sold'],
+                'days_active': days_active,
+            }
+ 
+        if not sales_map:
+            return JsonResponse({
+                'count': 0,
+                'page': 1,
+                'page_size': self.DEFAULT_PAGE_SIZE,
+                'total_pages': 0,
+                'has_next': False,
+                'has_previous': False,
+                'results': [],
+            }, safe=False)
+ 
+        # Step 2: Get current stock for these products
+        products_qs = (
+            Products.objects
+            .filter(tenant=tenant, id__in=sales_map.keys())
+            .annotate(total_stock=Sum('batches__current_quantity'))
+        )
+ 
+        suggestions = []
+ 
+        for product in products_qs:
+            total_stock = product.total_stock or 0
+ 
+            data = sales_map.get(product.id)
+            total_sold = data['total_sold']
+            days_active = data['days_active']
+ 
+            avg_daily_sale = total_sold / days_active
+            projected_need = avg_daily_sale * self.REORDER_DAYS
+ 
+            # Only suggest if current stock is less than projected need for reorder period
+            if total_stock >= projected_need:
+                continue
+ 
+            reorder_qty = round(projected_need - total_stock)
+            if reorder_qty <= 0:
+                continue
+ 
+            purchase_items = (
+                PurchaseItem.objects
+                .filter(tenant=tenant, product=product)
+                .select_related('purchase_invoice', 'purchase_invoice__supplier')
+                .order_by('-purchase_invoice__purchase_date')
+            )
+ 
+            if not purchase_items.exists():
+                suggestions.append({
+                    'id': product.id,
+                    'name': product.product_name,
+                    'packing': product.product_packing,
+                    'conversion_factor': product.conversion_factor,
+                    'total_stock': total_stock,
+                    'avg_daily_sale': round(avg_daily_sale, 2),
+                    'reorder_qty': reorder_qty,
+                    'last_purchase': None,
+                    'last_supplier': None,
+                    'last_purchase_price': None,
+                    'best_supplier': None,
+                    'best_purchase_price': None,
+                    'profit_difference': None,
+                    'compare_reason': "No previous purchase history found for this product. Please select a supplier.",
+                    'suggested_supplier': None,
+                })
+                continue
+ 
+            last_item = purchase_items.first()
+            last_supplier = last_item.purchase_invoice.supplier
+            last_price = last_item.purchase_price
+            last_date = last_item.purchase_invoice.purchase_date
+ 
+            supplier_latest_prices = {}
+            for item in purchase_items:
+                supplier = item.purchase_invoice.supplier
+                if supplier.id not in supplier_latest_prices:
+                    supplier_latest_prices[supplier.id] = {
+                        'supplier': supplier,
+                        'purchase_price': item.purchase_price,
+                        'purchase_date': item.purchase_invoice.purchase_date,
+                    }
+ 
+            best_entry = min(
+                supplier_latest_prices.values(),
+                key=lambda x: x['purchase_price']
+            )
+            best_supplier = best_entry['supplier']
+            best_price = best_entry['purchase_price']
+ 
+            profit_diff = last_price - best_price
+ 
+            if best_supplier.id != last_supplier.id and profit_diff > 0:
+                compare_reason = (
+                    f"Last time you purchased from '{last_supplier.name}' at ₹{last_price}/unit. "
+                    f"'{best_supplier.name}' offers it at ₹{best_price}/unit "
+                    f"(₹{profit_diff} more profit per unit)."
+                )
+                suggested_supplier_data = {
+                    'id': best_supplier.id,
+                    'name': best_supplier.name,
+                    'purchase_price': float(best_price),
+                }
+            else:
+                compare_reason = f"'{last_supplier.name}' is already offering the best price (₹{last_price}/unit)."
+                suggested_supplier_data = {
+                    'id': last_supplier.id,
+                    'name': last_supplier.name,
+                    'purchase_price': float(last_price),
+                }
+ 
+            suggestions.append({
+                'id': product.id,
+                'name': product.product_name,
+                'packing': product.product_packing,
+                'conversion_factor': product.conversion_factor,
+                'total_stock': total_stock,
+                'avg_daily_sale': round(avg_daily_sale, 2),
+                'reorder_qty': reorder_qty,
+                'last_purchase': last_date.strftime('%Y-%m-%d') if last_date else None,
+                'last_supplier': {
+                    'id': last_supplier.id,
+                    'name': last_supplier.name,
+                },
+                'last_purchase_price': float(last_price),
+                'best_supplier': {
+                    'id': best_supplier.id,
+                    'name': best_supplier.name,
+                },
+                'best_purchase_price': float(best_price),
+                'profit_difference': float(profit_diff),
+                'compare_reason': compare_reason,
+                'suggested_supplier': suggested_supplier_data,
+            })
+ 
+        # Most urgent first: highest sale velocity vs lowest remaining stock
+        suggestions.sort(key=lambda x: x['avg_daily_sale'], reverse=True)
+ 
+        # ---- Pagination ----
+        try:
+            page_number = int(request.GET.get('page', 1))
+        except (TypeError, ValueError):
+            page_number = 1
+ 
+        try:
+            page_size = int(request.GET.get('page_size', self.DEFAULT_PAGE_SIZE))
+        except (TypeError, ValueError):
+            page_size = self.DEFAULT_PAGE_SIZE
+ 
+        page_size = max(1, min(page_size, self.MAX_PAGE_SIZE))
+ 
+        paginator = Paginator(suggestions, page_size)
+        page_number = max(1, min(page_number, paginator.num_pages or 1))
+        page_obj = paginator.get_page(page_number)
+ 
+        return JsonResponse({
+            'count': paginator.count,
+            'page': page_obj.number,
+            'page_size': page_size,
+            'total_pages': paginator.num_pages,
+            'has_next': page_obj.has_next(),
+            'has_previous': page_obj.has_previous(),
+            'results': list(page_obj.object_list),
+        }, safe=False)

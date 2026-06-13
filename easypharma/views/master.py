@@ -182,6 +182,7 @@ class ProductCreate(View):
             product.product_hsn_code = request.POST.get("product_hsn_code")
             product.product_content_id = request.POST.get("product_content") or None
             product.compny_name_id = request.POST.get("compny_name") or None
+            product.minimum_stock_level = request.POST.get('minimum_stock_level') or None
             
             # Ensure conversion factor is at least 1 and handled correctly if empty
             try:

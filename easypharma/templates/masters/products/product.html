@@ -23,25 +23,31 @@
                 {% csrf_token %}
                 <div class="row g-4">
                     <!-- Product Name -->
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label for="productName" class="form-label fw-bold small text-uppercase">Product Name *</label>
-                        <input type="text" class="form-control py-2" id="productName" name="product_name" value="{{ product.product_name|default:'' }}" placeholder="Enter product name" required>
+                        <input type="text" class="form-control py-2" id="productName" name="product_name" value="{{ product.product_name|default:'' }}" placeholder="Enter product name" required autocomplete="Off">
                     </div>
 
                     <!-- Product Packing -->
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <label for="productPacking" class="form-label fw-bold small text-uppercase">Product Packing</label>
                         <input type="text" class="form-control py-2" id="productPacking" name="product_packing" value="{{ product.product_packing|default:'' }}" placeholder="e.g., 10 tablets">
                     </div>
 
                     <!-- Conversion Factor -->
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <label for="conversionFactor" class="form-label fw-bold small text-uppercase">Conv. Factor (Units/Pack)</label>
                         <input type="number" class="form-control py-2" id="conversionFactor" name="conversion_factor" value="{{ product.conversion_factor|default:'1' }}" required>
                     </div>
 
+                    <!-- Minimum Stock Level -->
+                    <div class="col-md-4">
+                        <label for="minimumStockLevel" class="form-label fw-bold small text-uppercase">Minimum Stock Level</label>
+                        <input type="number" class="form-control py-2" id="minimumStockLevel" name="minimum_stock_level" value="{{ product.minimum_stock_level|default:'0' }}" min="0" placeholder="e.g., 10">
+                    </div>
+
                     <!-- Product Type -->
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label for="productType" class="form-label fw-bold small text-uppercase w-100 d-flex justify-content-between">
                             <span>Product Type</span>
                             <a href="#" onclick="openQuickAdd('product-type', 'productType', 'Product Type', 'name'); return false;" class="text-success text-decoration-none text-lowercase" title="Add new product type"><i class="fas fa-plus"></i> add new</a>
@@ -55,7 +61,7 @@
                     </div>
 
                     <!-- Product Schedule -->
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label for="productSchedule" class="form-label fw-bold small text-uppercase w-100 d-flex justify-content-between">
                             <span>Product Schedule</span>
                             <a href="#" onclick="openQuickAdd('drug-schedule', 'productSchedule', 'Product Schedule', 'schedule_name'); return false;" class="text-success text-decoration-none text-lowercase" title="Add new product schedule"><i class="fas fa-plus"></i> add new</a>
@@ -69,7 +75,7 @@
                     </div>
 
                     <!-- Product Tax -->
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label for="productTax" class="form-label fw-bold small text-uppercase">Product Tax</label>
                         <select class="form-select py-2" id="productTax" name="product_tax">
                             <option value="">Select Product Tax</option>
@@ -80,13 +86,13 @@
                     </div>
 
                     <!-- HSN Code -->
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label for="productHsnCode" class="form-label fw-bold small text-uppercase">HSN Code *</label>
                         <input type="text" class="form-control py-2" id="productHsnCode" name="product_hsn_code" value="{{ product.product_hsn_code|default:'' }}" placeholder="Enter HSN code" required>
                     </div>
 
                     <!-- Product Content -->
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label for="productContent" class="form-label fw-bold small text-uppercase w-100 d-flex justify-content-between">
                             <span>Product Content</span>
                             <a href="#" onclick="openQuickAdd('product-content', 'productContent', 'Product Content', 'content_name'); return false;" class="text-success text-decoration-none text-lowercase" title="Add new product content"><i class="fas fa-plus"></i> add new</a>
@@ -100,7 +106,7 @@
                     </div>
 
                     <!-- Product Company -->
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label for="productCompany" class="form-label fw-bold small text-uppercase w-100 d-flex justify-content-between">
                             <span>Product Company</span>
                             <a href="#" onclick="openQuickAdd('drug-company', 'productCompany', 'Product Company', 'company_name'); return false;" class="text-success text-decoration-none text-lowercase" title="Add new product company"><i class="fas fa-plus"></i> add new</a>
