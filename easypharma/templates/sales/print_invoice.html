@@ -268,11 +268,11 @@
 
       @page {
         {% if ps.paper_size == '4x6' %}
-          size: 4in auto;
-          margin: 3mm;
+          size: 4in 6in;
+          margin: {{ ps.margin_top|default:3 }}mm {{ ps.margin_sides|default:3 }}mm;
         {% elif ps.paper_size == '8x4' %}
           size: 8in 4in;
-          margin: 3mm 4mm;
+          margin: {{ ps.margin_top|default:3 }}mm {{ ps.margin_sides|default:4 }}mm;
         {% elif ps.paper_size == '80mm' %}
           size: 80mm auto;
           margin: 2mm 3mm;
@@ -520,8 +520,8 @@
       const style = document.createElement('style');
       style.textContent = `
         @page {
-          size: 4in auto !important;
-          margin: 3mm !important;
+          size: 4in 6in !important;
+          margin: {{ ps.margin_top|default:3 }}mm {{ ps.margin_sides|default:3 }}mm !important;
         }
         body {
           width: 4in !important;
