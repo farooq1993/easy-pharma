@@ -1,6 +1,7 @@
 from django.db import models
 from tenants.models import TenantAwareModel
 from django.conf import settings
+import uuid as uuid_lib
 
 class MigrationLog(TenantAwareModel):
     IMPORT_TYPES = [
@@ -43,3 +44,16 @@ class MigrationLog(TenantAwareModel):
 
     def __str__(self):
         return f"{self.get_import_type_display()} - {self.records_count} rows ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
+
+
+
+
+class MigrationRow(TenantAwareModel):
+    job_id = models.UUIDField(db_index=True)
+    order = models.IntegerField()
+    data = models.JSONField()
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['job_id', 'order']),
+        ]

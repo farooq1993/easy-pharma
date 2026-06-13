@@ -1,8 +1,3 @@
-# ================================
-# dataMigration/views.py
-# FULL OPTIMIZED VERSION
-# ================================
-
 import json
 import uuid
 import threading
@@ -31,7 +26,7 @@ from easypharma.models.Items import (
 from easypharma.models.purchase_invoice import Supplier
 from easypharma.models.stock import StockBatch
 
-from dataMigration.models import MigrationLog
+from dataMigration.models import MigrationLog,MigrationRow
 
 from dataMigration.workers import start_background_migration
 
@@ -903,7 +898,7 @@ class MigrationParseView(LoginRequiredMixin, OrganizationRequiredMixin, View):
         try:
             chunk_index = int(request.POST.get('chunk_index', 0))
             total_chunks = int(request.POST.get('total_chunks', 1))
-            file_name = request.POST.get('file_name', 'upload.csv')
+            header_row = request.POST.get('header_row', '')
             tenant_id = request.POST.get('selected_tenant_id')
             job_id = request.POST.get('job_id') or str(uuid.uuid4())
 
@@ -911,25 +906,43 @@ class MigrationParseView(LoginRequiredMixin, OrganizationRequiredMixin, View):
             if not chunk_file:
                 return JsonResponse({'success': False, 'error': 'No chunk received'}, status=400)
 
-            import os
-            temp_dir = f"/tmp/migration_chunks/{tenant_id}/{job_id}"
-            os.makedirs(temp_dir, exist_ok=True)
+            chunk_content, _ = decode_uploaded_file(chunk_file)
 
-            chunk_path = os.path.join(temp_dir, f"chunk_{chunk_index:03d}.part")
+            if not header_row.strip():
+                return JsonResponse({'success': False, 'error': 'Missing header_row'}, status=400)
 
-            with open(chunk_path, 'wb') as f:
-                for chunk_data in chunk_file.chunks():
-                    f.write(chunk_data)
+            tenant = get_object_or_404(Tenant, id=tenant_id) if tenant_id else request.tenant
+
+            # Prepend header so DictReader works on this slice
+            full_chunk = header_row.strip() + '\n' + chunk_content
+
+            chunk_parsed = parse_product_seed_csv(full_chunk)
+
+            if chunk_parsed:
+                # Enrich just this chunk (DB IN-queries already internally chunked to 500)
+                _batch_enrich(chunk_parsed, import_type, tenant)
+
+                # Persist incrementally
+                base_order = chunk_index * 1_000_000  # large gap so ordering across chunks is stable
+                MigrationRow.objects.bulk_create([
+                    MigrationRow(
+                        job_id=job_id,
+                        tenant=tenant,
+                        order=base_order + i,
+                        data=row
+                    )
+                    for i, row in enumerate(chunk_parsed)
+                ])
 
             if chunk_index == total_chunks - 1:
-                return self._process_complete_file(temp_dir, total_chunks, import_type, tenant_id, job_id, file_name)
+                return self._finalize_chunked_job(job_id, tenant)
 
             return JsonResponse({
                 'success': True,
                 'chunk_index': chunk_index,
                 'progress': round(((chunk_index + 1) / total_chunks) * 100, 1),
                 'job_id': job_id,
-                'message': f'Chunk {chunk_index + 1}/{total_chunks} uploaded'
+                'message': f'Chunk {chunk_index + 1}/{total_chunks} processed'
             })
 
         except Exception as e:
@@ -937,42 +950,70 @@ class MigrationParseView(LoginRequiredMixin, OrganizationRequiredMixin, View):
             traceback.print_exc()
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
-    def _process_complete_file(self, temp_dir, total_chunks, import_type, tenant_id, job_id, original_name):
+
+    def _finalize_chunked_job(self, job_id, tenant):
         try:
-            final_path = os.path.join(temp_dir, f"combined_{original_name}")
+            qs = MigrationRow.objects.filter(job_id=job_id, tenant=tenant).order_by('order')
 
-            with open(final_path, 'wb') as outfile:
-                for i in range(total_chunks):
-                    chunk_path = os.path.join(temp_dir, f"chunk_{i:03d}.part")
-                    with open(chunk_path, 'rb') as infile:
-                        outfile.write(infile.read())
-
-            with open(final_path, 'r', encoding='utf-8', errors='replace') as f:
-                content = f.read()
-
-            parsed_data = parse_product_seed_csv(content)
-
-            cache.set(f'parsed_data_{job_id}', parsed_data, timeout=7200)
-
-            import shutil
-            shutil.rmtree(temp_dir, ignore_errors=True)
-
-            tenant = Tenant.objects.get(id=tenant_id)
-            preview_data, summary = _batch_enrich(parsed_data, import_type, tenant)
+            total = qs.count()
+            preview = [r.data for r in qs[:100]]
+            warnings = qs.filter(data__import_status__icontains='Exists').count()
 
             return JsonResponse({
                 'success': True,
                 'status': 'done',
                 'job_id': job_id,
-                'data': preview_data[:100],
-                'summary': summary,
-                'total_records': len(parsed_data)
+                'data': preview,
+                'summary': {
+                    'total': total,
+                    'preview_count': len(preview),
+                    'warnings': warnings,
+                    'is_truncated': total > 100,
+                },
+                'total_records': total,
             })
-
         except Exception as e:
             import traceback
             traceback.print_exc()
             return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+    # def _process_complete_file(self, temp_dir, total_chunks, import_type, tenant_id, job_id, original_name):
+    #     try:
+    #         final_path = os.path.join(temp_dir, f"combined_{original_name}")
+
+    #         with open(final_path, 'wb') as outfile:
+    #             for i in range(total_chunks):
+    #                 chunk_path = os.path.join(temp_dir, f"chunk_{i:03d}.part")
+    #                 with open(chunk_path, 'rb') as infile:
+    #                     outfile.write(infile.read())
+
+    #         with open(final_path, 'r', encoding='utf-8', errors='replace') as f:
+    #             content = f.read()
+
+    #         parsed_data = parse_product_seed_csv(content)
+
+    #         cache.set(f'parsed_data_{job_id}', parsed_data, timeout=7200)
+
+    #         import shutil
+    #         shutil.rmtree(temp_dir, ignore_errors=True)
+
+    #         tenant = Tenant.objects.get(id=tenant_id)
+    #         preview_data, summary = _batch_enrich(parsed_data, import_type, tenant)
+
+    #         return JsonResponse({
+    #             'success': True,
+    #             'status': 'done',
+    #             'job_id': job_id,
+    #             'data': preview_data[:100],
+    #             'summary': summary,
+    #             'total_records': len(parsed_data)
+    #         })
+
+    #     except Exception as e:
+    #         import traceback
+    #         traceback.print_exc()
+    #         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
 # =========================================================
 # PARSE STATUS VIEW
 # =========================================================
@@ -1012,28 +1053,46 @@ class MigrationParseStatusView(
 # IMPORT VIEW
 # =========================================================
 
-class MigrationImportView(
-    LoginRequiredMixin,
-    OrganizationRequiredMixin,
-    View
-):
+class MigrationImportView(LoginRequiredMixin, OrganizationRequiredMixin, View):
 
     def post(self, request, *args, **kwargs):
 
         import_type = request.POST.get('import_type')
         job_id = request.POST.get('job_id')
 
-        # Try cache first
-        parsed_data = cache.get(f'parsed_data_{job_id}')
+        tenant_id = request.POST.get('selected_tenant_id')
+        if tenant_id:
+            tenant = get_object_or_404(Tenant, id=tenant_id)
+        else:
+            tenant = request.tenant
 
-        # ==================== FALLBACK RE-PARSING ====================
+        parsed_data = None
+
+        # ==================== 1. Try MigrationRow table (chunked uploads) ====================
+        if job_id:
+            try:
+                job_uuid = uuid.UUID(job_id)
+                rows_qs = MigrationRow.objects.filter(
+                    job_id=job_uuid, tenant=tenant
+                ).order_by('order')
+
+                if rows_qs.exists():
+                    parsed_data = [r.data for r in rows_qs]
+                    print(f"[IMPORT] Loaded {len(parsed_data)} rows from MigrationRow table", flush=True)
+            except (ValueError, TypeError):
+                pass
+
+        # ==================== 2. Try cache (small-file / non-chunked uploads) ====================
         if not parsed_data:
-            print("[IMPORT FALLBACK] Parsed data expired in cache → Re-parsing now...", flush=True)
-            
+            parsed_data = cache.get(f'parsed_data_{job_id}')
+
+        # ==================== 3. FALLBACK RE-PARSING ====================
+        if not parsed_data:
+            print("[IMPORT FALLBACK] Parsed data expired/missing → Re-parsing now...", flush=True)
+
             input_method = request.POST.get('input_method')
             drop_first_col = request.POST.get('drop_first_column') == 'true'
             content = ''
-            tenant_id = request.POST.get('selected_tenant_id')
 
             if input_method == 'file':
                 uploaded_file = request.FILES.get('file')
@@ -1048,7 +1107,6 @@ class MigrationImportView(
                     'error': 'Parsed data expired and no input found to re-parse'
                 })
 
-            # Re-parse based on type (same logic as parse job)
             try:
                 if import_type == 'product_seed':
                     parsed_data = parse_product_seed_csv(content)
@@ -1077,7 +1135,7 @@ class MigrationImportView(
                         'success': False,
                         'error': f'Unsupported import type: {import_type}'
                     })
-                
+
                 print(f"[IMPORT FALLBACK] Successfully re-parsed {len(parsed_data)} records", flush=True)
             except Exception as e:
                 import traceback
@@ -1087,13 +1145,7 @@ class MigrationImportView(
                     'error': f'Re-parsing failed: {str(e)}'
                 })
 
-        # Continue with normal flow
-        tenant_id = request.POST.get('selected_tenant_id')
-        if tenant_id:
-            tenant = get_object_or_404(Tenant, id=tenant_id)
-        else:
-            tenant = request.tenant
-
+        # ==================== Continue with normal flow ====================
         try:
             log_entry = MigrationLog.objects.create(
                 tenant=tenant,
@@ -1131,42 +1183,81 @@ class MigrationImportView(
 
 #     def post(self, request, *args, **kwargs):
 
-#         import_type = request.POST.get(
-#             'import_type'
-#         )
+#         import_type = request.POST.get('import_type')
+#         job_id = request.POST.get('job_id')
 
-#         job_id = request.POST.get(
-#             'job_id'
-#         )
+#         # Try cache first
+#         parsed_data = cache.get(f'parsed_data_{job_id}')
 
-#         parsed_data = cache.get(
-#             f'parsed_data_{job_id}'
-#         )
-
+#         # ==================== FALLBACK RE-PARSING ====================
 #         if not parsed_data:
+#             print("[IMPORT FALLBACK] Parsed data expired in cache → Re-parsing now...", flush=True)
+            
+#             input_method = request.POST.get('input_method')
+#             drop_first_col = request.POST.get('drop_first_column') == 'true'
+#             content = ''
+#             tenant_id = request.POST.get('selected_tenant_id')
 
-#             return JsonResponse({
-#                 'success': False,
-#                 'error': 'Parsed data expired'
-#             })
+#             if input_method == 'file':
+#                 uploaded_file = request.FILES.get('file')
+#                 if uploaded_file:
+#                     content, _ = decode_uploaded_file(uploaded_file)
+#             else:
+#                 content = request.POST.get('raw_text', '')
 
-#         tenant_id = request.POST.get(
-#             'selected_tenant_id'
-#         )
+#             if not content.strip():
+#                 return JsonResponse({
+#                     'success': False,
+#                     'error': 'Parsed data expired and no input found to re-parse'
+#                 })
 
+#             # Re-parse based on type (same logic as parse job)
+#             try:
+#                 if import_type == 'product_seed':
+#                     parsed_data = parse_product_seed_csv(content)
+#                 elif import_type == 'supplier':
+#                     parsed_data = parse_suppliers_from_text(content)
+#                 elif import_type == 'company':
+#                     if input_method == 'file':
+#                         rows = parse_csv_to_rows(content, drop_first_column=False)
+#                     else:
+#                         rows = parse_text_lines_to_rows(content, drop_first_column=False)
+#                     parsed_data = parse_companies(rows)
+#                 elif import_type == 'product':
+#                     if input_method == 'text':
+#                         parsed_data = parse_product_master_text(content)
+#                     else:
+#                         rows = parse_csv_to_rows(content, drop_first_column=False)
+#                         parsed_data = parse_products_fast(rows)
+#                 elif import_type == 'stock':
+#                     if input_method == 'file' and (',' in content[:1000] or '\t' in content[:1000]):
+#                         rows = parse_csv_to_rows(content, drop_first_column=False)
+#                     else:
+#                         rows = parse_text_lines_to_rows(content, drop_first_column=False)
+#                     parsed_data = parse_stock_batches(rows)
+#                 else:
+#                     return JsonResponse({
+#                         'success': False,
+#                         'error': f'Unsupported import type: {import_type}'
+#                     })
+                
+#                 print(f"[IMPORT FALLBACK] Successfully re-parsed {len(parsed_data)} records", flush=True)
+#             except Exception as e:
+#                 import traceback
+#                 traceback.print_exc()
+#                 return JsonResponse({
+#                     'success': False,
+#                     'error': f'Re-parsing failed: {str(e)}'
+#                 })
+
+#         # Continue with normal flow
+#         tenant_id = request.POST.get('selected_tenant_id')
 #         if tenant_id:
-
-#             tenant = get_object_or_404(
-#                 Tenant,
-#                 id=tenant_id
-#             )
-
+#             tenant = get_object_or_404(Tenant, id=tenant_id)
 #         else:
-
 #             tenant = request.tenant
 
 #         try:
-
 #             log_entry = MigrationLog.objects.create(
 #                 tenant=tenant,
 #                 import_type=import_type,
@@ -1178,10 +1269,7 @@ class MigrationImportView(
 #                 metadata={}
 #             )
 
-#             print("=" * 80, flush=True)
-#             print("[IMPORT START]", flush=True)
-#             print(f"TOTAL RECORDS={len(parsed_data)}", flush=True)
-#             print("=" * 80, flush=True)
+#             print(f"[IMPORT START] log_id={log_entry.id}, records={len(parsed_data)}", flush=True)
 
 #             start_background_migration(
 #                 log_id=log_entry.id,
@@ -1195,15 +1283,13 @@ class MigrationImportView(
 #             })
 
 #         except Exception as e:
-
 #             import traceback
-
 #             traceback.print_exc()
-
 #             return JsonResponse({
 #                 'success': False,
 #                 'error': str(e)
 #             })
+
 
 class MigrationStatusView(LoginRequiredMixin, OrganizationRequiredMixin, View):
     """
