@@ -23,7 +23,7 @@ class POSView(View):
         customers = Customer.objects.filter(tenant=request.tenant)
         product_taxes = ProductTax.objects.filter(tenant=request.tenant)
         default_doctor = DoctorModel.objects.filter(tenant=request.tenant, is_default=True).first()
-    
+
         edit_invoice = None
         edit_data = None
         if invoice_id:

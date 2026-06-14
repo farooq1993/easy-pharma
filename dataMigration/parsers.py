@@ -103,7 +103,8 @@ def parse_csv_to_rows(content, drop_first_column=False):
     junk_count = 0
     csv_reader = csv.reader(io.StringIO(content))
     for row in csv_reader:
-        cleaned = [str(col).strip() for col in row if str(col).strip()]
+        cleaned = [str(col).strip() if col is not None else "" for col in row]
+        #cleaned = [str(col).strip() for col in row if str(col).strip()]
         if not cleaned:
             continue
         if is_junk_report_row(cleaned):
@@ -133,7 +134,7 @@ def parse_text_lines_to_rows(text_content, drop_first_column=False):
         if not line_str:
             continue
         parts = re.split(r'\t| {2,}', line_str)
-        cleaned_parts = [clean_value(x) for x in parts if x.strip()]
+        cleaned_parts = [clean_value(x) for x in parts]
         if not cleaned_parts:
             continue
         if is_junk_report_row(cleaned_parts):
@@ -946,11 +947,7 @@ def parse_stock_batches(rows):
             # NORMALIZE ROW
             # =====================================================
 
-            r = [
-                str(x).strip()
-                for x in r
-                if str(x).strip()
-            ]
+            r = [str(x).strip() if x is not None else "" for x in r]
 
             if idx < 5:
 
@@ -1034,6 +1031,13 @@ def parse_stock_batches(rows):
                     break
 
             if expiry_idx == -1:
+                first_col = row_cells[0].strip()
+
+                if first_col.isdigit() and len(row_cells) >= 2:
+
+                    current_product_code = first_col
+
+                    current_product_name = row_cells[1].strip().upper()
 
                 skipped_no_batch += 1
 
@@ -1043,13 +1047,31 @@ def parse_stock_batches(rows):
             # DETECT SHIFTED ROW
             # =====================================================
 
-            if expiry_idx == 2:
+            if (
+                expiry_idx == 5
+                and len(row_cells) >= 9
+                and row_cells[0].strip().replace('.', '', 1).isdigit()
+            ):
 
+                # Separate-column format:
+                # P.Code | Product Name | Pack | M.R.P | Batch No | Expiry DT | Close | Total | Location
+                is_shifted = None
+            elif row_cells[0].strip() == "" and current_product_name:
+                is_shifted = True
+
+            elif expiry_idx in [2, 4]:
                 is_shifted = True
 
             elif expiry_idx == 3:
-
                 is_shifted = False
+
+            # elif expiry_idx == 2:
+
+            #     is_shifted = True
+
+            # elif expiry_idx == 3:
+
+            #     is_shifted = False
 
             else:
 
@@ -1063,28 +1085,71 @@ def parse_stock_batches(rows):
                 )
 
             # =====================================================
+            # SEPARATE-COLUMN ROW
+            # (P.Code | Product Name | Pack | M.R.P | Batch No | Expiry DT | Close | Total | Location)
+            # =====================================================
+
+            if is_shifted is None:
+
+                p_code = row_cells[0].strip()
+
+                p_name = row_cells[1].strip().upper()
+
+                mrp_str = row_cells[3]
+
+                batch_no = row_cells[4]
+
+                expiry_str = row_cells[5]
+
+                qty_str = row_cells[6]
+
+                company = (
+                    row_cells[-1]
+                    if row_cells else ""
+                )
+
+                current_product_code = p_code
+
+                current_product_name = p_name
+
+                current_company = (
+                    company
+                    or current_company
+                )
+
+            # =====================================================
             # SHIFTED / CONTINUATION ROW
             # =====================================================
 
-            if is_shifted:
+            elif is_shifted:
+                
+                p_code = current_product_code
+                p_name = current_product_name
 
-                mrp_str = row_cells[0]
+                # Multi-batch continuation row
+                # ['', '', '', '8.57', 'A25149SU', '31-10-2027', '5', '15']
 
-                batch_no = row_cells[1]
+                if expiry_idx == 5 and row_cells[0].strip() == "":
 
-                expiry_str = row_cells[2]
+                    mrp_str = row_cells[3]
+                    batch_no = row_cells[4]
+                    expiry_str = row_cells[5]
+                    qty_str = row_cells[6]
 
-                qty_str = row_cells[3]
+                else:
+
+                    # Standard shifted row
+                    # ['8.13', 'E260149', '31-01-2029', '94']
+
+                    mrp_str = row_cells[0]
+                    batch_no = row_cells[1]
+                    expiry_str = row_cells[2]
+                    qty_str = row_cells[3]
 
                 company = (
                     row_cells[-1]
                     or current_company
                 )
-
-                p_code = current_product_code
-
-                p_name = current_product_name
-
             # =====================================================
             # NEW PRODUCT ROW
             # =====================================================
@@ -1192,17 +1257,8 @@ def parse_stock_batches(rows):
             # =====================================================
 
             try:
-
-                qty = int(
-                    re.sub(
-                        r'[^\d]+',
-                        '',
-                        qty_str
-                    )
-                ) if qty_str else 0
-
-            except ValueError:
-
+                qty = int(float(str(qty_str).replace(',', '').strip()))
+            except:
                 qty = 0
 
             # =====================================================
@@ -1243,6 +1299,13 @@ def parse_stock_batches(rows):
             # =====================================================
             # FINAL APPEND
             # =====================================================
+            if p_name == "AKURIT 3 TAB":
+                print(
+                    "FOUND AKURIT:",
+                    batch_no,
+                    expiry,
+                    qty
+                )
 
             batches.append({
 
