@@ -22,7 +22,7 @@ class TenantMiddleware:
         host = request.get_host().split(':')[0]
         host_parts = host.split('.')
         
-        if len(host_parts) > 2 and host_parts[0] not in ['www', 'app']:
+        if (len(host_parts) > 2 and host not in ['127.0.0.1', 'localhost'] and host_parts[0] not in ['www', 'app']):
             subdomain = host_parts[0]
             try:
                 return Tenant.objects.get(subdomain=subdomain, is_active=True)
