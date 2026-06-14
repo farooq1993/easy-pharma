@@ -342,49 +342,49 @@ def _batch_enrich(parsed_data, import_type, tenant):
 
     elif import_type == 'product_seed':
 
-    incoming_product_names = list({
-        item['product_name'].upper()
-        for item in parsed_data
-        if item.get('product_name')
-    })
+        incoming_product_names = list({
+            item['product_name'].upper()
+            for item in parsed_data
+            if item.get('product_name')
+        })
 
-    incoming_company_names = list({
-        item.get('company_name', '').upper()
-        for item in parsed_data
-        if item.get('company_name')
-    })
+        incoming_company_names = list({
+            item.get('company_name', '').upper()
+            for item in parsed_data
+            if item.get('company_name')
+        })
 
-    existing_products = set(
-        Products.objects.filter(
-            tenant=tenant, product_name__in=incoming_product_names
-        ).values_list('product_name', flat=True)
-    ) if incoming_product_names else set()
+        existing_products = set(
+            Products.objects.filter(
+                tenant=tenant, product_name__in=incoming_product_names
+            ).values_list('product_name', flat=True)
+        ) if incoming_product_names else set()
 
-    existing_companies = set(
-        DrugCompany.objects.filter(
-            tenant=tenant, company_name__in=incoming_company_names
-        ).values_list('company_name', flat=True)
-    ) if incoming_company_names else set()
+        existing_companies = set(
+            DrugCompany.objects.filter(
+                tenant=tenant, company_name__in=incoming_company_names
+            ).values_list('company_name', flat=True)
+        ) if incoming_company_names else set()
 
-    existing_products_upper  = {x.upper() for x in existing_products}
-    existing_companies_upper = {x.upper() for x in existing_companies}
+        existing_products_upper  = {x.upper() for x in existing_products}
+        existing_companies_upper = {x.upper() for x in existing_companies}
 
-    for item in parsed_data:
-        pname = item['product_name'].upper()
-        cname = item.get('company_name', '').upper()
-        active = item.get('active_ingredients', [])
-        ingredients_str = ', '.join(
-            i.get('full_description', '') for i in active if i.get('full_description')
-        ) if active else ''
+        for item in parsed_data:
+            pname = item['product_name'].upper()
+            cname = item.get('company_name', '').upper()
+            active = item.get('active_ingredients', [])
+            ingredients_str = ', '.join(
+                i.get('full_description', '') for i in active if i.get('full_description')
+            ) if active else ''
 
-        item['ingredients_display'] = ingredients_str or item.get('drug_content', '-')
+            item['ingredients_display'] = ingredients_str or item.get('drug_content', '-')
 
-        if pname in existing_products_upper:
-            item.update(import_status='Exists', import_status_class='text-warning', notes='Product exists')
-        elif cname and cname not in existing_companies_upper:
-            item.update(import_status='Ready (Create Company)', import_status_class='text-info', notes='Company auto create')
-        else:
-            item.update(import_status='Ready', import_status_class='text-success', notes='')
+            if pname in existing_products_upper:
+                item.update(import_status='Exists', import_status_class='text-warning', notes='Product exists')
+            elif cname and cname not in existing_companies_upper:
+                item.update(import_status='Ready (Create Company)', import_status_class='text-info', notes='Company auto create')
+            else:
+                item.update(import_status='Ready', import_status_class='text-success', notes='')
 
     # =====================================================
     # STOCK
