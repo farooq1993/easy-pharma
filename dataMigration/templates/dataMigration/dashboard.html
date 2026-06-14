@@ -997,7 +997,7 @@ Prod.Type : []AYURVEDIC[]
     async function handleChunkedUpload(file) {
 
         const uploadJobId = crypto.randomUUID();
-        const ROWS_PER_CHUNK = 2000;
+        const ROWS_PER_CHUNK = 5000;
 
         // Read entire file as text so we can split it by rows
         const fullText = await file.text();
