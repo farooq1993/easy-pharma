@@ -1,12 +1,20 @@
 {% load static %}
 
-<!-- Sidebar Toggle Button -->
+<!-- Sidebar Toggle Button (Desktop) -->
 <button class="sidebar-toggle d-none d-md-block" id="sidebarToggle">
     <i class="bi bi-list"></i>
 </button>
 
-<!-- Desktop Sidebar -->
-<div class="sidebar p-3 d-none d-md-block" id="sidebarMenu">
+<!-- Sidebar Toggle Button (Mobile) -->
+<button class="mobile-sidebar-toggle d-md-none" id="mobileSidebarToggle" aria-label="Toggle menu">
+    <i class="bi bi-list"></i>
+</button>
+
+<!-- Backdrop shown behind the sidebar on mobile -->
+<div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+<!-- Sidebar (shared by desktop and mobile) -->
+<div class="sidebar p-3" id="sidebarMenu">
     <h5 class="mb-3 text-white">
         <i class="fas fa-clinic-medical me-2"></i>
         <span class="sidebar-text">{{ request.tenant.pharmacy_name|default:"Easy Pharma" }}</span>
@@ -227,27 +235,6 @@
     {% endif %}
 </div>
 
-<!-- Mobile Sidebar (Offcanvas style simulated) -->
-<div class="mobile-sidebar d-md-none" id="mobileSidebar">
-    <div class="d-flex justify-content-between align-items-center p-3 text-white">
-        <h5 class="mb-0">Easy Pharma</h5>
-        <button class="btn btn-sm btn-outline-light d-md-none" type="button" data-bs-toggle="collapse" data-bs-target="#mobileMenu">
-            <i class="bi bi-list"></i>
-        </button>
-    </div>
-    <div class="collapse" id="mobileMenu">
-        <ul class="nav nav-pills flex-column p-3">
-            <li><a href="{% url 'home' %}" class="nav-link"><i class="bi bi-speedometer2 me-2"></i>Dashboard</a></li>
-            <li><a href="{% url 'pos' %}" class="nav-link"><i class="bi bi-cart-plus-fill me-2"></i>Sale (POS)</a></li>
-            <li><a href="{% url 'pos_returns' %}" class="nav-link"><i class="bi bi-arrow-counterclockwise me-2"></i>Sales Returns</a></li>
-            <li><a href="{% url 'master-crud' 'pharmacy-link' %}" class="nav-link text-info"><i class="bi bi-building me-2"></i>Firm Details</a></li>
-            <li><a href="#" class="nav-link text-warning fw-bold" data-bs-toggle="modal" data-bs-target="#helpShortcutModal"><i class="bi bi-question-circle-fill me-2"></i>Keyboard Shortcuts & Help</a></li>
-            <hr class="text-white opacity-25">
-            <li><a href="{% url 'logout' %}" class="nav-link text-danger"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
-        </ul>
-    </div>
-</div>
-
 <!-- Help & Support Modal -->
 <div class="modal fade" id="helpShortcutModal" tabindex="-1" aria-labelledby="helpShortcutModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -367,3 +354,54 @@
         </div>
     </div>
 </div>
+
+<!-- Mobile Sidebar Toggle Script -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var sidebar = document.getElementById('sidebarMenu');
+    var mobileToggle = document.getElementById('mobileSidebarToggle');
+    var backdrop = document.getElementById('sidebarBackdrop');
+
+    if (!sidebar) return;
+
+    function openSidebar() {
+        sidebar.classList.add('mobile-open');
+        if (backdrop) backdrop.classList.add('show');
+    }
+
+    function closeSidebar() {
+        sidebar.classList.remove('mobile-open');
+        if (backdrop) backdrop.classList.remove('show');
+    }
+
+    if (mobileToggle) {
+        mobileToggle.addEventListener('click', function () {
+            if (sidebar.classList.contains('mobile-open')) {
+                closeSidebar();
+            } else {
+                openSidebar();
+            }
+        });
+    }
+
+    if (backdrop) {
+        backdrop.addEventListener('click', closeSidebar);
+    }
+
+    // Close the sidebar after tapping a real link (not a dropdown/collapse toggle)
+    sidebar.querySelectorAll('.nav-link').forEach(function (link) {
+        link.addEventListener('click', function () {
+            if (window.innerWidth <= 768 && !link.hasAttribute('data-bs-toggle')) {
+                closeSidebar();
+            }
+        });
+    });
+
+    // Reset state if window is resized back to desktop
+    window.addEventListener('resize', function () {
+        if (window.innerWidth > 768) {
+            closeSidebar();
+        }
+    });
+});
+</script>

@@ -74,22 +74,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-2">
-            <div class="card text-center border-0 shadow-sm" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9);">
-                <div class="card-body py-3">
-                    <h6 class="card-title text-muted small fw-semibold">Today's Profit</h6>
-                    <h3 class="text-success mb-0 fw-bold">₹{{ total_daily_profit|floatformat:2 }}</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-2">
-            <div class="card text-center border-0 shadow-sm" style="background:linear-gradient(135deg,#fff3e0,#ffe0b2);">
-                <div class="card-body py-3">
-                    <h6 class="card-title text-muted small fw-semibold">Profit Margin</h6>
-                    <h3 class="text-warning mb-0 fw-bold">{{ total_daily_margin }}%</h3>
-                </div>
-            </div>
-        </div>
+        
     </div>
 
     <!-- Sale Type Breakdown -->
@@ -211,8 +196,6 @@
                             <th>Tax</th>
                             <th>Discount</th>
                             <th>Total</th>
-                            <th>Profit</th>
-                            <th>Margin%</th>
                             <th>Payment Mode</th>
                             <th>Time</th>
                         </tr>
@@ -246,24 +229,6 @@
                             <td>₹{{ sale.tax_amount|floatformat:2 }}</td>
                             <td>₹{{ sale.discount_amount|floatformat:2 }}</td>
                             <td><strong class="text-success">₹{{ sale.total_amount|floatformat:2 }}</strong></td>
-                            <td>
-                                {% if bill_profit_data %}
-                                  {% for k, v in bill_profit_data.items %}
-                                    {% if k == sale.pk %}
-                                      <strong class="{% if v.profit >= 0 %}text-success{% else %}text-danger{% endif %}">₹{{ v.profit|floatformat:2 }}</strong>
-                                    {% endif %}
-                                  {% endfor %}
-                                {% else %}—{% endif %}
-                            </td>
-                            <td>
-                                {% if bill_profit_data %}
-                                  {% for k, v in bill_profit_data.items %}
-                                    {% if k == sale.pk %}
-                                      <span class="badge {% if v.margin >= 15 %}bg-success{% elif v.margin >= 5 %}bg-warning text-dark{% else %}bg-danger{% endif %}">{{ v.margin }}%</span>
-                                    {% endif %}
-                                  {% endfor %}
-                                {% else %}—{% endif %}
-                            </td>
                             <td>{{ sale.payment_mode }}</td>
                             <td>{{ sale.created_at|date:"H:i" }}</td>
                         </tr>
@@ -272,8 +237,6 @@
                         <tr class="table-success fw-bold">
                             <td colspan="7" class="text-end">Daily Totals:</td>
                             <td>₹{{ daily_stats.total_amount|floatformat:2 }}</td>
-                            <td class="text-success">₹{{ total_daily_profit|floatformat:2 }}</td>
-                            <td><span class="badge bg-success fs-6">{{ total_daily_margin }}%</span></td>
                             <td colspan="2"></td>
                         </tr>
                         {% endif %}
