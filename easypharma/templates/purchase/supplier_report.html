@@ -2,6 +2,9 @@
 {% load static %}
 
 {% block content %}
+<!-- Tom Select (searchable dropdown) -->
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+
 <div class="container mt-4">
     <h2>Supplier-wise Purchase Report</h2>
     <div class="mb-3">
@@ -78,6 +81,9 @@
                         </button>
                     </div>
                     <span id="searchResultCount" class="text-muted small" style="display:none;"></span>
+                    <button class="btn btn-sm btn-outline-danger" type="button" onclick="exportTableToPDF()" title="Export invoice list as PDF">
+                        <i class="bi bi-file-earmark-pdf me-1"></i>Export PDF
+                    </button>
                 </div>
             </div>
             <div class="card-body p-0">
@@ -156,6 +162,9 @@
                         </div>
                     </div>
                     <div class="modal-footer bg-light">
+                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="exportInvoicePDF()">
+                            <i class="bi bi-file-earmark-pdf me-1"></i>Download PDF
+                        </button>
                         <a id="modal_full_link" href="#" class="btn btn-primary btn-sm">
                             <i class="bi bi-box-arrow-up-right me-1"></i>Open Full Invoice
                         </a>
@@ -203,8 +212,29 @@
 <!-- Chart.js CDN -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
+<!-- Tom Select (searchable supplier dropdown) -->
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+
+<!-- jsPDF + AutoTable (PDF export) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
 <script>
+    // --- Searchable Supplier Dropdown ---
+    const supplierTomSelect = new TomSelect('#supplierSelect', {
+        create: false,
+        sortField: { field: "text", direction: "asc" },
+        placeholder: '-- Select Supplier --',
+        allowEmptyOption: true,
+    });
+
     let barChart, pieChart, lineChart;
+    let currentSupplierName = '';
+    let currentInvoiceData = null;
+
+    function formatINRForPDF(amount) {
+        return 'Rs. ' + parseFloat(amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 });
+    }
 
     const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -218,6 +248,7 @@
     document.getElementById('supplierSelect').addEventListener('change', function () {
         const supplierId = this.value;
         const supplierName = this.options[this.selectedIndex].text;
+        currentSupplierName = supplierId ? supplierName : '';
 
         if (supplierId) {
             fetch(`{% url 'supplier_report_data' 0 %}`.replace('0', supplierId))
@@ -462,6 +493,9 @@
     });
 
     function openInvoiceModal(p, supplierName) {
+        currentInvoiceData = p;
+        currentSupplierName = supplierName;
+
         // Fill header info
         document.getElementById('modal_invoice_number').textContent = p.invoice_number;
         document.getElementById('modal_date').textContent = p.date;
@@ -523,6 +557,97 @@
                 document.getElementById('modal_items_table').style.display = '';
             }
         }, 300);
+    }
+
+    // --- Export Invoice List (table) to PDF ---
+    function exportTableToPDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        const supplierName = currentSupplierName || document.getElementById('supplierName').textContent || 'Supplier';
+        const generatedOn = new Date().toLocaleDateString('en-IN');
+
+        doc.setFontSize(14);
+        doc.text('Supplier-wise Purchase Report', 14, 15);
+        doc.setFontSize(11);
+        doc.text(`Supplier: ${supplierName}`, 14, 23);
+        doc.text(`Generated on: ${generatedOn}`, 14, 29);
+
+        doc.setFontSize(10);
+        doc.text(`Total Invoices: ${document.getElementById('totalCount').textContent}`, 14, 36);
+        doc.text(`Total Amount: ${formatINRForPDF(document.getElementById('totalAmount').textContent.replace(/[^\d.]/g, ''))}`, 14, 41);
+
+        const rows = [];
+        document.querySelectorAll('#reportBody tr').forEach(tr => {
+            if (tr.style.display === 'none') return; // skip rows hidden by search filter
+            const cells = tr.querySelectorAll('td');
+            if (!cells.length) return;
+            rows.push([
+                cells[0].textContent.trim(),
+                cells[1].textContent.trim(),
+                cells[2].textContent.trim().replace('₹', 'Rs. '),
+            ]);
+        });
+
+        if (rows.length === 0) {
+            alert('No invoices to export.');
+            return;
+        }
+
+        doc.autoTable({
+            head: [['Invoice Number', 'Date', 'Total Amount']],
+            body: rows,
+            startY: 47,
+            theme: 'grid',
+            headStyles: { fillColor: [33, 37, 41] },
+            styles: { fontSize: 9 },
+        });
+
+        const safeName = supplierName.replace(/[^a-z0-9]+/gi, '_');
+        doc.save(`Purchase_Report_${safeName}.pdf`);
+    }
+
+    // --- Export Single Invoice Detail to PDF ---
+    function exportInvoicePDF() {
+        if (!currentInvoiceData) return;
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        const p = currentInvoiceData;
+
+        doc.setFontSize(15);
+        doc.text('Invoice Details', 14, 15);
+        doc.setFontSize(11);
+        doc.text(`Invoice No: ${p.invoice_number}`, 14, 25);
+        doc.text(`Date: ${p.date}`, 14, 32);
+        doc.text(`Supplier: ${currentSupplierName}`, 14, 39);
+
+        const rows = [];
+        if (p.items && p.items.length > 0) {
+            p.items.forEach((item, idx) => {
+                rows.push([
+                    idx + 1,
+                    `${item.product_name}\nBatch: ${item.batch_number} | Exp: ${item.expiry_date}`,
+                    item.quantity,
+                    formatINRForPDF(item.unit_price),
+                    formatINRForPDF(item.total_amount),
+                ]);
+            });
+        } else {
+            rows.push(['-', 'Item-level details not available', '-', '-', formatINRForPDF(p.total_amount)]);
+        }
+
+        doc.autoTable({
+            head: [['#', 'Product', 'Qty', 'Purchase Price', 'Amount']],
+            body: rows,
+            startY: 46,
+            theme: 'grid',
+            headStyles: { fillColor: [33, 37, 41] },
+            styles: { fontSize: 9 },
+            foot: [['', '', '', 'Grand Total', formatINRForPDF(p.total_amount)]],
+            footStyles: { fillColor: [33, 37, 41], textColor: 255, fontStyle: 'bold' },
+        });
+
+        doc.save(`Invoice_${p.invoice_number}.pdf`);
     }
 </script>
 {% endblock %}

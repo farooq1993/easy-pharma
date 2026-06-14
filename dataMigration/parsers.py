@@ -1126,9 +1126,6 @@ def parse_stock_batches(rows):
                 p_code = current_product_code
                 p_name = current_product_name
 
-                # Multi-batch continuation row
-                # ['', '', '', '8.57', 'A25149SU', '31-10-2027', '5', '15']
-
                 if expiry_idx == 5 and row_cells[0].strip() == "":
 
                     mrp_str = row_cells[3]
@@ -1299,13 +1296,6 @@ def parse_stock_batches(rows):
             # =====================================================
             # FINAL APPEND
             # =====================================================
-            if p_name == "AKURIT 3 TAB":
-                print(
-                    "FOUND AKURIT:",
-                    batch_no,
-                    expiry,
-                    qty
-                )
 
             batches.append({
 
