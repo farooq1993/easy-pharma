@@ -2,6 +2,9 @@
 {% load static %}
 
 {% block content %}
+<!-- Tom Select (searchable dropdown) -->
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+
 <div class="container-fluid">
     <div class="row align-items-center mb-4">
         <div class="col">
@@ -228,8 +231,24 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- Tom Select (searchable dropdown) -->
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+
 <script>
 let qaModal;
+
+// ── Searchable dropdowns (Tom Select) ──────────────────────────────
+document.addEventListener('DOMContentLoaded', function () {
+    ['productType', 'productSchedule', 'productTax', 'productContent', 'productCompany'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el && !el.tomselect) {
+            new TomSelect('#' + id, {
+                create: false,
+                sortField: { field: 'text', direction: 'asc' },
+            });
+        }
+    });
+});
 
 document.addEventListener('DOMContentLoaded', function() {
     qaModal = new bootstrap.Modal(document.getElementById('quickAddModal'));
@@ -295,9 +314,16 @@ function submitQuickAdd() {
             );
 
             if (select) {
-                const option = new Option(data.name, data.id, true, true);
-                select.add(option);
-                select.value = String(data.id);  // auto-select the new item
+                if (select.tomselect) {
+                    const ts = select.tomselect;
+                    ts.addOption({ value: String(data.id), text: data.name });
+                    ts.refreshOptions(false);
+                    ts.setValue(String(data.id));
+                } else {
+                    const option = new Option(data.name, data.id, true, true);
+                    select.add(option);
+                    select.value = String(data.id);  // auto-select the new item
+                }
             } else {
                 console.warn('Select not found:', selectId);
             }

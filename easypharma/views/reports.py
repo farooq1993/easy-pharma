@@ -1,8 +1,11 @@
 import logging
 import json as json_module
+from django.core.cache import cache
 from django.db.models import Prefetch
 from django.views import View
 from django.shortcuts import render
+from django.http import JsonResponse
+from decimal import Decimal
 from easypharma.models.stock import StockBatch
 from easypharma.models.Items import Products, ProductSchedule
 from easypharma.models.purchase_invoice import PurchaseInvoice, PurchaseItem
@@ -10,7 +13,6 @@ from easypharma.models.sales import SaleInvoice, SaleItem
 from django.db.models import Sum, F, DecimalField, ExpressionWrapper, Q, Count, Avg, Max, Min
 from django.utils.timezone import now
 from datetime import datetime, timedelta,date
-from decimal import Decimal
 from tenants.models import Tenant
 
 logger = logging.getLogger('easypharma.reports')
@@ -688,35 +690,59 @@ class GSTReportView(View):
         return render(request, self.template_name, context)
 
 
+# ── Cache helpers ──────────────────────────────────────────────
+PRODUCT_HISTORY_CACHE_TIMEOUT = 120  # seconds (tune as needed)
+
+
+def _product_history_cache_key(tenant_id, product_id):
+    return f"product_history:{tenant_id}:{product_id}"
+
+
+def invalidate_product_history_cache(tenant_id, product_id):
+    """
+    Call this whenever a PurchaseItem / SaleItem / StockBatch is
+    created, updated or deleted for this product, so the cached
+    history doesn't go stale.
+    """
+    cache.delete(_product_history_cache_key(tenant_id, product_id))
+
+
 class ProductHistoryView(View):
     template_name = 'reports/product_history.html'
 
     def get(self, request):
-        from django.http import JsonResponse
-        from django.shortcuts import redirect
-        from django.contrib import messages
-        from easypharma.models.purchase_invoice import PurchaseItem
-        from easypharma.models.sales import SaleItem
-        from easypharma.models.stock import StockBatch
-        
         product_id = request.GET.get('product_id')
         if not product_id:
             return render(request, self.template_name)
-        
+
+        is_ajax = (
+            request.headers.get('x-requested-with') == 'XMLHttpRequest'
+            or request.GET.get('ajax') == '1'
+        )
+        is_pdf = request.GET.get('pdf') == '1'
+
+        cache_key = _product_history_cache_key(request.tenant.id, product_id)
+
+        # ── Try cache first (only for the AJAX/JSON path, not PDF) ──
+        if is_ajax and not is_pdf:
+            cached_data = cache.get(cache_key)
+            if cached_data is not None:
+                return JsonResponse(cached_data)
+
         try:
             product = Products.objects.get(id=product_id, tenant=request.tenant)
         except Products.DoesNotExist:
-            if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('ajax') == '1':
+            if is_ajax:
                 return JsonResponse({'error': 'Product not found'}, status=404)
             messages.error(request, 'Product not found.')
             return redirect('product_history')
-        
+
         # Purchases:
         purchases = PurchaseItem.objects.filter(
             product=product,
             tenant=request.tenant
         ).select_related('purchase_invoice', 'purchase_invoice__supplier').order_by('-purchase_invoice__purchase_date')
-        
+
         purchase_list = []
         total_purchased_qty = 0
         total_free_qty = 0
@@ -733,16 +759,17 @@ class ProductHistoryView(View):
                 'expiry_date': item.expiry_date.strftime('%m/%Y') if item.expiry_date else '—',
                 'quantity': item.quantity,
                 'free_quantity': item.free_quantity or 0,
+                'mrp': float(item.mrp) if item.mrp is not None else None,
                 'purchase_price': float(item.purchase_price),
                 'total': float(Decimal(str(item.quantity)) * Decimal(str(item.purchase_price)))
             })
-            
+
         # Sales:
         sales = SaleItem.objects.filter(
             product=product,
             tenant=request.tenant
         ).select_related('sale_invoice').order_by('-sale_invoice__created_at')
-        
+
         sale_list = []
         total_sold_qty = 0
         total_sales_val = Decimal('0')
@@ -758,13 +785,13 @@ class ProductHistoryView(View):
                 'unit_price': float(item.unit_price),
                 'total': float(item.total_amount)
             })
-            
+
         # Stocks:
         stocks = StockBatch.objects.filter(
             product=product,
             tenant=request.tenant
         ).order_by('expiry_date')
-        
+
         stock_list = []
         current_stock = 0
         for b in stocks:
@@ -777,10 +804,10 @@ class ProductHistoryView(View):
                 'sale_price': float(b.sale_price) if b.sale_price else 0.0,
                 'mrp': float(b.mrp) if b.mrp else 0.0
             })
-            
+
         avg_purchase_price = float(total_purchase_val / total_purchased_qty) if total_purchased_qty > 0 else 0.0
         avg_sale_price = float(total_sales_val / total_sold_qty) if total_sold_qty > 0 else 0.0
-        
+
         data = {
             'product_name': product.product_name,
             'packing': product.product_packing or '—',
@@ -795,16 +822,18 @@ class ProductHistoryView(View):
             'sales': sale_list,
             'stocks': stock_list
         }
-        
-        if request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.GET.get('ajax') == '1':
+
+        if is_ajax:
+            if not is_pdf:
+                cache.set(cache_key, data, PRODUCT_HISTORY_CACHE_TIMEOUT)
             return JsonResponse(data)
-            
+
         context = {
             'product': product,
             'data': data
         }
 
-        if request.GET.get('pdf') == '1':
+        if is_pdf:
             return render_to_pdf(self.template_name, context, filename=f"product_history_{product.product_name}.pdf")
 
         return render(request, self.template_name, context)

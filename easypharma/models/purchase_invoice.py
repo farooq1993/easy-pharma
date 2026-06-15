@@ -96,6 +96,9 @@ class PurchaseItem(TenantAwareModel):
     tax_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
 
+    def __str__(self):
+        return f"{self.purchase_invoice.supplier.name} {self.purchase_invoice.invoice_number}"
+
     def save(self, *args, **kwargs):
         # When a purchase item is saved, we update the stock
         from easypharma.models.stock import StockBatch
@@ -120,3 +123,4 @@ class PurchaseItem(TenantAwareModel):
             if not created:
                 batch.current_quantity += total_units
                 batch.save()
+
