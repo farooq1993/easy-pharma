@@ -78,7 +78,7 @@
                         <div>
                             <label class="ep-label">Medicine <i class="fas fa-search"></i></label>
                             <div class="search-wrap position-relative">
-                                <input type="text" id="productSearch" class="ep-input" placeholder="Type name...">
+                                <input type="text" id="productSearch" class="ep-input" placeholder="Type name..." autocomplete="off">
                                 <div id="searchResults" class="search-dropdown" style="position:absolute; background:white; width:100%; z-index:1055;"></div>
                             </div>
                             <div id="productInfo" class="product-info-bar mt-1" style="font-size:0.7rem; background:var(--brand-light); border-radius:6px; padding:4px 8px; display:none;"></div>
@@ -1554,8 +1554,10 @@
         const sub    = items.reduce((s,i) => s + (i.quantity * i.purchase_price), 0);
         const taxSum = items.reduce((s,i) => s + i.tax_amount, 0);
         const gross  = sub + taxSum;
+
         let discAmt  = parseFloat(document.getElementById('summaryDiscount').value) || 0;
         let discPerc = parseFloat(document.getElementById('summaryDiscountPerc').value) || 0;
+
         if (changed === 'perc') {
             discAmt = (gross * discPerc) / 100;
             document.getElementById('summaryDiscount').value = discAmt.toFixed(2);
@@ -1563,33 +1565,36 @@
             if (gross > 0) discPerc = (discAmt / gross) * 100;
             document.getElementById('summaryDiscountPerc').value = discPerc.toFixed(2);
         }
+
+        // Force recalculation
         calculateSummary();
     }
 
     function calculateSummary() {
-        const sub    = items.reduce((s,i) => s + (i.quantity * i.purchase_price), 0);
-        const taxSum = items.reduce((s,i) => s + i.tax_amount, 0);
-        const gross  = sub + taxSum;
+        // Original Sub Total (before any discount) - This is what user wants to see
+        const originalSub = items.reduce((s, i) => s + (i.quantity * i.purchase_price), 0);
+        const taxSum      = items.reduce((s, i) => s + i.tax_amount, 0);
+        const gross       = originalSub + taxSum;
 
-        const disc          = parseFloat(document.getElementById('summaryDiscount').value) || 0;
+        const disc = parseFloat(document.getElementById('summaryDiscount').value) || 0;
         const discountRatio = gross > 0 ? disc / gross : 0;
 
-        // Discount ke baad effective sub & tax
-        const effectiveSub = sub    * (1 - discountRatio);
+        // Effective values after discount (used for tax & grand total calculation)
+        const effectiveSub = originalSub * (1 - discountRatio);
         const effectiveTax = taxSum * (1 - discountRatio);
 
-        // ── GST Bifurcation: CGST + SGST (each = GST% / 2) ──────────────────
-        // gstMap[rate] = { total, cgst, sgst }
+        // ── GST Bifurcation (after discount) ─────────────────────────────
         const gstMap = {};
         items.forEach(i => {
-            const rate           = parseFloat(i.tax_percentage) || 0;
-            const adjustedTax    = i.tax_amount * (1 - discountRatio);
-            const cgst           = adjustedTax / 2;
-            const sgst           = adjustedTax / 2;
+            const rate        = parseFloat(i.tax_percentage) || 0;
+            const adjustedTax = i.tax_amount * (1 - discountRatio);
+            const cgst        = adjustedTax / 2;
+            const sgst        = adjustedTax / 2;
+
             if (!gstMap[rate]) gstMap[rate] = { total: 0, cgst: 0, sgst: 0 };
-            gstMap[rate].total  += adjustedTax;
-            gstMap[rate].cgst   += cgst;
-            gstMap[rate].sgst   += sgst;
+            gstMap[rate].total += adjustedTax;
+            gstMap[rate].cgst  += cgst;
+            gstMap[rate].sgst  += sgst;
         });
 
         const gstDiv = document.getElementById('gstBifurcationSection');
@@ -1598,9 +1603,9 @@
         } else {
             let html = '';
             Object.keys(gstMap).sort((a,b) => parseFloat(a) - parseFloat(b)).forEach(rate => {
-                const g      = gstMap[rate];
-                const cgstR  = parseFloat(rate) / 2;
-                const sgstR  = parseFloat(rate) / 2;
+                const g     = gstMap[rate];
+                const cgstR = parseFloat(rate) / 2;
+                const sgstR = parseFloat(rate) / 2;
                 html += `
                 <div style="background:#f8f9ff; border-radius:8px; padding:6px 10px; margin-bottom:6px; border-left:3px solid #6366f1;">
                     <div class="d-flex justify-content-between fw-semibold" style="font-size:0.78rem; color:#4338ca;">
@@ -1624,19 +1629,23 @@
         const grandRounded = Math.round(grandRaw);
         const roundOff     = grandRounded - grandRaw;
 
+        // Credit Notes
         let totalCreditApplied = 0;
         document.querySelectorAll('.cn-amt-input').forEach(inp => {
             if (!inp.disabled) totalCreditApplied += (parseFloat(inp.value) || 0);
         });
         document.getElementById('summaryCreditApplied').innerText = `₹${totalCreditApplied.toFixed(2)}`;
 
-        document.getElementById('summarySubTotal').innerHTML = `₹${effectiveSub.toFixed(2)}`;
+        // === FIXED: Show Original Sub Total (Before Discount) ===
+        document.getElementById('summarySubTotal').innerHTML = `₹${originalSub.toFixed(2)}`;
+        
         document.getElementById('summaryTax').innerHTML      = `₹${effectiveTax.toFixed(2)}`;
 
-        // Round off row — show only when there's an actual difference
+        // Round Off
         const roundOffRow = document.getElementById('roundOffRow');
         const roundOffEl  = document.getElementById('summaryRoundOff');
         const roundSignEl = document.getElementById('roundOffSign');
+
         if (Math.abs(roundOff) >= 0.005) {
             roundOffRow.style.display = 'flex';
             const sign = roundOff > 0 ? '+' : '−';
@@ -1649,6 +1658,7 @@
 
         document.getElementById('summaryGrandTotal').innerHTML = `₹${grandRounded.toFixed(2)}`;
 
+        // Balance Due
         if (totalCreditApplied > 0) {
             document.getElementById('summaryBalanceDueRow').classList.remove('d-none');
             const balanceDue = Math.max(0, grandRounded - totalCreditApplied);
