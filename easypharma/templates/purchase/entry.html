@@ -140,6 +140,37 @@
                         <div><button class="btn-add-item" id="addItemBtn" type="button"><i class="fas fa-plus"></i> Add</button></div>
                     </div>
                     <div class="unit-preview" id="unitPreview"></div>
+
+                    <!-- Inline Previous Purchase History (auto-shows on product select) -->
+                    <div id="inlinePrevPurchases" class="prev-purchase-panel mt-3" style="display:none;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0 fw-bold text-warning">
+                                <i class="fas fa-history me-1"></i> Previous Purchases — <span id="prevPurchaseProductName"></span>
+                            </h6>
+                            <button type="button" class="btn-close btn-sm" onclick="hideInlinePrevPurchases()" aria-label="Close"></button>
+                        </div>
+                        <div class="table-responsive" style="max-height:220px;">
+                            <table class="table table-sm table-hover align-middle mb-0" id="inlinePrevPurchasesTable">
+                                <thead class="bg-light text-muted small text-uppercase">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Invoice No.</th>
+                                        <th>Supplier</th>
+                                        <th>Batch</th>
+                                        <th>Expiry</th>
+                                        <th>Qty</th>
+                                        <th>Free</th>
+                                        <th>Cost Price</th>
+                                        <th>MRP</th>
+                                        <th class="text-end">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="10" class="text-center py-3 text-muted">No data</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -1102,6 +1133,8 @@
                         suggestionsDiv.innerHTML = '';
                         suggestionsDiv.classList.remove('show');
                         if (p.id) fetchBatchHistory(p.id);
+                        // Auto-show previous purchase history for this product
+                        loadInlinePreviousPurchases(p.id, p.name);
                         // Focus moves to batch field for keyboard efficiency
                         document.getElementById('itemBatch').focus();
                     };
@@ -1463,6 +1496,7 @@
         selectedProduct = null;
         document.getElementById('productSearch').value = '';
         document.getElementById('itemTax').value = '0';
+        hideInlinePrevPurchases();
         const suggestionsDiv = document.getElementById('batchSuggestions');
         suggestionsDiv.innerHTML = '';
         suggestionsDiv.classList.remove('show');
@@ -1819,7 +1853,7 @@
     async function openPreviousPurchases(productId, productName) {
         document.getElementById('purchasesModalProductName').textContent = productName;
         const tbody = document.querySelector('#previousPurchasesTable tbody');
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin"></i> Loading last purchases...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin"></i> Loading last purchases...</td></tr>';
         
         const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('previousPurchasesModal'));
         modal.show();
@@ -1832,11 +1866,12 @@
             tbody.innerHTML = '';
             
             if (!data.purchases || data.purchases.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">No purchase entries recorded for this medicine.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted">No purchase entries recorded for this medicine.</td></tr>';
             } else {
                 const list = data.purchases.slice(0, 7);
                 list.forEach(p => {
                     const row = document.createElement('tr');
+                    const mrpVal = (p.mrp !== undefined && p.mrp !== null) ? `₹${parseFloat(p.mrp).toFixed(2)}` : '-';
                     row.innerHTML = `
                         <td>${p.date}</td>
                         <td><span class="badge bg-light text-dark border">${p.invoice_number}</span></td>
@@ -1846,6 +1881,7 @@
                         <td class="fw-bold">${p.quantity}</td>
                         <td class="text-success">+${p.free_quantity}</td>
                         <td class="fw-bold">₹${p.purchase_price.toFixed(2)}</td>
+                        <td class="fw-bold text-secondary">${mrpVal}</td>
                         <td class="text-end fw-bold text-primary">₹${p.total.toFixed(2)}</td>
                     `;
                     tbody.appendChild(row);
@@ -1853,10 +1889,62 @@
             }
         } catch (error) {
             console.error('Error fetching previous purchases:', error);
-            tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-danger">Error loading purchases</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-danger">Error loading purchases</td></tr>';
         }
     }
     window.openPreviousPurchases = openPreviousPurchases;
+
+    // ── Inline Previous Purchase History (auto-shown on product select) ──
+    async function loadInlinePreviousPurchases(productId, productName) {
+        const panel = document.getElementById('inlinePrevPurchases');
+        const tbody = document.querySelector('#inlinePrevPurchasesTable tbody');
+        document.getElementById('prevPurchaseProductName').textContent = productName;
+
+        panel.style.display = 'block';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center py-3 text-muted"><i class="fas fa-spinner fa-spin"></i> Loading previous purchases...</td></tr>';
+
+        try {
+            const resp = await fetch(`/product-history/?product_id=${productId}&ajax=1`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const data = await resp.json();
+            tbody.innerHTML = '';
+
+            if (!data.purchases || data.purchases.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" class="text-center py-3 text-muted">No previous purchase entries for this medicine.</td></tr>';
+                return;
+            }
+
+            data.purchases.slice(0, 5).forEach(p => {
+                const row = document.createElement('tr');
+                const mrpVal = (p.mrp !== undefined && p.mrp !== null) ? `₹${parseFloat(p.mrp).toFixed(2)}` : '-';
+                row.innerHTML = `
+                    <td>${p.date}</td>
+                    <td><span class="badge bg-light text-dark border">${p.invoice_number}</span></td>
+                    <td class="fw-bold text-dark">${p.supplier_name}</td>
+                    <td><span class="badge bg-light text-secondary border">${p.batch_number}</span></td>
+                    <td>${p.expiry_date}</td>
+                    <td class="fw-bold">${p.quantity}</td>
+                    <td class="text-success">+${p.free_quantity}</td>
+                    <td class="fw-bold">₹${p.purchase_price.toFixed(2)}</td>
+                    <td class="fw-bold text-secondary">${mrpVal}</td>
+                    <td class="text-end fw-bold text-primary">₹${p.total.toFixed(2)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        } catch (error) {
+            console.error('Error fetching previous purchases:', error);
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center py-3 text-danger">Error loading previous purchases</td></tr>';
+        }
+    }
+
+    function hideInlinePrevPurchases() {
+        const panel = document.getElementById('inlinePrevPurchases');
+        if (panel) panel.style.display = 'none';
+    }
+
+    window.loadInlinePreviousPurchases = loadInlinePreviousPurchases;
+    window.hideInlinePrevPurchases = hideInlinePrevPurchases;
 </script>
 
 <!-- Shortcuts Modal -->
@@ -1984,12 +2072,13 @@
                                 <th>Qty</th>
                                 <th>Free</th>
                                 <th>Cost Price</th>
+                                <th>MRP</th>
                                 <th class="text-end">Total</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr>
-                                <td colspan="9" class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin"></i> Loading...</td>
+                                <td colspan="10" class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin"></i> Loading...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -2000,6 +2089,19 @@
 </div>
 
 <style>
+    /* Inline Previous Purchase History panel */
+    .prev-purchase-panel {
+        border: 1.5px solid #fde68a;
+        background: #fffbeb;
+        border-radius: 12px;
+        padding: 12px 14px;
+        animation: prevPurchaseFadeIn 0.25s ease;
+    }
+    @keyframes prevPurchaseFadeIn {
+        from { opacity: 0; transform: translateY(-8px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
     .universal-loader {
         position: fixed;
         inset: 0;
