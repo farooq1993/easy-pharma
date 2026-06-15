@@ -5,10 +5,14 @@
   <title>Invoice #{{ invoice.invoice_number }}</title>
   <style>
     /* ── Page & Font ── */
+    /* Only load Inter for A4/8x4 (which have reliable internet). For 4x6/thermal use
+       system fonts so print() fires correctly even when offline. */
+    {% if ps.paper_size != '4x6' and ps.paper_size != '80mm' and ps.paper_size != '58mm' %}
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    {% endif %}
 
     :root {
-      --font-main: 'Inter', 'Segoe UI', Arial, sans-serif;
+      --font-main: {% if ps.paper_size == '4x6' or ps.paper_size == '80mm' or ps.paper_size == '58mm' %}'Arial', sans-serif{% else %}'Inter', 'Segoe UI', Arial, sans-serif{% endif %};
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -261,6 +265,7 @@
       .action-bar { display: none !important; }
       .page-wrapper {
         max-width: 100%;
+        width: 100%;
         margin: 0;
         border-radius: 0;
         box-shadow: none;
@@ -286,12 +291,14 @@
       }
 
       {% if ps.paper_size == '4x6' %}
-        body { font-family: 'Courier New', monospace !important; font-size: 8pt !important; color: #000 !important; }
+        /* 4x6 – compact thermal-style receipt */
+        body { font-family: Arial, 'Helvetica Neue', sans-serif !important; font-size: 8pt !important; color: #000 !important; width: 4in !important; }
+        .page-wrapper { width: 4in !important; max-width: 4in !important; overflow: visible !important; }
         .invoice-body { padding: 2mm !important; }
         .inv-header { gap: 6px !important; padding-bottom: 4px !important; margin-bottom: 4px !important; border-bottom: 1px solid #000 !important; }
         .inv-pharmacy-info h1 { font-size: 11pt !important; }
         .inv-pharmacy-info p { font-size: 7pt !important; }
-        .inv-title-strip { padding: 3px 6px !important; margin-bottom: 5px !important; border-radius: 0 !important; background: #eee !important; -webkit-print-color-adjust: exact; }
+        .inv-title-strip { padding: 3px 6px !important; margin-bottom: 5px !important; border-radius: 0 !important; background: #eee !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .inv-title-strip h2 { font-size: 9pt !important; }
         .inv-title-strip .inv-meta { font-size: 7pt !important; }
         .patient-grid { padding: 4px 6px !important; gap: 3px 10px !important; margin-bottom: 6px !important; border-radius: 0 !important; }
@@ -317,7 +324,8 @@
         .inv-header { padding-bottom: 4px !important; margin-bottom: 4px !important; }
         .items-table th, .items-table td { padding: 2px 3px !important; font-size: 7pt !important; }
       {% elif ps.paper_size == '80mm' %}
-        body { font-family: 'Courier New', monospace !important; font-size: 7.5pt !important; }
+        body { font-family: Arial, 'Helvetica Neue', sans-serif !important; font-size: 7.5pt !important; width: 80mm !important; }
+        .page-wrapper { width: 80mm !important; max-width: 80mm !important; }
         .invoice-body { padding: 2mm !important; }
         .inv-pharmacy-info h1 { font-size: 10pt !important; }
         .inv-pharmacy-info p { font-size: 6.5pt !important; }
@@ -325,7 +333,8 @@
         .totals-box { width: 160px !important; }
         .total-row { padding: 2px 6px !important; font-size: 7.5pt !important; }
       {% elif ps.paper_size == '58mm' %}
-        body { font-family: 'Courier New', monospace !important; font-size: 6.5pt !important; }
+        body { font-family: Arial, 'Helvetica Neue', sans-serif !important; font-size: 6.5pt !important; width: 58mm !important; }
+        .page-wrapper { width: 58mm !important; max-width: 58mm !important; }
         .invoice-body { padding: 1mm !important; }
         .inv-pharmacy-info h1 { font-size: 8pt !important; }
         .inv-pharmacy-info p { font-size: 6pt !important; }
@@ -336,6 +345,7 @@
       {% endif %}
     }
   </style>
+
 </head>
 <body>
 
@@ -514,7 +524,7 @@
     </div>
   </div>
 <script>
-  window.addEventListener('load', function () {
+  (function () {
     {% if ps.paper_size == '4x6' %}
       // Force 4x6 page size via CSS before printing
       const style = document.createElement('style');
@@ -525,7 +535,7 @@
         }
         body {
           width: 4in !important;
-          font-family: 'Courier New', monospace !important;
+          font-family: Arial, 'Helvetica Neue', sans-serif !important;
           font-size: 8pt !important;
         }
         .page-wrapper {
@@ -541,9 +551,36 @@
         }
       `;
       document.head.appendChild(style);
+    {% elif ps.paper_size == '80mm' %}
+      const style = document.createElement('style');
+      style.textContent = `
+        @page { size: 80mm auto !important; margin: 2mm 3mm !important; }
+        body { width: 80mm !important; font-family: Arial, sans-serif !important; font-size: 7.5pt !important; }
+        .page-wrapper { width: 80mm !important; max-width: 80mm !important; margin: 0 !important; box-shadow: none !important; border-radius: 0 !important; }
+      `;
+      document.head.appendChild(style);
+    {% elif ps.paper_size == '58mm' %}
+      const style = document.createElement('style');
+      style.textContent = `
+        @page { size: 58mm auto !important; margin: 2mm !important; }
+        body { width: 58mm !important; font-family: Arial, sans-serif !important; font-size: 6.5pt !important; }
+        .page-wrapper { width: 58mm !important; max-width: 58mm !important; margin: 0 !important; box-shadow: none !important; border-radius: 0 !important; }
+      `;
+      document.head.appendChild(style);
     {% endif %}
-    window.print();
-  });
+
+    // Wait for fonts to be ready before triggering print to avoid garbled text
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(function () {
+        setTimeout(function () { window.print(); }, 200);
+      });
+    } else {
+      // Fallback for older browsers
+      window.addEventListener('load', function () {
+        setTimeout(function () { window.print(); }, 400);
+      });
+    }
+  })();
 </script>
 </body>
 </html>
