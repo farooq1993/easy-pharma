@@ -18,9 +18,16 @@ from easypharma.models.Items import Products, ProductTax
 from easypharma.models.doctor import DoctorModel
 
 # ── POS cache helpers ──────────────────────────────────────────
-POS_CACHE_TIMEOUT    = 300   # 5 min  — page-level product/customer lists
-SEARCH_CACHE_TIMEOUT = 120   # 2 min  — per-query search results
-SUBSTITUTE_CACHE_TIMEOUT = 300  # 5 min — substitute lookups (changes rarely)
+POS_CACHE_TIMEOUT = 180  # 3 minutes
+
+def _pos_search_version(tenant_id):
+    """Return current search-cache version for this tenant (create if absent)."""
+    version_key = f'pos_search_v:{tenant_id}'
+    version = cache.get(version_key)
+    if version is None:
+        cache.set(version_key, 1, timeout=None)  # never expires on its own
+        version = 1
+    return version
 
 def _pos_products_cache_key(tenant_id):
     return f'pos_products:{tenant_id}'
@@ -28,35 +35,16 @@ def _pos_products_cache_key(tenant_id):
 def _pos_customers_cache_key(tenant_id):
     return f'pos_customers:{tenant_id}'
 
-def _search_version_key(tenant_id):
-    return f'pos_search_v:{tenant_id}'
-
-def _pos_search_version(tenant_id):
-    """Return current search-cache version (auto-creates at 1 if missing)."""
-    v = cache.get(_search_version_key(tenant_id))
-    if v is None:
-        cache.set(_search_version_key(tenant_id), 1, timeout=None)
-        v = 1
-    return v
-
-def _pos_search_cache_key(tenant_id, query):
-    """Normalised, version-stamped key — bust all entries by bumping version."""
-    v = _pos_search_version(tenant_id)
-    return f'pos_search:{tenant_id}:v{v}:{query.lower().strip()}'
-
-def _substitute_cache_key(tenant_id, product_id):
-    return f'pos_sub:{tenant_id}:{product_id}'
 
 def invalidate_pos_cache(tenant_id):
-    """Call after any stock-changing event (sale saved, sale deleted, purchase entry)."""
-    # 1. Clear page-load caches
+    """Call after any stock-changing event (sale saved, deleted, purchase entry)."""
     cache.delete(_pos_products_cache_key(tenant_id))
     cache.delete(_pos_customers_cache_key(tenant_id))
-    # 2. Bust ALL search-result entries at once by incrementing the version counter
+    cache.delete(f'pos_next_inv:{tenant_id}')
+    # Bust ALL per-query search cache entries at once via version bump
     try:
         cache.incr(_search_version_key(tenant_id))
     except ValueError:
-        # Key didn't exist yet — initialise it
         cache.set(_search_version_key(tenant_id), 1, timeout=None)
 
 class POSView(LoginRequiredMixin,View):
@@ -65,19 +53,31 @@ class POSView(LoginRequiredMixin,View):
     def get(self, request, invoice_id=None):
         tenant_id = request.tenant.id
 
-        # ── Cached product/customer lists ──
-        products = cache.get(_pos_products_cache_key(tenant_id))
-        if products is None:
-            products = list(Products.objects.filter(tenant=request.tenant))
-            cache.set(_pos_products_cache_key(tenant_id), products, POS_CACHE_TIMEOUT)
+        # ── product_taxes: tiny table, cache it ──
+        product_taxes = cache.get(f'pos_taxes:{tenant_id}')
+        if product_taxes is None:
+            product_taxes = list(ProductTax.objects.filter(tenant=request.tenant))
+            cache.set(f'pos_taxes:{tenant_id}', product_taxes, 600)  # 10 min
 
-        customers = cache.get(_pos_customers_cache_key(tenant_id))
-        if customers is None:
-            customers = list(Customer.objects.filter(tenant=request.tenant))
-            cache.set(_pos_customers_cache_key(tenant_id), customers, POS_CACHE_TIMEOUT)
+        # ── default_doctor: rarely changes, cache it ──
+        default_doctor = cache.get(f'pos_default_doctor:{tenant_id}')
+        if default_doctor is None:
+            default_doctor = DoctorModel.objects.filter(
+                tenant=request.tenant, is_default=True
+            ).only('name').first()
+            cache.set(f'pos_default_doctor:{tenant_id}', default_doctor, 600)
 
-        product_taxes = ProductTax.objects.filter(tenant=request.tenant)
-        default_doctor = DoctorModel.objects.filter(tenant=request.tenant, is_default=True).first()
+        # ── next invoice number: cache with short TTL ──
+        next_inv_key = f'pos_next_inv:{tenant_id}'
+        next_invoice_number = cache.get(next_inv_key)
+        if next_invoice_number is None:
+            count = SaleInvoice.objects.filter(tenant=request.tenant).count()
+            next_invoice_number = f"INV-{tenant_id}-{count + 1}"
+            cache.set(next_inv_key, next_invoice_number, 30)  # 30s — refreshes often
+
+        # ── NOTE: products & customers removed from context ──
+        # Template never looped over them; search is done via /api/products/search/
+        # Removing them saves serialising 100s of ORM objects on every page load.
 
         edit_invoice = None
         edit_data = None
@@ -86,7 +86,6 @@ class POSView(LoginRequiredMixin,View):
                 edit_invoice = SaleInvoice.objects.get(id=invoice_id, tenant=request.tenant)
                 items = []
                 for item in edit_invoice.items.all().select_related('product'):
-                    # find batch id if available for the same product and batch
                     from easypharma.models.stock import StockBatch
                     batch = StockBatch.objects.filter(
                         tenant=request.tenant,
@@ -123,11 +122,8 @@ class POSView(LoginRequiredMixin,View):
                 }
             except SaleInvoice.DoesNotExist:
                 edit_data = None
-        count = SaleInvoice.objects.filter(tenant=request.tenant).count()
-        next_invoice_number = f"INV-{request.tenant.id}-{count + 1}"
+
         return render(request, self.template_name, {
-            'products': products,
-            'customers': customers,
             'product_taxes': product_taxes,
             'default_doctor': default_doctor,
             'edit_data': edit_data,
@@ -232,23 +228,29 @@ class POSView(LoginRequiredMixin,View):
                     if batch.current_quantity < 0:
                         raise Exception(f"Insufficient stock for {product.product_name}")
                     batch.save()
-
-            # ── Invalidate caches BEFORE returning so next request sees fresh data ──
-            try:
-                invalidate_pos_cache(request.tenant.id)
-                from easypharma.views.reports import invalidate_daily_sale_cache, invalidate_stock_cache
-                invalidate_daily_sale_cache(request.tenant.id)
-                invalidate_stock_cache(request.tenant.id)
-            except Exception:
-                pass  # Cache failure must never break the sale flow
-
-            return JsonResponse({
-                'success': True,
-                'invoice_id': invoice.id,
-                'invoice_number': invoice.invoice_number
-            })
+                
+                return JsonResponse({
+                    'success': True, 
+                    'invoice_id': invoice.id, 
+                    'invoice_number': invoice.invoice_number
+                })
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
+
+        # ── Invalidate caches after successful sale ──
+        try:
+            invalidate_pos_cache(request.tenant.id)
+            from easypharma.views.reports import invalidate_daily_sale_cache, invalidate_stock_cache
+            invalidate_daily_sale_cache(request.tenant.id)
+            invalidate_stock_cache(request.tenant.id)
+        except Exception:
+            pass  # Cache invalidation failure should never break the sale flow
+
+        return JsonResponse({
+            'success': True,
+            'invoice_id': invoice.id,
+            'invoice_number': invoice.invoice_number
+        })
 
 class PrintInvoiceView(LoginRequiredMixin,View):
     template_name = 'sales/print_invoice.html'
@@ -291,36 +293,42 @@ class SaleListView(LoginRequiredMixin,View):
                         batch.save()
                 
                 invoice.delete()
-                invalidate_pos_cache(request.tenant.id)
                 return JsonResponse({'success': True})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
 
-class ProductSearchAPI(LoginRequiredMixin, View):
+class ProductSearchAPI(LoginRequiredMixin,View):
+
+    CACHE_TIMEOUT = 120  # 2 minutes — short enough that new stock shows quickly
+
+    @staticmethod
+    def _cache_key(tenant_id, query):
+        # Include version so invalidate_pos_cache() busts all search entries at once
+        version = _pos_search_version(tenant_id)
+        return f'pos_search:{tenant_id}:v{version}:{query.lower().strip()}'
+
     def get(self, request):
         query = request.GET.get('q', '').strip()
         tenant_id = request.tenant.id
-        cache_key = _pos_search_cache_key(tenant_id, query)
+        cache_key = self._cache_key(tenant_id, query)
 
-        # ── Cache hit: zero DB, instant response ──
+        # ── Cache hit: return instantly without touching DB ──
         cached = cache.get(cache_key)
         if cached is not None:
             return JsonResponse(cached, safe=False)
 
         from easypharma.models.stock import StockBatch
-
+        
         products = Products.objects.filter(
             tenant=request.tenant,
             product_name__icontains=query
-        ).select_related(
-            'product_tax', 'product_content', 'compny_name', 'product_schedule'
-        ).prefetch_related('batches')[:10]
-
+        ).select_related('product_tax', 'product_content', 'compny_name', 'product_schedule').prefetch_related('batches')[:10]
         data = []
         for p in products:
             batches = p.batches.filter(current_quantity__gt=0).order_by('expiry_date')
-
+            
             if not batches.exists():
+                # Still return the product but flag as out of stock so UI can show substitute button
                 data.append({
                     'id': p.id,
                     'name': p.product_name,
@@ -333,7 +341,7 @@ class ProductSearchAPI(LoginRequiredMixin, View):
                     'batches': []
                 })
                 continue
-
+                
             batch_list = []
             for batch in batches:
                 unit_price = float(batch.sale_price)
@@ -341,6 +349,7 @@ class ProductSearchAPI(LoginRequiredMixin, View):
                     unit_price = float(batch.mrp) / p.conversion_factor
                 elif unit_price == 0 and batch.mrp:
                     unit_price = float(batch.mrp)
+                
                 batch_list.append({
                     'batch_id': batch.id,
                     'batch_no': batch.batch_number,
@@ -349,7 +358,7 @@ class ProductSearchAPI(LoginRequiredMixin, View):
                     'price': unit_price,
                     'mrp_pack': float(batch.mrp)
                 })
-
+            
             data.append({
                 'id': p.id,
                 'name': p.product_name,
@@ -363,24 +372,18 @@ class ProductSearchAPI(LoginRequiredMixin, View):
                 'batches': batch_list
             })
 
-        cache.set(cache_key, data, SEARCH_CACHE_TIMEOUT)
+        # ── Store in cache for next identical/same-case query ──
+        cache.set(cache_key, data, self.CACHE_TIMEOUT)
         return JsonResponse(data, safe=False)
 
 
-class SubstituteSearchAPI(LoginRequiredMixin, View):
+class SubstituteSearchAPI(LoginRequiredMixin,View):
     """Returns in-stock drugs with the same content/composition as the given product."""
     def get(self, request):
         product_id = request.GET.get('product_id')
         if not product_id:
             return JsonResponse([], safe=False)
-
-        tenant_id = request.tenant.id
-        cache_key = _substitute_cache_key(tenant_id, product_id)
-
-        cached = cache.get(cache_key)
-        if cached is not None:
-            return JsonResponse(cached, safe=False)
-
+        
         from easypharma.models.stock import StockBatch
         try:
             source = Products.objects.select_related('product_content').get(
@@ -388,10 +391,10 @@ class SubstituteSearchAPI(LoginRequiredMixin, View):
             )
         except Products.DoesNotExist:
             return JsonResponse([], safe=False)
-
+        
         if not source.product_content:
             return JsonResponse([], safe=False)
-
+        
         # Find other products with same content that have stock
         subs = Products.objects.filter(
             tenant=request.tenant,
@@ -399,7 +402,7 @@ class SubstituteSearchAPI(LoginRequiredMixin, View):
         ).exclude(id=source.id).select_related(
             'product_tax', 'product_content', 'compny_name'
         ).prefetch_related('batches')[:15]
-
+        
         data = []
         for p in subs:
             batches = p.batches.filter(current_quantity__gt=0).order_by('expiry_date')
@@ -429,8 +432,7 @@ class SubstituteSearchAPI(LoginRequiredMixin, View):
                 'conversion_factor': p.conversion_factor,
                 'batches': batch_list,
             })
-
-        cache.set(cache_key, data, SUBSTITUTE_CACHE_TIMEOUT)
+        
         return JsonResponse(data, safe=False)
 
 
