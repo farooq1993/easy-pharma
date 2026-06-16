@@ -664,17 +664,16 @@
         });
     }
 
-    // Product Search
+    // Product Search — with Debounce (300ms) + In-Memory Cache
     const searchInput = document.getElementById('productSearch');
     const resultsDiv = document.getElementById('searchResults');
 
-    searchInput.addEventListener('input', async (e) => {
-        const query = e.target.value.trim();
-        if (query.length < 1) { resultsDiv.classList.add('d-none'); return; }
+    const _posSearchCache = {};       // query → API data
+    let   _posDebounceTimer = null;   // debounce handle
 
-        const response = await fetch(`/api/products/search/?q=${encodeURIComponent(query)}`);
-        const data = await response.json();
-        resultsDiv.innerHTML = ''; searchSelectedIndex = -1;
+    function renderSearchResults(data) {
+        resultsDiv.innerHTML = '';
+        searchSelectedIndex = -1;
         let batchIndex = 0;
 
         if (data.length === 0) {
@@ -765,6 +764,30 @@
             resultsDiv.appendChild(productGroup);
         });
         resultsDiv.classList.remove('d-none');
+    }
+
+    searchInput.addEventListener('input', (e) => {
+        clearTimeout(_posDebounceTimer);
+        const query = e.target.value.trim();
+        if (query.length < 1) { resultsDiv.classList.add('d-none'); return; }
+
+        // Cache hit — instant render, no API call
+        if (_posSearchCache[query]) {
+            renderSearchResults(_posSearchCache[query]);
+            return;
+        }
+
+        // Debounce: wait 300ms after user stops typing before hitting API
+        _posDebounceTimer = setTimeout(async () => {
+            try {
+                const response = await fetch(`/api/products/search/?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+                _posSearchCache[query] = data;   // store in cache for next time
+                renderSearchResults(data);
+            } catch (err) {
+                console.error('POS search error:', err);
+            }
+        }, 300);
     });
 
     // ── Substitute lookup ──────────────────────────────────────────
@@ -907,7 +930,17 @@
     function showH1Alert(productName, scheduleLabel) {
         document.getElementById('h1AlertProductName').textContent = productName;
         document.getElementById('h1AlertScheduleLabel').textContent = scheduleLabel || 'SCHEDULE H1';
-        const modal = new bootstrap.Modal(document.getElementById('h1AlertModal'));
+        const h1ModalEl = document.getElementById('h1AlertModal');
+        const modal = new bootstrap.Modal(h1ModalEl);
+        // After user clicks "Understood", focus the last qty input
+        h1ModalEl.addEventListener('hidden.bs.modal', () => {
+            const inputs = document.querySelectorAll('#posTable tbody .qty-input');
+            const lastQtyInput = inputs[inputs.length - 1];
+            if (lastQtyInput) {
+                lastQtyInput.focus();
+                lastQtyInput.select();
+            }
+        }, { once: true });
         modal.show();
     }
 
