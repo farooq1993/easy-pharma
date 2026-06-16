@@ -1,5 +1,6 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.decorators import login_required
 from .models import User
 # Create your views here.
 
@@ -9,6 +10,7 @@ from .models.Items import Products
 from django.db.models import Sum
 from datetime import date
 
+@login_required
 def home_view(request):
     today = date.today()
     # Basic Stats
@@ -16,7 +18,6 @@ def home_view(request):
     total_customers = Customer.objects.filter(tenant=request.tenant).count()
     low_stock_count = Products.objects.filter(tenant=request.tenant).count() # Placeholder logic
     prescriptions_count = SaleInvoice.objects.filter(tenant=request.tenant, created_at__date=today).count()
-    
     context = {
         'today_revenue': today_revenue,
         'total_customers': total_customers,
@@ -28,6 +29,8 @@ def home_view(request):
 
 def login_view(request):
     if request.method == "POST":
+        print("LOGIN PAGE USER:", request.user)
+        print("AUTH:", request.user.is_authenticated)
         username = request.POST.get("username")
         password = request.POST.get("password")
         user = authenticate(request, username=username, password=password)
