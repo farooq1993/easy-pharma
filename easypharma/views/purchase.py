@@ -2,6 +2,7 @@ from django.views import View
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.core.paginator import Paginator
+from django.core.cache import cache
 from django.db.models import Sum,F, Q, Min
 from django.contrib.auth.mixins import LoginRequiredMixin
 
@@ -432,7 +433,16 @@ class PurchaseEntryView(LoginRequiredMixin,View):
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
-class PurchaseImportCSVView(LoginRequiredMixin,View):
+        # ── Invalidate caches after successful purchase save ──
+        try:
+            from easypharma.views.reports import invalidate_stock_cache
+            from easypharma.views.sales import invalidate_pos_cache
+            invalidate_stock_cache(request.tenant.id)
+            invalidate_pos_cache(request.tenant.id)
+        except Exception:
+            pass  # Cache invalidation failure must not block the response
+
+class PurchaseImportCSVView(View):
     def post(self, request):
         csv_file = request.FILES.get('csv_file')
 

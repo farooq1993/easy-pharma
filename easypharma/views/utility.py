@@ -4,9 +4,10 @@ import os
 import sqlite3
 from django.views import View
 from django.shortcuts import render, redirect
-from django.http import JsonResponse, FileResponse, Http404
+from django.http import JsonResponse, FileResponse, Http404, HttpResponse
 from django.contrib import messages
 from django.views.decorators.csrf import csrf_exempt
+from django.conf import settings
 from easypharma.models.stock import StockBatch
 from easypharma.models.print_setup import PrintSetup
 from datetime import date, timedelta
@@ -318,3 +319,31 @@ class BrowseDirectoryView(AdminRequiredMixin, View):
             'directories': directories,
             'is_drives': False
         })
+
+
+class OfflinePageView(View):
+    """Serve the PWA offline fallback page — no login required."""
+
+    def get(self, request):
+        return render(request, 'offline.html', status=200)
+
+
+class ServiceWorkerView(View):
+    """
+    Serve sw.js from the root path (/sw.js) so the Service Worker
+    scope covers the entire origin. Must be served with correct MIME
+    type and no-cache headers so the browser always gets the latest.
+    """
+
+    def get(self, request):
+        sw_path = os.path.join(settings.BASE_DIR, 'easypharma', 'static', 'sw.js')
+        if not os.path.exists(sw_path):
+            raise Http404('Service Worker not found')
+        with open(sw_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        response = HttpResponse(content, content_type='application/javascript')
+        # Ensure browser always checks for updates
+        response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response['Service-Worker-Allowed'] = '/'
+        return response
+

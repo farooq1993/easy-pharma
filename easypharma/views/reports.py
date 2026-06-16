@@ -118,6 +118,17 @@ class StockReportView(LoginRequiredMixin,View):
     template_name = 'reports/stock_report.html'
 
     def get(self, request):
+        is_pdf = request.GET.get('pdf') == '1'
+        cache_key = _stock_report_cache_key(request.tenant.id)
+
+        # ── Try cache first (skip for PDF to always get fresh data) ──
+        if not is_pdf:
+            cached_ctx = cache.get(cache_key)
+            if cached_ctx is not None:
+                logger.debug('StockReportView cache HIT tenant=%s', request.tenant.id)
+                return render(request, self.template_name, cached_ctx)
+
+        logger.debug('StockReportView cache MISS tenant=%s', request.tenant.id)
         # Aggregate stock by product
         stocks = StockBatch.objects.filter(tenant=request.tenant, current_quantity__gt=0).select_related('product')
         
@@ -135,15 +146,21 @@ class StockReportView(LoginRequiredMixin,View):
             )
         ).order_by('product__product_name')
 
-        total_value = sum(item['total_value'] for item in product_summary)
+        # Force evaluation before caching (QuerySets are lazy)
+        stocks_list = list(stocks)
+        summary_list = list(product_summary)
+        total_value = sum(item['total_value'] for item in summary_list)
         
         context = {
-            'stocks': stocks,
-            'summary': product_summary,
+            'stocks': stocks_list,
+            'summary': summary_list,
             'total_value': total_value
         }
+
+        if not is_pdf:
+            cache.set(cache_key, context, STOCK_REPORT_CACHE_TIMEOUT)
         
-        if request.GET.get('pdf') == '1':
+        if is_pdf:
             return render_to_pdf(self.template_name, context, filename="stock_report.pdf")
 
         return render(request, self.template_name, context)
@@ -166,6 +183,17 @@ class DailySaleReportView(LoginRequiredMixin,View):
                 date_obj = now().date()
         else:
             date_obj = date_str
+
+        is_csv = request.GET.get('csv') == '1'
+        is_pdf = request.GET.get('pdf') == '1'
+        cache_key = _daily_sale_cache_key(request.tenant.id, str(date_obj), selected_schedule)
+
+        # ── Serve from cache for plain HTML requests ──
+        if not is_csv and not is_pdf:
+            cached_ctx = cache.get(cache_key)
+            if cached_ctx is not None:
+                logger.debug('DailySaleReportView cache HIT tenant=%s date=%s', request.tenant.id, date_obj)
+                return render(request, self.template_name, cached_ctx)
 
         logger.debug('DailySaleReportView.get date=%s schedule=%s tenant=%s user=%s', date_obj, selected_schedule, request.tenant, request.user)
         
@@ -255,15 +283,21 @@ class DailySaleReportView(LoginRequiredMixin,View):
         ) if total_daily_revenue > 0 else 0.0
         # ─────────────────────────────────────────────────────────────────────
 
+        # Force evaluation of lazy querysets before caching
+        sales_list = list(sales)
+        payment_breakdown_list = list(payment_breakdown)
+        top_products_list = list(top_products)
+        report_schedules_list = list(report_schedules)
+
         context = {
             'date': date_obj,
-            'sales': sales,
+            'sales': sales_list,
             'daily_stats': daily_stats,
             'counter_stats': counter_stats,
             'prescription_stats': prescription_stats,
-            'payment_breakdown': payment_breakdown,
-            'top_products': top_products,
-            'report_schedules': report_schedules,
+            'payment_breakdown': payment_breakdown_list,
+            'top_products': top_products_list,
+            'report_schedules': report_schedules_list,
             'selected_schedule': selected_schedule,
             # profit data
             'bill_profit_data': bill_profit_data,
@@ -272,13 +306,15 @@ class DailySaleReportView(LoginRequiredMixin,View):
             'total_daily_margin': total_daily_margin,
         }
 
-        if request.GET.get('csv') == '1':
+        if is_csv:
             filename = f"daily_sale_report_{date_obj}.csv"
-            return export_sales_csv(request, sales, filename=filename)
+            return export_sales_csv(request, sales_list, filename=filename)
 
-        if request.GET.get('pdf') == '1':
+        if is_pdf:
             return render_to_pdf(request, self.template_name, context, filename=f"daily_sale_report_{date_obj}.pdf")
 
+        # Cache the context for subsequent HTML requests
+        cache.set(cache_key, context, DAILY_SALE_CACHE_TIMEOUT)
         return render(request, self.template_name, context)
 
 
@@ -693,10 +729,36 @@ class GSTReportView(LoginRequiredMixin,View):
 
 # ── Cache helpers ──────────────────────────────────────────────
 PRODUCT_HISTORY_CACHE_TIMEOUT = 120  # seconds (tune as needed)
+STOCK_REPORT_CACHE_TIMEOUT   = 300  # 5 minutes
+DAILY_SALE_CACHE_TIMEOUT     = 300  # 5 minutes
 
 
 def _product_history_cache_key(tenant_id, product_id):
     return f"product_history:{tenant_id}:{product_id}"
+
+
+def _stock_report_cache_key(tenant_id):
+    return f"stock_report:{tenant_id}"
+
+
+def _daily_sale_cache_key(tenant_id, date_str, schedule):
+    return f"daily_sale:{tenant_id}:{date_str}:{schedule}"
+
+
+def invalidate_stock_cache(tenant_id):
+    """Call after any purchase is saved or stock is modified."""
+    cache.delete(_stock_report_cache_key(tenant_id))
+
+
+def invalidate_daily_sale_cache(tenant_id, date_str=None):
+    """Call after any sale is saved. Invalidates today's date if date_str not provided."""
+    from django.utils.timezone import now as _now
+    if date_str is None:
+        date_str = str(_now().date())
+    # invalidate all schedule variants for this date by using pattern delete if possible
+    for sched in ['all', 'H', 'H1', 'X', 'OTC']:
+        cache.delete(_daily_sale_cache_key(tenant_id, date_str, sched))
+    cache.delete(_daily_sale_cache_key(tenant_id, date_str, 'all'))
 
 
 def invalidate_product_history_cache(tenant_id, product_id):

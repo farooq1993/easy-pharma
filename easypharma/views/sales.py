@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.db import transaction
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import F, Q
+from django.core.cache import cache
 from easypharma.models.Items import Products
 from easypharma.models.sales import (SaleInvoice, SaleItem,
                                     Customer, SalesReturn, SalesReturnItem,PrescriptionReminder)
@@ -16,14 +17,36 @@ from urllib.parse import quote_plus
 from easypharma.models.Items import Products, ProductTax
 from easypharma.models.doctor import DoctorModel
 
+# ── POS cache helpers ──────────────────────────────────────────
+POS_CACHE_TIMEOUT = 180  # 3 minutes
 
+def _pos_products_cache_key(tenant_id):
+    return f'pos_products:{tenant_id}'
 
-class POSView(LoginRequiredMixin,View):
+def _pos_customers_cache_key(tenant_id):
+    return f'pos_customers:{tenant_id}'
+
+def invalidate_pos_cache(tenant_id):
+    cache.delete(_pos_products_cache_key(tenant_id))
+    cache.delete(_pos_customers_cache_key(tenant_id))
+
+class POSView(View):
     template_name = 'sales/pos.html'
 
     def get(self, request, invoice_id=None):
-        products = Products.objects.filter(tenant=request.tenant)
-        customers = Customer.objects.filter(tenant=request.tenant)
+        tenant_id = request.tenant.id
+
+        # ── Cached product/customer lists ──
+        products = cache.get(_pos_products_cache_key(tenant_id))
+        if products is None:
+            products = list(Products.objects.filter(tenant=request.tenant))
+            cache.set(_pos_products_cache_key(tenant_id), products, POS_CACHE_TIMEOUT)
+
+        customers = cache.get(_pos_customers_cache_key(tenant_id))
+        if customers is None:
+            customers = list(Customer.objects.filter(tenant=request.tenant))
+            cache.set(_pos_customers_cache_key(tenant_id), customers, POS_CACHE_TIMEOUT)
+
         product_taxes = ProductTax.objects.filter(tenant=request.tenant)
         default_doctor = DoctorModel.objects.filter(tenant=request.tenant, is_default=True).first()
 
@@ -189,7 +212,22 @@ class POSView(LoginRequiredMixin,View):
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
 
-class PrintInvoiceView(LoginRequiredMixin,View):
+        # ── Invalidate caches after successful sale ──
+        try:
+            invalidate_pos_cache(request.tenant.id)
+            from easypharma.views.reports import invalidate_daily_sale_cache, invalidate_stock_cache
+            invalidate_daily_sale_cache(request.tenant.id)
+            invalidate_stock_cache(request.tenant.id)
+        except Exception:
+            pass  # Cache invalidation failure should never break the sale flow
+
+        return JsonResponse({
+            'success': True,
+            'invoice_id': invoice.id,
+            'invoice_number': invoice.invoice_number
+        })
+
+class PrintInvoiceView(View):
     template_name = 'sales/print_invoice.html'
 
     def get(self, request, invoice_id):

@@ -1,13 +1,15 @@
 from django.urls import path
 from easypharma.views.utility import (
-    UtilityHomeView, 
+    UtilityHomeView,
     PrintingSetupView,
     DatabaseBackupView,
     DownloadBackupView,
     DeleteBackupView,
     RestoreBackupView,
     UploadRestoreBackupView,
-    BrowseDirectoryView
+    BrowseDirectoryView,
+    OfflinePageView,
+    ServiceWorkerView,
 )
 
 urlpatterns = [
@@ -19,4 +21,7 @@ urlpatterns = [
     path('backup/restore/<str:filename>/', RestoreBackupView.as_view(), name='restore_backup'),
     path('backup/upload-restore/', UploadRestoreBackupView.as_view(), name='upload_restore_backup'),
     path('backup/browse-dir/', BrowseDirectoryView.as_view(), name='browse_directory'),
+    # PWA routes — no login required
+    path('sw.js', ServiceWorkerView.as_view(), name='service_worker'),
+    path('offline/', OfflinePageView.as_view(), name='offline_page'),
 ]
