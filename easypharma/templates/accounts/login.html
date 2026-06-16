@@ -3,59 +3,160 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    {% block content %}
     <meta charset="UTF-8">
     <title>Login | Easy Pharma</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <!-- Bootstrap CSS CDN -->
+    
+    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    
     <style>
         body {
             min-height: 100vh;
-            background: url("{% static 'img/pharmacy-bg.jpg' %}") no-repeat center center fixed;
+            background: linear-gradient(rgba(0,0,0,0.45), rgba(0,0,0,0.45)), 
+                        url("{% static 'img/pharmacy-bg.jpg' %}") no-repeat center center fixed;
             background-size: cover;
             display: flex;
             align-items: center;
             justify-content: center;
+            font-family: 'Segoe UI', system-ui, sans-serif;
         }
+
         .login-box {
-            background: rgba(255,255,255,0.95);
-            padding: 2rem 2.5rem;
-            border-radius: 1rem;
-            box-shadow: 0 0 20px rgba(0,0,0,0.15);
-            max-width: 400px;
+            background: rgba(255, 255, 255, 0.97);
+            padding: 2.5rem 2.8rem;
+            border-radius: 1.2rem;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+            max-width: 420px;
             width: 100%;
+            backdrop-filter: blur(8px);
         }
+
+        .logo-container {
+            text-align: center;
+            margin-bottom: 1.8rem;
+        }
+
+        .logo-container img {
+            max-height: 90px;
+            width: auto;
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.1));
+        }
+
         .login-title {
             font-weight: 700;
             color: #198754;
+            text-align: center;
+            margin-bottom: 1.8rem;
+            font-size: 1.75rem;
+        }
+
+        .form-control {
+            border-radius: 0.6rem;
+            padding: 0.75rem 1rem;
+            border: 2px solid #e0e0e0;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus {
+            border-color: #198754;
+            box-shadow: 0 0 0 0.3rem rgba(25, 135, 84, 0.15);
+        }
+
+        .btn-login {
+            padding: 0.85rem;
+            font-weight: 600;
+            border-radius: 0.6rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1050;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
         }
     </style>
 </head>
 <body>
-    
+
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" id="toastContainer"></div>
+
     <div class="login-box">
-        <h2 class="login-title mb-4 text-center">Easy Pharma Login</h2>
-        <form method="post">
+        <!-- Logo -->
+        <div class="logo-container">
+            <img src="{% static 'img/easyPharma.png' %}" alt="Easy Pharma Logo" class="img-fluid">
+        </div>
+
+        <h2 class="login-title">Welcome Back</h2>
+
+        <form method="post" id="loginForm">
             {% csrf_token %}
+
             <div class="mb-3">
-                <label for="username" class="form-label">Username</label>
-                <input type="text" name="username" id="username" class="form-control" required autofocus>
+                <label for="username" class="form-label fw-medium">Username</label>
+                <input type="text" name="username" id="username" 
+                       class="form-control" required autofocus>
             </div>
-            <div class="mb-3">
-                <label for="password" class="form-label">Password</label>
-                <input type="password" name="password" id="password" class="form-control" required>
+
+            <div class="mb-4">
+                <label for="password" class="form-label fw-medium">Password</label>
+                <input type="password" name="password" id="password" 
+                       class="form-control" required>
             </div>
-            {% if form.errors %}
-                <div class="alert alert-danger">
-                    Invalid username or password.
-                </div>
-            {% endif %}
-            <button type="submit" class="btn btn-success w-100">Login</button>
+
+            <button type="submit" class="btn btn-success btn-login w-100">
+                <i class="fas fa-sign-in-alt me-2"></i>Login
+            </button>
         </form>
+
+        <div class="text-center mt-3">
+            <small class="text-muted">Forgot password? Contact administrator</small>
+        </div>
     </div>
-    {% endblock %}
-    <!-- Bootstrap JS CDN -->
+
+    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        function showErrorToast(message = "Invalid username or password.") {
+            const toastHTML = `
+                <div class="toast align-items-center text-bg-danger border-0" role="alert">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <i class="fas fa-exclamation-circle me-2"></i>${message}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" 
+                                data-bs-dismiss="toast"></button>
+                    </div>
+                </div>`;
+            
+            const toastContainer = document.getElementById('toastContainer');
+            toastContainer.innerHTML = toastHTML;
+            
+            const toastElement = toastContainer.querySelector('.toast');
+            const toast = new bootstrap.Toast(toastElement, { delay: 4500 });
+            toast.show();
+        }
+
+        // Show Django messages / form errors
+        window.addEventListener('load', () => {
+            {% if messages %}
+                {% for message in messages %}
+                    showErrorToast("{{ message }}");
+                {% endfor %}
+            {% endif %}
+
+            {% if form.errors %}
+                showErrorToast("Invalid username or password.");
+            {% endif %}
+        });
+    </script>
 </body>
 </html>
