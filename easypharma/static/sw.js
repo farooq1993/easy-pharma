@@ -9,7 +9,7 @@
  * If the network is unavailable for those actions an offline notice is shown.
  */
 
-const SW_VERSION   = 'v1.0.0';
+const SW_VERSION   = 'v1.1.0';           // ← bumped: forces old cache eviction
 const CACHE_STATIC = `ep-static-${SW_VERSION}`;
 const CACHE_PAGES  = `ep-pages-${SW_VERSION}`;
 const CACHE_API    = `ep-api-${SW_VERSION}`;
@@ -23,10 +23,11 @@ const PRECACHE_ASSETS = [
   '/offline/',
 ];
 
-// URLs whose responses should always come from the network (write operations)
+// URLs whose responses should always come from the network (write operations + dynamic pages)
 const NETWORK_ONLY_PATTERNS = [
-  /\/pos\/?$/,
-  /\/purchase\/entry/,
+  /\/pos/,              // all POS pages: /pos/, /pos/edit/*, /pos/delete/*, /pos/print/*
+  /\/purchase/,         // purchase entry and related pages
+  /\/entry/,            // purchase entry page
   /\/accounts\//,
   /\/admin\//,
   /\/api\/save/,
@@ -43,7 +44,12 @@ const STATIC_PATTERNS = [
   /cdnjs\.cloudflare\.com/,
 ];
 
-// API patterns (Network-First with timeout)
+// API patterns — split by behaviour
+const API_NETWORK_ONLY_PATTERNS = [
+  /\/api\/products\/search/,   // live stock search — never serve stale
+  /\/api\/products\/substitute/, // live stock substitute
+];
+
 const API_PATTERNS = [
   /\/api\//,
 ];
@@ -87,7 +93,7 @@ self.addEventListener('fetch', event => {
   // Ignore chrome-extension etc.
   if (!['http:', 'https:'].includes(url.protocol)) return;
 
-  // 1. Network-Only for write/auth pages
+  // 1. Network-Only for write/auth pages + all POS & purchase HTML
   if (NETWORK_ONLY_PATTERNS.some(p => p.test(url.pathname + url.search))) {
     event.respondWith(
       fetch(request).catch(() => caches.match('/offline/'))
@@ -101,7 +107,20 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 3. Network-First (with timeout) for API calls
+  // 3a. Network-Only for live stock search APIs (must never return stale stock)
+  if (API_NETWORK_ONLY_PATTERNS.some(p => p.test(url.pathname))) {
+    event.respondWith(
+      fetch(request).catch(() =>
+        new Response(JSON.stringify({ error: 'offline' }), {
+          headers: { 'Content-Type': 'application/json' },
+          status: 503
+        })
+      )
+    );
+    return;
+  }
+
+  // 3b. Network-First (with timeout) for other API calls
   if (API_PATTERNS.some(p => p.test(url.pathname))) {
     event.respondWith(networkFirstWithTimeout(request, CACHE_API, 3000));
     return;
