@@ -6,6 +6,7 @@ from django.views import View
 from django.shortcuts import render
 from django.http import JsonResponse
 from decimal import Decimal
+from django.contrib.auth.mixins import LoginRequiredMixin
 from easypharma.models.stock import StockBatch
 from easypharma.models.Items import Products, ProductSchedule
 from easypharma.models.purchase_invoice import PurchaseInvoice, PurchaseItem
@@ -113,7 +114,7 @@ def export_sales_csv(request, sales, filename='sales_report.csv'):
     return response
 
 
-class StockReportView(View):
+class StockReportView(LoginRequiredMixin,View):
     template_name = 'reports/stock_report.html'
 
     def get(self, request):
@@ -167,7 +168,7 @@ class StockReportView(View):
 
 # ========== NEW REPORTS ==========
 
-class DailySaleReportView(View):
+class DailySaleReportView(LoginRequiredMixin,View):
     """Daily Sale Report - Show sales data for a specific date"""
     template_name = 'reports/daily_sale_report.html'
 
@@ -317,7 +318,7 @@ class DailySaleReportView(View):
         return render(request, self.template_name, context)
 
 
-class HalfYearlySaleReportView(View):
+class HalfYearlySaleReportView(LoginRequiredMixin,View):
     """H1/H2 Sale Report - Show sales data for a half year (6 months)"""
     template_name = 'reports/half_yearly_report.html'
 
@@ -484,7 +485,7 @@ class HalfYearlySaleReportView(View):
         return render(request, self.template_name, context)
 
 
-class ProfitReportView(View):
+class ProfitReportView(LoginRequiredMixin,View):
     """Profit Report - Date-wise profit analysis"""
     template_name = 'reports/profit_report.html'
 
@@ -595,7 +596,7 @@ class ProfitReportView(View):
         return render(request, self.template_name, context)
 
 
-class GSTReportView(View):
+class GSTReportView(LoginRequiredMixin,View):
     """GST Report - GST as per Indian GST Law"""
     template_name = 'reports/gst_report.html'
 
@@ -769,7 +770,7 @@ def invalidate_product_history_cache(tenant_id, product_id):
     cache.delete(_product_history_cache_key(tenant_id, product_id))
 
 
-class ProductHistoryView(View):
+class ProductHistoryView(LoginRequiredMixin,View):
     template_name = 'reports/product_history.html'
 
     def get(self, request):
@@ -903,7 +904,7 @@ class ProductHistoryView(View):
 
 # ========== SCHEDULE H & NARCOTIC DRUG REGISTER ==========
 
-class ScheduleHReportView(View):
+class ScheduleHReportView(LoginRequiredMixin,View):
     """
     Schedule H / H1 Drug Register — lists all sales of Schedule H/H1 drugs
     in a format suitable for statutory drug register submission.
@@ -998,7 +999,7 @@ class ScheduleHReportView(View):
         return render(request, self.template_name, context)
 
 
-class NarcoticDrugReportView(View):
+class NarcoticDrugReportView(LoginRequiredMixin,View):
     """
     Narcotic Drug Register — purchase & sale register for narcotic drugs
     (as required under NDPS Act).
@@ -1127,7 +1128,7 @@ class NarcoticDrugReportView(View):
 #  GSTR-3B REPORT — Auto-computed from actual transactions
 # ============================================================
 
-class GSTR3BReportView(View):
+class GSTR3BReportView(LoginRequiredMixin,View):
     """
     GSTR-3B: Monthly return showing outward supply summary (Section 3.1)
     and Input Tax Credit available (Section 4), both auto-filled from
@@ -1265,7 +1266,7 @@ class GSTR3BReportView(View):
 #  GSTR-1 BILL-WISE REPORT — with CSV Export
 # ============================================================
 
-class GSTR1ReportView(View):
+class GSTR1ReportView(LoginRequiredMixin,View):
     """
     GSTR-1: Invoice-level outward supply report.
     Each row = one SaleInvoice with aggregated CGST / SGST / taxable value.
@@ -1394,7 +1395,7 @@ class GSTR1ReportView(View):
 #  PURCHASE ANALYSIS DASHBOARD
 # ============================================================
 
-class PurchaseAnalysisView(View):
+class PurchaseAnalysisView(LoginRequiredMixin,View):
     """
     Advanced purchase analytics: KPIs, supplier spending, GST breakdown,
     monthly trend, top products, expiry risk, payment mode split.
@@ -1560,7 +1561,7 @@ class PurchaseAnalysisView(View):
         return render(request, self.template_name, context)
 
 
-class SaleBillWiseProfit(View):
+class SaleBillWiseProfit(LoginRequiredMixin,View):
     template_name = 'reports/sale_billwise_profit.html'
 
     def get(self, request):

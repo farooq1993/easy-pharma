@@ -105,7 +105,7 @@ ROOT_URLCONF = 'pharmaProject.urls'
 AUTH_USER_MODEL = 'easypharma.User'
 
 LOGIN_REDIRECT_URL = 'home'
-LOGIN_URL = 'login/'
+LOGIN_URL = '/'
 
 TEMPLATES = [
     {

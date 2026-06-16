@@ -1,4 +1,5 @@
 from django.views import View
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.http import JsonResponse
@@ -12,7 +13,7 @@ from easypharma.models.Items import (DrugCompany, ProductContent,
                                      ProductTax, ProductType, Products)
 from easypharma.models.purchase_invoice import Supplier
 
-class MasterCRUDView(View):
+class MasterCRUDView(LoginRequiredMixin,View):
     """
     Generic view to handle CRUD for all master models.
     """
@@ -149,7 +150,7 @@ class MasterCRUDView(View):
 
 
 # Keep Product views as they are more complex (file uploads, select2, etc.)
-class ProductCreate(View):
+class ProductCreate(LoginRequiredMixin,View):
     template_name = 'masters/products/product.html'
     def get(self, request, product_id=None):
         product = None
@@ -198,7 +199,7 @@ class ProductCreate(View):
             messages.error(request, f"Error: {str(e)}")
         return redirect('all-products')
 
-class QuickProductAPI(View):
+class QuickProductAPI(LoginRequiredMixin,View):
     # Your purchase entry view (wherever it renders entry.html)
     def get(self, request):
         from django.db.models import Q
@@ -263,7 +264,7 @@ class QuickProductAPI(View):
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
-class ProductMasterSearchAPI(View):
+class ProductMasterSearchAPI(LoginRequiredMixin,View):
     def get(self, request):
         query = request.GET.get('q', '')
         products = Products.objects.filter(
@@ -282,7 +283,7 @@ class ProductMasterSearchAPI(View):
             })
         return JsonResponse(data, safe=False)
 
-class ProductListView(View):
+class ProductListView(LoginRequiredMixin,View):
     template_name = 'masters/products/product_list.html'
     def get(self, request):
         query = request.GET.get('q', '')

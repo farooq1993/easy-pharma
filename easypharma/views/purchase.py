@@ -4,6 +4,7 @@ from django.http import JsonResponse
 from django.core.paginator import Paginator
 from django.core.cache import cache
 from django.db.models import Sum,F, Q, Min
+from django.contrib.auth.mixins import LoginRequiredMixin
 
 from easypharma.models.Items import (Products,DrugCompany, ProductContent, 
                                      ProductSchedule,
@@ -268,7 +269,7 @@ def parse_expiry(value):
     return f'{year}-{month}'
 
 
-class PurchaseEntryView(View):
+class PurchaseEntryView(LoginRequiredMixin,View):
     template_name = 'purchase/entry.html'
 
     def get(self, request, invoice_id=None):
@@ -599,14 +600,14 @@ class PurchaseImportCSVView(View):
             print(traceback.format_exc())
             return JsonResponse({'success': False, 'error': str(e)})
 
-class SupplierAutocomplete(View):
+class SupplierAutocomplete(LoginRequiredMixin,View):
     def get(self, request):
         query = request.GET.get('q', '')
         suppliers = Supplier.objects.filter(tenant=request.tenant, name__icontains=query)[:10]
         data = [{'id': s.id, 'name': s.name} for s in suppliers]
         return JsonResponse(data, safe=False)
 
-class QuickCreateProductView(View):
+class QuickCreateProductView(LoginRequiredMixin,View):
     """Inline product creation from CSV import."""
     def post(self, request):
         try:
@@ -665,7 +666,7 @@ class QuickCreateProductView(View):
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
-class PurchaseListView(View):
+class PurchaseListView(LoginRequiredMixin,View):
     template_name = 'purchase/list.html'
     ITEMS_PER_PAGE = 20
 
@@ -739,7 +740,7 @@ class PurchaseListView(View):
             return JsonResponse({'success': False, 'error': str(e)})
 
 
-class SupplierWisePurchaseReportView(View):
+class SupplierWisePurchaseReportView(LoginRequiredMixin,View):
     template_name = 'purchase/supplier_report.html'
 
     def get(self, request):
@@ -749,7 +750,7 @@ class SupplierWisePurchaseReportView(View):
 
 from django.http import JsonResponse
 
-class SupplierReportDataView(View):
+class SupplierReportDataView(LoginRequiredMixin,View):
     def get(self, request, supplier_id):
         try:
             supplier = Supplier.objects.get(id=supplier_id, tenant=request.tenant)
@@ -824,7 +825,7 @@ def _get_filtered_purchases(request):
     return qs
 
 
-class PurchaseExportCSVView(View):
+class PurchaseExportCSVView(LoginRequiredMixin,View):
     """Export filtered purchase list as CSV — includes all transaction line items."""
 
     def get(self, request):
@@ -889,7 +890,7 @@ class PurchaseExportCSVView(View):
         return response
 
 
-class PurchaseExportPDFView(View):
+class PurchaseExportPDFView(LoginRequiredMixin,View):
     """Export filtered purchase list as PDF — all transaction data."""
 
     template_name = 'purchase/purchase_export_pdf.html'
@@ -948,7 +949,7 @@ class PurchaseExportPDFView(View):
 
         return render_to_pdf(self.template_name, context, filename='purchase_bills.pdf')
 
-class ProductBatchHistoryView(View):
+class ProductBatchHistoryView(LoginRequiredMixin,View):
     def get(self, request):
         product_id = request.GET.get('product_id')
         if not product_id:
@@ -975,7 +976,7 @@ class ProductBatchHistoryView(View):
 
 
 
-class SmartPurchaseSuggestPageView(View):
+class SmartPurchaseSuggestPageView(LoginRequiredMixin,View):
     """Renders the HTML page."""
     template_name = 'purchase/purchase_suggestion.html'
 
@@ -983,7 +984,7 @@ class SmartPurchaseSuggestPageView(View):
         return render(request, self.template_name)
 
 
-class SmartPurchaseSuggestAPIView(View):
+class SmartPurchaseSuggestAPIView(LoginRequiredMixin,View):
     """
     Suggests products to purchase today based on:
     - Average daily sales calculated over the actual number of active sale days

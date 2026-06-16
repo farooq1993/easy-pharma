@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.decorators import login_required, permission_required
+from django.contrib.auth.decorators import login_required, permission_required, login_required
 from django.views.decorators.http import require_http_methods
 from easypharma.models import User
 from django.contrib import messages
@@ -13,6 +13,8 @@ from tenants.models import Tenant
 import uuid
 import json
 
+
+@login_required
 def home_view(request):
     period = request.GET.get('period', 'today')
     today = date.today()

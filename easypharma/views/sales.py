@@ -4,6 +4,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.contrib import messages
 from django.db import transaction
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import F, Q
 from django.core.cache import cache
 from easypharma.models.Items import Products
@@ -240,7 +241,7 @@ class PrintInvoiceView(View):
         ps, _ = PrintSetup.objects.get_or_create(tenant=tenant)
         return render(request, self.template_name, {'invoice': invoice, 'ps': ps})
 
-class SaleListView(View):
+class SaleListView(LoginRequiredMixin,View):
     template_name = 'sales/list.html'
 
     def get(self, request):
@@ -271,7 +272,7 @@ class SaleListView(View):
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
 
-class ProductSearchAPI(View):
+class ProductSearchAPI(LoginRequiredMixin,View):
     def get(self, request):
         query = request.GET.get('q', '')
         from easypharma.models.stock import StockBatch
@@ -331,7 +332,7 @@ class ProductSearchAPI(View):
         return JsonResponse(data, safe=False)
 
 
-class SubstituteSearchAPI(View):
+class SubstituteSearchAPI(LoginRequiredMixin,View):
     """Returns in-stock drugs with the same content/composition as the given product."""
     def get(self, request):
         product_id = request.GET.get('product_id')
@@ -390,7 +391,7 @@ class SubstituteSearchAPI(View):
         return JsonResponse(data, safe=False)
 
 
-class SalesReturnView(View):
+class SalesReturnView(LoginRequiredMixin,View):
     template_name = 'sales/sales_return.html'
 
     def get(self, request):
@@ -551,14 +552,14 @@ class SalesReturnView(View):
         return redirect('pos_returns')
 
 
-class PatientWiseSales(View):
+class PatientWiseSales(LoginRequiredMixin,View):
     template_name = "sales/patient_wise_sales.html"
 
     def get(self, request):
         return render(request, self.template_name)
 
 
-class PatientWiseSalesAPI(View):
+class PatientWiseSalesAPI(LoginRequiredMixin,View):
     def get(self, request):
         patient_name = request.GET.get('patient_name', '').strip()
         if not patient_name:
@@ -593,7 +594,7 @@ class PatientWiseSalesAPI(View):
         return JsonResponse(data, safe=False)
 
 
-class PrescriptionReminderView(View):
+class PrescriptionReminderView(LoginRequiredMixin,View):
     template_name = "sales/prescription_reminders.html"
 
     def get(self, request):
@@ -639,7 +640,7 @@ class PrescriptionReminderView(View):
         
         return redirect('prescription_reminders')
     
-class PrescriptionReminderDeleteView(View):
+class PrescriptionReminderDeleteView(LoginRequiredMixin,View):
 
     def post(self, request, reminder_id):
 
