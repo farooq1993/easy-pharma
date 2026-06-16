@@ -2,11 +2,12 @@ from django.views import View
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from tenants.models import Tenant
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
-class RegisterTenantView(View):
+class RegisterTenantView(LoginRequiredMixin,View):
     template_name = 'tenants/register.html'
 
     def get(self, request):
