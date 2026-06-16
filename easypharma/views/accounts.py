@@ -201,7 +201,22 @@ def login_view(request):
     if request.method == "POST":
         username = request.POST.get("username")
         password = request.POST.get("password")
+
         user = authenticate(request, username=username, password=password)
+
+        #Validation check
+        if not username:
+            messages.error(request, "Username is required.")
+            return render(request, "accounts/login.html")
+
+        if not password:
+            messages.error(request, "Password is required.")
+            return render(request, "accounts/login.html")
+
+        if user is None:
+            messages.error(request, "Invalid username or password.")
+            return redirect("login")
+
         if user:
             login(request, user)
             if getattr(user, 'user_type', '') == 'admin':
