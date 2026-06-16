@@ -4,583 +4,242 @@
   <meta charset="UTF-8">
   <title>Invoice #{{ invoice.invoice_number }}</title>
   <style>
-    /* ── Page & Font ── */
-    /* Only load Inter for A4/8x4 (which have reliable internet). For 4x6/thermal use
-       system fonts so print() fires correctly even when offline. */
-    {% if ps.paper_size != '4x6' and ps.paper_size != '80mm' and ps.paper_size != '58mm' %}
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    {% endif %}
-
-    :root {
-      --font-main: {% if ps.paper_size == '4x6' or ps.paper_size == '80mm' or ps.paper_size == '58mm' %}'Arial', sans-serif{% else %}'Inter', 'Segoe UI', Arial, sans-serif{% endif %};
-    }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: var(--font-main);
-      color: #1a1a2e;
-      background: #f0f2f8;
-      font-size: 12px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 10px;
+      line-height: 1.2;
+      color: #000;
+      background: #f8f9fa;
     }
 
-    /* ── Print Action Bar (no-print) ── */
+    /* Print Button */
     .action-bar {
       background: linear-gradient(135deg, #2d3048, #4a4f7a);
-      color: #fff;
-      padding: 10px 24px;
+      color: white;
+      padding: 12px 20px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
-    .action-bar-title { font-size: 13px; font-weight: 600; }
-    .action-bar-title small { font-size: 10px; opacity: .7; display: block; }
-    .action-btn {
-      padding: 8px 18px;
+    .btn-print {
+      background: #22c55e;
+      color: white;
       border: none;
+      padding: 10px 24px;
       border-radius: 8px;
-      font-size: 12px;
       font-weight: 600;
       cursor: pointer;
-      transition: opacity .2s;
-    }
-    .action-btn:hover { opacity: .85; }
-    .btn-print { background: #22c55e; color: #fff; }
-    .btn-close-w { background: rgba(255,255,255,.15); color: #fff; }
-
-    /* ── Outer Wrapper ── */
-    .page-wrapper {
-      max-width: 860px;
-      margin: 24px auto;
-      background: #fff;
-      border-radius: 16px;
-      overflow: hidden;
-      box-shadow: 0 8px 40px rgba(0,0,0,.12);
     }
 
-    /* ── Invoice Content ── */
-    .invoice-body {
-      padding: {{ ps.margin_top|default:10 }}mm {{ ps.margin_sides|default:10 }}mm;
+    .invoice-container {
+      width: 100%;
+      max-width: 380px;
+      margin: 20px auto;
+      background: white;
+      padding: 10px 8px;
     }
 
-    /* ── Header ── */
-    .inv-header {
-      display: flex;
-      align-items: center;
-      gap: 18px;
-      padding-bottom: 14px;
-      border-bottom: 2px solid #e5e7ef;
-      margin-bottom: 12px;
-    }
-    .inv-logo img {
-      max-height: 70px;
-      max-width: 160px;
-      object-fit: contain;
-    }
-    .inv-pharmacy-info { flex: 1; text-align: center; }
-    .inv-pharmacy-info h1 {
-      font-size: 20px;
-      font-weight: 800;
-      color: #1a1a2e;
-      letter-spacing: .5px;
-      text-transform: uppercase;
-      margin-bottom: 4px;
-    }
-    .inv-pharmacy-info p {
-      font-size: 11px;
-      color: #4b5563;
-      margin: 2px 0;
-    }
-
-    /* ── Invoice Title Strip ── */
-    .inv-title-strip {
-      background: #f3f4f6;
-      border-radius: 8px;
+    .header {
       text-align: center;
-      padding: 8px 16px;
-      margin-bottom: 14px;
+      border-bottom: 2px solid #000;
+      padding-bottom: 6px;
+      margin-bottom: 8px;
+    }
+    .header h1 { font-size: 13px; text-transform: uppercase; margin-bottom: 3px; }
+    .header p { font-size: 8.5px; margin: 1px 0; }
+
+    .invoice-info {
       display: flex;
-      align-items: center;
       justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-    .inv-title-strip h2 {
-      font-size: 14px;
-      font-weight: 700;
-      color: #1a1a2e;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-    }
-    .inv-title-strip .inv-meta {
-      font-size: 11px;
-      color: #6b7280;
-    }
-    .inv-title-strip .inv-meta b { color: #1a1a2e; }
-
-    /* ── Patient Info Grid ── */
-    .patient-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px 24px;
-      padding: 12px 14px;
-      background: #fafbff;
-      border: 1px solid #e8eaf0;
-      border-radius: 10px;
-      margin-bottom: 14px;
-    }
-    .patient-field label {
-      display: block;
-      font-size: 9.5px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .5px;
-      color: #9ca3af;
-      margin-bottom: 2px;
-    }
-    .patient-field p {
-      font-size: 12px;
-      font-weight: 600;
-      color: #1a1a2e;
+      font-size: 9px;
+      margin-bottom: 8px;
     }
 
-    /* ── Optional: invoice message ── */
-    .inv-message {
-      padding: 8px 12px;
-      border-left: 3px solid #5c67f2;
-      background: #f5f6ff;
-      border-radius: 0 6px 6px 0;
-      font-size: 11px;
-      color: #4b5563;
-      margin-bottom: 14px;
-    }
-
-    /* ── Items Table ── */
-    .items-table {
+    /* Items Table */
+    table.items-table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 14px;
-      font-size: 11.5px;
+      font-size: 9.2px;
+      margin-bottom: 10px;
     }
-    .items-table thead tr {
-      background: #1a1a2e;
-      color: #fff;
+    .items-table th, .items-table td {
+      border: 1px solid #000;
+      padding: 3px 4px;
     }
     .items-table th {
-      padding: 8px 10px;
-      text-align: left;
-      font-weight: 600;
-      font-size: 10.5px;
-      letter-spacing: .3px;
-    }
-    .items-table th:last-child { text-align: right; }
-    .items-table tbody tr { border-bottom: 1px solid #f0f2f5; }
-    .items-table tbody tr:nth-child(even) { background: #fafbff; }
-    .items-table td { padding: 7px 10px; vertical-align: middle; }
-    .items-table td:last-child { text-align: right; font-weight: 600; }
-    .med-name { font-weight: 600; color: #1a1a2e; }
-    .med-pack { font-size: 9.5px; color: #9ca3af; margin-top: 1px; }
-
-    /* ── Totals Block ── */
-    .totals-wrap {
-      display: flex;
-      justify-content: flex-end;
-      margin-bottom: 18px;
-    }
-    .totals-box {
-      width: 280px;
-      border: 1px solid #e5e7ef;
-      border-radius: 10px;
-      overflow: hidden;
-    }
-    .total-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 8px 14px;
-      font-size: 11.5px;
-      border-bottom: 1px solid #f3f4f6;
-    }
-    .total-row:last-child { border-bottom: none; }
-    .total-row.grand {
-      background: #1a1a2e;
-      color: #fff;
-      font-weight: 700;
-      font-size: 13px;
-    }
-    .total-row span:last-child { font-weight: 600; }
-
-    /* ── Signature Block ── */
-    .sig-block {
-      display: flex;
-      justify-content: flex-end;
-      gap: 40px;
-      margin-top: 24px;
-      padding-top: 16px;
-      border-top: 1px dashed #d1d5db;
-    }
-    .sig-area {
+      color: #0f0303;
       text-align: center;
-      min-width: 140px;
     }
-    .sig-line {
+    .items-table td.amount { text-align: right; }
+
+    /* Tight Totals Section */
+    .totals-table {
       width: 100%;
-      border-top: 1px solid #6b7280;
-      margin-top: 36px;
-    }
-    .sig-label {
-      font-size: 10px;
-      color: #6b7280;
-      font-weight: 600;
+      font-size: 9.5px;
       margin-top: 4px;
     }
-    .sig-name {
-      font-size: 10px;
-      color: #374151;
-      margin-top: 2px;
+    /* .totals-table td {
+      padding: 2px 4px;
+    } */
+    .totals-table td:first-child {
+      width: 48%;
+      /* text-align: left; */
+      padding-right: 8px;
     }
-
-    /* ── Footer ── */
-    .inv-footer {
-      text-align: center;
-      margin-top: 18px;
-      padding-top: 12px;
-      border-top: 2px solid #e5e7ef;
-    }
-    .inv-footer p {
-      font-size: 10.5px;
-      color: #6b7280;
-      margin: 2px 0;
-    }
-    .inv-footer p.footer-main {
+    .totals-table td:last-child {
+      text-align: right;
       font-weight: 600;
-      color: #374151;
-      font-size: 11px;
+      padding-left: 8px;
+    }
+    .totals-table tr.grand-total {
+      margin-top: 2px;
+      color: #0a0101;
+      font-weight: bold;
     }
 
-    /* ── @media print ── */
+    .signature {
+      margin-top: 25px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 9px;
+    }
+    .sig-line {
+      border-top: 1px solid #000;
+      width: 45%;
+      margin-top: 30px;
+    }
+
+    .footer {
+      text-align: center;
+      font-size: 8.5px;
+      margin-top: 15px;
+      padding-top: 8px;
+      border-top: 1px dashed #000;
+    }
+
     @media print {
-      body { background: #fff; }
       .action-bar { display: none !important; }
-      .page-wrapper {
-        max-width: 100%;
-        width: 100%;
-        margin: 0;
-        border-radius: 0;
-        box-shadow: none;
+      .invoice-container { 
+        margin: 0; 
+        box-shadow: none; 
+        max-width: 101.6mm !important; 
+        width: 101.6mm !important; 
+        padding: 6px 5px !important;
       }
-
       @page {
-        {% if ps.paper_size == '4x6' %}
-          size: 4in 6in;
-          margin: {{ ps.margin_top|default:3 }}mm {{ ps.margin_sides|default:3 }}mm;
-        {% elif ps.paper_size == '8x4' %}
-          size: 8in 4in;
-          margin: {{ ps.margin_top|default:3 }}mm {{ ps.margin_sides|default:4 }}mm;
-        {% elif ps.paper_size == '80mm' %}
-          size: 80mm auto;
-          margin: 2mm 3mm;
-        {% elif ps.paper_size == '58mm' %}
-          size: 58mm auto;
-          margin: 2mm;
-        {% else %}
-          size: A4 portrait;
-          margin: {{ ps.margin_top|default:10 }}mm {{ ps.margin_sides|default:10 }}mm;
-        {% endif %}
+        size: 101.6mm 152.4mm;
+        margin: 4mm 3mm;
       }
-
-      {% if ps.paper_size == '4x6' %}
-        /* 4x6 – compact thermal-style receipt */
-        body { font-family: Arial, 'Helvetica Neue', sans-serif !important; font-size: 8pt !important; color: #000 !important; width: 4in !important; }
-        .page-wrapper { width: 4in !important; max-width: 4in !important; overflow: visible !important; }
-        .invoice-body { padding: 2mm !important; }
-        .inv-header { gap: 6px !important; padding-bottom: 4px !important; margin-bottom: 4px !important; border-bottom: 1px solid #000 !important; }
-        .inv-pharmacy-info h1 { font-size: 11pt !important; }
-        .inv-pharmacy-info p { font-size: 7pt !important; }
-        .inv-title-strip { padding: 3px 6px !important; margin-bottom: 5px !important; border-radius: 0 !important; background: #eee !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        .inv-title-strip h2 { font-size: 9pt !important; }
-        .inv-title-strip .inv-meta { font-size: 7pt !important; }
-        .patient-grid { padding: 4px 6px !important; gap: 3px 10px !important; margin-bottom: 6px !important; border-radius: 0 !important; }
-        .patient-field label { font-size: 6.5pt !important; }
-        .patient-field p { font-size: 8pt !important; }
-        .items-table { font-size: 7.5pt !important; margin-bottom: 6px !important; }
-        .items-table th { padding: 2px 3px !important; font-size: 7pt !important; }
-        .items-table td { padding: 2px 3px !important; }
-        .med-name { font-size: 7.5pt !important; }
-        .med-pack { font-size: 6pt !important; }
-        .totals-box { width: 180px !important; }
-        .total-row { padding: 3px 8px !important; font-size: 8pt !important; }
-        .total-row.grand { font-size: 9pt !important; }
-        .sig-block { margin-top: 10px !important; padding-top: 6px !important; }
-        .sig-line { margin-top: 20px !important; }
-        .sig-label { font-size: 7pt !important; }
-        .inv-footer { margin-top: 8px !important; padding-top: 6px !important; }
-        .inv-footer p { font-size: 7pt !important; }
-      {% elif ps.paper_size == '8x4' %}
-        body { font-size: 8pt !important; }
-        .inv-pharmacy-info h1 { font-size: 11pt !important; }
-        .inv-pharmacy-info p { font-size: 7pt !important; }
-        .inv-header { padding-bottom: 4px !important; margin-bottom: 4px !important; }
-        .items-table th, .items-table td { padding: 2px 3px !important; font-size: 7pt !important; }
-      {% elif ps.paper_size == '80mm' %}
-        body { font-family: Arial, 'Helvetica Neue', sans-serif !important; font-size: 7.5pt !important; width: 80mm !important; }
-        .page-wrapper { width: 80mm !important; max-width: 80mm !important; }
-        .invoice-body { padding: 2mm !important; }
-        .inv-pharmacy-info h1 { font-size: 10pt !important; }
-        .inv-pharmacy-info p { font-size: 6.5pt !important; }
-        .items-table th, .items-table td { padding: 1px 2px !important; font-size: 7pt !important; }
-        .totals-box { width: 160px !important; }
-        .total-row { padding: 2px 6px !important; font-size: 7.5pt !important; }
-      {% elif ps.paper_size == '58mm' %}
-        body { font-family: Arial, 'Helvetica Neue', sans-serif !important; font-size: 6.5pt !important; width: 58mm !important; }
-        .page-wrapper { width: 58mm !important; max-width: 58mm !important; }
-        .invoice-body { padding: 1mm !important; }
-        .inv-pharmacy-info h1 { font-size: 8pt !important; }
-        .inv-pharmacy-info p { font-size: 6pt !important; }
-        .patient-grid { grid-template-columns: 1fr !important; }
-        .items-table th, .items-table td { padding: 1px !important; font-size: 6pt !important; }
-        .totals-box { width: 140px !important; }
-        .total-row { padding: 1px 4px !important; font-size: 6.5pt !important; }
-      {% endif %}
     }
   </style>
-
 </head>
 <body>
 
-  <!-- ── Action Bar (no-print) ── -->
-  <div class="action-bar no-print">
-    <div class="action-bar-title">
-      Invoice #{{ invoice.invoice_number }}
-      <small>{{ invoice.tenant.pharmacy_name }}</small>
-    </div>
-    <div style="display:flex; gap:8px;">
-      <button class="action-btn btn-print" onclick="window.print()">
-        🖨 Print
-      </button>
-      <button class="action-btn btn-close-w" onclick="window.close()">
-        ✕ Close
-      </button>
-    </div>
+  <!-- Print Button -->
+  <div class="action-bar">
+    <h5>Invoice #{{ invoice.invoice_number }}</h5>
+    <button class="btn-print" onclick="window.print()">
+      🖨 Print Invoice
+    </button>
   </div>
 
-  <!-- ── Invoice ── -->
-  <div class="page-wrapper">
-    <div class="invoice-body">
+  <div class="invoice-container">
 
-      <!-- Header -->
-      <div class="inv-header">
-        {% if ps.show_logo and ps.logo_base64 %}
-        <div class="inv-logo">
-          <img src="{{ ps.logo_base64 }}" alt="{{ invoice.tenant.pharmacy_name }} logo">
-        </div>
-        {% endif %}
-
-        <div class="inv-pharmacy-info">
-          <h1>{{ invoice.tenant.pharmacy_name }}</h1>
-          {% if invoice.tenant.address %}
-          <p>{{ invoice.tenant.address }}</p>
-          {% endif %}
-          {% if invoice.tenant.phone %}
-          <p>Phone: {{ invoice.tenant.phone }}</p>
-          {% endif %}
-          {% if ps.show_dl_details and invoice.tenant.license_number %}
-          <p>DL No: {{ invoice.tenant.license_number }}
-            {% if ps.show_gst_details and invoice.tenant.gst_number %}
-             &nbsp;|&nbsp; GST: {{ invoice.tenant.gst_number }}
-            {% endif %}
-          </p>
-          {% elif ps.show_gst_details and invoice.tenant.gst_number %}
-          <p>GST: {{ invoice.tenant.gst_number }}</p>
-          {% endif %}
-          {% if ps.custom_header %}
-          <p style="margin-top:4px; font-style:italic; color:#6b7280; font-size:10.5px;">{{ ps.custom_header }}</p>
-          {% endif %}
-        </div>
-      </div>
-
-      <!-- Title Strip -->
-      <div class="inv-title-strip">
-        <h2>Retail Invoice</h2>
-        <div class="inv-meta">
-          No: <b>{{ invoice.invoice_number }}</b>
-          &nbsp;&nbsp;|&nbsp;&nbsp;
-          Date: <b>{{ invoice.created_at|date:"d M Y, H:i" }}</b>
-        </div>
-      </div>
-
-      <!-- Optional Invoice Message -->
-      {% if invoice.tenant.invoice_message %}
-      <div class="inv-message">{{ invoice.tenant.invoice_message }}</div>
+    <!-- Header -->
+    <div class="header">
+      <h1>{{ invoice.tenant.pharmacy_name }}</h1>
+      {% if invoice.tenant.address %}<p>{{ invoice.tenant.address }}</p>{% endif %}
+      {% if invoice.tenant.phone %}<p>Ph: {{ invoice.tenant.phone }}</p>{% endif %}
+      {% if ps.show_dl_details and invoice.tenant.license_number %}
+        <p>DL: {{ invoice.tenant.license_number }}</p>
       {% endif %}
-
-      <!-- Patient Info -->
-      <div class="patient-grid">
-        <div class="patient-field">
-          <label>Patient Name</label>
-          <p>{{ invoice.patient_name|default:"Cash Customer" }}</p>
-        </div>
-        <div class="patient-field">
-          <label>Referred By (Dr.)</label>
-          <p>{{ invoice.doctor_name|default:"Self" }}</p>
-        </div>
-        <div class="patient-field">
-          <label>Address</label>
-          <p>{{ invoice.patient_address|default:"—" }}</p>
-        </div>
-        <div class="patient-field">
-          <label>Payment Mode</label>
-          <p>{{ invoice.payment_mode }}</p>
-        </div>
-        <div class="patient-field">
-          <label>Mobile Number</label>
-          <p>{{ invoice.patient_phone|default:"—" }}</p>
-        </div>
-      </div>
-
-      <!-- Items Table -->
-      <table class="items-table">
-        <thead>
-          <tr>
-            <th style="width:38%">Medicine Name</th>
-            <th>Batch No.</th>
-            <th>Expiry</th>
-            <th>Qty</th>
-            <th>Unit Price</th>
-            <th>Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for item in invoice.items.all %}
-          <tr>
-            <td>
-              <div class="med-name">{{ item.product.product_name }}</div>
-              <div class="med-pack">{{ item.product.product_packing }}</div>
-            </td>
-            <td>{{ item.batch_number }}</td>
-            <td>{{ item.expiry_date|date:"m/y" }}</td>
-            <td>{{ item.quantity }}</td>
-            <td>{{ item.unit_price }}</td>
-            <td>{{ item.total_amount }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-
-      <!-- Totals -->
-      <div class="totals-wrap">
-        <div class="totals-box">
-          <div class="total-row">
-            <span>Sub Total</span>
-            <span>₹ {{ invoice.sub_total }}</span>
-          </div>
-          <div class="total-row">
-            <span>GST / Tax</span>
-            <span>₹ {{ invoice.tax_amount }}</span>
-          </div>
-          <div class="total-row">
-            <span>Discount</span>
-            <span>- ₹ {{ invoice.discount_amount }}</span>
-          </div>
-          <div class="total-row grand">
-            <span>Net Payable</span>
-            <span>₹ {{ invoice.total_amount }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Signatures -->
-      {% if ps.show_customer_signature or ps.show_pharmacist_signature %}
-      <div class="sig-block">
-        {% if ps.show_customer_signature %}
-        <div class="sig-area">
-          <div class="sig-line"></div>
-          <div class="sig-label">Customer Signature</div>
-        </div>
-        {% endif %}
-        {% if ps.show_pharmacist_signature %}
-        <div class="sig-area">
-          <div class="sig-line"></div>
-          <div class="sig-label">Pharmacist Signature</div>
-          <div class="sig-name">{{ invoice.user.get_full_name|default:invoice.user.username }}</div>
-        </div>
-        {% endif %}
-      </div>
+      {% if ps.show_gst_details and invoice.tenant.gst_number %}
+        <p>GST: {{ invoice.tenant.gst_number }}</p>
       {% endif %}
-
-      <!-- Footer -->
-      <div class="inv-footer">
-        <p class="footer-main">
-          {% if ps.custom_footer %}
-            {{ ps.custom_footer }}
-          {% else %}
-            Thank you for choosing {{ invoice.tenant.pharmacy_name }}!
-          {% endif %}
-        </p>
-        <p>Subject to terms &amp; conditions &nbsp;·&nbsp; Not for resale</p>
-      </div>
-
     </div>
-  </div>
-<script>
-  (function () {
-    {% if ps.paper_size == '4x6' %}
-      // Force 4x6 page size via CSS before printing
-      const style = document.createElement('style');
-      style.textContent = `
-        @page {
-          size: 4in 6in !important;
-          margin: {{ ps.margin_top|default:3 }}mm {{ ps.margin_sides|default:3 }}mm !important;
-        }
-        body {
-          width: 4in !important;
-          font-family: Arial, 'Helvetica Neue', sans-serif !important;
-          font-size: 8pt !important;
-        }
-        .page-wrapper {
-          width: 4in !important;
-          max-width: 4in !important;
-          margin: 0 !important;
-          box-shadow: none !important;
-          border-radius: 0 !important;
-          overflow: visible !important;
-        }
-        .invoice-body {
-          padding: 2mm !important;
-        }
-      `;
-      document.head.appendChild(style);
-    {% elif ps.paper_size == '80mm' %}
-      const style = document.createElement('style');
-      style.textContent = `
-        @page { size: 80mm auto !important; margin: 2mm 3mm !important; }
-        body { width: 80mm !important; font-family: Arial, sans-serif !important; font-size: 7.5pt !important; }
-        .page-wrapper { width: 80mm !important; max-width: 80mm !important; margin: 0 !important; box-shadow: none !important; border-radius: 0 !important; }
-      `;
-      document.head.appendChild(style);
-    {% elif ps.paper_size == '58mm' %}
-      const style = document.createElement('style');
-      style.textContent = `
-        @page { size: 58mm auto !important; margin: 2mm !important; }
-        body { width: 58mm !important; font-family: Arial, sans-serif !important; font-size: 6.5pt !important; }
-        .page-wrapper { width: 58mm !important; max-width: 58mm !important; margin: 0 !important; box-shadow: none !important; border-radius: 0 !important; }
-      `;
-      document.head.appendChild(style);
-    {% endif %}
 
-    // Wait for fonts to be ready before triggering print to avoid garbled text
-    if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(function () {
-        setTimeout(function () { window.print(); }, 200);
-      });
-    } else {
-      // Fallback for older browsers
-      window.addEventListener('load', function () {
-        setTimeout(function () { window.print(); }, 400);
-      });
-    }
-  })();
-</script>
+    <!-- Invoice Info -->
+    <div class="invoice-info">
+      <div>
+        <strong>No:</strong> {{ invoice.invoice_number }}<br>
+        <strong>Date:</strong> {{ invoice.created_at|date:"d/m/Y H:i" }}
+      </div>
+      <div style="text-align:right;">
+        <strong>Patient:</strong> {{ invoice.patient_name|default:"Cash Customer" }}<br>
+        <strong>Payment:</strong> {{ invoice.payment_mode }}
+      </div>
+    </div>
+
+    <!-- Items Table -->
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th style="width:42%">Medicine Name</th>
+          <th>Batch</th>
+          <th>Exp</th>
+          <th>Qty</th>
+          <th>Rate</th>
+          <th class="amount">Amt</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in invoice.items.all %}
+        <tr>
+          <td>{{ item.product.product_name }}<br><small>{{ item.product.product_packing|default:"" }}</small></td>
+          <td>{{ item.batch_number }}</td>
+          <td>{{ item.expiry_date|date:"m/y" }}</td>
+          <td style="text-align:center;">{{ item.quantity }}</td>
+          <td style="text-align:right;">{{ item.unit_price }}</td>
+          <td class="amount">{{ item.total_amount }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- Tight & Clean Totals -->
+    <table class="totals-table">
+      <tr>
+        <td>Sub Total</td>
+        <td>₹ {{ invoice.sub_total }}</td>
+      </tr>
+      <tr>
+        <td>GST / Tax</td>
+        <td>₹ {{ invoice.tax_amount }}</td>
+      </tr>
+      <tr>
+        <td>Discount</td>
+        <td>- ₹ {{ invoice.discount_amount }}</td>
+      </tr>
+      <tr class="grand-total">
+        <td>Net Payable</td>
+        <td>₹ {{ invoice.total_amount }}</td>
+      </tr>
+    </table>
+
+    <!-- Signature -->
+    <div class="signature">
+      {% if ps.show_customer_signature %}
+      <div>Customer Sign<br><div class="sig-line"></div></div>
+      {% endif %}
+      {% if ps.show_pharmacist_signature %}
+      <div style="text-align:right;">Pharmacist Sign<br><div class="sig-line"></div></div>
+      {% endif %}
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      {% if ps.custom_footer %}
+        {{ ps.custom_footer }}
+      {% else %}
+        Thank you! Visit Again • Medicines once sold will not be returned.
+      {% endif %}
+    </div>
+
+  </div>
+
 </body>
 </html>
