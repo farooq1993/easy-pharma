@@ -5,45 +5,101 @@
 <title>{{ invoice.invoice_number }}</title>
 
 <style>
-body{
-    font-family:"Courier New", monospace;
-    font-size:10.6px;
-    margin:0;
-    padding:0;
-    color:#000;
-    line-height:1.02;
+* { box-sizing: border-box; }
+
+body {
+    font-family: "Courier New", monospace;
+    font-size: 10px;
+    margin: 0;
+    padding: 0;
+    color: #000;
+    line-height: 1.15;
 }
 
-.bill{
-    width:210mm;
-    max-width:210mm;
-    padding:4mm 5mm;
-    box-sizing:border-box;
+.bill {
+    width: 200mm;
+    padding: 2mm 4mm;
 }
 
-.line{
-    white-space:pre;
-    margin:1px 0;
+.shop-info {
+    flex: 1;
 }
 
-.sep{
-    border-top:1px dashed #000;
-    margin:4px 0;
+.memo-info {
+    text-align: right;
+    white-space: nowrap;
 }
 
-.r{text-align:right;}
-.c{text-align:center;}
+.line {
+    white-space: pre;
+    margin: 0;
+    display: block;
+}
 
-@media print{
-    .action-bar{display:none !important;}
-    body{margin:0;}
-    .bill{
-        width:210mm;
-        padding:3mm 4mm;
+.sep {
+    border: none;
+    border-top: 1px dotted #000;
+    margin: 2px 0;
+}
+
+/* Products table */
+.tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: "Courier New", monospace;
+    font-size: 10px;
+}
+
+.tbl th {
+    text-align: left;
+    font-weight: bold;
+    padding: 0 2px;
+    border-bottom: 1px dotted #000;
+    white-space: nowrap;
+}
+
+.tbl td {
+    padding: 0 2px;
+    vertical-align: top;
+}
+
+.tbl .r { text-align: right; }
+.tbl .c { text-align: center; }
+
+/* Footer two-column layout */
+.footer-row {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 2px;
+}
+
+.footer-left {
+    flex: 1;
+    font-size: 9.5px;
+}
+
+.footer-right {
+    text-align: right;
+    white-space: nowrap;
+    margin-left: 6mm;
+}
+
+.footer-right .line {
+    white-space: nowrap;
+}
+
+@media print {
+    .action-bar { display: none !important; }
+    body { margin: 0; }
+    .bill { width: 200mm; }
+
+    @page {
+        size: 241mm auto;
+        margin: 4mm 6mm 4mm 8mm;
     }
-    @page{
-        size: 210mm 305mm;
-        margin:0;
+
+    .page-break {
+        page-break-before: always;
     }
 }
 </style>
@@ -51,63 +107,118 @@ body{
 
 <body>
 
-<div class="action-bar" style="padding:10px;background:#eee">
+<div class="action-bar" style="padding:8px;background:#eee;">
     <button onclick="window.print()">Print</button>
 </div>
 
 <div class="bill">
 
-<div class="line c"><b>{{ invoice.tenant.pharmacy_name|upper }}</b></div>
-<div class="line c">{{ invoice.tenant.address }}</div>
+    <!-- TOP: Cash Memo No + Date - right aligned -->
+    <div class="memo-info">
+        <span class="line">CASH BILL NO. : {{ invoice.invoice_number }}    Date: {{ invoice.created_at|date:"d/m/Y" }}</span>
+    </div>
 
-<div class="sep"></div>
+    <!-- Shop Name + Address - left -->
+    <div class="shop-info">
+        <div class="line"><b>{{ invoice.tenant.pharmacy_name|upper }}</b></div>
+        <div class="line">{{ invoice.tenant.address }}</div>
+        <div class="line">Phone: {{ invoice.tenant.phone }}</div>
+        <div class="line">D.L.NO: {{ invoice.tenant.license_number }}</div>
+    </div>
 
-<div class="line">Cash Memo No : {{ invoice.invoice_number }}      Date: {{ invoice.created_at|date:"d/m/Y" }}</div>
-<div class="line">Pt. Name     : {{ invoice.patient_name|default:"Cash Customer" }}</div>
+    <div class="sep"></div>
 
-{% if invoice.patient_address %}
-<div class="line">Address      : {{ invoice.patient_address }}</div>
-{% endif %}
+    <!-- Patient Info - full labels -->
+    <div class="line">Patient Name : {{ invoice.patient_name|default:"Cash Customer" }}</div>
+    {% if invoice.patient_address %}
+    <div class="line">Address      : {{ invoice.patient_address }}</div>
+    {% endif %}
+    {% if invoice.prescribed_by %}
+    <div class="line">Doctor Name  : {{ invoice.prescribed_by }}</div>
+    {% endif %}
+    <div class="line">Payment Mode : {{ invoice.payment_mode }}</div>
 
-{% if invoice.prescribed_by %}
-<div class="line">Pres.By      : {{ invoice.prescribed_by }}</div>
-{% endif %}
+    <div class="sep"></div>
 
-<div class="line">Payment      : {{ invoice.payment_mode }}</div>
+    <!-- Products Table -->
+    <table class="tbl">
+        <thead>
+            <tr>
+                <th style="width:38%">PRODUCTS</th>
+                <th style="width:8%">MFG</th>
+                <th style="width:15%">BATCH NO.</th>
+                <th style="width:10%">EXP.DT</th>
+                <th style="width:6%" class="r">QTY</th>
+                <th style="width:13%" class="r">VALUE</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in invoice.items.all %}
+            {% if forloop.counter0 > 0 and forloop.counter0|divisibleby:12 %}
+            </tbody>
+            </table>
+            <div class="page-break"></div>
+            <table class="tbl">
+            <thead>
+                <tr>
+                    <th style="width:38%">PRODUCTS (contd.)</th>
+                    <th style="width:8%">MFG</th>
+                    <th style="width:15%">BATCH NO.</th>
+                    <th style="width:10%">EXP.DT</th>
+                    <th style="width:6%" class="r">QTY</th>
+                    <th style="width:13%" class="r">VALUE</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% endif %}
+            <tr>
+                <td>{{ item.product.product_name|truncatechars:32 }}</td>
+                <td>{{ item.product.manufacturer|default:""|truncatechars:5 }}</td>
+                <td>{{ item.batch_number|truncatechars:12 }}</td>
+                <td class="c">{{ item.expiry_date|date:"m/y" }}</td>
+                <td class="r">{{ item.quantity }}</td>
+                <td class="r">{{ item.total_amount|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 
-<div class="sep"></div>
+    <div class="sep"></div>
 
-<div class="line">PRODUCTS                          MFG    BATCH NO.    EXP.DT   QTY    VALUE</div>
+    <!-- Footer: left = items + DL nos + phone, right = totals -->
+    <div class="footer-row">
+        <div class="footer-left">
+            <div class="line">No.of Items : {{ invoice.items.count }}</div>
+        </div>
 
-<div class="sep"></div>
+        <div class="footer-right">
+            <div class="line">Item Total : {{ invoice.sub_total|floatformat:2 }}</div>
+            <div class="line">GST amount  : {{ invoice.tax_amount|floatformat:2 }}</div>
+            <div class="line">Discount   : {{ invoice.discount_amount|floatformat:2 }}</div>
+            <div class="sep"></div>
+            <div class="line"><b>NET AMOUNT : {{ invoice.total_amount|floatformat:2 }}</b></div>
+        </div>
+    </div>
 
-{% for item in invoice.items.all %}
-<div class="line">{{ item.product.product_name|truncatechars:38 }}</div>
-<div class="line">{{ item.product.manufacturer|default:""|ljust:7 }}{{ item.batch_number|truncatechars:12|ljust:13 }}{{ item.expiry_date|date:"m/y"|ljust:8 }}{{ item.quantity|stringformat:"s"|rjust:5 }}{{ item.total_amount|stringformat:".2f"|rjust:9 }}</div>
-{% endfor %}
+    <div class="sep" style="margin-top:4px;"></div>
 
-<div class="sep"></div>
+    <!-- Bottom bar: computer generated note + O.P. -->
+    <div style="display:flex; justify-content:space-between; margin-top:3px; font-size:9.5px;">
+        <span>This bill is computer generated and does not require signature.</span>
+    </div>
 
-<div class="line">No. of Items : {{ invoice.items.count }}</div>
-<div class="line">Item Total                     : {{ invoice.sub_total }}</div>
-<div class="line">GST / Tax                      : {{ invoice.tax_amount }}</div>
-<div class="line">Discount                       : {{ invoice.discount_amount }}</div>
+    <!-- Jurisdiction -->
+    <div style="font-size:9.5px; margin-top:2px;">
+        Subject to <b>{{ invoice.tenant.city }}</b> Jurisdiction only.
+    </div>
 
-<div class="sep"></div>
+    <div style="margin-top:14px; font-size:9.5px;">Pharmacist Sign :</div>
+    <div class="sep" style="margin-top:16px;"></div>
 
-<div class="line"><b>NET AMOUNT                     : ₹ {{ invoice.total_amount }}</b></div>
+    <div style="text-align:center; font-size:9.5px; margin-top:2px;">
+        ** Goods once sold will not be taken back. **
+    </div>
 
-<div class="sep"></div>
-
-<div style="margin-top:12px;">Pharmacist Sign :</div>
-
-<div class="sep" style="margin-top:20px"></div>
-
-<div class="line c">
-** Goods once sold will not be taken back. **
 </div>
-
-</div>
-
 </body>
 </html>

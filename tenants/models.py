@@ -14,6 +14,7 @@ class Tenant(models.Model):
     pharmacy_name = models.CharField(max_length=200)
     address = models.TextField()
     phone = models.CharField(max_length=20)
+    city = models.CharField(max_length=20)
     license_number = models.CharField(max_length=100)
     gst_number = models.CharField(max_length=50, null=True, blank=True)
     invoice_message = models.TextField(null=True, blank=True)
