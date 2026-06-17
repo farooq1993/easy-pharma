@@ -124,3 +124,52 @@ class PurchaseItem(TenantAwareModel):
                 batch.current_quantity += total_units
                 batch.save()
 
+
+class OpeningStock(TenantAwareModel):
+    product = models.ForeignKey(Products, on_delete=models.CASCADE)
+    voucher_number = models.CharField(max_length=30, blank=True, null=True, db_index=True)
+    batch_number = models.CharField(max_length=100)
+    expiry_date = models.DateField()
+    quantity = models.PositiveIntegerField()
+    purchase_price = models.DecimalField(max_digits=10, decimal_places=2)
+    mrp = models.DecimalField(max_digits=10, decimal_places=2)
+    tax_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    opening_stock_date = models.DateField(null=True, blank=True)
+
+    @classmethod
+    def generate_voucher_number(cls, tenant, opening_stock_date=None):
+        """
+        Sequential, tenant-scoped voucher number.
+        Format: PV-YYYY-XXXXXX  e.g. PV-2026-000042
+        Counter resets each financial year (April 1 – March 31).
+        """
+ 
+        today = opening_stock_date or timezone.now().date()
+        if isinstance(today, str):
+            today = datetime.date.fromisoformat(today)
+ 
+        # Financial year starts April
+        fy_year = today.year if today.month >= 4 else today.year - 1
+        fy_start = datetime.date(fy_year, 4, 1)
+        fy_end = datetime.date(fy_year + 1, 3, 31)
+ 
+        last = (
+            cls.objects
+            .filter(
+                tenant=tenant,
+                purchase_date__range=(fy_start, fy_end),
+                voucher_number__startswith=f"PV-{fy_year}-"
+            )
+            .order_by('-voucher_number')
+            .first()
+        )
+        if last and last.voucher_number:
+            try:
+                last_seq = int(last.voucher_number.rsplit('-', 1)[-1])
+            except ValueError:
+                last_seq = 0
+        else:
+            last_seq = 0
+ 
+        return f"PV-{fy_year}-{str(last_seq + 1).zfill(6)}"
