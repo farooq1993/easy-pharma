@@ -7,13 +7,12 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: 'Courier New', Courier, monospace;
-      font-size: 10px;
-      line-height: 1.2;
+      font-size: 11px;
+      line-height: 1.4;
       color: #000;
       background: #f8f9fa;
     }
 
-    /* Print Button */
     .action-bar {
       background: linear-gradient(135deg, #2d3048, #4a4f7a);
       color: white;
@@ -37,209 +36,280 @@
 
     .invoice-container {
       width: 100%;
-      max-width: 380px;
+      max-width: 680px;
       margin: 20px auto;
       background: white;
-      padding: 10px 8px;
+      padding: 12px 10px;
     }
 
-    .header {
-      text-align: center;
-      border-bottom: 2px solid #000;
-      padding-bottom: 6px;
-      margin-bottom: 8px;
+    /* HEADER */
+    .header { margin-bottom: 6px; }
+    .header h1 {
+      font-size: 13px;
+      text-transform: uppercase;
+      font-weight: bold;
+      margin-bottom: 1px;
     }
-    .header h1 { font-size: 13px; text-transform: uppercase; margin-bottom: 3px; }
-    .header p { font-size: 8.5px; margin: 1px 0; }
-
-    .invoice-info {
+    .header p { font-size: 11px; margin: 0; }
+    .header .header-row {
       display: flex;
-      justify-content: space-between;
-      font-size: 9px;
-      margin-bottom: 8px;
+      gap: 20px;
     }
 
-    /* Items Table */
+    .sep { border: none; border-top: 1px solid #000; margin: 5px 0; }
+    .sep-dash {
+      border: none;
+      border-top: 1px dashed #000;
+      margin: 4px 0;
+    }
+
+    /* BILL INFO */
+    .bill-info { font-size: 11px; margin: 5px 0; }
+    .bill-info .row { display: flex; justify-content: space-between; }
+
+    /* ITEMS TABLE — plain text style, no borders */
     table.items-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 9.2px;
-      margin-bottom: 10px;
+      font-size: 11px;
+      table-layout: fixed;
     }
     .items-table th, .items-table td {
-      border: 1px solid #000;
-      padding: 3px 4px;
+      border: none;
+      padding: 1px 2px;
+      text-align: left;
     }
-    .items-table th {
-      color: #0f0303;
-      text-align: center;
-    }
-    .items-table td.amount { text-align: right; }
+    .items-table th { font-weight: bold; }
 
-    /* Tight Totals Section */
-    .totals-table {
-      width: 100%;
-      font-size: 9.5px;
-      margin-top: 4px;
-    }
-    /* .totals-table td {
-      padding: 2px 4px;
-    } */
-    .totals-table td:first-child {
-      width: 48%;
-      /* text-align: left; */
-      padding-right: 8px;
-    }
-    .totals-table td:last-child {
-      text-align: right;
-      font-weight: 600;
-      padding-left: 8px;
-    }
-    .totals-table tr.grand-total {
+    /* Column widths */
+    .items-table col.col-sl    { width: 5%; }
+    .items-table col.col-name  { width: 30%; }
+    .items-table col.col-batch { width: 13%; }
+    .items-table col.col-exp   { width: 11%; }
+    .items-table col.col-qty   { width: 6%; }
+    .items-table col.col-rate  { width: 10%; }
+    .items-table col.col-amt   { width: 12%; }
+
+    .items-table td.right, .items-table th.right { text-align: right; }
+    .items-table td.center { text-align: center; }
+
+    /* TOTALS */
+    .totals-section {
       margin-top: 2px;
-      color: #0a0101;
+      font-size: 11px;
+    }
+    .totals-section .trow {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .totals-section .trow .label { min-width: 120px; text-align: right; }
+    .totals-section .trow .value { min-width: 70px; text-align: right; }
+    .totals-section .trow.grand .label,
+    .totals-section .trow.grand .value {
       font-weight: bold;
     }
 
+    /* AMOUNT IN WORDS */
+    .amt-words { font-size: 11px; margin: 5px 0; }
+
+    /* PAYMENT / NOTE */
+    .payment-info { font-size: 11px; margin: 3px 0; }
+
+    /* SIGNATURE */
     .signature {
-      margin-top: 25px;
+      margin-top: 10px;
       display: flex;
       justify-content: space-between;
-      font-size: 9px;
+      font-size: 11px;
     }
-    .sig-line {
-      border-top: 1px solid #000;
-      width: 45%;
-      margin-top: 30px;
-    }
+    .sig-block { width: 40%; }
+    .sig-line  { border-top: 1px solid #000; margin-top: 20px; }
 
-    .footer {
-      text-align: center;
-      font-size: 8.5px;
-      margin-top: 15px;
-      padding-top: 8px;
-      border-top: 1px dashed #000;
-    }
+    /* FOOTER */
+    .footer { font-size: 11px; margin-top: 6px; }
 
     @media print {
       .action-bar { display: none !important; }
-      .invoice-container { 
-        margin: 0; 
-        box-shadow: none; 
-        max-width: 101.6mm !important; 
-        width: 101.6mm !important; 
-        padding: 6px 5px !important;
+      html, body {
+        background: white !important;
+        height: auto !important;
+      }
+      .invoice-container {
+        margin: 0 !important;
+        padding: 0 !important;
+        max-width: 100% !important;
+        width: 100% !important;
       }
       @page {
-        size: 101.6mm 152.4mm;
-        margin: 4mm 3mm;
+        size: auto;
+        margin: 3mm 2mm;
       }
     }
   </style>
 </head>
 <body>
 
-  <!-- Print Button -->
   <div class="action-bar">
     <h5>Invoice #{{ invoice.invoice_number }}</h5>
-    <button class="btn-print" onclick="window.print()">
-      🖨 Print Invoice
-    </button>
+    <button class="btn-print" onclick="window.print()">🖨 Print Invoice</button>
   </div>
 
   <div class="invoice-container">
 
-    <!-- Header -->
+    <!-- HEADER -->
     <div class="header">
       <h1>{{ invoice.tenant.pharmacy_name }}</h1>
       {% if invoice.tenant.address %}<p>{{ invoice.tenant.address }}</p>{% endif %}
+      <div class="header-row">
+        {% if ps.show_gst_details and invoice.tenant.gst_number %}
+          <p>GSTIN: {{ invoice.tenant.gst_number }}</p>
+        {% endif %}
+        {% if ps.show_dl_details and invoice.tenant.license_number %}
+          <p>DL No: {{ invoice.tenant.license_number }}</p>
+        {% endif %}
+      </div>
       {% if invoice.tenant.phone %}<p>Ph: {{ invoice.tenant.phone }}</p>{% endif %}
-      {% if ps.show_dl_details and invoice.tenant.license_number %}
-        <p>DL: {{ invoice.tenant.license_number }}</p>
-      {% endif %}
-      {% if ps.show_gst_details and invoice.tenant.gst_number %}
-        <p>GST: {{ invoice.tenant.gst_number }}</p>
-      {% endif %}
     </div>
 
-    <!-- Invoice Info -->
-    <div class="invoice-info">
-      <div>
-        <strong>No:</strong> {{ invoice.invoice_number }}<br>
-        <strong>Date:</strong> {{ invoice.created_at|date:"d/m/Y H:i" }}
+    <hr class="sep">
+
+    <!-- BILL INFO -->
+    <div class="bill-info">
+      <div class="row">
+        <span>Bill No: {{ invoice.invoice_number }}</span>
+        <span>Date: {{ invoice.created_at|date:"d/m/Y" }}&nbsp;&nbsp;Time: {{ invoice.created_at|date:"h:i A" }}</span>
       </div>
-      <div style="text-align:right;">
-        <strong>Patient:</strong> {{ invoice.patient_name|default:"Cash Customer" }}<br>
-        <strong>Payment:</strong> {{ invoice.payment_mode }}
+      <div class="row">
+        <span>Customer: {{ invoice.patient_name|default:"Cash Customer" }}</span>
+        <span>Payment Mode: {{ invoice.payment_mode }}</span>
       </div>
     </div>
 
-    <!-- Items Table -->
+    <hr class="sep">
+
+    <!-- ITEMS TABLE -->
     <table class="items-table">
+      <colgroup>
+        <col class="col-sl">
+        <col class="col-name">
+        <col class="col-batch">
+        <col class="col-exp">
+        <col class="col-qty">
+        <col class="col-rate">
+        <col class="col-amt">
+      </colgroup>
       <thead>
         <tr>
-          <th style="width:42%">Medicine Name</th>
+          <th>Sl</th>
+          <th>Item Name</th>
           <th>Batch</th>
-          <th>Exp</th>
-          <th>Qty</th>
-          <th>Rate</th>
-          <th class="amount">Amt</th>
+          <th>Expiry</th>
+          <th class="right">Qty</th>
+          <th class="right">Rate</th>
+          <th class="right">Amount</th>
         </tr>
       </thead>
+    </table>
+    <hr class="sep-dash">
+    <table class="items-table">
+      <colgroup>
+        <col class="col-sl">
+        <col class="col-name">
+        <col class="col-batch">
+        <col class="col-exp">
+        <col class="col-qty">
+        <col class="col-rate">
+        <col class="col-amt">
+      </colgroup>
       <tbody>
         {% for item in invoice.items.all %}
         <tr>
+          <td>{{ forloop.counter }}</td>
           <td>{{ item.product.product_name }}<br><small>{{ item.product.product_packing|default:"" }}</small></td>
           <td>{{ item.batch_number }}</td>
-          <td>{{ item.expiry_date|date:"m/y" }}</td>
-          <td style="text-align:center;">{{ item.quantity }}</td>
-          <td style="text-align:right;">{{ item.unit_price }}</td>
-          <td class="amount">{{ item.total_amount }}</td>
+          <td>{{ item.expiry_date|date:"m/Y" }}</td>
+          <td class="right">{{ item.quantity }}</td>
+          <td class="right">{{ item.unit_price }}</td>
+          <td class="right">{{ item.total_amount }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+    <hr class="sep-dash">
 
-    <!-- Tight & Clean Totals -->
-    <table class="totals-table">
-      <tr>
-        <td>Sub Total</td>
-        <td>₹ {{ invoice.sub_total }}</td>
-      </tr>
-      <tr>
-        <td>GST / Tax</td>
-        <td>₹ {{ invoice.tax_amount }}</td>
-      </tr>
-      <tr>
-        <td>Discount</td>
-        <td>- ₹ {{ invoice.discount_amount }}</td>
-      </tr>
-      <tr class="grand-total">
-        <td>Net Payable</td>
-        <td>₹ {{ invoice.total_amount }}</td>
-      </tr>
-    </table>
+    <!-- TOTALS -->
+    <div class="totals-section">
+      <div class="trow">
+        <span class="label">Subtotal:</span>
+        <span class="value">{{ invoice.sub_total }}</span>
+      </div>
+      <div class="trow">
+        <span class="label">GST / Tax:</span>
+        <span class="value">{{ invoice.tax_amount }}</span>
+      </div>
+      <div class="trow">
+        <span class="label">Discount:</span>
+        <span class="value">- {{ invoice.discount_amount }}</span>
+      </div>
+      <div class="trow">
+        <span class="label">Total:</span>
+        <span class="value">{{ invoice.total_amount }}</span>
+      </div>
+    </div>
 
-    <!-- Signature -->
+    <hr class="sep">
+
+    <!-- NET PAYABLE -->
+    <div class="totals-section">
+      <div class="trow grand">
+        <span class="label">Net Payable:</span>
+        <span class="value">&#8377; {{ invoice.total_amount }}</span>
+      </div>
+    </div>
+
+    <hr class="sep">
+
+    <!-- PAYMENT MODE -->
+    <div class="payment-info">
+      Thank You! Visit Again.
+    </div>
+
+    <hr class="sep-dash">
+
+    <!-- NOTE -->
+    <div class="payment-info">
+      <strong>**Note:**</strong> Goods once sold will not be taken back.
+    </div>
+
+    <hr class="sep">
+
+    <!-- SIGNATURE -->
     <div class="signature">
       {% if ps.show_customer_signature %}
-      <div>Customer Sign<br><div class="sig-line"></div></div>
+      <div class="sig-block">
+        Customer Sign
+        <div class="sig-line"></div>
+      </div>
       {% endif %}
       {% if ps.show_pharmacist_signature %}
-      <div style="text-align:right;">Pharmacist Sign<br><div class="sig-line"></div></div>
+      <div class="sig-block" style="text-align:right;">
+        Pharmacist Sign
+        <div class="sig-line"></div>
+      </div>
       {% endif %}
     </div>
 
-    <!-- Footer -->
+    <!-- FOOTER -->
+    <hr class="sep-dash">
     <div class="footer">
       {% if ps.custom_footer %}
         {{ ps.custom_footer }}
       {% else %}
-        Thank you! Visit Again • Medicines once sold will not be returned.
+        This bill is computer generated and does not require signature.
       {% endif %}
     </div>
 
   </div>
-
 </body>
 </html>
