@@ -1,315 +1,113 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>Invoice #{{ invoice.invoice_number }}</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 11px;
-      line-height: 1.4;
-      color: #000;
-      background: #f8f9fa;
-    }
+<meta charset="utf-8">
+<title>{{ invoice.invoice_number }}</title>
 
-    .action-bar {
-      background: linear-gradient(135deg, #2d3048, #4a4f7a);
-      color: white;
-      padding: 12px 20px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-    .btn-print {
-      background: #22c55e;
-      color: white;
-      border: none;
-      padding: 10px 24px;
-      border-radius: 8px;
-      font-weight: 600;
-      cursor: pointer;
-    }
+<style>
+body{
+    font-family:"Courier New", monospace;
+    font-size:10.6px;
+    margin:0;
+    padding:0;
+    color:#000;
+    line-height:1.02;
+}
 
-    .invoice-container {
-      width: 100%;
-      max-width: 680px;
-      margin: 20px auto;
-      background: white;
-      padding: 12px 10px;
+.bill{
+    width:210mm;
+    max-width:210mm;
+    padding:4mm 5mm;
+    box-sizing:border-box;
+}
+
+.line{
+    white-space:pre;
+    margin:1px 0;
+}
+
+.sep{
+    border-top:1px dashed #000;
+    margin:4px 0;
+}
+
+.r{text-align:right;}
+.c{text-align:center;}
+
+@media print{
+    .action-bar{display:none !important;}
+    body{margin:0;}
+    .bill{
+        width:210mm;
+        padding:3mm 4mm;
     }
-
-    /* HEADER */
-    .header { margin-bottom: 6px; }
-    .header h1 {
-      font-size: 13px;
-      text-transform: uppercase;
-      font-weight: bold;
-      margin-bottom: 1px;
+    @page{
+        size: 210mm 305mm;
+        margin:0;
     }
-    .header p { font-size: 11px; margin: 0; }
-    .header .header-row {
-      display: flex;
-      gap: 20px;
-    }
-
-    .sep { border: none; border-top: 1px solid #000; margin: 5px 0; }
-    .sep-dash {
-      border: none;
-      border-top: 1px dashed #000;
-      margin: 4px 0;
-    }
-
-    /* BILL INFO */
-    .bill-info { font-size: 11px; margin: 5px 0; }
-    .bill-info .row { display: flex; justify-content: space-between; }
-
-    /* ITEMS TABLE — plain text style, no borders */
-    table.items-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 11px;
-      table-layout: fixed;
-    }
-    .items-table th, .items-table td {
-      border: none;
-      padding: 1px 2px;
-      text-align: left;
-    }
-    .items-table th { font-weight: bold; }
-
-    /* Column widths */
-    .items-table col.col-sl    { width: 5%; }
-    .items-table col.col-name  { width: 30%; }
-    .items-table col.col-batch { width: 13%; }
-    .items-table col.col-exp   { width: 11%; }
-    .items-table col.col-qty   { width: 6%; }
-    .items-table col.col-rate  { width: 10%; }
-    .items-table col.col-amt   { width: 12%; }
-
-    .items-table td.right, .items-table th.right { text-align: right; }
-    .items-table td.center { text-align: center; }
-
-    /* TOTALS */
-    .totals-section {
-      margin-top: 2px;
-      font-size: 11px;
-    }
-    .totals-section .trow {
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-    }
-    .totals-section .trow .label { min-width: 120px; text-align: right; }
-    .totals-section .trow .value { min-width: 70px; text-align: right; }
-    .totals-section .trow.grand .label,
-    .totals-section .trow.grand .value {
-      font-weight: bold;
-    }
-
-    /* AMOUNT IN WORDS */
-    .amt-words { font-size: 11px; margin: 5px 0; }
-
-    /* PAYMENT / NOTE */
-    .payment-info { font-size: 11px; margin: 3px 0; }
-
-    /* SIGNATURE */
-    .signature {
-      margin-top: 10px;
-      display: flex;
-      justify-content: space-between;
-      font-size: 11px;
-    }
-    .sig-block { width: 40%; }
-    .sig-line  { border-top: 1px solid #000; margin-top: 20px; }
-
-    /* FOOTER */
-    .footer { font-size: 11px; margin-top: 6px; }
-
-    @media print {
-      .action-bar { display: none !important; }
-      html, body {
-        background: white !important;
-        height: auto !important;
-      }
-      .invoice-container {
-        margin: 0 !important;
-        padding: 0 !important;
-        max-width: 100% !important;
-        width: 100% !important;
-      }
-      @page {
-        size: auto;
-        margin: 3mm 2mm;
-      }
-    }
-  </style>
+}
+</style>
 </head>
+
 <body>
 
-  <div class="action-bar">
-    <h5>Invoice #{{ invoice.invoice_number }}</h5>
-    <button class="btn-print" onclick="window.print()">🖨 Print Invoice</button>
-  </div>
+<div class="action-bar" style="padding:10px;background:#eee">
+    <button onclick="window.print()">Print</button>
+</div>
 
-  <div class="invoice-container">
+<div class="bill">
 
-    <!-- HEADER -->
-    <div class="header">
-      <h1>{{ invoice.tenant.pharmacy_name }}</h1>
-      {% if invoice.tenant.address %}<p>{{ invoice.tenant.address }}</p>{% endif %}
-      <div class="header-row">
-        {% if ps.show_gst_details and invoice.tenant.gst_number %}
-          <p>GSTIN: {{ invoice.tenant.gst_number }}</p>
-        {% endif %}
-        {% if ps.show_dl_details and invoice.tenant.license_number %}
-          <p>DL No: {{ invoice.tenant.license_number }}</p>
-        {% endif %}
-      </div>
-      {% if invoice.tenant.phone %}<p>Ph: {{ invoice.tenant.phone }}</p>{% endif %}
-    </div>
+<div class="line c"><b>{{ invoice.tenant.pharmacy_name|upper }}</b></div>
+<div class="line c">{{ invoice.tenant.address }}</div>
 
-    <hr class="sep">
+<div class="sep"></div>
 
-    <!-- BILL INFO -->
-    <div class="bill-info">
-      <div class="row">
-        <span>Bill No: {{ invoice.invoice_number }}</span>
-        <span>Date: {{ invoice.created_at|date:"d/m/Y" }}&nbsp;&nbsp;Time: {{ invoice.created_at|date:"h:i A" }}</span>
-      </div>
-      <div class="row">
-        <span>Customer: {{ invoice.patient_name|default:"Cash Customer" }}</span>
-        <span>Payment Mode: {{ invoice.payment_mode }}</span>
-      </div>
-    </div>
+<div class="line">Cash Memo No : {{ invoice.invoice_number }}      Date: {{ invoice.created_at|date:"d/m/Y" }}</div>
+<div class="line">Pt. Name     : {{ invoice.patient_name|default:"Cash Customer" }}</div>
 
-    <hr class="sep">
+{% if invoice.patient_address %}
+<div class="line">Address      : {{ invoice.patient_address }}</div>
+{% endif %}
 
-    <!-- ITEMS TABLE -->
-    <table class="items-table">
-      <colgroup>
-        <col class="col-sl">
-        <col class="col-name">
-        <col class="col-batch">
-        <col class="col-exp">
-        <col class="col-qty">
-        <col class="col-rate">
-        <col class="col-amt">
-      </colgroup>
-      <thead>
-        <tr>
-          <th>Sl</th>
-          <th>Item Name</th>
-          <th>Batch</th>
-          <th>Expiry</th>
-          <th class="right">Qty</th>
-          <th class="right">Rate</th>
-          <th class="right">Amount</th>
-        </tr>
-      </thead>
-    </table>
-    <hr class="sep-dash">
-    <table class="items-table">
-      <colgroup>
-        <col class="col-sl">
-        <col class="col-name">
-        <col class="col-batch">
-        <col class="col-exp">
-        <col class="col-qty">
-        <col class="col-rate">
-        <col class="col-amt">
-      </colgroup>
-      <tbody>
-        {% for item in invoice.items.all %}
-        <tr>
-          <td>{{ forloop.counter }}</td>
-          <td>{{ item.product.product_name }}<br><small>{{ item.product.product_packing|default:"" }}</small></td>
-          <td>{{ item.batch_number }}</td>
-          <td>{{ item.expiry_date|date:"m/Y" }}</td>
-          <td class="right">{{ item.quantity }}</td>
-          <td class="right">{{ item.unit_price }}</td>
-          <td class="right">{{ item.total_amount }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <hr class="sep-dash">
+{% if invoice.prescribed_by %}
+<div class="line">Pres.By      : {{ invoice.prescribed_by }}</div>
+{% endif %}
 
-    <!-- TOTALS -->
-    <div class="totals-section">
-      <div class="trow">
-        <span class="label">Subtotal:</span>
-        <span class="value">{{ invoice.sub_total }}</span>
-      </div>
-      <div class="trow">
-        <span class="label">GST / Tax:</span>
-        <span class="value">{{ invoice.tax_amount }}</span>
-      </div>
-      <div class="trow">
-        <span class="label">Discount:</span>
-        <span class="value">- {{ invoice.discount_amount }}</span>
-      </div>
-      <div class="trow">
-        <span class="label">Total:</span>
-        <span class="value">{{ invoice.total_amount }}</span>
-      </div>
-    </div>
+<div class="line">Payment      : {{ invoice.payment_mode }}</div>
 
-    <hr class="sep">
+<div class="sep"></div>
 
-    <!-- NET PAYABLE -->
-    <div class="totals-section">
-      <div class="trow grand">
-        <span class="label">Net Payable:</span>
-        <span class="value">&#8377; {{ invoice.total_amount }}</span>
-      </div>
-    </div>
+<div class="line">PRODUCTS                          MFG    BATCH NO.    EXP.DT   QTY    VALUE</div>
 
-    <hr class="sep">
+<div class="sep"></div>
 
-    <!-- PAYMENT MODE -->
-    <div class="payment-info">
-      Thank You! Visit Again.
-    </div>
+{% for item in invoice.items.all %}
+<div class="line">{{ item.product.product_name|truncatechars:38 }}</div>
+<div class="line">{{ item.product.manufacturer|default:""|ljust:7 }}{{ item.batch_number|truncatechars:12|ljust:13 }}{{ item.expiry_date|date:"m/y"|ljust:8 }}{{ item.quantity|stringformat:"s"|rjust:5 }}{{ item.total_amount|stringformat:".2f"|rjust:9 }}</div>
+{% endfor %}
 
-    <hr class="sep-dash">
+<div class="sep"></div>
 
-    <!-- NOTE -->
-    <div class="payment-info">
-      <strong>**Note:**</strong> Goods once sold will not be taken back.
-    </div>
+<div class="line">No. of Items : {{ invoice.items.count }}</div>
+<div class="line">Item Total                     : {{ invoice.sub_total }}</div>
+<div class="line">GST / Tax                      : {{ invoice.tax_amount }}</div>
+<div class="line">Discount                       : {{ invoice.discount_amount }}</div>
 
-    <hr class="sep">
+<div class="sep"></div>
 
-    <!-- SIGNATURE -->
-    <div class="signature">
-      {% if ps.show_customer_signature %}
-      <div class="sig-block">
-        Customer Sign
-        <div class="sig-line"></div>
-      </div>
-      {% endif %}
-      {% if ps.show_pharmacist_signature %}
-      <div class="sig-block" style="text-align:right;">
-        Pharmacist Sign
-        <div class="sig-line"></div>
-      </div>
-      {% endif %}
-    </div>
+<div class="line"><b>NET AMOUNT                     : ₹ {{ invoice.total_amount }}</b></div>
 
-    <!-- FOOTER -->
-    <hr class="sep-dash">
-    <div class="footer">
-      {% if ps.custom_footer %}
-        {{ ps.custom_footer }}
-      {% else %}
-        This bill is computer generated and does not require signature.
-      {% endif %}
-    </div>
+<div class="sep"></div>
 
-  </div>
+<div style="margin-top:12px;">Pharmacist Sign :</div>
+
+<div class="sep" style="margin-top:20px"></div>
+
+<div class="line c">
+** Goods once sold will not be taken back. **
+</div>
+
+</div>
+
 </body>
 </html>
