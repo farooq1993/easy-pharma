@@ -38,3 +38,12 @@ def get_item(dictionary, key):
     if dictionary is None:
         return None
     return dictionary.get(key)
+
+
+@register.filter
+def ljust(value, width):
+    return str(value).ljust(int(width))
+
+@register.filter
+def rjust(value, width):
+    return str(value).rjust(int(width))
