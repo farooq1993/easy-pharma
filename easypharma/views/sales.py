@@ -252,19 +252,166 @@ class POSView(LoginRequiredMixin,View):
             'invoice_number': invoice.invoice_number
         })
 
-class PrintInvoiceView(LoginRequiredMixin,View):
+class PrintInvoiceView(LoginRequiredMixin, View):
     template_name = 'sales/print_invoice.html'
 
     def get(self, request, invoice_id):
+        WIDTH = 80
         from django.shortcuts import get_object_or_404
         from easypharma.models.print_setup import PrintSetup
-        invoice = get_object_or_404(SaleInvoice, id=invoice_id)
+
+        invoice = get_object_or_404(
+            SaleInvoice.objects.prefetch_related(
+                'items',
+                'items__product'
+            ),
+            id=invoice_id
+        )
+
         if not invoice.tenant and request.tenant:
             invoice.tenant = request.tenant
-        # Load print settings (use tenant from invoice or request)
+
         tenant = invoice.tenant or request.tenant
-        ps, _ = PrintSetup.objects.get_or_create(tenant=tenant)
-        return render(request, self.template_name, {'invoice': invoice, 'ps': ps})
+
+        ps, _ = PrintSetup.objects.get_or_create(
+            tenant=tenant
+        )
+
+        lines = []
+
+        # =========================
+        # HEADER
+        # =========================
+        #lines.append(shop_name.center(WIDTH))
+        lines.append(invoice.tenant.pharmacy_name.upper())
+        lines.append(invoice.tenant.address or "")
+        lines.append(f"Phone : {invoice.tenant.phone or ''}")
+        lines.append(f"D.L.No : {invoice.tenant.license_number or ''}")
+        lines.append("")
+
+        lines.append(f"CASH BILL NO : {invoice.invoice_number}".ljust(50)+ f"DATE : {invoice.created_at.strftime('%d/%m/%Y')}")
+
+        lines.append("=" * 80)
+
+        lines.append(
+            f"Patient Name : {invoice.patient_name or 'Cash Customer'}"
+        )
+
+        if invoice.patient_address:
+            lines.append(
+                f"Address      : {invoice.patient_address}"
+            )
+
+        lines.append(
+            f"Payment Mode : {invoice.payment_mode}"
+        )
+
+        lines.append("-" * 80)
+
+        # =========================
+        # ITEMS HEADER
+        # =========================
+
+        lines.append(
+            f"{'PRODUCT':<35}"
+            f"{'BATCH':<12}"
+            f"{'EXP':<8}"
+            f"{'QTY':>5}"
+            f"{'VALUE':>10}"
+        )
+
+        lines.append("-" * 80)
+
+        # =========================
+        # ITEMS
+        # =========================
+
+        for item in invoice.items.all():
+
+            product = (item.product.product_name or "")[:35]
+
+            batch = (item.batch_number or "")[:12]
+
+            exp = (
+                item.expiry_date.strftime("%m/%y")
+                if item.expiry_date
+                else ""
+            )
+
+            lines.append(
+                f"{product:<35}"
+                f"{batch:<12}"
+                f"{exp:<8}"
+                f"{item.quantity:>5}"
+                f"{float(item.total_amount):>10.2f}"
+            )
+
+        lines.append("-" * 80)
+
+        # =========================
+        # FOOTER
+        # =========================
+
+        lines.append(
+            f"No Of Items : {invoice.items.count()}"
+        )
+
+        lines.append("")
+
+        lines.append(
+            f"Item Total : {invoice.sub_total:.2f}"
+        )
+
+        lines.append(
+            f"GST Amount : {invoice.tax_amount:.2f}"
+        )
+
+        lines.append(
+            f"Discount   : {invoice.discount_amount:.2f}"
+        )
+
+        lines.append(
+            f"NET AMOUNT : {invoice.total_amount:.2f}"
+        )
+
+        lines.append("-" * 65)
+
+        lines.append(
+            f"Subject to {invoice.tenant.city} Jurisdiction only."
+        )
+
+        lines.append("")
+        lines.append("Pharmacist Sign :")
+        lines.append("")
+        lines.append(
+            "** Goods once sold will not be taken back **"
+        )
+        print("======",lines)
+        bill_text = "\n".join(lines)
+
+        return render(
+            request,
+            self.template_name,
+            {
+                'invoice': invoice,
+                'ps': ps,
+                'bill_text': bill_text,
+            }
+        )
+
+# class PrintInvoiceView(LoginRequiredMixin,View):
+#     template_name = 'sales/print_invoice.html'
+
+#     def get(self, request, invoice_id):
+#         from django.shortcuts import get_object_or_404
+#         from easypharma.models.print_setup import PrintSetup
+#         invoice = get_object_or_404(SaleInvoice, id=invoice_id)
+#         if not invoice.tenant and request.tenant:
+#             invoice.tenant = request.tenant
+#         # Load print settings (use tenant from invoice or request)
+#         tenant = invoice.tenant or request.tenant
+#         ps, _ = PrintSetup.objects.get_or_create(tenant=tenant)
+#         return render(request, self.template_name, {'invoice': invoice, 'ps': ps})
 
 class SaleListView(LoginRequiredMixin,View):
     template_name = 'sales/list.html'
