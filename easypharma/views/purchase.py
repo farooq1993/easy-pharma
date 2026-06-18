@@ -10,7 +10,7 @@ from easypharma.models.Items import (Products,DrugCompany, ProductContent,
                                      ProductSchedule,
                                      ProductTax, ProductType)
 
-from easypharma.models.purchase_invoice import Supplier, PurchaseInvoice, PurchaseItem,OpeningStock
+from easypharma.models.purchase_invoice import Supplier, PurchaseInvoice, PurchaseItem,OpeningStock,OpeningStockItem
 from easypharma.models.stock import StockBatch
 from easypharma.models.sales import SaleItem
 from django.db import transaction
@@ -1192,160 +1192,141 @@ class SmartPurchaseSuggestAPIView(LoginRequiredMixin,View):
         }, safe=False)
 
 
-class PurchaseEntryView(LoginRequiredMixin,View):
-    template_name = 'purchase/opening.html'
+class OpeningStockListView(LoginRequiredMixin, View):
+    template_name = 'purchase/opening_list.html'  # We'll create this
+    ITEMS_PER_PAGE = 20
 
-    def get(self, request, invoice_id=None):
+    def get(self, request):
+        qs = OpeningStock.objects.filter(tenant=request.tenant).order_by('-opening_stock_date')
+
+        search_query = request.GET.get('q', '').strip()
+        if search_query:
+            qs = qs.filter(voucher_number__icontains=search_query)
+
+        date_from = request.GET.get('date_from', '').strip()
+        date_to = request.GET.get('date_to', '').strip()
+        if date_from:
+            qs = qs.filter(opening_stock_date__gte=date_from)
+        if date_to:
+            qs = qs.filter(opening_stock_date__lte=date_to)
+
+        paginator = Paginator(qs, self.ITEMS_PER_PAGE)
+        page_obj = paginator.get_page(request.GET.get('page', 1))
+
+        return render(request, self.template_name, {
+            'page_obj': page_obj,
+            'opening_stocks': page_obj,
+            'search_query': search_query,
+            'date_from': date_from,
+            'date_to': date_to,
+            'total_count': paginator.count,
+        })
+
+
+class OpeningStockEntryView(LoginRequiredMixin, View):
+    template_name = 'purchase/opening_entry.html'
+
+    def get(self, request, stock_id=None):
         products = Products.objects.filter(tenant=request.tenant).order_by('product_name')
-        from easypharma.models.Items import ProductTax
         product_taxes = ProductTax.objects.filter(tenant=request.tenant)
         product_schedules = ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True))
         drug_companies = DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True))
         product_contents = ProductContent.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('content_name')
 
         edit_data = None
-        if invoice_id:
+        if stock_id:
             try:
-                invoice = OpeningStock.objects.get(id=invoice_id, tenant=request.tenant)
-                items = []
-                for item in invoice.items.all():
-                    items.append({
-                        'product_id': item.product.id,
-                        'name': item.product.product_name,
-                        'batch_number': item.batch_number,
-                        'expiry_date': item.expiry_date.strftime('%Y-%m'),
-                        'quantity': item.quantity,
-                        'total_units': (item.quantity + item.free_quantity) * item.product.conversion_factor,
-                        'purchase_price': float(item.purchase_price),
-                        'tax_percentage': float(item.tax_percentage),
-                        'tax_amount': float((item.quantity * item.purchase_price * item.tax_percentage) / 100),
-                        'mrp': float(item.mrp),
-                        'sale_price': float(item.sale_price),
-                        'total': float(item.total_amount)
-                    })
+                stock = OpeningStock.objects.get(id=stock_id, tenant=request.tenant)
+                items = [{
+                    'product_id': item.product.id,
+                    'name': item.product.product_name,
+                    'batch_number': item.batch_number,
+                    'expiry_date': item.expiry_date.strftime('%Y-%m'),
+                    'quantity': item.quantity,
+                    'purchase_price': float(item.purchase_price),
+                    'mrp': float(item.mrp),
+                    'tax_percentage': float(item.tax_percentage),
+                    'total': float(item.total_amount)
+                } for item in stock.items.all()]
+
                 edit_data = {
-                    'id': invoice.id,
-                    'supplier_id': invoice.supplier.id if invoice.supplier else '',
-                    'invoice_number': invoice.invoice_number,
-                    'purchase_date': invoice.purchase_date.strftime('%Y-%m-%d') if invoice.purchase_date else '',
+                    'id': stock.id,
+                    'voucher_number': stock.voucher_number,
+                    'opening_stock_date': stock.opening_stock_date.strftime('%Y-%m-%d') if stock.opening_stock_date else '',
                     'items': items,
-                    'discount_amount': float(invoice.discount_amount),
-                    'discount_percentage': float(invoice.discount_percentage or 0),
-                    'payment_mode': invoice.payment_mode
+                    'sub_total': float(stock.sub_total),
+                    'tax_amount': float(stock.tax_amount),
+                    'discount_amount': float(stock.discount_amount),
+                    'total_amount': float(stock.total_amount),
                 }
-            except PurchaseInvoice.DoesNotExist:
-                return redirect('purchase_list')
-        edit_data = json.dumps(edit_data) if edit_data else None
-        
+            except OpeningStock.DoesNotExist:
+                return redirect('opening_stock_list')
+
         return render(request, self.template_name, {
             'products': products,
             'product_taxes': product_taxes,
             'product_schedules': product_schedules,
             'drug_companies': drug_companies,
             'product_contents': product_contents,
-            'edit_data': edit_data,
+            'edit_data': json.dumps(edit_data) if edit_data else None,
             'today': now().date()
         })
 
-    def post(self, request, invoice_id=None):
+    def post(self, request, stock_id=None):
         try:
             data = json.loads(request.body)
             with transaction.atomic():
-                # If editing, revert old stock first
-                if invoice_id:
-                    invoice = PurchaseInvoice.objects.get(id=invoice_id, tenant=request.tenant)
-                    for item in invoice.items.all():
-                        
+                if stock_id:
+                    # Revert old stock
+                    stock = OpeningStock.objects.get(id=stock_id, tenant=request.tenant)
+                    for item in stock.items.all():
                         batch = StockBatch.objects.filter(
-                            tenant=request.tenant, product=item.product, batch_number=item.batch_number
+                            tenant=request.tenant, 
+                            product=item.product, 
+                            batch_number=item.batch_number
                         ).first()
                         if batch:
-                            total_units = (item.quantity + item.free_quantity) * item.product.conversion_factor
-                            batch.current_quantity -= total_units
-                            if batch.current_quantity < 0: batch.current_quantity = 0
+                            batch.current_quantity -= item.quantity * item.product.conversion_factor
+                            if batch.current_quantity < 0:
+                                batch.current_quantity = 0
                             batch.save()
-                    invoice.items.all().delete()
+                    stock.items.all().delete()
                 else:
-                    invoice = PurchaseInvoice(tenant=request.tenant, user=request.user)
+                    stock = OpeningStock(tenant=request.tenant)
 
-                supplier = Supplier.objects.get(id=data['supplier_id'], tenant=request.tenant)
-                invoice.supplier = supplier
-                invoice.invoice_number = data['invoice_number']
-                invoice.purchase_date = data['purchase_date']
-                invoice.sub_total = data['sub_total']
-                invoice.tax_amount = data['tax_amount']
-                invoice.discount_percentage = data.get('discount_percentage', 0)
-                invoice.discount_amount = data.get('discount_amount', 0)
-                invoice.payment_mode = data.get('payment_mode', 'Cash')
-                invoice.total_amount = data['total_amount']
+                stock.opening_stock_date = data['opening_stock_date']
+                stock.sub_total = data['sub_total']
+                stock.tax_amount = data['tax_amount']
+                stock.discount_percentage = data.get('discount_percentage', 0)
+                stock.discount_amount = data.get('discount_amount', 0)
+                stock.total_amount = data['total_amount']
 
-                 # ── Generate voucher number (new invoices only) ───────────────
-                if not invoice_id or not invoice.voucher_number:
-                    invoice.voucher_number = PurchaseInvoice.generate_voucher_number(
+                if not stock_id or not stock.voucher_number:
+                    stock.voucher_number = OpeningStock.generate_voucher_number(
                         tenant=request.tenant,
-                        purchase_date=data.get('purchase_date')
+                        opening_stock_date=data['opening_stock_date']
                     )
+                stock.save()
 
-                invoice.save()
-                
                 for item in data['items']:
                     product = Products.objects.get(id=item['product_id'], tenant=request.tenant)
-                    # Note: PurchaseItem.save() handles stock addition
-                    PurchaseItem.objects.create(
+                    OpeningStockItem.objects.create(
                         tenant=request.tenant,
-                        purchase_invoice=invoice,
+                        opening_stock=stock,
                         product=product,
                         batch_number=item['batch_number'],
-                        expiry_date=item['expiry_date'] if '-' in item['expiry_date'] and len(item['expiry_date']) > 7 else item['expiry_date'] + "-01",
+                        expiry_date=item['expiry_date'] + "-01" if len(item['expiry_date']) == 7 else item['expiry_date'],
                         quantity=item['quantity'],
-                        free_quantity=item.get('free_quantity', 0),
                         purchase_price=item['purchase_price'],
                         mrp=item['mrp'],
-                        sale_price=item['sale_price'],
                         tax_percentage=item.get('tax_percentage', 0),
                         total_amount=item['total']
                     )
-                
-                
-                applied_returns = data.get('applied_returns', [])
-                total_credit_applied = sum(float(r['amount']) for r in applied_returns)
-
-                if invoice_id:
-                    SupplierLedger.objects.filter(tenant=request.tenant, reference_number=invoice.invoice_number, transaction_type='Purchase').delete()
-                    
-                    
-                invoice.paid_amount = invoice.paid_amount + total_credit_applied
-                invoice.save()
-
-                for ret in applied_returns:
-                    try:
-                        exp_return = ExpiryReturn.objects.get(id=ret['return_id'], tenant=request.tenant)
-                        if not exp_return.return_details:
-                            exp_return.return_details = {}
-                        if 'adjusted_invoices' not in exp_return.return_details:
-                            exp_return.return_details['adjusted_invoices'] = []
-                        
-                        exp_return.return_details['adjusted_invoices'].append({
-                            'id': invoice.id,
-                            'amount': ret['amount']
-                        })
-                        exp_return.save()
-                    except ExpiryReturn.DoesNotExist:
-                        pass
 
                 return JsonResponse({
-                        'success': True,
-                        'invoice_id': invoice.id,
-                        'voucher_number': invoice.voucher_number,
-                    })
+                    'success': True,
+                    'stock_id': stock.id,
+                    'voucher_number': stock.voucher_number,
+                })
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
-
-        # ── Invalidate caches after successful purchase save ──
-        try:
-            from easypharma.views.reports import invalidate_stock_cache
-            from easypharma.views.sales import invalidate_pos_cache
-            invalidate_stock_cache(request.tenant.id)
-            invalidate_pos_cache(request.tenant.id)
-        except Exception:
-            pass  # Cache invalidation failure must not block the response
