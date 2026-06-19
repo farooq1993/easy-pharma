@@ -3,6 +3,7 @@ from decimal import Decimal
 import csv
 import io
 from easypharma.models.Items import Products
+from easypharma.models.purchase_invoice import PurchaseInvoice
 
 def parse_integer_value(value, default=0):
     if not value:
@@ -74,7 +75,18 @@ def process_csv_file(csv_file, request):
                 break
         if invoice_number:
             break
-
+    # === IMPORTANT: Check if Invoice already exists ===
+    if invoice_number:
+        existing = PurchaseInvoice.objects.filter(
+            tenant=request.tenant, 
+            invoice_number=invoice_number
+        ).exists()
+        
+        if existing:
+            return {
+                'success': False,
+                'error': f"Invoice {invoice_number} is already imported in the system."
+            }
     for row_number, row in enumerate(rows, start=1):
         if len(row) < 17 or row[0] != 'T':
             continue
