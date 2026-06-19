@@ -1,0 +1,307 @@
+{% extends "includes/base.html" %}
+{% load static %}
+{% load custom_filters %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    <div class="row mb-4">
+        <div class="col">
+            <h2 class="fw-bold mb-1">New Opening Stock</h2>
+            <p class="text-muted">Record initial stock with batch-wise details</p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'opening_stock' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i> Back to List
+            </a>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-body">
+
+            <div class="row mb-4 g-3">
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Voucher Number</label>
+                    <input type="text" id="voucher_number" class="form-control bg-light" readonly>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Opening Stock Date <span class="text-danger">*</span></label>
+                    <input type="date" id="opening_date" class="form-control" value="{{ today|date:'Y-m-d' }}">
+                </div>
+            </div>
+
+            <button onclick="openQuickAddModal()" class="btn btn-outline-primary mb-3">
+                <i class="fas fa-plus-circle me-1"></i> Quick Add New Product
+            </button>
+
+            <h5 class="mb-3">Opening Stock Items</h5>
+            <div class="table-responsive mb-3">
+                <table class="table table-bordered" id="itemsTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:35%">Product</th>
+                            <th style="width:12%">Batch No.</th>
+                            <th style="width:12%">Expiry (MM/YYYY)</th>
+                            <th style="width:9%">Qty</th>
+                            <th style="width:9%">Pur. Price</th>
+                            <th style="width:9%">MRP</th>
+                            <th style="width:7%">Tax %</th>
+                            <th style="width:10%">Total</th>
+                            <th style="width:5%">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="itemsBody"></tbody>
+                </table>
+            </div>
+
+            <button type="button" onclick="addRow()" class="btn btn-success">
+                <i class="fas fa-plus me-2"></i> Add Product
+            </button>
+
+            <div class="row justify-content-end mt-4">
+                <div class="col-md-5">
+                    <div class="bg-light rounded-3 p-4">
+                        <div class="d-flex justify-content-between mb-2"><span>Sub Total</span><span id="sub_total">₹0.00</span></div>
+                        <div class="d-flex justify-content-between mb-2"><span>Tax Amount</span><span id="tax_amount">₹0.00</span></div>
+                        <hr>
+                        <div class="d-flex justify-content-between fw-bold fs-5"><span>Grand Total</span><span id="grand_total">₹0.00</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-footer bg-white border-0 py-4 text-end">
+            <button onclick="saveOpeningStock()" class="btn btn-primary px-5 py-2">
+                <i class="fas fa-save me-2"></i> Save Opening Stock
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Add Modal -->
+<div class="modal fade" id="quickAddModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Quick Add New Product</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="quickName" class="form-control" placeholder="Product Name">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveQuickProduct()">Save Product</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ==================== ADD ROW ====================
+function addRow() {
+    const rowId = 'row_' + Date.now();
+    const html = `
+        <tr id="${rowId}">
+            <td style="position:relative">
+                <input type="text" class="form-control product-input" placeholder="Search product..." 
+                       onkeyup="showSuggestions(this)" autocomplete="off">
+                <div id="suggestions_${rowId}" class="suggestions-box"></div>
+            </td>
+            <td><input type="text" class="form-control batch-input" placeholder="Batch No." onkeypress="handleEnter(event,this)"></td>
+            <td><input type="text" class="form-control expiry-input" placeholder="MM/YYYY" maxlength="7" oninput="formatExpiry(this)" onkeypress="handleEnter(event,this)"></td>
+            <td><input type="number" class="form-control qty-input" value="1" min="1" oninput="calculateRow('${rowId}')" onkeypress="handleEnter(event,this)"></td>
+            <td><input type="number" class="form-control purchase-input" value="0" step="0.01" oninput="calculateRow('${rowId}')" onkeypress="handleEnter(event,this)"></td>
+            <td><input type="number" class="form-control mrp-input" value="0" step="0.01" oninput="calculateRow('${rowId}')" onkeypress="handleEnter(event,this)"></td>
+            <td><input type="number" class="form-control tax-input" value="5" step="0.01" oninput="calculateRow('${rowId}')" onkeypress="handleEnter(event,this)"></td>
+            <td class="text-end fw-bold row-total">₹0.00</td>
+            <td><button onclick="removeRow('${rowId}')" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button></td>
+        </tr>`;
+    document.getElementById('itemsBody').insertAdjacentHTML('beforeend', html);
+    setTimeout(() => document.getElementById(rowId).querySelector('.product-input').focus(), 100);
+}
+
+// ==================== PRODUCT SEARCH ====================
+function showSuggestions(input) {
+    const rowId = input.closest('tr').id;
+    const query = input.value.toLowerCase().trim();
+    const box = document.getElementById('suggestions_' + rowId);
+
+    if (query.length < 2) {
+        box.style.display = 'none';
+        return;
+    }
+
+    let html = '';
+    {% for p in products %}
+    if ("{{ p.product_name|escapejs|lower }}".includes(query)) {
+        html += `<div class="suggestion-item" data-id="{{ p.id }}" 
+                     onclick="selectProduct('${rowId}', '{{ p.id }}', '{{ p.product_name|escapejs }}', {{ p.product_tax.tax_rate|default:5 }})">
+                    {{ p.product_name }}
+                 </div>`;
+    }
+    {% endfor %}
+
+    box.innerHTML = html || '<div class="p-2 text-muted">No products found</div>';
+    box.style.display = 'block';
+}
+
+function selectProduct(rowId, productId, name, taxRate) {
+    const row = document.getElementById(rowId);
+    row.querySelector('.product-input').value = name;
+    row.querySelector('.product-input').dataset.productId = productId;
+    row.querySelector('.tax-input').value = taxRate;
+    document.getElementById('suggestions_' + rowId).style.display = 'none';
+    calculateRow(rowId);
+}
+
+// ==================== SAVE FUNCTION (FIXED EXPIRY) ====================
+async function saveOpeningStock() {
+    const openingDate = document.getElementById('opening_date').value;
+    if (!openingDate) return alert("Please select Opening Stock Date");
+
+    const itemsData = [];
+    document.querySelectorAll('#itemsBody tr').forEach(row => {
+        const prodInput = row.querySelector('.product-input');
+        if (!prodInput || !prodInput.value.trim()) return;
+
+        const productId = prodInput.dataset.productId;
+        if (!productId) return alert("Please select product from dropdown");
+
+        let expiry = row.querySelector('.expiry-input').value.trim();
+        // Convert MM/YYYY to YYYY-MM-01
+        if (expiry.includes('/')) {
+            const [month, year] = expiry.split('/');
+            if (month && year) {
+                expiry = `${year}-${month.padStart(2, '0')}-01`;
+            }
+        }
+
+        itemsData.push({
+            product_id: productId,
+            batch_number: row.querySelector('.batch-input').value.trim(),
+            expiry_date: expiry,
+            quantity: parseInt(row.querySelector('.qty-input').value) || 0,
+            purchase_price: parseFloat(row.querySelector('.purchase-input').value) || 0,
+            mrp: parseFloat(row.querySelector('.mrp-input').value) || 0,
+            tax_percentage: parseFloat(row.querySelector('.tax-input').value) || 0,
+            total: parseFloat(row.querySelector('.row-total').textContent.replace('₹','')) || 0
+        });
+    });
+
+    if (itemsData.length === 0) return alert("Please add at least one product");
+
+    const data = {
+        opening_stock_date: openingDate,
+        sub_total: parseFloat(document.getElementById('sub_total').textContent.replace('₹','')),
+        tax_amount: parseFloat(document.getElementById('tax_amount').textContent.replace('₹','')),
+        total_amount: parseFloat(document.getElementById('grand_total').textContent.replace('₹','')),
+        items: itemsData
+    };
+
+    try {
+        const response = await fetch("{% url 'opening_stock_entry' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert(`✅ Opening Stock Saved Successfully!\nVoucher: ${result.voucher_number}`);
+            window.location.href = "{% url 'opening_stock' %}";
+        } else {
+            alert("❌ Error: " + (result.error || "Failed to save"));
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Network Error. Check console.");
+    }
+}
+
+// Other helper functions
+function formatExpiry(input) {
+    let val = input.value.replace(/[^0-9]/g, '');
+    if (val.length > 2) val = val.slice(0,2) + '/' + val.slice(2,6);
+    input.value = val;
+}
+
+function handleEnter(e, current) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const row = current.closest('tr');
+        const inputs = Array.from(row.querySelectorAll('input'));
+        const idx = inputs.indexOf(current);
+        if (idx < inputs.length - 1) inputs[idx + 1].focus();
+        else addRow();
+    }
+}
+
+function removeRow(rowId) {
+    document.getElementById(rowId).remove();
+    calculateTotal();
+}
+
+function calculateRow(rowId) {
+    const row = document.getElementById(rowId);
+    if (!row) return;
+    const qty = parseFloat(row.querySelector('.qty-input').value) || 0;
+    const price = parseFloat(row.querySelector('.purchase-input').value) || 0;
+    row.querySelector('.row-total').textContent = '₹' + (qty * price).toFixed(2);
+    calculateTotal();
+}
+
+function calculateTotal() {
+    let subTotal = 0, taxTotal = 0;
+    document.querySelectorAll('#itemsBody tr').forEach(row => {
+        const qty = parseFloat(row.querySelector('.qty-input').value) || 0;
+        const price = parseFloat(row.querySelector('.purchase-input').value) || 0;
+        const taxRate = parseFloat(row.querySelector('.tax-input').value) || 0;
+        const itemTotal = qty * price;
+        subTotal += itemTotal;
+        taxTotal += itemTotal * (taxRate / 100);
+    });
+
+    document.getElementById('sub_total').textContent = '₹' + subTotal.toFixed(2);
+    document.getElementById('tax_amount').textContent = '₹' + taxTotal.toFixed(2);
+    document.getElementById('grand_total').textContent = '₹' + (subTotal + taxTotal).toFixed(2);
+}
+
+function openQuickAddModal() {
+    document.getElementById('quickName').value = '';
+    new bootstrap.Modal(document.getElementById('quickAddModal')).show();
+}
+
+async function saveQuickProduct() {
+    const name = document.getElementById('quickName').value.trim();
+    if (!name) return alert("Product name is required");
+    try {
+        const res = await fetch("{% url 'quick_create_product' %}", {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+            body: JSON.stringify({product_name: name})
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert("Product created successfully!");
+            bootstrap.Modal.getInstance(document.getElementById('quickAddModal')).hide();
+            location.reload();
+        }
+    } catch(e){ alert("Error creating product"); }
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => addRow());
+</script>
+
+<style>
+.suggestions-box { position:absolute; background:white; border:1px solid #ccc; border-radius:6px; z-index:2000; max-height:250px; overflow:auto; width:100%; }
+.suggestion-item { padding:8px 12px; cursor:pointer; }
+.suggestion-item:hover, .suggestion-item.active { background:#e3f2fd; }
+</style>
+{% endblock %}

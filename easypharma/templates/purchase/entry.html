@@ -28,6 +28,12 @@
         </div>
     </div>
 
+    <button class="btn btn-outline-success rounded-pill px-3 py-2 fw-bold"
+            style="font-size: 0.85rem;"
+            data-bs-toggle="modal" data-bs-target="#csvImportModal">
+        <i class="fas fa-file-upload me-1"></i> Import CSV
+    </button>
+
     <div class="row g-3">
         <div class="col-lg-9">
             <!-- Invoice details -->
@@ -2633,7 +2639,7 @@ async function saveEditProduct() {
         </div>
     </div>
 </div>
-
+{% include 'includes/purchase_import.html' %}
 <script>
 function showPurchaseConfirm(result) {
     // Fill purchase number (backend may send as purchase_number, voucher_number, or id)
@@ -2661,5 +2667,5 @@ function showPurchaseConfirm(result) {
     ).show();
 }
 </script>
-
+<script src="{% static 'js/purchase/purchase.js' %}"></script>
 {% endblock %}

@@ -1,0 +1,249 @@
+<!-- ══════════════════════════════════════════
+     Purchase CSV Import Modal
+     ══════════════════════════════════════════ -->
+<div class="modal fade" id="csvImportModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:20px; overflow:hidden; max-height:92vh;">
+
+            <!-- ── Header ── -->
+            <div style="background:linear-gradient(135deg,#1e3a8a 0%,#3b82f6 100%);padding:22px 28px 18px;flex-shrink:0;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-3">
+                        <div style="width:46px;height:46px;background:rgba(255,255,255,0.18);border-radius:12px;display:flex;align-items:center;justify-content:center;">
+                            <i class="fas fa-file-upload" style="font-size:1.3rem;color:#fff;"></i>
+                        </div>
+                        <div>
+                            <h5 style="color:#fff;font-weight:700;margin:0;font-size:1.05rem;">Import Purchases from CSV</h5>
+                            <p style="color:rgba(255,255,255,0.72);margin:2px 0 0;font-size:0.78rem;">
+                                Upload CSV — preview items — then save to purchase
+                            </p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="resetCsvImportModal()"></button>
+                </div>
+
+                <!-- Step indicator -->
+                <div class="d-flex align-items-center gap-2 mt-3" id="csvStepIndicator">
+                    <div class="csv-step active" id="csvStep1Ind">
+                        <span class="csv-step-num">1</span>
+                        <span class="csv-step-label">Upload CSV</span>
+                    </div>
+                    <div class="csv-step-line"></div>
+                    <div class="csv-step" id="csvStep2Ind">
+                        <span class="csv-step-num">2</span>
+                        <span class="csv-step-label">Preview Items</span>
+                    </div>
+                    <div class="csv-step-line"></div>
+                    <div class="csv-step" id="csvStep3Ind">
+                        <span class="csv-step-num">3</span>
+                        <span class="csv-step-label">Confirm & Load</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Body ── -->
+            <div class="modal-body p-0" style="overflow-y:auto;">
+
+                <!-- ════ STEP 1: Upload ════ -->
+                <div id="csvStep1" class="p-4">
+
+                    <!-- Warnings from re-import (existing JS writes here) -->
+                    <div id="csvImportWarnings"></div>
+
+                    <!-- Upload zone -->
+                    <div id="csvDropZone"
+                         style="border:2.5px dashed #93c5fd;border-radius:16px;padding:40px 24px;text-align:center;cursor:pointer;transition:all .2s;background:#f0f7ff;"
+                         onclick="document.getElementById('purchaseCsvFile').click()"
+                         ondragover="csvDragOver(event)"
+                         ondragleave="csvDragLeave(event)"
+                         ondrop="csvDrop(event)">
+                        <i class="fas fa-cloud-upload-alt" style="font-size:2.4rem;color:#3b82f6;"></i>
+                        <div class="mt-3 fw-bold" style="color:#1d4ed8;font-size:1rem;">Drop CSV file here or click to select</div>
+                        <div class="mt-1" style="font-size:0.8rem;color:#6b7280;">Supported: .csv files only</div>
+                        <input type="file" id="purchaseCsvFile" accept=".csv" style="display:none;" onchange="csvFileSelected(this)">
+                    </div>
+
+                    <!-- Selected file -->
+                    <div id="csvSelectedFile" class="mt-3 d-none">
+                        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 16px;" class="d-flex align-items-center justify-content-between">
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="fas fa-file-csv" style="color:#16a34a;font-size:1.2rem;"></i>
+                                <span id="csvSelectedFileName" class="fw-bold" style="color:#15803d;font-size:0.9rem;"></span>
+                                <span id="csvSelectedFileSize" class="text-muted" style="font-size:0.78rem;"></span>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-danger rounded-pill" onclick="csvClearFile()" style="font-size:0.75rem;">
+                                <i class="fas fa-times me-1"></i>Remove
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Template download + instructions -->
+                    <div style="background:#eff6ff;border-radius:12px;padding:14px 18px;margin-top:16px;border:1px solid #bfdbfe;">
+                        <div class="fw-bold mb-2" style="font-size:0.84rem;color:#1d4ed8;">
+                            <i class="fas fa-info-circle me-1"></i> About CSV format
+                        </div>
+                        <div style="font-size:0.8rem;color:#374151;line-height:1.8;">
+                            <strong>Required columns:</strong> product / medicine name, quantity, purchase price<br>
+                            <strong>Optional:</strong> batch no, expiry (MM/YYYY), free qty, mrp, sale price, invoice no, date, supplier<br>
+                            <strong>Expiry format:</strong> MM/YYYY (e.g. 06/2028) or YYYY-MM-DD<br>
+                            <i class="fas fa-lightbulb me-1 text-warning"></i> <em>Header names are flexible — system auto-detects columns</em>
+                        </div>
+                       
+                    </div>
+
+                    <!-- Parse progress -->
+                    <div id="csvParseProgress" class="mt-3 d-none">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <div class="spinner-border spinner-border-sm text-primary"></div>
+                            <span style="font-size:0.85rem;color:#374151;">Parsing CSV...</span>
+                        </div>
+                        <div class="progress" style="height:6px;border-radius:6px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width:100%;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Parse error -->
+                    <div id="csvParseError" class="mt-3 d-none">
+                        <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:12px 16px;color:#991b1b;font-size:0.85rem;">
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            <span id="csvParseErrorMsg"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ════ STEP 2: Preview ════ -->
+                <div id="csvStep2" class="d-none">
+
+                    <!-- Invoice meta bar -->
+                    <div style="background:#f8faff;border-bottom:1px solid #e5e7eb;padding:14px 24px;" id="csvMetaBar">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-3">
+                                <label class="ep-label mb-1">Supplier</label>
+                                <!-- Hidden real select -->
+                                <select id="csvSupplierSelect" style="display:none;">
+                                    <option value="">— Select —</option>
+                                    {% for supplier in suppliers %}
+                                        <option value="{{ supplier.id }}">{{ supplier.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <!-- Searchable input -->
+                                <div class="position-relative" id="csvSupplierSearchWrap">
+                                    <input type="text" id="csvSupplierSearchInput" class="ep-input" style="font-size:0.85rem;" placeholder="Search supplier..." autocomplete="off">
+                                    <div id="csvSupplierDropdown" style="display:none;position:absolute;background:white;width:100%;z-index:1055;border-radius:12px;border:1px solid #dee2e6;box-shadow:0 4px 12px rgba(0,0,0,0.1);max-height:200px;overflow-y:auto;"></div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="ep-label mb-1">Invoice Number</label>
+                                <input type="text" id="csvInvoiceNumber" class="ep-input" style="font-size:0.85rem;" placeholder="INV-001">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="ep-label mb-1">Purchase Date</label>
+                                <input type="date" id="csvPurchaseDate" class="ep-input" style="font-size:0.85rem;">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="ep-label mb-1">Payment Mode</label>
+                                <select id="csvPaymentMode" class="ep-input" style="font-size:0.85rem;">
+                                    <option>Cash</option>
+                                    <option>Credit</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Missing products alert -->
+                    <div id="csvMissingProductsBar" class="d-none" style="background:#fffbeb;border-bottom:1px solid #fde68a;padding:12px 24px;">
+                        <div class="d-flex align-items-start gap-2">
+                            <i class="fas fa-exclamation-triangle text-warning mt-1" style="font-size:1rem;"></i>
+                            <div style="font-size:0.83rem;color:#92400e;">
+                                <strong>Some products were not found in the system:</strong>
+                                <div id="csvMissingProductsList" class="mt-1"></div>
+                                <div class="mt-1 text-muted" style="font-size:0.78rem;">Create these products first, then re-upload the CSV — or proceed to import the found items.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Items count bar -->
+                    <div class="d-flex align-items-center justify-content-between px-4 py-2" style="background:#fff;border-bottom:1px solid #f3f4f6;">
+                        <div style="font-size:0.83rem;color:#374151;">
+                            <i class="fas fa-list me-1 text-primary"></i>
+                            <span id="csvItemCount" class="fw-bold">0</span> items in preview
+                        </div>
+                        <div class="d-flex gap-2">
+                            <span style="font-size:0.75rem;color:#6b7280;padding-top:2px;">
+                                <i class="fas fa-pencil-alt me-1"></i> Cells are directly editable
+                            </span>
+                            <button type="button" class="btn btn-sm btn-outline-danger" style="font-size:0.75rem;border-radius:6px;" onclick="csvClearAll()">
+                                <i class="fas fa-trash me-1"></i> Clear All
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Preview table -->
+                    <div style="padding:0 16px 16px;overflow-x:auto;">
+                        <table class="table table-sm table-hover align-middle mt-2" id="csvPreviewTable" style="font-size:0.82rem;min-width:900px;">
+                            <thead style="background:#f1f5f9;position:sticky;top:0;z-index:10;">
+                                <tr>
+                                    <th style="width:32px;padding:8px 6px;">#</th>
+                                    <th style="min-width:180px;">Medicine</th>
+                                    <th style="min-width:100px;">Batch No</th>
+                                    <th style="min-width:100px;">Expiry</th>
+                                    <th style="min-width:70px;text-align:center;">Qty</th>
+                                    <th style="min-width:60px;text-align:center;color:#16a34a;">Free</th>
+                                    <th style="min-width:90px;text-align:right;">Pur. Rate</th>
+                                    <th style="min-width:80px;text-align:right;">MRP</th>
+                                    <th style="min-width:60px;text-align:center;">GST%</th>
+                                    <th style="min-width:90px;text-align:right;color:#1d4ed8;">Total</th>
+                                    <th style="width:36px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="csvPreviewTbody"></tbody>
+                            <tfoot>
+                                <tr style="background:#f8faff;border-top:2px solid #e5e7eb;">
+                                    <td colspan="4" class="fw-bold" style="padding:8px 10px;font-size:0.82rem;">TOTAL</td>
+                                    <td id="csvTotalQty" class="fw-bold text-center" style="padding:8px 6px;"></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td id="csvTotalAmount" class="fw-bold text-end text-primary" style="padding:8px 6px;"></td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- ── Footer ── -->
+            <div class="modal-footer border-top px-4 py-3 gap-2" style="flex-shrink:0;justify-content:space-between;">
+
+                <!-- Left: back/reset -->
+                <div>
+                    <button type="button" class="btn btn-outline-secondary rounded-pill px-3" id="csvBackBtn"
+                            style="font-size:0.85rem;display:none;" onclick="csvGoToStep1()">
+                        <i class="fas fa-arrow-left me-1"></i> Back
+                    </button>
+                </div>
+
+                <!-- Right: actions -->
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-secondary rounded-pill px-4"
+                            data-bs-dismiss="modal" onclick="resetCsvImportModal()" style="font-size:0.85rem;">
+                        Cancel
+                    </button>
+                    <!-- Step 1: Parse button -->
+                    <button type="button" class="btn btn-primary rounded-pill px-4 fw-bold" id="csvParseBtn"
+                            style="font-size:0.85rem;" onclick="submitCsvParse()" disabled>
+                        <i class="fas fa-search me-1"></i> Preview CSV
+                    </button>
+                    <!-- Step 2: Confirm button (hidden initially) -->
+                    <button type="button" class="btn btn-success rounded-pill px-4 fw-bold d-none" id="csvConfirmBtn"
+                            style="font-size:0.85rem;" onclick="csvConfirmAndLoad()">
+                        <i class="fas fa-check-circle me-1"></i> Confirm & Load to Purchase
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -4,10 +4,13 @@ from easypharma.views.purchase import (PurchaseEntryView, PurchaseListView,
                                         SupplierReportDataView, PurchaseExportCSVView,
                                         PurchaseExportPDFView, PurchaseImportCSVView,
                                         QuickCreateProductView, ProductBatchHistoryView,SmartPurchaseSuggestPageView,
-                                        SmartPurchaseSuggestAPIView)
+                                        SmartPurchaseSuggestAPIView,PurchaseEntryView,
+                                        OpeningStockListView,OpeningStockEntryView)
 
 urlpatterns = [
     path('entry/', PurchaseEntryView.as_view(), name='purchase_entry'),
+    path('opening/stock/list', OpeningStockListView.as_view(), name='opening_stock'),
+    path('opening/stock/entry', OpeningStockEntryView.as_view(), name='opening_stock_entry'),
     path('edit/<int:invoice_id>/', PurchaseEntryView.as_view(), name='purchase_edit'),
     path('list/', PurchaseListView.as_view(), name='purchase_list'),
     path('delete/<int:invoice_id>/', PurchaseListView.as_view(), name='purchase_delete'),

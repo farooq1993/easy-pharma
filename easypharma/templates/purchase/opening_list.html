@@ -1,0 +1,228 @@
+{% extends "includes/base.html" %}
+{% load static %}
+{% load custom_filters %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    <!-- Page header -->
+    <div class="row align-items-center mb-3">
+        <div class="col">
+            <h2 class="fw-bold mb-0">Opening Stock</h2>
+            <p class="text-muted small mb-0">
+                View and manage all Opening Stock entries.
+                {% if total_count %}
+                <span class="badge bg-secondary ms-1">{{ total_count }} record{{ total_count|pluralize }}</span>
+                {% endif %}
+            </p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'opening_stock_entry' %}" class="btn btn-success px-4 shadow-sm">
+                <i class="fas fa-plus me-2"></i> New Opening Stock
+            </a>
+        </div>
+    </div>
+
+    <!-- Search + Filters -->
+    <div class="card border-0 shadow-sm rounded-4 mb-3">
+        <div class="card-body py-3">
+            <form method="get" id="filterForm" class="row g-2 align-items-end">
+                <!-- Search -->
+                <div class="col-lg-4 col-md-6">
+                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">
+                        <i class="fas fa-search me-1"></i> Search
+                    </label>
+                    <div class="input-group">
+                        <input type="text" name="q" id="searchInput"
+                            class="form-control border-0 bg-light"
+                            placeholder="Voucher number..."
+                            value="{{ search_query }}"
+                            autocomplete="off">
+                        {% if search_query %}
+                        <a href="{% url 'opening_stock_list' %}" class="btn btn-outline-secondary border-0 bg-light"
+                           title="Clear search"><i class="fas fa-times"></i></a>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Date From -->
+                <div class="col-lg-2 col-md-3 col-sm-6">
+                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">From</label>
+                    <input type="date" name="date_from" class="form-control border-0 bg-light"
+                           value="{{ date_from }}">
+                </div>
+
+                <!-- Date To -->
+                <div class="col-lg-2 col-md-3 col-sm-6">
+                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">To</label>
+                    <input type="date" name="date_to" class="form-control border-0 bg-light"
+                           value="{{ date_to }}">
+                </div>
+
+                <!-- Buttons -->
+                <div class="col-lg-2 col-md-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary flex-fill">
+                        <i class="fas fa-filter me-1"></i> Filter
+                    </button>
+                    <a href="{% url 'opening_stock' %}" class="btn btn-outline-secondary" title="Reset filters">
+                        <i class="fas fa-redo"></i>
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light text-muted small text-uppercase">
+                        <tr>
+                            <th class="ps-4">Voucher No.</th>
+                            <th>Date</th>
+                            <th class="text-end">Sub Total</th>
+                            <th class="text-end">GST</th>
+                            <th class="text-end">Discount</th>
+                            <th class="text-end">Total Amount</th>
+                            <th class="text-end pe-4">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for stock in opening_stocks %}
+                        <tr id="stock-{{ stock.id }}">
+                            <td class="ps-4">
+                                <span class="voucher-badge" title="Click to copy"
+                                      onclick="copyVoucher('{{ stock.voucher_number }}', this)">
+                                    <i class="fas fa-tag me-1" style="font-size:0.65rem;"></i>
+                                    {{ stock.voucher_number }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="fw-bold small">
+                                    {{ stock.opening_stock_date|date:"d M Y" }}
+                                </div>
+                            </td>
+                            <td class="text-end small">₹{{ stock.sub_total }}</td>
+                            <td class="text-end small text-primary">₹{{ stock.tax_amount }}</td>
+                            <td class="text-end small text-danger">
+                                {% if stock.discount_amount > 0 %}-₹{{ stock.discount_amount }}{% else %}—{% endif %}
+                            </td>
+                            <td class="text-end fw-bold text-success">₹{{ stock.total_amount }}</td>
+                            <td class="text-end pe-4">
+                                <div class="btn-group">
+                                    <a href="{% url 'opening_stock_edit' stock.id %}" 
+                                       class="btn btn-sm btn-outline-primary border-0" title="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <button class="btn btn-sm btn-outline-danger border-0"
+                                        onclick="deleteOpeningStock({{ stock.id }}, '{{ stock.voucher_number }}')"
+                                        title="Delete">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5">
+                                <div class="opacity-25 mb-3">
+                                    <i class="fas fa-boxes" style="font-size: 3rem;"></i>
+                                </div>
+                                <p class="text-muted">No opening stock entries found.</p>
+                                <a href="{% url 'opening_stock' %}" class="btn btn-success">
+                                    <i class="fas fa-plus me-1"></i> Add Opening Stock
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <div class="card-footer bg-white border-0 py-3">
+            <!-- Same pagination code as before -->
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <small class="text-muted">
+                    Showing <strong>{{ page_obj.start_index }}–{{ page_obj.end_index }}</strong> 
+                    of <strong>{{ total_count }}</strong> records
+                </small>
+                <!-- Pagination HTML (same as your existing one) -->
+                <nav aria-label="Opening stock pagination">
+                    <ul class="pagination pagination-sm mb-0">
+                        <!-- ... (copy your existing pagination block here) ... -->
+                    </ul>
+                </nav>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Toast -->
+<div id="listToast" style="position:fixed; bottom:24px; right:24px; z-index:9999; background:#16A34A; color:#fff; padding:10px 18px; border-radius:10px; font-weight:600; font-size:0.85rem; display:none; align-items:center; gap:8px; box-shadow:0 4px 14px rgba(0,0,0,.15);">
+    <i class="fas fa-check-circle"></i>
+    <span id="listToastMsg"></span>
+</div>
+
+<script>
+// Copy Voucher
+function copyVoucher(voucher, el) {
+    navigator.clipboard.writeText(voucher).then(() => {
+        showToast(`Copied: ${voucher}`);
+        el.classList.add('copied');
+        setTimeout(() => el.classList.remove('copied'), 1500);
+    });
+}
+
+// Delete Opening Stock
+let _deleteId = null;
+function deleteOpeningStock(id, voucher) {
+    _deleteId = id;
+    if (confirm(`Delete Opening Stock ${voucher}? This will reverse stock quantities.`)) {
+        fetch(`/opening-stock/delete/${id}/`, {
+            method: 'DELETE',
+            headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+        })
+        .then(r => r.json())
+        .then(result => {
+            if (result.success) {
+                document.getElementById(`stock-${id}`).remove();
+                showToast('Opening Stock deleted — stock reverted.');
+            } else {
+                showToast('Error: ' + (result.error || 'Delete failed'), 'error');
+            }
+        });
+    }
+}
+
+function showToast(msg, type = 'success') {
+    const toast = document.getElementById('listToast');
+    document.getElementById('listToastMsg').textContent = msg;
+    toast.style.background = type === 'error' ? '#DC2626' : '#16A34A';
+    toast.style.display = 'flex';
+    setTimeout(() => toast.style.display = 'none', 3000);
+}
+
+// Live Search
+let searchTimer;
+document.getElementById('searchInput').addEventListener('input', function () {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => document.getElementById('filterForm').submit(), 500);
+});
+</script>
+
+<style>
+.voucher-badge {
+    display: inline-flex; align-items: center;
+    background: #EDE9F8; color: #5C3D99; border: 1px solid #C9BEF0;
+    border-radius: 8px; padding: 4px 10px; font-size: 0.75rem; font-weight: 700;
+    font-family: 'JetBrains Mono', monospace; cursor: pointer;
+}
+.voucher-badge:hover { background: #D4C8F5; transform: scale(1.03); }
+.voucher-badge.copied { background: #DCFCE7; color: #16A34A; border-color: #86EFAC; }
+</style>
+{% endblock %}
