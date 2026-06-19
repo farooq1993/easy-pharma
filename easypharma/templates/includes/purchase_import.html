@@ -15,7 +15,7 @@
                         <div>
                             <h5 style="color:#fff;font-weight:700;margin:0;font-size:1.05rem;">Import Purchases from CSV</h5>
                             <p style="color:rgba(255,255,255,0.72);margin:2px 0 0;font-size:0.78rem;">
-                                CSV se items load honge — preview check karo phir save karo
+                                Upload CSV — preview items — then save to purchase
                             </p>
                         </div>
                     </div>
@@ -58,7 +58,7 @@
                          ondragleave="csvDragLeave(event)"
                          ondrop="csvDrop(event)">
                         <i class="fas fa-cloud-upload-alt" style="font-size:2.4rem;color:#3b82f6;"></i>
-                        <div class="mt-3 fw-bold" style="color:#1d4ed8;font-size:1rem;">CSV file yahan drop karo ya click karke select karo</div>
+                        <div class="mt-3 fw-bold" style="color:#1d4ed8;font-size:1rem;">Drop CSV file here or click to select</div>
                         <div class="mt-1" style="font-size:0.8rem;color:#6b7280;">Supported: .csv files only</div>
                         <input type="file" id="purchaseCsvFile" accept=".csv" style="display:none;" onchange="csvFileSelected(this)">
                     </div>
@@ -80,13 +80,13 @@
                     <!-- Template download + instructions -->
                     <div style="background:#eff6ff;border-radius:12px;padding:14px 18px;margin-top:16px;border:1px solid #bfdbfe;">
                         <div class="fw-bold mb-2" style="font-size:0.84rem;color:#1d4ed8;">
-                            <i class="fas fa-info-circle me-1"></i> CSV format ke baare mein
+                            <i class="fas fa-info-circle me-1"></i> About CSV format
                         </div>
                         <div style="font-size:0.8rem;color:#374151;line-height:1.8;">
-                            <strong>Zaruri columns:</strong> product / medicine name, quantity, purchase price<br>
+                            <strong>Required columns:</strong> product / medicine name, quantity, purchase price<br>
                             <strong>Optional:</strong> batch no, expiry (MM/YYYY), free qty, mrp, sale price, invoice no, date, supplier<br>
-                            <strong>Expiry format:</strong> MM/YYYY (e.g. 06/2028) ya YYYY-MM-DD<br>
-                            <i class="fas fa-lightbulb me-1 text-warning"></i> <em>Header names flexible hain — system automatically pehchaan leta hai</em>
+                            <strong>Expiry format:</strong> MM/YYYY (e.g. 06/2028) or YYYY-MM-DD<br>
+                            <i class="fas fa-lightbulb me-1 text-warning"></i> <em>Header names are flexible — system auto-detects columns</em>
                         </div>
                        
                     </div>
@@ -95,7 +95,7 @@
                     <div id="csvParseProgress" class="mt-3 d-none">
                         <div class="d-flex align-items-center gap-2 mb-2">
                             <div class="spinner-border spinner-border-sm text-primary"></div>
-                            <span style="font-size:0.85rem;color:#374151;">CSV parse ho rahi hai...</span>
+                            <span style="font-size:0.85rem;color:#374151;">Parsing CSV...</span>
                         </div>
                         <div class="progress" style="height:6px;border-radius:6px;">
                             <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width:100%;"></div>
@@ -119,12 +119,18 @@
                         <div class="row g-3 align-items-end">
                             <div class="col-md-3">
                                 <label class="ep-label mb-1">Supplier</label>
-                                <select id="csvSupplierSelect" class="ep-input" style="font-size:0.85rem;">
-                                    <option value="">— Supplier Select Karo —</option>
+                                <!-- Hidden real select -->
+                                <select id="csvSupplierSelect" style="display:none;">
+                                    <option value="">— Select —</option>
                                     {% for supplier in suppliers %}
                                         <option value="{{ supplier.id }}">{{ supplier.name }}</option>
                                     {% endfor %}
                                 </select>
+                                <!-- Searchable input -->
+                                <div class="position-relative" id="csvSupplierSearchWrap">
+                                    <input type="text" id="csvSupplierSearchInput" class="ep-input" style="font-size:0.85rem;" placeholder="Search supplier..." autocomplete="off">
+                                    <div id="csvSupplierDropdown" style="display:none;position:absolute;background:white;width:100%;z-index:1055;border-radius:12px;border:1px solid #dee2e6;box-shadow:0 4px 12px rgba(0,0,0,0.1);max-height:200px;overflow-y:auto;"></div>
+                                </div>
                             </div>
                             <div class="col-md-3">
                                 <label class="ep-label mb-1">Invoice Number</label>
@@ -149,9 +155,9 @@
                         <div class="d-flex align-items-start gap-2">
                             <i class="fas fa-exclamation-triangle text-warning mt-1" style="font-size:1rem;"></i>
                             <div style="font-size:0.83rem;color:#92400e;">
-                                <strong>Kuch products system mein nahi mile:</strong>
+                                <strong>Some products were not found in the system:</strong>
                                 <div id="csvMissingProductsList" class="mt-1"></div>
-                                <div class="mt-1 text-muted" style="font-size:0.78rem;">Inhe create karne ke baad CSV dobara upload karo, ya baaki items abhi import kar lo.</div>
+                                <div class="mt-1 text-muted" style="font-size:0.78rem;">Create these products first, then re-upload the CSV — or proceed to import the found items.</div>
                             </div>
                         </div>
                     </div>
@@ -160,11 +166,11 @@
                     <div class="d-flex align-items-center justify-content-between px-4 py-2" style="background:#fff;border-bottom:1px solid #f3f4f6;">
                         <div style="font-size:0.83rem;color:#374151;">
                             <i class="fas fa-list me-1 text-primary"></i>
-                            <span id="csvItemCount" class="fw-bold">0</span> items preview mein
+                            <span id="csvItemCount" class="fw-bold">0</span> items in preview
                         </div>
                         <div class="d-flex gap-2">
                             <span style="font-size:0.75rem;color:#6b7280;padding-top:2px;">
-                                <i class="fas fa-pencil-alt me-1"></i> Cells directly edit ho sakte hain
+                                <i class="fas fa-pencil-alt me-1"></i> Cells are directly editable
                             </span>
                             <button type="button" class="btn btn-sm btn-outline-danger" style="font-size:0.75rem;border-radius:6px;" onclick="csvClearAll()">
                                 <i class="fas fa-trash me-1"></i> Clear All
@@ -216,7 +222,7 @@
                 <div>
                     <button type="button" class="btn btn-outline-secondary rounded-pill px-3" id="csvBackBtn"
                             style="font-size:0.85rem;display:none;" onclick="csvGoToStep1()">
-                        <i class="fas fa-arrow-left me-1"></i> Wapas
+                        <i class="fas fa-arrow-left me-1"></i> Back
                     </button>
                 </div>
 
@@ -229,12 +235,12 @@
                     <!-- Step 1: Parse button -->
                     <button type="button" class="btn btn-primary rounded-pill px-4 fw-bold" id="csvParseBtn"
                             style="font-size:0.85rem;" onclick="submitCsvParse()" disabled>
-                        <i class="fas fa-search me-1"></i> CSV Preview Karo
+                        <i class="fas fa-search me-1"></i> Preview CSV
                     </button>
                     <!-- Step 2: Confirm button (hidden initially) -->
                     <button type="button" class="btn btn-success rounded-pill px-4 fw-bold d-none" id="csvConfirmBtn"
                             style="font-size:0.85rem;" onclick="csvConfirmAndLoad()">
-                        <i class="fas fa-check-circle me-1"></i> Confirm & Purchase Mein Load Karo
+                        <i class="fas fa-check-circle me-1"></i> Confirm & Load to Purchase
                     </button>
                 </div>
             </div>

@@ -1,11 +1,12 @@
 from django.views import View
 from django.shortcuts import render, redirect
-from django.http import JsonResponse
+from django.http import JsonResponse,HttpResponse
 from django.core.paginator import Paginator
 from django.core.cache import cache
 from django.db.models import Sum,F, Q, Min
 from django.contrib.auth.mixins import LoginRequiredMixin
-
+import csv
+from easypharma.views.reports import render_to_pdf
 from easypharma.models.Items import (Products,DrugCompany, ProductContent, 
                                      ProductSchedule,
                                      ProductTax, ProductType)
@@ -22,251 +23,12 @@ import io
 import re
 from decimal import Decimal
 
-def normalize_column_name(value):
-    if value is None:
-        return ''
-    return re.sub(r'[^a-z0-9]+', ' ', str(value).strip().lower())
-
-
-def find_column(headers, names):
-    for name in names:
-        for idx, header in enumerate(headers):
-            if name in header:
-                return idx
-    return None
-
-
-def looks_like_date(value):
-    if value is None:
-        return False
-    text = str(value).strip()
-    if not text:
-        return False
-    text = text.replace('/', '-').replace('.', '-').strip()
-    if re.match(r'^[0-9]{4}-[0-9]{1,2}$', text):
-        return True
-    if re.match(r'^[0-9]{1,2}-[0-9]{1,2}-[0-9]{2,4}$', text):
-        return True
-    if re.match(r'^[0-9]{6,8}$', text):
-        return True
-    return False
-
-
-def looks_like_integer(value):
-    if value is None:
-        return False
-    text = str(value).strip().replace(',', '')
-    if not text:
-        return False
-    return re.fullmatch(r'[-+]?[0-9]+', text) is not None
-
-
-def looks_like_decimal(value):
-    if value is None:
-        return False
-    text = str(value).strip().replace(',', '')
-    if not text:
-        return False
-    return re.fullmatch(r'[-+]?[0-9]*\.?[0-9]+', text) is not None
-
-
-def is_likely_product_name(value):
-    if value is None:
-        return False
-    text = str(value).strip()
-    if not text:
-        return False
-    if looks_like_date(text) or looks_like_decimal(text) or looks_like_integer(text):
-        return False
-    if ' ' in text and any(c.isalpha() for c in text):
-        return True
-    letters = sum(1 for c in text if c.isalpha())
-    digits = sum(1 for c in text if c.isdigit())
-    return letters >= 3 and digits <= letters
-
-
-def is_likely_batch(value):
-    if value is None:
-        return False
-    text = str(value).strip()
-    if not text or ' ' in text:
-        return False
-    has_alpha = any(c.isalpha() for c in text)
-    has_digit = any(c.isdigit() for c in text)
-    return has_alpha and has_digit and 3 <= len(text) <= 15
-
-
-def infer_purchase_columns(rows):
-    sample_rows = rows[:min(len(rows), 10)]
-    max_cols = max((len(row) for row in sample_rows), default=0)
-    stats = [
-        {
-            'product': 0,
-            'batch': 0,
-            'expiry': 0,
-            'quantity': 0,
-            'decimal': 0,
-            'integer': 0,
-            'text': 0,
-            'long_text': 0,
-            'date': 0,
-        }
-        for _ in range(max_cols)
-    ]
-
-    for row in sample_rows:
-        for col in range(max_cols):
-            value = str(row[col]).strip() if col < len(row) else ''
-            if not value:
-                continue
-            if looks_like_date(value):
-                stats[col]['date'] += 1
-            if looks_like_decimal(value):
-                stats[col]['decimal'] += 1
-            if looks_like_integer(value):
-                stats[col]['integer'] += 1
-            if is_likely_product_name(value):
-                stats[col]['product'] += 1
-            if is_likely_batch(value):
-                stats[col]['batch'] += 1
-            if any(c.isalpha() for c in value) and ' ' in value:
-                stats[col]['text'] += 1
-            if len(value) >= 10:
-                stats[col]['long_text'] += 1
-
-    def choose_best(key, exclude=None):
-        exclude = exclude or []
-        candidates = [i for i in range(max_cols) if i not in exclude]
-        if not candidates:
-            return None
-        candidates.sort(key=lambda i: (stats[i][key], stats[i].get('text', 0), stats[i].get('long_text', 0)), reverse=True)
-        return candidates[0] if stats[candidates[0]][key] > 0 else None
-
-    product_idx = choose_best('product') or choose_best('text')
-    expiry_idx = choose_best('date', exclude=[product_idx])
-    batch_idx = choose_best('batch', exclude=[product_idx, expiry_idx])
-    qty_idx = choose_best('integer', exclude=[product_idx, expiry_idx, batch_idx])
-    purchase_price_idx = choose_best('decimal', exclude=[product_idx, expiry_idx, batch_idx, qty_idx])
-    mrp_idx = choose_best('decimal', exclude=[product_idx, expiry_idx, batch_idx, qty_idx, purchase_price_idx])
-    sale_price_idx = choose_best('decimal', exclude=[product_idx, expiry_idx, batch_idx, qty_idx, purchase_price_idx, mrp_idx])
-
-    return {
-        'product_idx': product_idx,
-        'batch_idx': batch_idx,
-        'expiry_idx': expiry_idx,
-        'qty_idx': qty_idx,
-        'free_idx': None,
-        'purchase_price_idx': purchase_price_idx,
-        'mrp_idx': mrp_idx,
-        'sale_price_idx': sale_price_idx,
-        'total_idx': None,
-        'invoice_idx': None,
-        'date_idx': None,
-        'data_start': 0
-    }
-
-
-def guess_invoice_number(rows):
-    for row in rows[:3]:
-        for cell in row:
-            text = str(cell).strip()
-            if not text:
-                continue
-            if looks_like_date(text) or looks_like_decimal(text) or looks_like_integer(text):
-                continue
-            if re.search(r'[A-Za-z]+\d+|\d{5,}', text):
-                return text
-    return None
-
-
-def guess_purchase_date(rows):
-    for row in rows[:3]:
-        for cell in row:
-            text = str(cell).strip()
-            if looks_like_date(text):
-                parsed = parse_expiry(text)
-                if parsed:
-                    if len(parsed) == 7 and parsed[4] == '-':
-                        return f"{parsed}-01"
-                    return parsed
-                text = text.replace('/', '-').replace('.', '-').strip()
-                parts = text.split('-')
-                if len(parts) == 3:
-                    day, month, year = parts[0], parts[1], parts[2]
-                    if len(year) == 2:
-                        year = '20' + year
-                    if len(day) == 2 and len(month) == 2 and len(year) == 4:
-                        return f"{year}-{month}-{day}"
-                elif len(parts) == 2:
-                    if len(parts[0]) == 4:
-                        year, month = parts[0], parts[1]
-                        return f"{year}-{month}-01"
-                    else:
-                        month, year = parts[0], parts[1]
-                        if len(year) == 2:
-                            year = '20' + year
-                        return f"{year}-{month}-01"
-    return None
-
-
-def parse_decimal_value(value, default=Decimal('0')):
-    if value is None or str(value).strip() == '':
-        return default
-    value = str(value).replace(',', '').strip()
-    try:
-        return Decimal(value)
-    except Exception:
-        try:
-            return Decimal(str(float(value)))
-        except Exception:
-            return default
-
-
-def parse_integer_value(value, default=0):
-    if value is None or str(value).strip() == '':
-        return default
-    try:
-        return int(float(str(value).replace(',', '').strip()))
-    except Exception:
-        return default
-
-
-def parse_expiry(value):
-    if not value:
-        return ''
-    text = str(value).strip()
-    # Handle 8-digit format: DDMMYYYY
-    if len(text) == 8 and text.isdigit():
-        day = text[0:2]
-        month = text[2:4]
-        year = text[4:8]
-        if int(month) < 1 or int(month) > 12:
-            return ''
-        return f'{year}-{month}'
-    
-    # Normalize formats like DD/MM/YYYY, DD-MM-YYYY, YYYY-MM, MM/YYYY, YYYYMM
-    text = text.replace('/', '-').replace('.', '-').strip()
-    parts = text.split('-')
-    if len(parts) == 3:
-        year, month = parts[2], parts[1]
-    elif len(parts) == 2:
-        if len(parts[0]) == 4:
-            year, month = parts[0], parts[1]
-        else:
-            year, month = parts[1], parts[0]
-    elif len(parts) == 1 and len(parts[0]) == 6:
-        year, month = parts[0][:4], parts[0][4:6]
-    else:
-        return ''
-    if len(month) == 1:
-        month = '0' + month
-    if len(year) == 2:
-        year = '20' + year
-    if not (year.isdigit() and month.isdigit()):
-        return ''
-    if int(month) < 1 or int(month) > 12:
-        return ''
-    return f'{year}-{month}'
+# Import from your utility file
+from easypharma.utility.purchase_import import process_csv_file
+# from easypharma.utility.purchase_import import (normalize_column_name,find_column,looks_like_date,looks_like_integer,looks_like_decimal,
+#                                     is_likely_product_name,is_likely_batch,infer_purchase_columns,
+#                                     guess_invoice_number,guess_purchase_date,parse_decimal_value,
+#                                     parse_integer_value,parse_expiry,process_csv_file)
 
 
 class PurchaseEntryView(LoginRequiredMixin,View):
@@ -449,156 +211,185 @@ class PurchaseImportCSVView(View):
         if not csv_file:
             return JsonResponse({'success': False, 'error': 'Please upload a CSV file.'}, status=400)
 
+
+# Then continue with your existing code
         try:
-            try:
-                file_data = csv_file.read().decode('utf-8-sig')
-            except UnicodeDecodeError:
-                try:
-                    file_data = csv_file.read().decode('latin-1')
-                except Exception:
-                    return JsonResponse({'success': False, 'error': 'Unable to decode CSV file. Use UTF-8 encoding.'}, status=400)
+            # Use the specialized parser we created for your CSV format
+            data = process_csv_file(csv_file, request)
+            return JsonResponse(data)
 
-            rows = []
-            try:
-                reader = csv.reader(io.StringIO(file_data))
-                rows = [r for r in reader if any(cell.strip() for cell in r)]
-            except Exception:
-                return JsonResponse({'success': False, 'error': 'Invalid CSV file format.'}, status=400)
-
-            if not rows:
-                return JsonResponse({'success': False, 'error': 'CSV file is empty.'}, status=400)
-
-            headers = [normalize_column_name(h) for h in rows[0]]
-            product_idx = find_column(headers, ['product', 'product name', 'item', 'item name', 'description', 'drug', 'medicine', 'brand', 'generic', 'molecule'])
-            batch_idx = find_column(headers, ['batch', 'batch no', 'batch_number', 'batch number'])
-            expiry_idx = find_column(headers, ['expiry', 'exp', 'expiry_date', 'exp_date', 'expiry date'])
-            qty_idx = find_column(headers, ['qty', 'quantity', 'pack', 'packs', 'units', 'nos', 'pcs', 'pieces'])
-            free_idx = find_column(headers, ['free', 'free_qty', 'free quantity'])
-            purchase_price_idx = find_column(headers, ['purchase price', 'purchase_price', 'rate', 'cost', 'price', 'unit cost', 'buy price', 'invoice rate', 'net price'])
-            mrp_idx = find_column(headers, ['mrp'])
-            sale_price_idx = find_column(headers, ['sale_price', 'sale price', 'sale'])
-            total_idx = find_column(headers, ['total', 'amount', 'value', 'line total', 'gross'])
-            invoice_idx = find_column(headers, ['invoice', 'bill no', 'invoice number', 'voucher', 'bill number'])
-            date_idx = find_column(headers, ['date', 'purchase_date', 'purchase date', 'invoice date'])
-
-            data_rows = rows[1:]
-            headerless = False
-            if product_idx is None or qty_idx is None or purchase_price_idx is None:
-                inferred = infer_purchase_columns(rows)
-                if inferred['product_idx'] is not None and inferred['qty_idx'] is not None and inferred['purchase_price_idx'] is not None:
-                    product_idx = inferred['product_idx']
-                    batch_idx = inferred['batch_idx']
-                    expiry_idx = inferred['expiry_idx']
-                    qty_idx = inferred['qty_idx']
-                    free_idx = inferred['free_idx']
-                    purchase_price_idx = inferred['purchase_price_idx']
-                    mrp_idx = inferred['mrp_idx']
-                    sale_price_idx = inferred['sale_price_idx']
-                    total_idx = inferred['total_idx']
-                    invoice_idx = inferred['invoice_idx']
-                    date_idx = inferred['date_idx']
-
-                    first_row = rows[0]
-                    header_candidate_count = sum(
-                        1 for cell in first_row
-                        if str(cell).strip() and not looks_like_integer(cell) and not looks_like_decimal(cell) and not looks_like_date(cell)
-                    )
-                    if header_candidate_count >= max(2, len(first_row) // 3):
-                        data_rows = rows[1:]
-                    else:
-                        data_rows = rows
-                        headerless = True
-                else:
-                    return JsonResponse({
-                        'success': False,
-                        'error': f'CSV header not recognized. Missing columns: {", ".join([c for c in ["product" if product_idx is None else None, "quantity" if qty_idx is None else None, "purchase price" if purchase_price_idx is None else None] if c])}.',
-                        'detected_headers': headers,
-                        'required_columns': ['product', 'quantity', 'purchase price']
-                    }, status=400)
-
-            items = []
-            missing_products = []
-            invoice_number = None
-            purchase_date = None
-            supplier_name = None
-
-            if headerless:
-                invoice_number = guess_invoice_number(rows)
-                purchase_date = guess_purchase_date(rows)
-
-            for row_number, row in enumerate(data_rows, start=(2 if not headerless else 1)):
-                if product_idx >= len(row):
-                    continue
-                product_name = str(row[product_idx]).strip()
-                if not product_name:
-                    continue
-
-                if invoice_number is None and invoice_idx is not None and invoice_idx < len(row):
-                    invoice_number = str(row[invoice_idx]).strip() or invoice_number
-                if purchase_date is None and date_idx is not None and date_idx < len(row):
-                    purchase_date = str(row[date_idx]).strip() or purchase_date
-                if supplier_name is None:
-                    supplier_name = None
-
-                batch_number = str(row[batch_idx]).strip() if batch_idx is not None and batch_idx < len(row) else ''
-                expiry_text = str(row[expiry_idx]).strip() if expiry_idx is not None and expiry_idx < len(row) else ''
-                expiry_date = parse_expiry(expiry_text)
-                quantity = parse_integer_value(row[qty_idx])
-                free_quantity = parse_integer_value(row[free_idx]) if free_idx is not None and free_idx < len(row) else 0
-                purchase_price = parse_decimal_value(row[purchase_price_idx])
-                mrp = parse_decimal_value(row[mrp_idx]) if mrp_idx is not None and mrp_idx < len(row) else Decimal('0')
-                sale_price = parse_decimal_value(row[sale_price_idx]) if sale_price_idx is not None and sale_price_idx < len(row) else Decimal('0')
-                total_amount = parse_decimal_value(row[total_idx]) if total_idx is not None and total_idx < len(row) else Decimal('0')
-
-                if sale_price == 0 and mrp > 0:
-                    sale_price = mrp
-                if mrp == 0:
-                    mrp = purchase_price
-                if total_amount == 0:
-                    total_amount = (purchase_price * quantity) + Decimal('0')
-
-                product = Products.objects.filter(tenant=request.tenant, product_name__iexact=product_name).first()
-                if not product:
-                    product = Products.objects.filter(tenant=request.tenant, product_name__icontains=product_name).first()
-
-                if not product:
-                    missing_products.append({
-                        'row': row_number,
-                        'product': product_name,
-                        'message': 'Product not found in master data. Please create it first.'
-                    })
-                    continue
-
-                items.append({
-                    'product_id': product.id,
-                    'name': product.product_name,
-                    'packing': product.product_packing or '',
-                    'conversion_factor': product.conversion_factor or 1,
-                    'batch_number': batch_number or '',
-                    'expiry_date': expiry_date or '',
-                    'quantity': quantity,
-                    'free_quantity': free_quantity,
-                    'total_units': (quantity + free_quantity) * (product.conversion_factor or 1),
-                    'purchase_price': float(purchase_price),
-                    'tax_percentage': float(product.product_tax.tax_rate if product.product_tax else 0),
-                    'tax_amount': float((purchase_price * quantity) * (product.product_tax.tax_rate if product.product_tax else 0) / 100),
-                    'mrp': float(mrp),
-                    'sale_price': float(sale_price),
-                    'total': float(total_amount)
-                })
-
-            return JsonResponse({
-                'success': True,
-                'invoice_number': invoice_number,
-                'purchase_date': purchase_date,
-                'supplier_name': supplier_name,
-                'items': items,
-                'missing_products': missing_products
-            })
         except Exception as e:
             import traceback
-            print(traceback.format_exc())
-            return JsonResponse({'success': False, 'error': str(e)})
+            return JsonResponse({
+                'success': False, 
+                'error': str(e)
+            })
+
+# class PurchaseImportCSVView(View):
+#     def post(self, request):
+#         csv_file = request.FILES.get('csv_file')
+
+#         if not csv_file:
+#             return JsonResponse({'success': False, 'error': 'Please upload a CSV file.'}, status=400)
+        
+#         try:
+#             data = process_csv_file(csv_file, request)
+#             return JsonResponse(data)
+#         except Exception as e:
+#             import traceback
+#           
+#             return JsonResponse({'success': False, 'error': str(e)})
+
+#         try:
+#             try:
+#                 file_data = csv_file.read().decode('utf-8-sig')
+#             except UnicodeDecodeError:
+#                 try:
+#                     file_data = csv_file.read().decode('latin-1')
+#                 except Exception:
+#                     return JsonResponse({'success': False, 'error': 'Unable to decode CSV file. Use UTF-8 encoding.'}, status=400)
+
+#             rows = []
+#             try:
+#                 reader = csv.reader(io.StringIO(file_data))
+#                 rows = [r for r in reader if any(cell.strip() for cell in r)]
+#             except Exception:
+#                 return JsonResponse({'success': False, 'error': 'Invalid CSV file format.'}, status=400)
+
+#             if not rows:
+#                 return JsonResponse({'success': False, 'error': 'CSV file is empty.'}, status=400)
+
+#             headers = [normalize_column_name(h) for h in rows[0]]
+#             product_idx = find_column(headers, ['product', 'product name', 'item', 'item name', 'description', 'drug', 'medicine', 'brand', 'generic', 'molecule'])
+#             batch_idx = find_column(headers, ['batch', 'batch no', 'batch_number', 'batch number'])
+#             expiry_idx = find_column(headers, ['expiry', 'exp', 'expiry_date', 'exp_date', 'expiry date'])
+#             qty_idx = find_column(headers, ['qty', 'quantity', 'pack', 'packs', 'units', 'nos', 'pcs', 'pieces'])
+#             free_idx = find_column(headers, ['free', 'free_qty', 'free quantity'])
+#             purchase_price_idx = find_column(headers, ['purchase price', 'purchase_price', 'rate', 'cost', 'price', 'unit cost', 'buy price', 'invoice rate', 'net price'])
+#             mrp_idx = find_column(headers, ['mrp'])
+#             sale_price_idx = find_column(headers, ['sale_price', 'sale price', 'sale'])
+#             total_idx = find_column(headers, ['total', 'amount', 'value', 'line total', 'gross'])
+#             invoice_idx = find_column(headers, ['invoice', 'bill no', 'invoice number', 'voucher', 'bill number'])
+#             date_idx = find_column(headers, ['date', 'purchase_date', 'purchase date', 'invoice date'])
+
+#             data_rows = rows[1:]
+#             headerless = False
+#             if product_idx is None or qty_idx is None or purchase_price_idx is None:
+#                 inferred = infer_purchase_columns(rows)
+#                 if inferred['product_idx'] is not None and inferred['qty_idx'] is not None and inferred['purchase_price_idx'] is not None:
+#                     product_idx = inferred['product_idx']
+#                     batch_idx = inferred['batch_idx']
+#                     expiry_idx = inferred['expiry_idx']
+#                     qty_idx = inferred['qty_idx']
+#                     free_idx = inferred['free_idx']
+#                     purchase_price_idx = inferred['purchase_price_idx']
+#                     mrp_idx = inferred['mrp_idx']
+#                     sale_price_idx = inferred['sale_price_idx']
+#                     total_idx = inferred['total_idx']
+#                     invoice_idx = inferred['invoice_idx']
+#                     date_idx = inferred['date_idx']
+
+#                     first_row = rows[0]
+#                     header_candidate_count = sum(
+#                         1 for cell in first_row
+#                         if str(cell).strip() and not looks_like_integer(cell) and not looks_like_decimal(cell) and not looks_like_date(cell)
+#                     )
+#                     if header_candidate_count >= max(2, len(first_row) // 3):
+#                         data_rows = rows[1:]
+#                     else:
+#                         data_rows = rows
+#                         headerless = True
+#                 else:
+#                     return JsonResponse({
+#                         'success': False,
+#                         'error': f'CSV header not recognized. Missing columns: {", ".join([c for c in ["product" if product_idx is None else None, "quantity" if qty_idx is None else None, "purchase price" if purchase_price_idx is None else None] if c])}.',
+#                         'detected_headers': headers,
+#                         'required_columns': ['product', 'quantity', 'purchase price']
+#                     }, status=400)
+
+#             items = []
+#             missing_products = []
+#             invoice_number = None
+#             purchase_date = None
+#             supplier_name = None
+
+#             if headerless:
+#                 invoice_number = guess_invoice_number(rows)
+#                 purchase_date = guess_purchase_date(rows)
+
+#             for row_number, row in enumerate(data_rows, start=(2 if not headerless else 1)):
+#                 if product_idx >= len(row):
+#                     continue
+#                 product_name = str(row[product_idx]).strip()
+#                 if not product_name:
+#                     continue
+
+#                 if invoice_number is None and invoice_idx is not None and invoice_idx < len(row):
+#                     invoice_number = str(row[invoice_idx]).strip() or invoice_number
+#                 if purchase_date is None and date_idx is not None and date_idx < len(row):
+#                     purchase_date = str(row[date_idx]).strip() or purchase_date
+#                 if supplier_name is None:
+#                     supplier_name = None
+
+#                 batch_number = str(row[batch_idx]).strip() if batch_idx is not None and batch_idx < len(row) else ''
+#                 expiry_text = str(row[expiry_idx]).strip() if expiry_idx is not None and expiry_idx < len(row) else ''
+#                 expiry_date = parse_expiry(expiry_text)
+#                 quantity = parse_integer_value(row[qty_idx])
+#                 free_quantity = parse_integer_value(row[free_idx]) if free_idx is not None and free_idx < len(row) else 0
+#                 purchase_price = parse_decimal_value(row[purchase_price_idx])
+#                 mrp = parse_decimal_value(row[mrp_idx]) if mrp_idx is not None and mrp_idx < len(row) else Decimal('0')
+#                 sale_price = parse_decimal_value(row[sale_price_idx]) if sale_price_idx is not None and sale_price_idx < len(row) else Decimal('0')
+#                 total_amount = parse_decimal_value(row[total_idx]) if total_idx is not None and total_idx < len(row) else Decimal('0')
+
+#                 if sale_price == 0 and mrp > 0:
+#                     sale_price = mrp
+#                 if mrp == 0:
+#                     mrp = purchase_price
+#                 if total_amount == 0:
+#                     total_amount = (purchase_price * quantity) + Decimal('0')
+
+#                 product = Products.objects.filter(tenant=request.tenant, product_name__iexact=product_name).first()
+#                 if not product:
+#                     product = Products.objects.filter(tenant=request.tenant, product_name__icontains=product_name).first()
+
+#                 if not product:
+#                     missing_products.append({
+#                         'row': row_number,
+#                         'product': product_name,
+#                         'message': 'Product not found in master data. Please create it first.'
+#                     })
+#                     continue
+
+#                 items.append({
+#                     'product_id': product.id,
+#                     'name': product.product_name,
+#                     'packing': product.product_packing or '',
+#                     'conversion_factor': product.conversion_factor or 1,
+#                     'batch_number': batch_number or '',
+#                     'expiry_date': expiry_date or '',
+#                     'quantity': quantity,
+#                     'free_quantity': free_quantity,
+#                     'total_units': (quantity + free_quantity) * (product.conversion_factor or 1),
+#                     'purchase_price': float(purchase_price),
+#                     'tax_percentage': float(product.product_tax.tax_rate if product.product_tax else 0),
+#                     'tax_amount': float((purchase_price * quantity) * (product.product_tax.tax_rate if product.product_tax else 0) / 100),
+#                     'mrp': float(mrp),
+#                     'sale_price': float(sale_price),
+#                     'total': float(total_amount)
+#                 })
+
+#             return JsonResponse({
+#                 'success': True,
+#                 'invoice_number': invoice_number,
+#                 'purchase_date': purchase_date,
+#                 'supplier_name': supplier_name,
+#                 'items': items,
+#                 'missing_products': missing_products
+#             })
+#         except Exception as e:
+#             import traceback
+#           
+#             return JsonResponse({'success': False, 'error': str(e)})
 
 class SupplierAutocomplete(LoginRequiredMixin,View):
     def get(self, request):
@@ -748,8 +539,6 @@ class SupplierWisePurchaseReportView(LoginRequiredMixin,View):
         return render(request, self.template_name, {'suppliers': suppliers})
 
 
-from django.http import JsonResponse
-
 class SupplierReportDataView(LoginRequiredMixin,View):
     def get(self, request, supplier_id):
         try:
@@ -787,10 +576,6 @@ class SupplierReportDataView(LoginRequiredMixin,View):
 
 
 # ========== PURCHASE BILL EXPORT ==========
-
-import csv
-from django.http import HttpResponse
-from easypharma.views.reports import render_to_pdf
 
 
 def _get_filtered_purchases(request):
@@ -972,8 +757,6 @@ class ProductBatchHistoryView(LoginRequiredMixin,View):
             for b in batches
         ]
         return JsonResponse(result, safe=False)
-
-
 
 
 class SmartPurchaseSuggestPageView(LoginRequiredMixin,View):

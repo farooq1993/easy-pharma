@@ -25,7 +25,7 @@ function csvDrop(e) {
         document.getElementById('purchaseCsvFile').files = dt.files;
         csvFileSelected(document.getElementById('purchaseCsvFile'));
     } else {
-        _csvShowError('Sirf .csv files accepted hain.');
+        _csvShowError('Only .csv files are accepted.');
     }
 }
 
@@ -98,10 +98,10 @@ async function submitCsvParse() {
 
         document.getElementById('csvParseProgress').classList.add('d-none');
         document.getElementById('csvParseBtn').disabled = false;
-        document.getElementById('csvParseBtn').innerHTML = '<i class="fas fa-search me-1"></i> CSV Preview Karo';
+        document.getElementById('csvParseBtn').innerHTML = '<i class="fas fa-search me-1"></i> Preview CSV';
 
         if (!data.success) {
-            _csvShowError(data.error || 'CSV parse nahi ho saki.');
+            _csvShowError(data.error || 'Could not parse CSV.');
             return;
         }
 
@@ -113,13 +113,17 @@ async function submitCsvParse() {
         if (data.invoice_number) document.getElementById('csvInvoiceNumber').value = data.invoice_number;
         if (data.purchase_date)  document.getElementById('csvPurchaseDate').value  = data.purchase_date;
 
-        // Supplier auto-select by name
+        // Supplier auto-select by name — update both hidden select + search input
         if (data.supplier_name) {
             const sel = document.getElementById('csvSupplierSelect');
             const match = Array.from(sel.options).find(o =>
                 o.text.toLowerCase().includes(data.supplier_name.toLowerCase())
             );
-            if (match) sel.value = match.value;
+            if (match) {
+                sel.value = match.value;
+                const si = document.getElementById('csvSupplierSearchInput');
+                if (si) si.value = match.text;
+            }
         }
 
         // Handle missing products
@@ -140,11 +144,11 @@ async function submitCsvParse() {
         }
 
         if (_csvParsedItems.length === 0 && _csvMissing.length > 0) {
-            _csvShowError('Koi bhi product nahi mila system mein. Pehle products create karo phir CSV dobara upload karo.');
+            _csvShowError('No products found in system. Please create them first, then re-upload the CSV.');
             return;
         }
         if (_csvParsedItems.length === 0) {
-            _csvShowError('CSV mein koi valid data nahi mila.');
+            _csvShowError('No valid data found in CSV.');
             return;
         }
 
@@ -154,7 +158,7 @@ async function submitCsvParse() {
     } catch (err) {
         document.getElementById('csvParseProgress').classList.add('d-none');
         document.getElementById('csvParseBtn').disabled = false;
-        document.getElementById('csvParseBtn').innerHTML = '<i class="fas fa-search me-1"></i> CSV Preview Karo';
+        document.getElementById('csvParseBtn').innerHTML = '<i class="fas fa-search me-1"></i> Preview CSV';
         _csvShowError('Network error: ' + err.message);
     }
 }
@@ -255,7 +259,7 @@ function _csvRemoveRow(idx) {
 }
 
 function csvClearAll() {
-    if (!confirm('Saare items remove kar dein?')) return;
+    if (!confirm('Remove all items?')) return;
     _csvParsedItems = [];
     _csvRenderPreviewTable([]);
 }
@@ -268,9 +272,10 @@ function _csvRefreshTotals() {
 }
 
 // ── Confirm & load into purchase form ────────
+// ── Confirm & load into purchase form ────────
 function csvConfirmAndLoad() {
     if (_csvParsedItems.length === 0) {
-        alert('Koi items nahi hain load karne ke liye.');
+        alert('No items to load.');
         return;
     }
 
@@ -281,66 +286,79 @@ function csvConfirmAndLoad() {
     const payMode  = document.getElementById('csvPaymentMode').value;
 
     if (!suppVal) {
-        document.getElementById('csvSupplierSelect').focus();
-        showToast('Supplier select karo', 'error');
+        document.getElementById('csvSupplierSearchInput').focus();
+        showToast('Please select a supplier', 'error');
         return;
     }
     if (!invNum) {
         document.getElementById('csvInvoiceNumber').focus();
-        showToast('Invoice number daalo', 'error');
+        showToast('Please enter invoice number', 'error');
         return;
     }
 
     // ── Fill main purchase form ──────────────
-    // 1. Supplier
     const mainSupplierSel = document.getElementById('supplierSelect');
     mainSupplierSel.value = suppVal;
     mainSupplierSel.dispatchEvent(new Event('change'));
-    // Sync supplier search input
+
     const suppSearchInput = document.getElementById('supplierSearchInput');
     if (suppSearchInput) {
         const selOpt = mainSupplierSel.options[mainSupplierSel.selectedIndex];
         if (selOpt) suppSearchInput.value = selOpt.text.split(' | ')[0];
     }
 
-    // 2. Invoice details
     document.getElementById('invoiceNumber').value = invNum;
     if (invDate) document.getElementById('purchaseDate').value = invDate;
     document.getElementById('summaryPaymentMode').value = payMode;
 
-    // 3. Load items into global items array
-    // Fix expiry_date: ensure YYYY-MM-DD format (day as 01)
+    // 3. Load items with proper cleaning
+    items = [];   // Reset global items array
+
     _csvParsedItems.forEach(item => {
+        // Clean expiry_date
         if (item.expiry_date) {
-            const ed = String(item.expiry_date).trim();
-            if (ed.length === 7) {
-                // YYYY-MM → YYYY-MM-01
+            let ed = String(item.expiry_date).trim();
+            if (ed.length === 7 && ed.includes('-')) {
                 item.expiry_date = ed + '-01';
+            } else if (ed.length === 10) {
+                // good
             } else if (/^\d{2}\/\d{4}$/.test(ed)) {
-                // MM/YYYY → YYYY-MM-01
                 const [mm, yyyy] = ed.split('/');
                 item.expiry_date = `${yyyy}-${mm}-01`;
+            } else {
+                item.expiry_date = ed + '-01';
             }
+        } else {
+            item.expiry_date = null;
         }
-        // Ensure required fields
+
+        // Clean numbers
+        item.quantity = Number(item.quantity) || 0;
+        item.free_quantity = Number(item.free_quantity) || 0;
+        item.purchase_price = Number(item.purchase_price) || 0;
+        item.mrp = Number(item.mrp) || 0;
+        item.tax_percentage = Number(item.tax_percentage) || 0;
+
+        // Calculate missing fields
         if (!item.tax_amount) {
-            const sub = (item.quantity||0) * (item.purchase_price||0);
-            item.tax_amount = sub * (item.tax_percentage||0) / 100;
+            const sub = item.quantity * item.purchase_price;
+            item.tax_amount = sub * (item.tax_percentage / 100);
         }
         if (!item.total) {
-            const sub = (item.quantity||0) * (item.purchase_price||0);
-            item.total = sub + (item.tax_amount||0);
+            const sub = item.quantity * item.purchase_price;
+            item.total = sub + (item.tax_amount || 0);
         }
         if (!item.total_units) {
-            item.total_units = (item.quantity + (item.free_quantity||0)) * (item.conversion_factor||1);
+            item.total_units = (item.quantity + item.free_quantity) * (item.conversion_factor || 1);
         }
-        if (!item.sale_price && item.mrp) {
-            item.sale_price = item.mrp;
+        if (!item.sale_price || item.sale_price === 0) {
+            item.sale_price = item.mrp || item.purchase_price;
         }
+
         items.push(item);
     });
 
-    // 4. Render table & summary
+    // 4. Render & Save
     renderTable();
     calculateSummary();
 
@@ -348,12 +366,11 @@ function csvConfirmAndLoad() {
     bootstrap.Modal.getInstance(document.getElementById('csvImportModal')).hide();
     resetCsvImportModal();
 
-    showToast(`${_csvParsedItems.length} items CSV se load ho gaye ✓`, 'success');
+    showToast(`${_csvParsedItems.length} items loaded from CSV ✓`, 'success');
 
-    // Scroll to items table
     setTimeout(() => {
         const tableEl = document.getElementById('purchaseTable');
-        if (tableEl) tableEl.scrollIntoView({ behavior:'smooth', block:'start' });
+        if (tableEl) tableEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 300);
 }
 
@@ -387,3 +404,97 @@ function resetCsvImportModal() {
 
 // Reset when modal closes via backdrop/X
 document.getElementById('csvImportModal').addEventListener('hidden.bs.modal', resetCsvImportModal);
+
+// ── Searchable Supplier Dropdown (CSV modal) ──
+(function() {
+    const sel      = document.getElementById('csvSupplierSelect');
+    const input    = document.getElementById('csvSupplierSearchInput');
+    const dropdown = document.getElementById('csvSupplierDropdown');
+    if (!sel || !input || !dropdown) return;
+
+    let activeIdx = -1;
+    let filtered  = [];
+
+    function getOptions() {
+        return Array.from(sel.options)
+            .filter(o => o.value !== '')
+            .map(o => ({ value: o.value, text: o.text }));
+    }
+
+    function renderDrop(opts) {
+        filtered  = opts;
+        activeIdx = opts.length > 0 ? 0 : -1;
+        dropdown.innerHTML = '';
+        if (opts.length === 0) {
+            dropdown.innerHTML = '<div style="padding:10px 14px;color:#888;font-size:0.85rem;">No suppliers found</div>';
+        } else {
+            opts.forEach((opt, i) => {
+                const div = document.createElement('div');
+                div.style.cssText = 'padding:9px 14px;font-size:0.88rem;cursor:pointer;border-left:3px solid transparent;transition:all 0.15s;';
+                div.textContent = opt.text;
+                div.addEventListener('mouseover', () => { activeIdx = i; highlight(); });
+                div.addEventListener('mousedown', e => { e.preventDefault(); pick(opt); });
+                dropdown.appendChild(div);
+            });
+        }
+        highlight();
+        dropdown.style.display = 'block';
+    }
+
+    function highlight() {
+        Array.from(dropdown.children).forEach((el, i) => {
+            el.style.background   = i === activeIdx ? 'linear-gradient(90deg,#6366f1,#818cf8)' : '';
+            el.style.color        = i === activeIdx ? '#fff' : '';
+            el.style.borderLeftColor = i === activeIdx ? '#4338ca' : 'transparent';
+            if (i === activeIdx) el.scrollIntoView({ block: 'nearest' });
+        });
+    }
+
+    function pick(opt) {
+        sel.value    = opt.value;
+        input.value  = opt.text;
+        dropdown.style.display = 'none';
+        activeIdx = -1;
+    }
+
+    input.addEventListener('focus', () => {
+        const q = input.value.trim().toLowerCase();
+        renderDrop(q ? getOptions().filter(o => o.text.toLowerCase().includes(q)) : getOptions());
+    });
+
+    input.addEventListener('input', () => {
+        const q = input.value.trim().toLowerCase();
+        if (!q) sel.value = '';
+        renderDrop(q ? getOptions().filter(o => o.text.toLowerCase().includes(q)) : getOptions());
+    });
+
+    input.addEventListener('keydown', e => {
+        if (dropdown.style.display === 'none') {
+            if (e.key === 'ArrowDown') { e.preventDefault(); renderDrop(getOptions()); }
+            return;
+        }
+        if (e.key === 'ArrowDown') {
+            e.preventDefault(); activeIdx = Math.min(activeIdx + 1, filtered.length - 1); highlight();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault(); activeIdx = Math.max(activeIdx - 1, 0); highlight();
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+            if (activeIdx >= 0 && filtered[activeIdx]) { e.preventDefault(); pick(filtered[activeIdx]); }
+        } else if (e.key === 'Escape') {
+            dropdown.style.display = 'none';
+        }
+    });
+
+    document.addEventListener('mousedown', e => {
+        const wrap = document.getElementById('csvSupplierSearchWrap');
+        if (wrap && !wrap.contains(e.target)) dropdown.style.display = 'none';
+    });
+
+    // Clear search input on modal reset
+    const _origReset = resetCsvImportModal;
+    window.resetCsvImportModal = function() {
+        _origReset();
+        input.value = '';
+        sel.value   = '';
+        dropdown.style.display = 'none';
+    };
+})();
