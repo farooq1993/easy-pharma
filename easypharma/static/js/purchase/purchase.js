@@ -1,9 +1,58 @@
 // ════════════════════════════════════════════
-//  Purchase CSV Import Logic
+//  Purchase CSV Import Logic - FINAL VERSION
 // ════════════════════════════════════════════
+//
+// Wrapped in an IIFE so that if this script is ever accidentally loaded
+// twice (duplicate <script> tag, stale cached copy alongside a fresh one,
+// etc.) it CANNOT throw "Identifier has already been declared" and take
+// down the whole file's parsing. Functions called from inline HTML
+// (onclick/onchange in purchase_import.html) are explicitly attached to
+// `window` below so they keep working exactly as before.
+(function() {
+    'use strict';
 
-let _csvParsedItems  = [];   // items from backend
-let _csvMissing      = [];   // missing products from backend
+    if (window.__csvImportInitialized) {
+        console.warn('purchase.js loaded more than once — skipping re-init.');
+        return;
+    }
+    window.__csvImportInitialized = true;
+
+let _csvParsedItems  = [];
+let _csvMissing      = [];
+
+console.log("✅ CSV Import JS Loaded");
+
+// ── Stacked modal fix ─────────────────────────
+// When "+ Add" is clicked from inside the CSV preview, quickAddModal opens
+// ON TOP of csvImportModal (csvImportModal stays open in the background).
+// Bootstrap doesn't always re-stack z-index correctly for a modal that
+// already exists earlier in the DOM, so quickAddModal can end up rendered
+// BEHIND csvImportModal's backdrop — it's technically open, just invisible.
+// This forces quickAddModal (and its backdrop) above any already-open modal.
+(function() {
+    const quickAddEl = document.getElementById('quickAddModal');
+    if (!quickAddEl) return;
+
+    quickAddEl.addEventListener('show.bs.modal', function() {
+        // Count how many modals + backdrops are already open/stacked
+        const openBackdrops = document.querySelectorAll('.modal-backdrop').length;
+        const baseZ = 1060 + (openBackdrops * 20);
+
+        quickAddEl.style.zIndex = baseZ + 10;
+
+        // The backdrop for THIS modal is created right as it shows; grab it
+        // on the next tick and push it above any existing backdrop(s).
+        setTimeout(() => {
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            const thisBackdrop = backdrops[backdrops.length - 1];
+            if (thisBackdrop) thisBackdrop.style.zIndex = baseZ;
+        }, 0);
+    });
+
+    quickAddEl.addEventListener('hidden.bs.modal', function() {
+        quickAddEl.style.zIndex = '';
+    });
+})();
 
 // ── Drag & Drop ──────────────────────────────
 function csvDragOver(e) {
@@ -32,9 +81,7 @@ function csvDrop(e) {
 function csvFileSelected(input) {
     const f = input.files[0];
     if (!f) return;
-    const sizeTxt = f.size > 1024*1024
-        ? (f.size/1024/1024).toFixed(1)+' MB'
-        : (f.size/1024).toFixed(1)+' KB';
+    const sizeTxt = f.size > 1024*1024 ? (f.size/1024/1024).toFixed(1)+' MB' : (f.size/1024).toFixed(1)+' KB';
 
     document.getElementById('csvSelectedFileName').textContent = f.name;
     document.getElementById('csvSelectedFileSize').textContent = '(' + sizeTxt + ')';
@@ -42,7 +89,6 @@ function csvFileSelected(input) {
     document.getElementById('csvDropZone').style.borderColor  = '#22c55e';
     document.getElementById('csvDropZone').style.background   = '#f0fdf4';
     document.getElementById('csvParseBtn').disabled           = false;
-    document.getElementById('csvParseError').classList.add('d-none');
 }
 
 function csvClearFile() {
@@ -51,7 +97,6 @@ function csvClearFile() {
     document.getElementById('csvDropZone').style.borderColor = '#93c5fd';
     document.getElementById('csvDropZone').style.background  = '#f0f7ff';
     document.getElementById('csvParseBtn').disabled          = true;
-    document.getElementById('csvParseError').classList.add('d-none');
 }
 
 // ── Step navigation ──────────────────────────
@@ -71,7 +116,7 @@ function csvGoToStep1() {
     _csvSetStep(1);
 }
 
-// ── Parse (Step 1 → 2) ───────────────────────
+// ── Parse CSV ───────────────────────
 async function submitCsvParse() {
     const fileInput = document.getElementById('purchaseCsvFile');
     if (!fileInput.files[0]) {
@@ -79,103 +124,110 @@ async function submitCsvParse() {
         return;
     }
 
-    // Show loader
     document.getElementById('csvParseProgress').classList.remove('d-none');
-    document.getElementById('csvParseError').classList.add('d-none');
     document.getElementById('csvParseBtn').disabled = true;
     document.getElementById('csvParseBtn').innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Parsing...';
 
-    const form = new FormData();
-    form.append('csv_file', fileInput.files[0]);
-
     try {
-        const resp = await fetch('/import/csv/', {
-            method: 'POST',
-            headers: { 'X-CSRFToken': csrfToken },
-            body: form
-        });
-        const data = await resp.json();
-
+        await _csvFetchAndRender(fileInput.files[0]);
         document.getElementById('csvParseProgress').classList.add('d-none');
         document.getElementById('csvParseBtn').disabled = false;
         document.getElementById('csvParseBtn').innerHTML = '<i class="fas fa-search me-1"></i> Preview CSV';
-
-        if (!data.success) {
-            _csvShowError(data.error || 'Could not parse CSV.');
-            return;
-        }
-
-        // Store data
-        _csvParsedItems = data.items || [];
-        _csvMissing     = data.missing_products || [];
-
-        // Pre-fill invoice meta
-        if (data.invoice_number) document.getElementById('csvInvoiceNumber').value = data.invoice_number;
-        if (data.purchase_date)  document.getElementById('csvPurchaseDate').value  = data.purchase_date;
-
-        // Supplier auto-select by name — update both hidden select + search input
-        if (data.supplier_name) {
-            const sel = document.getElementById('csvSupplierSelect');
-            const match = Array.from(sel.options).find(o =>
-                o.text.toLowerCase().includes(data.supplier_name.toLowerCase())
-            );
-            if (match) {
-                sel.value = match.value;
-                const si = document.getElementById('csvSupplierSearchInput');
-                if (si) si.value = match.text;
-            }
-        }
-
-        // Handle missing products
-        if (_csvMissing.length) {
-            let mpHtml = _csvMissing.map(mp =>
-                `<span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;margin:2px;padding:4px 8px;border-radius:6px;font-size:0.75rem;">
-                    <i class="fas fa-times-circle me-1 text-danger"></i>${mp.product} (Row ${mp.row})
-                    <button type="button" class="btn btn-link p-0 ms-1 text-primary" style="font-size:0.72rem;vertical-align:middle;"
-                        onclick="bootstrap.Modal.getInstance(document.getElementById('csvImportModal')).hide();setTimeout(()=>showProductCreationModal('${mp.product.replace(/'/g,"\\'")}'),300);">
-                        + Add
-                    </button>
-                </span>`
-            ).join('');
-            document.getElementById('csvMissingProductsList').innerHTML = mpHtml;
-            document.getElementById('csvMissingProductsBar').classList.remove('d-none');
-        } else {
-            document.getElementById('csvMissingProductsBar').classList.add('d-none');
-        }
-
-        if (_csvParsedItems.length === 0 && _csvMissing.length > 0) {
-            _csvShowError('No products found in system. Please create them first, then re-upload the CSV.');
-            return;
-        }
-        if (_csvParsedItems.length === 0) {
-            _csvShowError('No valid data found in CSV.');
-            return;
-        }
-
-        _csvRenderPreviewTable(_csvParsedItems);
         _csvSetStep(2);
-
     } catch (err) {
         document.getElementById('csvParseProgress').classList.add('d-none');
         document.getElementById('csvParseBtn').disabled = false;
         document.getElementById('csvParseBtn').innerHTML = '<i class="fas fa-search me-1"></i> Preview CSV';
-        _csvShowError('Network error: ' + err.message);
+        _csvShowError(err.message || 'Could not parse CSV.');
     }
 }
 
-// ── Render editable preview table ────────────
+// Re-parses the same CSV file and refreshes the preview table + missing-products
+// list in place. Used after a missing product is created so the preview updates
+// immediately without the user having to cancel and re-upload.
+async function _csvRefreshPreviewSilently() {
+    const fileInput = document.getElementById('purchaseCsvFile');
+    if (!fileInput.files[0]) return; // nothing to re-parse against
+
+    try {
+        await _csvFetchAndRender(fileInput.files[0]);
+    } catch (err) {
+        // Silent refresh failing shouldn't interrupt the user — they can still
+        // manually re-upload if needed.
+        console.warn('CSV silent refresh failed:', err.message);
+    }
+}
+
+// Shared fetch + state-sync + render logic for both the initial parse and
+// the silent post-product-creation refresh.
+async function _csvFetchAndRender(file) {
+    const form = new FormData();
+    form.append('csv_file', file);
+
+    const resp = await fetch('/import/csv/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken },
+        body: form
+    });
+    const data = await resp.json();
+
+    if (!data.success) {
+        throw new Error(data.error || 'Could not parse CSV.');
+    }
+
+    _csvParsedItems = data.items || [];
+    _csvMissing     = data.missing_products || [];
+
+    // entry.html's handleSaveProduct() decides whether "Save Medicine" should
+    // call saveProductFromCsv() or saveQuickProduct() based on these two
+    // globals. Keep them in sync so Save routes correctly for CSV-missing
+    // products opened from this preview.
+    if (typeof pendingCsvData !== 'undefined') pendingCsvData = data;
+    if (typeof pendingMissingProducts !== 'undefined') pendingMissingProducts = _csvMissing;
+
+    if (data.invoice_number) document.getElementById('csvInvoiceNumber').value = data.invoice_number;
+    if (data.purchase_date)  document.getElementById('csvPurchaseDate').value  = data.purchase_date;
+
+    if (_csvMissing.length) {
+        let mpHtml = _csvMissing.map((mp, index) => `
+            <span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;margin:2px;padding:4px 8px;border-radius:6px;font-size:0.75rem;">
+                <i class="fas fa-times-circle me-1 text-danger"></i>${mp.product} (Row ${mp.row})
+                <button type="button" class="btn btn-link p-0 ms-1 text-primary" style="font-size:0.72rem;"
+                    onclick="showProductCreationModal('${mp.product.replace(/'/g,"\\'")}')">
+                    + Add
+                </button>
+            </span>`).join('');
+        document.getElementById('csvMissingProductsList').innerHTML = mpHtml;
+        document.getElementById('csvMissingProductsBar').classList.remove('d-none');
+    } else {
+        document.getElementById('csvMissingProductsBar').classList.add('d-none');
+    }
+
+    _csvRenderPreviewTable(_csvParsedItems);
+}
+
+// Whenever quickAddModal closes (Save or Cancel) WHILE csvImportModal is still
+// open in the background, refresh its preview so newly created products show
+// up immediately instead of needing a manual cancel + re-upload.
+(function() {
+    const quickAddEl = document.getElementById('quickAddModal');
+    if (!quickAddEl) return;
+    quickAddEl.addEventListener('hidden.bs.modal', function() {
+        const csvModalEl = document.getElementById('csvImportModal');
+        if (csvModalEl && csvModalEl.classList.contains('show')) {
+            _csvRefreshPreviewSilently();
+        }
+    });
+})();
 function _csvRenderPreviewTable(items) {
     const tbody = document.getElementById('csvPreviewTbody');
     tbody.innerHTML = '';
     document.getElementById('csvItemCount').textContent = items.length;
 
     items.forEach((item, idx) => {
-        const expiryDisplay = item.expiry_date
-            ? String(item.expiry_date).substring(0, 7)   // YYYY-MM
-            : '';
+        const expiryDisplay = item.expiry_date ? String(item.expiry_date).substring(0, 7) : '';
 
         const tr = document.createElement('tr');
-        if (item._missing) tr.className = 'csv-row-missing';
         tr.dataset.idx = idx;
 
         tr.innerHTML = `
@@ -193,34 +245,34 @@ function _csvRenderPreviewTable(items) {
             </td>
             <td style="padding:4px 6px;">
                 <input class="csv-editable" style="max-width:90px;"
-                    placeholder="MM/YYYY"
+                    placeholder="YYYY-MM-DD"
                     value="${_esc(expiryDisplay)}"
                     onchange="_csvUpdateItem(${idx},'expiry_date',this.value)">
             </td>
             <td style="padding:4px 6px;text-align:center;">
                 <input class="csv-editable" type="number" min="0" style="max-width:60px;text-align:center;"
                     value="${item.quantity||0}"
-                    onchange="_csvUpdateItem(${idx},'quantity',+this.value);_csvRefreshTotals()">
+                    onchange="_csvUpdateItem(${idx},'quantity',+this.value);_csvRecalcRow(${idx});_csvRefreshTotals()">
             </td>
             <td style="padding:4px 6px;text-align:center;color:#16a34a;">
                 <input class="csv-editable" type="number" min="0" style="max-width:55px;text-align:center;"
                     value="${item.free_quantity||0}"
-                    onchange="_csvUpdateItem(${idx},'free_quantity',+this.value)">
+                    onchange="_csvUpdateItem(${idx},'free_quantity',+this.value);_csvRecalcRow(${idx});_csvRefreshTotals()">
             </td>
             <td style="padding:4px 6px;text-align:right;">
                 <input class="csv-editable" type="number" min="0" step="0.01" style="max-width:85px;text-align:right;"
                     value="${(item.purchase_price||0).toFixed(2)}"
-                    onchange="_csvUpdateItem(${idx},'purchase_price',+this.value);_csvRecalcRow(${idx})">
+                    onchange="_csvUpdateItem(${idx},'purchase_price',+this.value);_csvRecalcRow(${idx});_csvRefreshTotals()">
             </td>
             <td style="padding:4px 6px;text-align:right;">
                 <input class="csv-editable" type="number" min="0" step="0.01" style="max-width:80px;text-align:right;"
                     value="${(item.mrp||0).toFixed(2)}"
-                    onchange="_csvUpdateItem(${idx},'mrp',+this.value)">
+                    onchange="_csvUpdateItem(${idx},'mrp',+this.value);_csvRecalcRow(${idx});_csvRefreshTotals()">
             </td>
             <td style="padding:4px 6px;text-align:center;">
                 <input class="csv-editable" type="number" min="0" step="0.01" style="max-width:55px;text-align:center;"
                     value="${(item.tax_percentage||0).toFixed(1)}"
-                    onchange="_csvUpdateItem(${idx},'tax_percentage',+this.value);_csvRecalcRow(${idx})">
+                    onchange="_csvUpdateItem(${idx},'tax_percentage',+this.value);_csvRecalcRow(${idx});_csvRefreshTotals()">
             </td>
             <td style="padding:4px 6px;text-align:right;font-weight:700;color:#1d4ed8;" id="csvRowTotal${idx}">
                 ₹${(item.total||0).toFixed(2)}
@@ -244,12 +296,20 @@ function _csvUpdateItem(idx, field, val) {
 function _csvRecalcRow(idx) {
     const item = _csvParsedItems[idx];
     if (!item) return;
-    const sub = (item.quantity||0) * (item.purchase_price||0);
-    const tax = sub * (item.tax_percentage||0) / 100;
+
+    const qty = Number(item.quantity) || 0;
+    const price = Number(item.purchase_price) || 0;
+    const taxPerc = Number(item.tax_percentage) || 0;
+
+    const sub = qty * price;
+    const tax = sub * taxPerc / 100;
+
     item.total = sub + tax;
     item.tax_amount = tax;
-    const el = document.getElementById('csvRowTotal'+idx);
-    if (el) el.textContent = '₹' + item.total.toFixed(2);
+
+    const el = document.getElementById('csvRowTotal' + idx);
+    if (el) el.textContent = '₹' + (item.total || 0).toFixed(2);
+
     _csvRefreshTotals();
 }
 
@@ -272,74 +332,42 @@ function _csvRefreshTotals() {
 }
 
 // ── Confirm & load into purchase form ────────
-// ── Confirm & load into purchase form ────────
 function csvConfirmAndLoad() {
     if (_csvParsedItems.length === 0) {
         alert('No items to load.');
         return;
     }
 
-    // Validate invoice meta
     const suppVal  = document.getElementById('csvSupplierSelect').value;
     const invNum   = document.getElementById('csvInvoiceNumber').value.trim();
     const invDate  = document.getElementById('csvPurchaseDate').value;
     const payMode  = document.getElementById('csvPaymentMode').value;
 
-    if (!suppVal) {
-        document.getElementById('csvSupplierSearchInput').focus();
-        showToast('Please select a supplier', 'error');
-        return;
-    }
-    if (!invNum) {
-        document.getElementById('csvInvoiceNumber').focus();
-        showToast('Please enter invoice number', 'error');
+    if (!suppVal || !invNum) {
+        showToast('Please fill supplier and invoice number', 'error');
         return;
     }
 
-    // ── Fill main purchase form ──────────────
     const mainSupplierSel = document.getElementById('supplierSelect');
     mainSupplierSel.value = suppVal;
     mainSupplierSel.dispatchEvent(new Event('change'));
-
-    const suppSearchInput = document.getElementById('supplierSearchInput');
-    if (suppSearchInput) {
-        const selOpt = mainSupplierSel.options[mainSupplierSel.selectedIndex];
-        if (selOpt) suppSearchInput.value = selOpt.text.split(' | ')[0];
-    }
 
     document.getElementById('invoiceNumber').value = invNum;
     if (invDate) document.getElementById('purchaseDate').value = invDate;
     document.getElementById('summaryPaymentMode').value = payMode;
 
-    // 3. Load items with proper cleaning
-    items = [];   // Reset global items array
-
+    items = [];
     _csvParsedItems.forEach(item => {
-        // Clean expiry_date
-        if (item.expiry_date) {
-            let ed = String(item.expiry_date).trim();
-            if (ed.length === 7 && ed.includes('-')) {
-                item.expiry_date = ed + '-01';
-            } else if (ed.length === 10) {
-                // good
-            } else if (/^\d{2}\/\d{4}$/.test(ed)) {
-                const [mm, yyyy] = ed.split('/');
-                item.expiry_date = `${yyyy}-${mm}-01`;
-            } else {
-                item.expiry_date = ed + '-01';
-            }
-        } else {
-            item.expiry_date = null;
-        }
-
-        // Clean numbers
         item.quantity = Number(item.quantity) || 0;
         item.free_quantity = Number(item.free_quantity) || 0;
         item.purchase_price = Number(item.purchase_price) || 0;
         item.mrp = Number(item.mrp) || 0;
         item.tax_percentage = Number(item.tax_percentage) || 0;
 
-        // Calculate missing fields
+        if (item.expiry_date && String(item.expiry_date).length === 7) {
+            item.expiry_date = item.expiry_date + '-01';
+        }
+
         if (!item.tax_amount) {
             const sub = item.quantity * item.purchase_price;
             item.tax_amount = sub * (item.tax_percentage / 100);
@@ -348,30 +376,17 @@ function csvConfirmAndLoad() {
             const sub = item.quantity * item.purchase_price;
             item.total = sub + (item.tax_amount || 0);
         }
-        if (!item.total_units) {
-            item.total_units = (item.quantity + item.free_quantity) * (item.conversion_factor || 1);
-        }
-        if (!item.sale_price || item.sale_price === 0) {
-            item.sale_price = item.mrp || item.purchase_price;
-        }
 
         items.push(item);
     });
 
-    // 4. Render & Save
     renderTable();
     calculateSummary();
 
-    // 5. Close modal
     bootstrap.Modal.getInstance(document.getElementById('csvImportModal')).hide();
     resetCsvImportModal();
 
-    showToast(`${_csvParsedItems.length} items loaded from CSV ✓`, 'success');
-
-    setTimeout(() => {
-        const tableEl = document.getElementById('purchaseTable');
-        if (tableEl) tableEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 300);
+    showToast(`${items.length} items loaded from CSV ✓`, 'success');
 }
 
 // ── Helpers ──────────────────────────────────
@@ -402,10 +417,9 @@ function resetCsvImportModal() {
     _csvSetStep(1);
 }
 
-// Reset when modal closes via backdrop/X
 document.getElementById('csvImportModal').addEventListener('hidden.bs.modal', resetCsvImportModal);
 
-// ── Searchable Supplier Dropdown (CSV modal) ──
+// Supplier Dropdown
 (function() {
     const sel      = document.getElementById('csvSupplierSelect');
     const input    = document.getElementById('csvSupplierSearchInput');
@@ -489,7 +503,6 @@ document.getElementById('csvImportModal').addEventListener('hidden.bs.modal', re
         if (wrap && !wrap.contains(e.target)) dropdown.style.display = 'none';
     });
 
-    // Clear search input on modal reset
     const _origReset = resetCsvImportModal;
     window.resetCsvImportModal = function() {
         _origReset();
@@ -498,3 +511,22 @@ document.getElementById('csvImportModal').addEventListener('hidden.bs.modal', re
         dropdown.style.display = 'none';
     };
 })();
+
+// ── Expose functions called from inline HTML onclick/onchange ───────────
+window.csvDragOver           = csvDragOver;
+window.csvDragLeave          = csvDragLeave;
+window.csvDrop               = csvDrop;
+window.csvFileSelected       = csvFileSelected;
+window.csvClearFile          = csvClearFile;
+window.csvGoToStep1          = csvGoToStep1;
+window.submitCsvParse        = submitCsvParse;
+window.csvConfirmAndLoad     = csvConfirmAndLoad;
+window.csvClearAll           = csvClearAll;
+window._csvUpdateItem        = _csvUpdateItem;
+window._csvRecalcRow         = _csvRecalcRow;
+window._csvRefreshTotals     = _csvRefreshTotals;
+window._csvRemoveRow         = _csvRemoveRow;
+// Note: window.resetCsvImportModal is already set above (wrapped version
+// that also clears the supplier search input) — don't overwrite it here.
+
+})(); // ← closes the top-level IIFE opened at the start of this file
