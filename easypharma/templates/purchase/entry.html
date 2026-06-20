@@ -100,31 +100,15 @@
                         </div>
                         <!-- Expiry -->
                         <div>
-                            <label class="ep-label">Expiry (MM/YYYY)</label>
+                            <label class="ep-label">Expiry</label>
                             <div class="expiry-split-wrap" id="expiryWrapper">
-                                <select id="itemExpiryMonth" class="ep-input expiry-month-select">
-                                    <option value="">MM</option>
-                                    <option value="01">01 Jan</option>
-                                    <option value="02">02 Feb</option>
-                                    <option value="03">03 Mar</option>
-                                    <option value="04">04 Apr</option>
-                                    <option value="05">05 May</option>
-                                    <option value="06">06 Jun</option>
-                                    <option value="07">07 Jul</option>
-                                    <option value="08">08 Aug</option>
-                                    <option value="09">09 Sep</option>
-                                    <option value="10">10 Oct</option>
-                                    <option value="11">11 Nov</option>
-                                    <option value="12">12 Dec</option>
-                                </select>
-                                <span class="expiry-sep">/</span>
-                                <input type="text" id="itemExpiryYear" class="ep-input expiry-year-input"
-                                    placeholder="YYYY" maxlength="4" inputmode="numeric"
-                                    oninput="this.value=this.value.replace(/\D/g,'').slice(0,4)"
-                                    onblur="validateExpiryYear(this)">
+                                <input type="text" id="itemExpiryInput" class="ep-input"
+                                    placeholder="e.g. 01-27 or 2027-01"
+                                    maxlength="10" autocomplete="off"
+                                    inputmode="numeric">
                             </div>
-                            <input type="hidden" id="itemExpiry">
-                            <div id="expiryHint" class="expiry-hint-text" style="display:none;"></div>
+                            <input type="hidden" id="itemExpiry"> <!-- YYYY-MM format for backend -->
+                            <div id="expiryHint" class="expiry-hint-text small text-muted mt-1"></div>
                         </div>
                         <!-- Qty -->
                         <div><label class="ep-label">Qty (Packs)</label><input type="number" id="itemQty" class="ep-input" value="1" min="1"></div>
@@ -592,15 +576,36 @@
     let searchSelectedIndex = -1;
     let batchSelectedIndex = -1;
 
-    function validateExpiryYear(el) {
-        const y = el.value;
-        if (y.length > 0 && y.length < 4) {
-            el.classList.add('is-invalid');
-            el.title = 'Enter full 4-digit year, e.g. 2026';
-        } else {
-            el.classList.remove('is-invalid');
-            el.title = '';
+    // Parse a free-typed expiry string into {month, year} or null if invalid/incomplete.
+    // Accepts: MM-YY, MM/YY, MM-YYYY, MM/YYYY, YYYY-MM, YYYY/MM
+    function parseExpiryInput(raw) {
+        const v = (raw || '').trim();
+        if (!v) return null;
+
+        // YYYY-MM or YYYY/MM (year first)
+        let m = v.match(/^(\d{4})[-\/](\d{1,2})$/);
+        if (m) {
+            const year = parseInt(m[1], 10);
+            const month = parseInt(m[2], 10);
+            if (month >= 1 && month <= 12) return { month, year };
+            return null;
         }
+
+        // MM-YY, MM/YY, MM-YYYY, MM/YYYY (month first)
+        m = v.match(/^(\d{1,2})[-\/](\d{2}|\d{4})$/);
+        if (m) {
+            const month = parseInt(m[1], 10);
+            let year = parseInt(m[2], 10);
+            if (month < 1 || month > 12) return null;
+            if (m[2].length === 2) year += 2000; // 2-digit year -> 2000s
+            return { month, year };
+        }
+
+        return null;
+    }
+
+    function formatExpiryDisplay(month, year) {
+        return String(month).padStart(2, '0') + '-' + String(year).slice(-2);
     }
 
     function showToast(msg, type = 'success') {
@@ -754,9 +759,11 @@
                     let exp = batch.expiry_date.substring(0,7); // YYYY-MM
                     const parts = exp.split('-');
                     if (parts.length === 2) {
-                        document.getElementById('itemExpiryMonth').value = parts[1];
-                        document.getElementById('itemExpiryYear').value = parts[0];
+                        const year = parseInt(parts[0], 10);
+                        const month = parseInt(parts[1], 10);
+                        document.getElementById('itemExpiryInput').value = formatExpiryDisplay(month, year);
                         document.getElementById('itemExpiry').value = exp;
+                        syncExpiryHidden();
                     }
                 }
                 if (batch.mrp) document.getElementById('itemMrp').value = batch.mrp;
@@ -1210,49 +1217,60 @@
             if (!batchInput.contains(e.target) && !suggestionsDiv.contains(e.target)) suggestionsDiv.classList.remove('show');
         });
 
-        // Sync split expiry fields → hidden itemExpiry whenever either changes
+        // Sync free-typed expiry input → hidden itemExpiry (YYYY-MM) whenever it changes
         function syncExpiryHidden() {
-            const m = document.getElementById('itemExpiryMonth').value;
-            const y = document.getElementById('itemExpiryYear').value;
+            const input = document.getElementById('itemExpiryInput');
             const hint = document.getElementById('expiryHint');
-            if (m && y && y.length === 4) {
-                const val = `${y}-${m}`;
+            const parsed = parseExpiryInput(input.value);
+
+            if (parsed) {
+                const { month, year } = parsed;
+                const val = `${year}-${String(month).padStart(2, '0')}`;
                 document.getElementById('itemExpiry').value = val;
-                // Warn if expiry is in the past
-                const expDate = new Date(parseInt(y), parseInt(m) - 1, 1);
-                const today = new Date(); today.setDate(1); today.setHours(0,0,0,0);
+                input.classList.remove('is-invalid');
+
+                // Warn if expiry is in the past / expiring soon
+                const expDate = new Date(year, month - 1, 1);
+                const today = new Date(); today.setDate(1); today.setHours(0, 0, 0, 0);
                 if (expDate < today) {
                     hint.style.color = '#dc3545';
                     hint.textContent = '⚠ Expiry is in the past!';
                     hint.style.display = 'block';
-                } else if ((expDate - today) / (1000*60*60*24*30) < 3) {
+                } else if ((expDate - today) / (1000 * 60 * 60 * 24 * 30) < 3) {
                     hint.style.color = '#fd7e14';
                     hint.textContent = '⚠ Expires within 3 months';
                     hint.style.display = 'block';
                 } else {
                     hint.style.display = 'none';
                 }
-                // Auto-advance to Qty after year is filled
+                return true;
             } else {
                 document.getElementById('itemExpiry').value = '';
-                hint.style.display = 'none';
+                if (input.value.trim()) {
+                    // something typed but not yet a valid/complete date
+                    hint.style.color = '#dc3545';
+                    hint.textContent = 'Format: MM-YY or YYYY-MM (e.g. 01-27 or 2027-01)';
+                    hint.style.display = 'block';
+                    input.classList.add('is-invalid');
+                } else {
+                    hint.style.display = 'none';
+                    input.classList.remove('is-invalid');
+                }
+                return false;
             }
         }
-        document.getElementById('itemExpiryMonth').addEventListener('change', () => {
+
+        document.getElementById('itemExpiryInput').addEventListener('input', () => {
             syncExpiryHidden();
-            // Auto-focus year after month selected
-            if (document.getElementById('itemExpiryMonth').value) {
-                document.getElementById('itemExpiryYear').focus();
-                document.getElementById('itemExpiryYear').select();
-            }
         });
-        document.getElementById('itemExpiryYear').addEventListener('input', () => {
-            syncExpiryHidden();
-            // Auto-advance to Qty when 4-digit year entered
-            if (document.getElementById('itemExpiryYear').value.length === 4) {
-                document.getElementById('itemQty').focus();
-                document.getElementById('itemQty').select();
+
+        document.getElementById('itemExpiryInput').addEventListener('blur', () => {
+            // normalize the visible text to MM-YY once a valid date is recognized
+            const parsed = parseExpiryInput(document.getElementById('itemExpiryInput').value);
+            if (parsed) {
+                document.getElementById('itemExpiryInput').value = formatExpiryDisplay(parsed.month, parsed.year);
             }
+            syncExpiryHidden();
         });
 
         // ══════════════════════════════════════════════════════════
@@ -1281,7 +1299,7 @@
 
         // ── Product form: Enter moves to next enabled field ──
         const formInputs = [
-            'productSearch', 'itemBatch', 'itemExpiryMonth', 'itemExpiryYear',
+            'productSearch', 'itemBatch', 'itemExpiryInput',
             'itemQty', 'itemFreeQty', 'itemPrice', 'itemTax', 'itemMrp'
         ];
 
@@ -1315,21 +1333,21 @@
                         return; // let existing keydown handler select it
                     }
                     e.preventDefault();
-                    document.getElementById('itemExpiryMonth').focus();
+                    const expEl = document.getElementById('itemExpiryInput');
+                    expEl.focus(); expEl.select();
                     return;
                 }
 
-                // Expiry month select: on Enter move to year
-                if (id === 'itemExpiryMonth') {
+                // Expiry: on Enter, validate & normalize, then move to Qty
+                if (id === 'itemExpiryInput') {
                     e.preventDefault();
-                    const yearEl = document.getElementById('itemExpiryYear');
-                    yearEl.focus(); yearEl.select();
-                    return;
-                }
-
-                // Expiry year: on Enter move to Qty
-                if (id === 'itemExpiryYear') {
-                    e.preventDefault();
+                    const valid = syncExpiryHidden();
+                    if (!valid) {
+                        showToast('Enter a valid expiry, e.g. 01-27 or 2027-01', 'error');
+                        return;
+                    }
+                    const parsed = parseExpiryInput(document.getElementById('itemExpiryInput').value);
+                    document.getElementById('itemExpiryInput').value = formatExpiryDisplay(parsed.month, parsed.year);
                     const qtyEl = document.getElementById('itemQty');
                     qtyEl.focus(); qtyEl.select();
                     return;
@@ -1490,8 +1508,8 @@
     function resetAddForm() {
         document.getElementById('itemBatch').value = '';
         document.getElementById('itemExpiry').value = '';
-        document.getElementById('itemExpiryMonth').value = '';
-        document.getElementById('itemExpiryYear').value = '';
+        document.getElementById('itemExpiryInput').value = '';
+        document.getElementById('itemExpiryInput').classList.remove('is-invalid');
         document.getElementById('expiryHint').style.display = 'none';
         document.getElementById('itemQty').value = '1';
         document.getElementById('itemFreeQty').value = '0';
