@@ -292,6 +292,7 @@ class PrintInvoiceView(LoginRequiredMixin, View):
         if invoice.patient_address:
             lines.append(f"Address  : {invoice.patient_address}")
         lines.append(f"Pres.By  : {invoice.doctor_name or 'SELF'}")
+        lines.append("-" * 80)
 
         # =========================
         # ITEMS HEADER
@@ -336,13 +337,11 @@ class PrintInvoiceView(LoginRequiredMixin, View):
         lines.append(f"No.of Items : {invoice.items.count()}/{total_qty}")
         
         # Row 1 of footer
-        footer_line1 = f"{dl1:<28} {phone:<24} Item Total :{invoice.sub_total:>7.2f}"
+        footer_line1 = f"{dl1:<28} {phone:<24}Item Total :{invoice.sub_total:>7.2f}"
         lines.append(footer_line1)
         
-        # # Row 2 of footer
-        # footer_line2 = f"{dl1:<53} Discount   :{invoice.discount_amount:>7.2f}"
-        # lines.append(footer_line2)
-
+        footer_line2 = f"{' ':>53} GST Amount :{invoice.tax_amount:>7.2f}"
+        lines.append(footer_line2)
         # Row 3 of footer
         footer_line3 = f"{' ':>53} NET AMOUNT :{invoice.total_amount:>7.2f}"
         lines.append(footer_line3)
