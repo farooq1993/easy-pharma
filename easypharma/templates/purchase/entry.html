@@ -1762,12 +1762,18 @@
         const endpoint = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
 
         try {
-            const response = await fetch(endpoint, { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken}, body:JSON.stringify(data) });
-            const result = await response.json();
-            if(result.success) {
-                showPurchaseConfirm(result);
+            if (!navigator.onLine && typeof OfflineSync !== 'undefined') {
+                const fakeId = 'OFF_PUR_' + Date.now();
+                await OfflineSync.queueRequest(OfflineSync.purchaseStore, endpoint, data, 'Purchase saved offline!');
+                showPurchaseConfirm({ success: true, invoice_id: fakeId });
             } else {
-                showToast('Error: '+ (result.error||'server'),'error');
+                const response = await fetch(endpoint, { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken}, body:JSON.stringify(data) });
+                const result = await response.json();
+                if(result.success) {
+                    showPurchaseConfirm(result);
+                } else {
+                    showToast('Error: '+ (result.error||'server'),'error');
+                }
             }
         } catch (err) {
             showToast('Error: ' + err.message, 'error');

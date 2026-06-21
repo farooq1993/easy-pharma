@@ -229,28 +229,27 @@ class POSView(LoginRequiredMixin,View):
                         raise Exception(f"Insufficient stock for {product.product_name}")
                     batch.save()
                 
+                # Calculate next invoice number
+                count = SaleInvoice.objects.filter(tenant=request.tenant).count()
+                next_inv = f"INV-{tenant_id}-{count + 1}"
+
+                # ── Invalidate caches after successful sale ──
+                try:
+                    invalidate_pos_cache(tenant_id)
+                    from easypharma.views.reports import invalidate_daily_sale_cache, invalidate_stock_cache
+                    invalidate_daily_sale_cache(tenant_id)
+                    invalidate_stock_cache(tenant_id)
+                except Exception:
+                    pass  # Cache invalidation failure should never break the sale flow
+
                 return JsonResponse({
                     'success': True, 
                     'invoice_id': invoice.id, 
-                    'invoice_number': invoice.invoice_number
+                    'invoice_number': invoice.invoice_number,
+                    'next_invoice_number': next_inv
                 })
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
-
-        # ── Invalidate caches after successful sale ──
-        try:
-            invalidate_pos_cache(request.tenant.id)
-            from easypharma.views.reports import invalidate_daily_sale_cache, invalidate_stock_cache
-            invalidate_daily_sale_cache(request.tenant.id)
-            invalidate_stock_cache(request.tenant.id)
-        except Exception:
-            pass  # Cache invalidation failure should never break the sale flow
-
-        return JsonResponse({
-            'success': True,
-            'invoice_id': invoice.id,
-            'invoice_number': invoice.invoice_number
-        })
 
 class PrintInvoiceView(LoginRequiredMixin, View):
     template_name = 'sales/print_invoice.html'
@@ -282,68 +281,48 @@ class PrintInvoiceView(LoginRequiredMixin, View):
         # =========================
         # HEADER
         # =========================
-        #lines.append(shop_name.center(WIDTH))
+        invoice_date = invoice.created_at.strftime('%d/%m/%Y')
+        lines.append(f"                                CASH MEMO NO.: {invoice.invoice_number} Date: {invoice_date}")
         lines.append(invoice.tenant.pharmacy_name.upper())
-        lines.append(invoice.tenant.address or "")
-        lines.append(f"Phone : {invoice.tenant.phone or ''}")
-        lines.append(f"D.L.No : {invoice.tenant.license_number or ''}")
-        lines.append("")
-
-        lines.append(f"CASH BILL NO : {invoice.invoice_number}".ljust(50)+ f"DATE : {invoice.created_at.strftime('%d/%m/%Y')}")
-
-        lines.append("=" * 80)
-
-        lines.append(
-            f"Patient Name : {invoice.patient_name or 'Cash Customer'}"
-        )
-
-        if invoice.patient_address:
-            lines.append(
-                f"Address      : {invoice.patient_address}"
-            )
-
-        lines.append(
-            f"Payment Mode : {invoice.payment_mode}"
-        )
-
+        if invoice.tenant.address:
+            lines.append(invoice.tenant.address.upper())
         lines.append("-" * 80)
+
+        lines.append(f"Pt.Name  : {invoice.patient_name or 'CASH CUSTOMER'}")
+        if invoice.patient_address:
+            lines.append(f"Address  : {invoice.patient_address}")
+        lines.append(f"Pres.By  : {invoice.doctor_name or 'SELF'}")
 
         # =========================
         # ITEMS HEADER
         # =========================
-
         lines.append(
-            f"{'PRODUCT':<35}"
-            f"{'BATCH':<12}"
-            f"{'EXP':<8}"
-            f"{'QTY':>5}"
-            f"{'VALUE':>10}"
+            f"{'PRODUCTS':<40}"
+            f"{'MFG':<7}"
+            f"{'BATCH NO.':<11}"
+            f"{'EXP.DT':<9}"
+            f"{'QTY':>4}"
+            f"{'VALUE':>9}"
         )
-
-        lines.append("-" * 80)
 
         # =========================
         # ITEMS
         # =========================
-
+        total_qty = 0
         for item in invoice.items.all():
-
-            product = (item.product.product_name or "")[:35]
-
-            batch = (item.batch_number or "")[:12]
-
-            exp = (
-                item.expiry_date.strftime("%m/%y")
-                if item.expiry_date
-                else ""
-            )
-
+            total_qty += item.quantity
+            product_name = (item.product.product_name or "")[:38].upper()
+            company_abbr = (item.product.compny_name.sht_name if item.product.compny_name and item.product.compny_name.sht_name else (item.product.company.name[:5] if item.product.company else ""))[:6].upper()
+            batch = (item.batch_number or "")[:10]
+            exp = item.expiry_date.strftime("%m/%y") if item.expiry_date else ""
+            
             lines.append(
-                f"{product:<35}"
-                f"{batch:<12}"
-                f"{exp:<8}"
-                f"{item.quantity:>5}"
-                f"{float(item.total_amount):>10.2f}"
+                f"{product_name:<40}"
+                f"{company_abbr:<7}"
+                f"{batch:<11}"
+                f"{exp:<9}"
+                f"{item.quantity:>4}"
+                f"{float(item.total_amount):>9.2f}"
             )
 
         lines.append("-" * 80)
@@ -351,42 +330,24 @@ class PrintInvoiceView(LoginRequiredMixin, View):
         # =========================
         # FOOTER
         # =========================
+        dl1 = f"D.L NO:{invoice.tenant.license_number or ''}"
+        phone = f"{invoice.tenant.phone or ''}"
 
-        lines.append(
-            f"No Of Items : {invoice.items.count()}"
-        )
+        lines.append(f"No.of Items : {invoice.items.count()}/{total_qty}")
+        
+        # Row 1 of footer
+        footer_line1 = f"{dl1:<28} {phone:<24} Item Total :{invoice.sub_total:>7.2f}"
+        lines.append(footer_line1)
+        
+        # Row 2 of footer
+        footer_line2 = f"{dl1:<53} Discount   :{invoice.discount_amount:>7.2f}"
+        lines.append(footer_line2)
 
-        lines.append("")
+        # Row 3 of footer
+        footer_line3 = f"{' ':>53} NET AMOUNT :{invoice.total_amount:>7.2f}"
+        lines.append(footer_line3)
 
-        lines.append(
-            f"Item Total : {invoice.sub_total:.2f}"
-        )
-
-        lines.append(
-            f"GST Amount : {invoice.tax_amount:.2f}"
-        )
-
-        lines.append(
-            f"Discount   : {invoice.discount_amount:.2f}"
-        )
-
-        lines.append(
-            f"NET AMOUNT : {invoice.total_amount:.2f}"
-        )
-
-        lines.append("-" * 65)
-
-        lines.append(
-            f"Subject to {invoice.tenant.city} Jurisdiction only."
-        )
-
-        lines.append("")
-        lines.append("Pharmacist Sign :")
-        lines.append("")
-        lines.append(
-            "** Goods once sold will not be taken back **"
-        )
-        print("======",lines)
+        lines.append("-" * 80)
         bill_text = "\n".join(lines)
 
         return render(

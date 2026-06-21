@@ -99,7 +99,10 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <a href="#" class="btn btn-sm btn-outline-danger" onclick="deleteReminder({{ reminder.id }})">
+                                <a href="#" class="btn btn-sm btn-outline-success me-1" onclick="sendWhatsAppReminder('{{ reminder.patient_name }}', '{{ reminder.reminder_date|date:'d M, Y' }}')" title="Send WhatsApp">
+                                    <i class="fab fa-whatsapp"></i>
+                                </a>
+                                <a href="#" class="btn btn-sm btn-outline-danger" onclick="deleteReminder({{ reminder.id }})" title="Delete">
                                     <i class="fas fa-trash"></i>
                                 </a>
                             </td>
@@ -203,6 +206,23 @@ function deleteReminder(id) {
             alert(data.error);
         }
     });
+}
+
+function sendWhatsAppReminder(patientName, dateStr) {
+    let phone = prompt("Enter 10-digit WhatsApp number for " + patientName + ":", "");
+    if (!phone) return;
+    
+    // Auto prefix 91 if it's a 10 digit Indian number
+    if(phone.length === 10) phone = '91' + phone;
+
+    let msg = `*EASY PHARMA - PRESCRIPTION REMINDER*\n\n`;
+    msg += `Hello ${patientName},\n`;
+    msg += `This is a friendly reminder to refill your prescription medicines.\n`;
+    msg += `Please visit our pharmacy or contact us to restock.\n\n`;
+    msg += `Stay Healthy!`;
+    
+    const encodedMsg = encodeURIComponent(msg);
+    window.open(`https://wa.me/${phone}?text=${encodedMsg}`, '_blank');
 }
 </script>
 {% endblock %}
