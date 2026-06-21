@@ -282,10 +282,12 @@ class PrintInvoiceView(LoginRequiredMixin, View):
         # HEADER
         # =========================
         invoice_date = invoice.created_at.strftime('%d/%m/%Y')
-        lines.append(f"                                CASH MEMO NO.: {invoice.invoice_number} Date: {invoice_date}")
         lines.append(invoice.tenant.pharmacy_name.upper())
         if invoice.tenant.address:
             lines.append(invoice.tenant.address.upper())
+            lines.append(f"D.L number: {invoice.tenant.license_number}")
+            lines.append(f"Phone: {invoice.tenant.phone}")
+        lines.append(f"                                       CASH MEMO NO:{invoice.invoice_number} Date: {invoice_date}")
         lines.append("-" * 80)
 
         lines.append(f"Pt.Name  : {invoice.patient_name or 'CASH CUSTOMER'}")
@@ -299,7 +301,7 @@ class PrintInvoiceView(LoginRequiredMixin, View):
         # =========================
         lines.append(
             f"{'PRODUCTS':<40}"
-            f"{'MFG':<7}"
+            f"{'MFG':<6}"
             f"{'BATCH NO.':<11}"
             f"{'EXP.DT':<9}"
             f"{'QTY':>4}"
@@ -331,14 +333,8 @@ class PrintInvoiceView(LoginRequiredMixin, View):
         # =========================
         # FOOTER
         # =========================
-        dl1 = f"D.L NO:{invoice.tenant.license_number or ''}"
-        phone = f"{invoice.tenant.phone or ''}"
-
         lines.append(f"No.of Items : {invoice.items.count()}/{total_qty}")
         
-        # Row 1 of footer
-        footer_line1 = f"{dl1:<28} {phone:<24} Item Total :{invoice.sub_total:>7.2f}"
-        lines.append(footer_line1)
 
         # Row 2 of footer — GST/Tax
         footer_line2 = f"{' ':>53} GST Amount :{invoice.tax_amount:>7.2f}"
