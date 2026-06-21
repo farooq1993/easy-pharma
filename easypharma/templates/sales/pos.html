@@ -484,6 +484,31 @@
     </div>
 </div>
 
+<!-- Success Checkout Modal -->
+<div class="modal fade" id="checkoutSuccessModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 text-center p-4">
+            <div class="mb-3">
+                <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
+            </div>
+            <h4 class="fw-bold mb-2">Bill Generated!</h4>
+            <p class="text-muted mb-4">Invoice <span id="successInvoiceNum" class="fw-bold text-dark"></span> saved successfully.</p>
+            
+            <div class="d-grid gap-3">
+                <button type="button" class="btn btn-primary btn-lg rounded-pill fw-bold" id="btnSuccessPrint">
+                    <i class="fas fa-print me-2"></i> Print Bill (Dot Matrix)
+                </button>
+                <button type="button" class="btn btn-success btn-lg rounded-pill fw-bold" id="btnSuccessWhatsApp">
+                    <i class="fab fa-whatsapp me-2"></i> Send WhatsApp
+                </button>
+                <button type="button" class="btn btn-outline-secondary rounded-pill fw-bold mt-2" id="btnSuccessNewSale">
+                    <i class="fas fa-plus me-2"></i> New Sale
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     let cart = [];
     let searchSelectedIndex = -1;
@@ -1138,16 +1163,25 @@
             tax_id: document.getElementById('quickTax').value
         };
         if (!data.name) return alert('Name is required');
-        const response = await fetch('/api/products/quick-add/', {
-            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
-            body: JSON.stringify(data)
-        });
-        const result = await response.json();
-        if (result.success) {
+
+        if (!navigator.onLine && typeof OfflineSync !== 'undefined') {
+            await OfflineSync.queueRequest(OfflineSync.masterStore, '/api/products/quick-add/', data, 'Product queued offline!');
             bootstrap.Modal.getInstance(document.getElementById('quickAddModal')).hide();
-            document.getElementById('productSearch').value = result.name;
-            document.getElementById('productSearch').dispatchEvent(new Event('input'));
-        } else { alert('Error: ' + result.error); }
+            document.getElementById('productSearch').value = data.name;
+            // Note: Since it's offline, the actual search won't return it yet, but we inform the user.
+            alert('Product saved offline. It will be available for search once internet reconnects and syncs.');
+        } else {
+            const response = await fetch('/api/products/quick-add/', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+                body: JSON.stringify(data)
+            });
+            const result = await response.json();
+            if (result.success) {
+                bootstrap.Modal.getInstance(document.getElementById('quickAddModal')).hide();
+                document.getElementById('productSearch').value = result.name;
+                document.getElementById('productSearch').dispatchEvent(new Event('input'));
+            } else { alert('Error: ' + result.error); }
+        }
     }
 
     function updateQty(index, val) {
@@ -1326,14 +1360,138 @@
         };
 
         try {
-            const response = await fetch('/pos/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' }, body: JSON.stringify(data) });
-            const result = await response.json();
-            if (result.success) {
-                window.open(`/pos/print/${result.invoice_id}/`, '_blank');
-                alert('Bill generated successfully!');
-                window.location.reload();
+            if (!navigator.onLine && typeof OfflineSync !== 'undefined') {
+                // Save offline
+                const fakeInvoiceId = 'OFFLINE_' + Date.now();
+                await OfflineSync.queueRequest(OfflineSync.salesStore, '/pos/', data, 'Sale saved offline!');
+                
+                // Show offline success modal
+                document.getElementById('successInvoiceNum').textContent = "Pending Sync";
+                document.getElementById('btnSuccessPrint').style.display = 'none'; // Cannot print dot matrix offline without server
+                
+                document.getElementById('btnSuccessWhatsApp').onclick = () => {
+                    let phone = data.patient_phone;
+                    if (!phone || phone.length < 10) {
+                        phone = prompt("Enter patient's 10-digit WhatsApp number:", "");
+                        if (!phone) return;
+                    }
+                    if(phone.length === 10) phone = '91' + phone;
+                    let msg = `*EASY PHARMA - INVOICE (Offline)*\n`;
+                    msg += `Patient: ${data.patient_name || 'Cash Customer'}\n\n`;
+                    msg += `*ITEMS:*\n`;
+                    cart.forEach(item => {
+                        msg += `- ${item.name} (x${item.quantity}) = ₹${(item.price * item.quantity).toFixed(2)}\n`;
+                    });
+                    msg += `\n*Total Amount: ₹${data.total_amount.toFixed(2)}*\n\n`;
+                    msg += `Thank you for your visit!\n`;
+                    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+                };
+                document.getElementById('btnSuccessNewSale').onclick = () => {
+                    // For offline, we don't know the true next invoice number from server, 
+                    // so we just append a star to indicate offline mode or leave it as pending.
+                    resetPOS("Pending Sync*");
+                };
+
+                const successModalEl = document.getElementById('checkoutSuccessModal');
+                const successModal = new bootstrap.Modal(successModalEl);
+                successModal.show();
+                
+                successModalEl.addEventListener('shown.bs.modal', function () {
+                    const modalButtons = [
+                        document.getElementById('btnSuccessPrint'),
+                        document.getElementById('btnSuccessWhatsApp'),
+                        document.getElementById('btnSuccessNewSale')
+                    ].filter(b => b && window.getComputedStyle(b).display !== 'none');
+                    
+                    if (modalButtons.length > 0) {
+                        let activeBtnIndex = 0;
+                        modalButtons[0].focus();
+                        
+                        successModalEl.onkeydown = (e) => {
+                            if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+                                e.preventDefault();
+                                activeBtnIndex = (activeBtnIndex + 1) % modalButtons.length;
+                                modalButtons[activeBtnIndex].focus();
+                            } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                                e.preventDefault();
+                                activeBtnIndex = (activeBtnIndex - 1 + modalButtons.length) % modalButtons.length;
+                                modalButtons[activeBtnIndex].focus();
+                            }
+                        };
+                    }
+                }, { once: true });
+
             } else {
-                alert('Error: ' + result.error);
+                const response = await fetch('/pos/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' }, body: JSON.stringify(data) });
+                const result = await response.json();
+                if (result.success) {
+                    // Show Success Modal instead of reloading
+                    document.getElementById('successInvoiceNum').textContent = result.invoice_number;
+                    
+                    document.getElementById('btnSuccessPrint').style.display = 'inline-block';
+                    document.getElementById('btnSuccessPrint').onclick = () => {
+                        window.open(`/pos/print/${result.invoice_id}/`, '_blank');
+                        setTimeout(() => resetPOS(result.next_invoice_number), 500);
+                    };
+                    
+                    document.getElementById('btnSuccessNewSale').onclick = () => {
+                        resetPOS(result.next_invoice_number);
+                    };
+                    
+                    document.getElementById('btnSuccessWhatsApp').onclick = () => {
+                        let phone = data.patient_phone;
+                        if (!phone || phone.length < 10) {
+                            phone = prompt("Enter patient's 10-digit WhatsApp number:", "");
+                            if (!phone) return;
+                        }
+                        if(phone.length === 10) phone = '91' + phone;
+                        
+                        let msg = `*EASY PHARMA - INVOICE*\n`;
+                        msg += `Invoice No: ${result.invoice_number}\n`;
+                        msg += `Patient: ${data.patient_name || 'Cash Customer'}\n\n`;
+                        
+                        msg += `*ITEMS:*\n`;
+                        cart.forEach(item => {
+                            msg += `- ${item.name} (x${item.quantity}) = ₹${(item.price * item.quantity).toFixed(2)}\n`;
+                        });
+                        msg += `\n*Total Amount: ₹${data.total_amount.toFixed(2)}*\n\n`;
+                        msg += `Thank you for your visit!\n`;
+                        
+                        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+                    };
+
+                    const successModalEl = document.getElementById('checkoutSuccessModal');
+                    const successModal = new bootstrap.Modal(successModalEl);
+                    successModal.show();
+                    
+                    // Keyboard navigation for success modal
+                    successModalEl.addEventListener('shown.bs.modal', function () {
+                        const modalButtons = [
+                            document.getElementById('btnSuccessPrint'),
+                            document.getElementById('btnSuccessWhatsApp'),
+                            document.getElementById('btnSuccessNewSale')
+                        ].filter(b => b && window.getComputedStyle(b).display !== 'none');
+                        
+                        if (modalButtons.length > 0) {
+                            let activeBtnIndex = 0;
+                            modalButtons[0].focus();
+                            
+                            successModalEl.onkeydown = (e) => {
+                                if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+                                    e.preventDefault();
+                                    activeBtnIndex = (activeBtnIndex + 1) % modalButtons.length;
+                                    modalButtons[activeBtnIndex].focus();
+                                } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                                    e.preventDefault();
+                                    activeBtnIndex = (activeBtnIndex - 1 + modalButtons.length) % modalButtons.length;
+                                    modalButtons[activeBtnIndex].focus();
+                                }
+                            };
+                        }
+                    }, { once: true });
+                } else {
+                    alert('Error: ' + result.error);
+                }
             }
         } catch (err) {
             alert('Error: ' + err.message);
@@ -1341,6 +1499,35 @@
             hideLoader();
             if (checkoutBtn) { checkoutBtn.disabled = false; }
         }
+    }
+
+    function resetPOS(nextInvNum) {
+        if (typeof editData !== 'undefined' && editData) {
+            window.location.href = '/pos/';
+            return;
+        }
+
+        const successModalEl = document.getElementById('checkoutSuccessModal');
+        const modal = bootstrap.Modal.getInstance(successModalEl);
+        if(modal) modal.hide();
+
+        cart = [];
+        renderCart();
+        
+        document.getElementById('patientName').value = '';
+        document.getElementById('patientAddress').value = '';
+        document.getElementById('patientPhone').value = '';
+        document.getElementById('doctorName').value = '';
+        document.getElementById('summaryDiscount').value = '0';
+        document.getElementById('summaryDiscountPerc').value = '0';
+        document.getElementById('patientName').classList.remove('is-invalid');
+        document.getElementById('patientPhone').classList.remove('is-invalid');
+        
+        if (nextInvNum) {
+            document.getElementById('runningBillNumber').textContent = nextInvNum;
+        }
+
+        setTimeout(() => document.getElementById('productSearch').focus(), 300);
     }
 </script>
 
@@ -1381,9 +1568,23 @@
     }
     .payment-btn-active {
         border-color: #28a745 !important;
-        background: linear-gradient(135deg, #d4edda, #c3e6cb) !important;
-        color: #155724 !important;
-        box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.2);
+        background: #e8f5e9 !important;
+        color: #28a745 !important;
+        font-weight: 600;
+        box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+    }
+
+    /* Modal Button Focus Highlight */
+    #checkoutSuccessModal .btn:focus {
+        outline: none;
+        box-shadow: 0 0 0 5px rgba(245, 158, 11, 0.5) !important;
+        border-color: #f59e0b !important;
+        transform: scale(1.02);
+        transition: all 0.15s ease-in-out;
+    }
+
+    .toast-container {
+        z-index: 1056;
     }
 
     .w-60 {

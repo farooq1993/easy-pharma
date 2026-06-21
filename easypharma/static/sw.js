@@ -25,9 +25,6 @@ const PRECACHE_ASSETS = [
 
 // URLs whose responses should always come from the network (write operations + dynamic pages)
 const NETWORK_ONLY_PATTERNS = [
-  /\/pos/,              // all POS pages: /pos/, /pos/edit/*, /pos/delete/*, /pos/print/*
-  /\/purchase/,         // purchase entry and related pages
-  /\/entry/,            // purchase entry page
   /\/accounts\//,
   /\/admin\//,
   /\/api\/save/,
