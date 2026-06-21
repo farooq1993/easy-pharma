@@ -458,7 +458,7 @@ class HalfYearlySaleReportView(LoginRequiredMixin,View):
         ).order_by('-quantity_sold')
         
         report_schedules = ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('schedule_name')
-
+        
         context = {
             'half_label': half_label,
             'half': half,
