@@ -337,14 +337,22 @@ class PrintInvoiceView(LoginRequiredMixin, View):
         lines.append(f"No.of Items : {invoice.items.count()}/{total_qty}")
         
         # Row 1 of footer
-        footer_line1 = f"{dl1:<28} {phone:<24}Item Total :{invoice.sub_total:>7.2f}"
+        footer_line1 = f"{dl1:<28} {phone:<24} Item Total :{invoice.sub_total:>7.2f}"
         lines.append(footer_line1)
-        
+
+        # Row 2 of footer — GST/Tax
         footer_line2 = f"{' ':>53} GST Amount :{invoice.tax_amount:>7.2f}"
         lines.append(footer_line2)
-        # Row 3 of footer
-        footer_line3 = f"{' ':>53} NET AMOUNT :{invoice.total_amount:>7.2f}"
-        lines.append(footer_line3)
+
+        # Row 3 of footer — Round Off (agar non-zero hai)
+        round_off = invoice.total_amount - (invoice.sub_total + invoice.tax_amount - invoice.discount_amount)
+        if round_off != 0:
+            footer_line3 = f"{' ':>53} Round Off  :{round_off:>+7.2f}"
+            lines.append(footer_line3)
+
+        # Row 4 of footer — Net Amount
+        footer_line4 = f"{' ':>53} NET AMOUNT :{invoice.total_amount:>7.2f}"
+        lines.append(footer_line4)
 
         lines.append("-" * 80)
         bill_text = "\n".join(lines)
