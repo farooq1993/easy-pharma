@@ -1490,11 +1490,11 @@
                         }
                     }, { once: true });
                 } else {
-                    alert('Error: ' + result.error);
+                    alert('Error whatsapp: ' + result.error);
                 }
             }
         } catch (err) {
-            alert('Error: ' + err.message);
+            alert('Error loader: ' + err.message);
         } finally {
             hideLoader();
             if (checkoutBtn) { checkoutBtn.disabled = false; }

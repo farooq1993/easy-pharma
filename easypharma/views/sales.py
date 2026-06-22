@@ -255,113 +255,103 @@ class PrintInvoiceView(LoginRequiredMixin, View):
     template_name = 'sales/print_invoice.html'
 
     def get(self, request, invoice_id):
-        WIDTH = 80
+        W = 65  # landscape 6x4 pe ~70 chars fit hote hain
         from django.shortcuts import get_object_or_404
         from easypharma.models.print_setup import PrintSetup
 
         invoice = get_object_or_404(
             SaleInvoice.objects.prefetch_related(
-                'items',
-                'items__product'
+                'items', 'items__product'
             ),
             id=invoice_id
         )
 
         if not invoice.tenant and request.tenant:
             invoice.tenant = request.tenant
-
         tenant = invoice.tenant or request.tenant
 
-        ps, _ = PrintSetup.objects.get_or_create(
-            tenant=tenant
-        )
+        ps, _ = PrintSetup.objects.get_or_create(tenant=tenant)
 
         lines = []
-
-        # =========================
-        # HEADER
-        # =========================
+        lines.append("")
         invoice_date = invoice.created_at.strftime('%d/%m/%Y')
-        lines.append(invoice.tenant.pharmacy_name.upper())
+
+        # === HEADER ===
+        lines.append(invoice.tenant.pharmacy_name.upper()[:W])
         if invoice.tenant.address:
-            lines.append(invoice.tenant.address.upper())
-            lines.append(f"D.L number: {invoice.tenant.license_number}")
-            lines.append(f"Phone: {invoice.tenant.phone}")
-        lines.append(f"                                       CASH MEMO NO:{invoice.invoice_number} Date: {invoice_date}")
-        lines.append("-" * 80)
+            lines.append(invoice.tenant.address.upper()[:W])
+        lines.append(f"DL: {invoice.tenant.license_number or ''}  Ph: {invoice.tenant.phone or ''}"[:W])
+        lines.append(f"{'CASH MEMO: ' + invoice.invoice_number + '  Dt: ' + invoice_date:>{W}}")
+        lines.append("-" * W)
 
-        lines.append(f"Pt.Name  : {invoice.patient_name or 'CASH CUSTOMER'}")
+        # === PATIENT ===
+        lines.append(f"Pt  : {invoice.patient_name or 'CASH CUSTOMER'}"[:W])
         if invoice.patient_address:
-            lines.append(f"Address  : {invoice.patient_address}")
-        lines.append(f"Pres.By  : {invoice.doctor_name or 'SELF'}")
-        lines.append("-" * 80)
+            lines.append(f"Addr: {invoice.patient_address}"[:W])
+        lines.append(f"Dr  : {invoice.doctor_name or 'SELF'}"[:W])
+        lines.append("-" * W)
 
-        # =========================
-        # ITEMS HEADER
-        # =========================
+        # === ITEMS HEADER ===
+        # 70 chars: product(32) + mfg(6) + batch(10) + exp(7) + qty(5) + value(10) = 70
         lines.append(
-            f"{'PRODUCTS':<40}"
+            f"{'PRODUCT':<28}"
             f"{'MFG':<6}"
-            f"{'BATCH NO.':<11}"
-            f"{'EXP.DT':<9}"
-            f"{'QTY':>4}"
-            f"{'VALUE':>9}"
+            f"{'BATCH':<9}"
+            f"{'EXP':<6}"
+            f"{'QT':>4}"
+            f"{'VALUE':>10}"
         )
+        lines.append("-" * W)
 
-        # =========================
-        # ITEMS
-        # =========================
+        # === ITEMS ===
         total_qty = 0
         for item in invoice.items.all():
             total_qty += item.quantity
-            product_name = (item.product.product_name or "")[:38].upper()
-            company_abbr = (item.product.compny_name.sht_name if item.product.compny_name and item.product.compny_name.sht_name else (item.product.company.name[:5] if item.product.company else ""))[:6].upper()
+            product_name = (item.product.product_name or "")[:31].upper()
+            company_abbr = ""
+            if item.product.compny_name and item.product.compny_name.sht_name:
+                company_abbr = item.product.compny_name.sht_name[:6].upper()
+            elif item.product.company:
+                company_abbr = item.product.company.name[:6].upper()
             batch = (item.batch_number or "")[:10]
             exp = item.expiry_date.strftime("%m/%y") if item.expiry_date else ""
-            
+
             lines.append(
-                f"{product_name:<40}"
-                f"{company_abbr:<7}"
-                f"{batch:<11}"
-                f"{exp:<9}"
+                f"{product_name:<28}"
+                f"{company_abbr:<6}"
+                f"{batch:<9}"
+                f"{exp:<6}"
                 f"{item.quantity:>4}"
-                f"{float(item.total_amount):>9.2f}"
+                f"{float(item.total_amount):>10.2f}"
             )
 
-        lines.append("-" * 80)
+        lines.append("-" * W)
 
-        # =========================
-        # FOOTER
-        # =========================
-        lines.append(f"No.of Items : {invoice.items.count()}/{total_qty}")
-        
+        # === FOOTER ===
+        lines.append(f"Items: {invoice.items.count()}  Qty: {total_qty}")
+        lines.append("-" * W)
 
-        # Row 2 of footer — GST/Tax
-        footer_line2 = f"{' ':>53} GST Amount :{invoice.tax_amount:>7.2f}"
-        lines.append(footer_line2)
+        # Amounts simple — left side khali, right side values
+        lines.append(f"{'Sub Total :':<20}{invoice.sub_total:>10.2f}")
+        lines.append(f"{'GST Amount:':<20}{invoice.tax_amount:>10.2f}")
 
-        # Row 3 of footer — Round Off (agar non-zero hai)
-        round_off = invoice.total_amount - (invoice.sub_total + invoice.tax_amount - invoice.discount_amount)
-        if round_off != 0:
-            footer_line3 = f"{' ':>53} Round Off  :{round_off:>+7.2f}"
-            lines.append(footer_line3)
+        round_off = invoice.total_amount - (
+            invoice.sub_total + invoice.tax_amount - invoice.discount_amount
+        )
+        if abs(round_off) >= 0.01:
+            lines.append(f"{'Round Off :':<20}{round_off:>+10.2f}")
 
-        # Row 4 of footer — Net Amount
-        footer_line4 = f"{' ':>53} NET AMOUNT :{invoice.total_amount:>7.2f}"
-        lines.append(footer_line4)
+        lines.append(f"{'NET AMOUNT:':<20}{invoice.total_amount:>10.2f}")
+        lines.append("-" * W)
 
-        lines.append("-" * 80)
         bill_text = "\n".join(lines)
-
+       
         return render(
             request,
             self.template_name,
-            {
-                'invoice': invoice,
-                'ps': ps,
-                'bill_text': bill_text,
-            }
+            {'invoice': invoice, 'ps': ps, 'bill_text': bill_text}
         )
+        
 
 # class PrintInvoiceView(LoginRequiredMixin,View):
 #     template_name = 'sales/print_invoice.html'
