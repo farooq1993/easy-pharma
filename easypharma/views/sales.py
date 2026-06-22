@@ -309,10 +309,11 @@ class PrintInvoiceView(LoginRequiredMixin, View):
             total_qty += item.quantity
             product_name = (item.product.product_name or "")[:31].upper()
             company_abbr = ""
-            if item.product.compny_name and item.product.compny_name.sht_name:
-                company_abbr = item.product.compny_name.sht_name[:6].upper()
-            elif item.product.company:
-                company_abbr = item.product.company.name[:6].upper()
+            if item.product.compny_name:
+                if item.product.compny_name.sht_name:
+                    company_abbr = item.product.compny_name.sht_name[:6].upper()
+                elif item.product.compny_name.company_name:
+                    company_abbr = item.product.compny_name.company_name[:6].upper()
             batch = (item.batch_number or "")[:10]
             exp = item.expiry_date.strftime("%m/%y") if item.expiry_date else ""
 
