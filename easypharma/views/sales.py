@@ -371,12 +371,58 @@ class PrintInvoiceView(LoginRequiredMixin, View):
 #         ps, _ = PrintSetup.objects.get_or_create(tenant=tenant)
 #         return render(request, self.template_name, {'invoice': invoice, 'ps': ps})
 
-class SaleListView(LoginRequiredMixin,View):
+class SaleListView(LoginRequiredMixin, View):
     template_name = 'sales/list.html'
+    PAGE_SIZE = 20
 
     def get(self, request):
-        invoices = SaleInvoice.objects.filter(tenant=request.tenant).order_by('-created_at')
-        return render(request, self.template_name, {'invoices': invoices})
+        qs = SaleInvoice.objects.filter(tenant=request.tenant).order_by('-created_at')
+
+        # ── Filters ──────────────────────────────────────────────
+        q = request.GET.get('q', '').strip()
+        date_from = request.GET.get('date_from', '').strip()
+        date_to   = request.GET.get('date_to', '').strip()
+        payment   = request.GET.get('payment', '').strip()
+
+        if q:
+            qs = qs.filter(
+                Q(patient_name__icontains=q) |
+                Q(patient_phone__icontains=q) |
+                Q(invoice_number__icontains=q) |
+                Q(doctor_name__icontains=q)
+            )
+        if date_from:
+            qs = qs.filter(created_at__date__gte=date_from)
+        if date_to:
+            qs = qs.filter(created_at__date__lte=date_to)
+        if payment:
+            qs = qs.filter(payment_mode=payment)
+
+        # ── Totals for filtered set ───────────────────────────────
+        from django.db.models import Sum as DbSum
+        totals = qs.aggregate(
+            total_revenue=DbSum('total_amount'),
+            total_tax=DbSum('tax_amount')
+        )
+
+        # ── Pagination ───────────────────────────────────────────
+        from django.core.paginator import Paginator
+        paginator = Paginator(qs, self.PAGE_SIZE)
+        page_num  = request.GET.get('page', 1)
+        page_obj  = paginator.get_page(page_num)
+
+        return render(request, self.template_name, {
+            'invoices':  page_obj,
+            'page_obj':  page_obj,
+            'paginator': paginator,
+            # preserve filters in pagination links
+            'q':          q,
+            'date_from':  date_from,
+            'date_to':    date_to,
+            'payment':    payment,
+            'total_revenue': totals['total_revenue'] or 0,
+            'total_tax':     totals['total_tax'] or 0,
+        })
 
     def delete(self, request, invoice_id):
         try:
@@ -386,7 +432,6 @@ class SaleListView(LoginRequiredMixin,View):
                 # REVERT STOCK: Add back the sold quantities
                 for item in invoice.items.all():
                     from easypharma.models.stock import StockBatch
-                    # Find the most recent batch for this product (simplified logic)
                     batch = StockBatch.objects.filter(
                         tenant=request.tenant, 
                         product=item.product,
@@ -398,9 +443,12 @@ class SaleListView(LoginRequiredMixin,View):
                         batch.save()
                 
                 invoice.delete()
+                invalidate_pos_cache(request.tenant.id)
                 return JsonResponse({'success': True})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
+
+
 
 class ProductSearchAPI(LoginRequiredMixin,View):
 

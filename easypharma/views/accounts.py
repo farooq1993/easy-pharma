@@ -184,6 +184,46 @@ def home_view(request):
     }
     return render(request, "home.html", context)
 
+
+from django.http import JsonResponse
+
+@login_required
+def dashboard_stats_api(request):
+    """Lightweight JSON endpoint – called every 30 s by the dashboard for live stats."""
+    today = date.today()
+    tenant = request.tenant
+    if not tenant:
+        return JsonResponse({'error': 'No tenant'}, status=403)
+
+    from easypharma.models.stock import StockBatch
+    from django.db.models import Sum as DbSum
+
+    today_revenue = SaleInvoice.objects.filter(
+        tenant=tenant, created_at__date=today
+    ).aggregate(DbSum('total_amount'))['total_amount__sum'] or 0
+
+    today_transactions = SaleInvoice.objects.filter(
+        tenant=tenant, created_at__date=today
+    ).count()
+
+    total_customers = Customer.objects.filter(tenant=tenant).count()
+
+    low_stock_count = (
+        StockBatch.objects
+        .filter(tenant=tenant)
+        .values('product')
+        .annotate(total=DbSum('current_quantity'))
+        .filter(total__lt=50)
+        .count()
+    )
+
+    return JsonResponse({
+        'today_revenue':      float(today_revenue),
+        'today_transactions': today_transactions,
+        'total_customers':    total_customers,
+        'low_stock_count':    low_stock_count,
+    })
+
 def create_user(request):
     if request.method =='POST':
         username = request.POST.get('username')
