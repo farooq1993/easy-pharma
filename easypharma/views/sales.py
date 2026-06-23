@@ -66,7 +66,9 @@ class POSView(LoginRequiredMixin,View):
                 tenant=request.tenant, is_default=True
             ).only('name').first()
             cache.set(f'pos_default_doctor:{tenant_id}', default_doctor, 600)
-
+        # All doctor tenant wise
+        doctors = DoctorModel.objects.filter(tenant=request.tenant).order_by('name')
+        
         # ── next invoice number: cache with short TTL ──
         next_inv_key = f'pos_next_inv:{tenant_id}'
         next_invoice_number = cache.get(next_inv_key)
@@ -125,6 +127,7 @@ class POSView(LoginRequiredMixin,View):
 
         return render(request, self.template_name, {
             'product_taxes': product_taxes,
+            'doctors':doctors,
             'default_doctor': default_doctor,
             'edit_data': edit_data,
             'next_invoice_number': next_invoice_number,

@@ -602,28 +602,28 @@ class SmartPurchaseSuggestPageView(LoginRequiredMixin,View):
         return render(request, self.template_name)
 
 
-class SmartPurchaseSuggestAPIView(LoginRequiredMixin,View):
+class SmartPurchaseSuggestAPIView(LoginRequiredMixin, View):
     """
     Suggests products to purchase today based on:
     - Average daily sales calculated over the actual number of active sale days
       (not a fixed 30-day divisor, so new products with limited history are handled correctly)
     - Current stock vs projected need (avg_daily_sale * reorder_days)
     - Best supplier (lowest last purchase price = highest profit) vs last used supplier
- 
+
     Supports pagination via ?page=<n>&page_size=<n> query params.
     No caching is applied — data is always computed fresh on each request.
     """
- 
+
     DAYS_FOR_AVG = 30          # window to look back for sales history
     REORDER_DAYS = 7           # how many days of stock you want to maintain
     DEFAULT_PAGE_SIZE = 20
     MAX_PAGE_SIZE = 100
- 
+
     def get(self, request):
         tenant = request.tenant
- 
+
         cutoff_date = timezone.now() - timedelta(days=self.DAYS_FOR_AVG)
- 
+
         # Step 1: Get total sold + first sale date per product within the window
         sales_data = (
             SaleItem.objects
@@ -637,7 +637,7 @@ class SmartPurchaseSuggestAPIView(LoginRequiredMixin,View):
                 first_sale_date=Min('sale_invoice__created_at')
             )
         )
- 
+
         sales_map = {}
         for row in sales_data:
             days_active = (timezone.now() - row['first_sale_date']).days
@@ -646,7 +646,7 @@ class SmartPurchaseSuggestAPIView(LoginRequiredMixin,View):
                 'total_sold': row['total_sold'],
                 'days_active': days_active,
             }
- 
+
         if not sales_map:
             return JsonResponse({
                 'count': 0,
@@ -657,41 +657,49 @@ class SmartPurchaseSuggestAPIView(LoginRequiredMixin,View):
                 'has_previous': False,
                 'results': [],
             }, safe=False)
- 
+
         # Step 2: Get current stock for these products
         products_qs = (
             Products.objects
             .filter(tenant=tenant, id__in=sales_map.keys())
             .annotate(total_stock=Sum('batches__current_quantity'))
         )
- 
+
         suggestions = []
- 
+
         for product in products_qs:
             total_stock = product.total_stock or 0
- 
+
             data = sales_map.get(product.id)
             total_sold = data['total_sold']
             days_active = data['days_active']
- 
+
             avg_daily_sale = total_sold / days_active
             projected_need = avg_daily_sale * self.REORDER_DAYS
- 
+
             # Only suggest if current stock is less than projected need for reorder period
             if total_stock >= projected_need:
                 continue
- 
+
             reorder_qty = round(projected_need - total_stock)
             if reorder_qty <= 0:
                 continue
- 
+
+            # ── Days remaining calculation ──────────────────────────────────
+            # Kitne din ka stock bacha hai abhi
+            if avg_daily_sale > 0:
+                days_remaining = round(total_stock / avg_daily_sale, 1)
+            else:
+                days_remaining = 999  # effectively infinite / no sales data
+
             purchase_items = (
                 PurchaseItem.objects
                 .filter(tenant=tenant, product=product)
                 .select_related('purchase_invoice', 'purchase_invoice__supplier')
                 .order_by('-purchase_invoice__purchase_date')
             )
- 
+
+            # ── No purchase history ─────────────────────────────────────────
             if not purchase_items.exists():
                 suggestions.append({
                     'id': product.id,
@@ -701,6 +709,7 @@ class SmartPurchaseSuggestAPIView(LoginRequiredMixin,View):
                     'total_stock': total_stock,
                     'avg_daily_sale': round(avg_daily_sale, 2),
                     'reorder_qty': reorder_qty,
+                    'days_remaining': days_remaining,          # <-- NEW
                     'last_purchase': None,
                     'last_supplier': None,
                     'last_purchase_price': None,
@@ -711,12 +720,13 @@ class SmartPurchaseSuggestAPIView(LoginRequiredMixin,View):
                     'suggested_supplier': None,
                 })
                 continue
- 
+
             last_item = purchase_items.first()
             last_supplier = last_item.purchase_invoice.supplier
             last_price = last_item.purchase_price
             last_date = last_item.purchase_invoice.purchase_date
- 
+
+            # ── Find best (cheapest) supplier from all past purchases ───────
             supplier_latest_prices = {}
             for item in purchase_items:
                 supplier = item.purchase_invoice.supplier
@@ -726,16 +736,16 @@ class SmartPurchaseSuggestAPIView(LoginRequiredMixin,View):
                         'purchase_price': item.purchase_price,
                         'purchase_date': item.purchase_invoice.purchase_date,
                     }
- 
+
             best_entry = min(
                 supplier_latest_prices.values(),
                 key=lambda x: x['purchase_price']
             )
             best_supplier = best_entry['supplier']
             best_price = best_entry['purchase_price']
- 
+
             profit_diff = last_price - best_price
- 
+
             if best_supplier.id != last_supplier.id and profit_diff > 0:
                 compare_reason = (
                     f"Last time you purchased from '{last_supplier.name}' at ₹{last_price}/unit. "
@@ -754,7 +764,8 @@ class SmartPurchaseSuggestAPIView(LoginRequiredMixin,View):
                     'name': last_supplier.name,
                     'purchase_price': float(last_price),
                 }
- 
+
+            # ── Normal case ─────────────────────────────────────────────────
             suggestions.append({
                 'id': product.id,
                 'name': product.product_name,
@@ -763,6 +774,7 @@ class SmartPurchaseSuggestAPIView(LoginRequiredMixin,View):
                 'total_stock': total_stock,
                 'avg_daily_sale': round(avg_daily_sale, 2),
                 'reorder_qty': reorder_qty,
+                'days_remaining': days_remaining,              # <-- NEW
                 'last_purchase': last_date.strftime('%Y-%m-%d') if last_date else None,
                 'last_supplier': {
                     'id': last_supplier.id,
@@ -778,27 +790,28 @@ class SmartPurchaseSuggestAPIView(LoginRequiredMixin,View):
                 'compare_reason': compare_reason,
                 'suggested_supplier': suggested_supplier_data,
             })
- 
-        # Most urgent first: highest sale velocity vs lowest remaining stock
-        suggestions.sort(key=lambda x: x['avg_daily_sale'], reverse=True)
- 
-        # ---- Pagination ----
+
+        # ── Sort: most urgent first (least days of stock remaining) ────────
+        # CHANGED: was sorted by avg_daily_sale — now sorted by days_remaining
+        suggestions.sort(key=lambda x: x['days_remaining'])
+
+        # ── Pagination ──────────────────────────────────────────────────────
         try:
             page_number = int(request.GET.get('page', 1))
         except (TypeError, ValueError):
             page_number = 1
- 
+
         try:
             page_size = int(request.GET.get('page_size', self.DEFAULT_PAGE_SIZE))
         except (TypeError, ValueError):
             page_size = self.DEFAULT_PAGE_SIZE
- 
+
         page_size = max(1, min(page_size, self.MAX_PAGE_SIZE))
- 
+
         paginator = Paginator(suggestions, page_size)
         page_number = max(1, min(page_number, paginator.num_pages or 1))
         page_obj = paginator.get_page(page_number)
- 
+
         return JsonResponse({
             'count': paginator.count,
             'page': page_obj.number,
