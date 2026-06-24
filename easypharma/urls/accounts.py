@@ -9,11 +9,13 @@ from easypharma.views.accounts import (
     pharmacy_detail,
     regenerate_access_key,
     deactivate_pharmacy,
+    dashboard_stats_api,
 )
 
 urlpatterns = [
     path("", login_view, name="login"),
     path("home", home_view, name="home"),
+    path("api/dashboard-stats/", dashboard_stats_api, name="dashboard_stats_api"),
     path('createuser', create_user, name='create_user'),
     path('logout',logout_view, name='logout'),
     

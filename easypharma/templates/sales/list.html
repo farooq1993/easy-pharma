@@ -1,20 +1,117 @@
 {% extends "includes/base.html" %}
 {% load static %}
 
+{% block title %}Sales Invoices — Easy Pharma{% endblock %}
+
 {% block content %}
 <div class="container-fluid py-4">
-    <div class="row align-items-center mb-4">
+
+    <!-- Header -->
+    <div class="row align-items-center mb-3">
         <div class="col">
-            <h2 class="fw-bold mb-0">Sales Invoices</h2>
-            <p class="text-muted small">View and manage all customer billing records.</p>
+            <h2 class="fw-bold mb-0">
+                <i class="fas fa-file-invoice-dollar me-2 text-success"></i>Sales Invoices
+            </h2>
+            <p class="text-muted small mb-0">
+                View and manage all customer billing records.
+            </p>
         </div>
         <div class="col-auto">
-            <a href="{% url 'pos' %}" class="btn btn-success px-4 shadow-sm fw-bold">
+            <a href="{% url 'pos' %}" class="btn btn-success px-4 shadow-sm fw-bold rounded-pill">
                 <i class="fas fa-plus me-2"></i> NEW BILL
             </a>
         </div>
     </div>
 
+    <!-- Search & Filter bar -->
+    <form method="get" id="filterForm" class="card border-0 shadow-sm rounded-4 p-3 mb-3">
+        <div class="row g-2 align-items-end">
+            <!-- Search -->
+            <div class="col-12 col-md-4">
+                <label class="form-label small fw-bold text-muted mb-1">
+                    <i class="fas fa-search me-1"></i>Search
+                </label>
+                <input type="text" name="q" value="{{ q }}"
+                    class="form-control rounded-pill border-0 bg-light"
+                    placeholder="Patient name, phone, bill no, doctor…"
+                    id="searchInput" autocomplete="off">
+            </div>
+            <!-- Date From -->
+            <div class="col-6 col-md-2">
+                <label class="form-label small fw-bold text-muted mb-1">
+                    <i class="fas fa-calendar me-1"></i>From
+                </label>
+                <input type="date" name="date_from" value="{{ date_from }}"
+                    class="form-control border-0 bg-light rounded-pill">
+            </div>
+            <!-- Date To -->
+            <div class="col-6 col-md-2">
+                <label class="form-label small fw-bold text-muted mb-1">To</label>
+                <input type="date" name="date_to" value="{{ date_to }}"
+                    class="form-control border-0 bg-light rounded-pill">
+            </div>
+            <!-- Payment Mode -->
+            <div class="col-6 col-md-2">
+                <label class="form-label small fw-bold text-muted mb-1">
+                    <i class="fas fa-wallet me-1"></i>Payment
+                </label>
+                <select name="payment" class="form-select border-0 bg-light rounded-pill">
+                    <option value="">All Modes</option>
+                    <option value="Cash"   {% if payment == 'Cash'   %}selected{% endif %}>Cash</option>
+                    <option value="Card"   {% if payment == 'Card'   %}selected{% endif %}>Card</option>
+                    <option value="UPI"    {% if payment == 'UPI'    %}selected{% endif %}>UPI</option>
+                    <option value="Credit" {% if payment == 'Credit' %}selected{% endif %}>Credit</option>
+                </select>
+            </div>
+            <!-- Buttons -->
+            <div class="col-6 col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-success rounded-pill flex-grow-1 fw-bold">
+                    <i class="fas fa-filter me-1"></i>Filter
+                </button>
+                {% if q or date_from or date_to or payment %}
+                <a href="{% url 'pos_list' %}" class="btn btn-outline-secondary rounded-pill" title="Clear">
+                    <i class="fas fa-times"></i>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </form>
+
+    <!-- Summary Bar -->
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm h-100 rounded-4 p-3 text-center"
+                style="border-left:5px solid #1cc88a !important;">
+                <div class="small text-muted fw-bold text-uppercase">Filtered Records</div>
+                <div class="h4 mb-0 fw-bold text-dark">{{ paginator.count }}</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm h-100 rounded-4 p-3 text-center"
+                style="border-left:5px solid #4e73df !important;">
+                <div class="small text-muted fw-bold text-uppercase">Total Revenue</div>
+                <div class="h4 mb-0 fw-bold text-dark">₹{{ total_revenue|floatformat:2 }}</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm h-100 rounded-4 p-3 text-center"
+                style="border-left:5px solid #36b9cc !important;">
+                <div class="small text-muted fw-bold text-uppercase">Total GST/Tax</div>
+                <div class="h4 mb-0 fw-bold text-dark">₹{{ total_tax|floatformat:2 }}</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card border-0 shadow-sm h-100 rounded-4 p-3 text-center"
+                style="border-left:5px solid #f6c23e !important;">
+                <div class="small text-muted fw-bold text-uppercase">Page</div>
+                <div class="h4 mb-0 fw-bold text-dark">
+                    {{ page_obj.number }} / {{ paginator.num_pages }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Table -->
     <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -27,32 +124,53 @@
                             <th>Doctor</th>
                             <th>Amount</th>
                             <th>GST/Tax</th>
-                            <th>Grand Total</th>
+                            <th class="fw-bold text-success">Grand Total</th>
+                            <th>Payment</th>
                             <th class="text-end pe-4">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for invoice in invoices %}
                         <tr id="invoice-{{ invoice.id }}">
-                            <td class="ps-4 small">{{ invoice.created_at|date:"d M Y H:i" }}</td>
-                            <td><span class="badge bg-light text-dark border">#{{ invoice.invoice_number }}</span></td>
+                            <td class="ps-4 small text-nowrap">
+                                {{ invoice.created_at|date:"d M Y H:i" }}
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark border fw-bold">
+                                    #{{ invoice.invoice_number }}
+                                </span>
+                            </td>
                             <td>
                                 <div class="fw-bold small">{{ invoice.patient_name|default:"Walk-in Customer" }}</div>
-                                <div class="text-muted x-small">{{ invoice.patient_phone }}</div>
+                                <div class="text-muted" style="font-size:0.75rem;">{{ invoice.patient_phone }}</div>
                             </td>
-                            <td class="small">{{ invoice.doctor_name|default:"-" }}</td>
-                            <td class="small">{{ invoice.sub_total }}</td>
-                            <td class="small text-primary">{{ invoice.tax_amount }}</td>
-                            <td class="fw-bold text-success">{{ invoice.total_amount }}</td>
+                            <td class="small">{{ invoice.doctor_name|default:"—" }}</td>
+                            <td class="small">₹{{ invoice.sub_total }}</td>
+                            <td class="small text-primary">₹{{ invoice.tax_amount }}</td>
+                            <td class="fw-bold text-success">₹{{ invoice.total_amount }}</td>
+                            <td>
+                                {% if invoice.payment_mode == 'Cash' %}
+                                    <span class="badge rounded-pill" style="background:#d1fae5;color:#065f46;">Cash</span>
+                                {% elif invoice.payment_mode == 'Card' %}
+                                    <span class="badge rounded-pill" style="background:#dbeafe;color:#1e40af;">Card</span>
+                                {% elif invoice.payment_mode == 'UPI' %}
+                                    <span class="badge rounded-pill" style="background:#ede9fe;color:#5b21b6;">UPI</span>
+                                {% else %}
+                                    <span class="badge rounded-pill bg-secondary">{{ invoice.payment_mode }}</span>
+                                {% endif %}
+                            </td>
                             <td class="text-end pe-4">
                                 <div class="btn-group">
-                                    <a href="{% url 'pos_print' invoice.id %}" target="_blank" class="btn btn-sm btn-outline-primary border-0" title="Print Bill">
+                                    <a href="{% url 'pos_print' invoice.id %}" target="_blank"
+                                        class="btn btn-sm btn-outline-primary border-0" title="Print Bill">
                                         <i class="fas fa-print"></i>
                                     </a>
-                                    <a href="{% url 'pos_edit' invoice.id %}" class="btn btn-sm btn-outline-secondary border-0" title="Edit Bill">
+                                    <a href="{% url 'pos_edit' invoice.id %}"
+                                        class="btn btn-sm btn-outline-secondary border-0" title="Edit Bill">
                                         <i class="fas fa-edit"></i>
                                     </a>
-                                    <button class="btn btn-sm btn-outline-danger border-0" onclick="deleteInvoice({{ invoice.id }})">
+                                    <button class="btn btn-sm btn-outline-danger border-0"
+                                        onclick="deleteInvoice({{ invoice.id }})" title="Delete">
                                         <i class="fas fa-trash-alt"></i>
                                     </button>
                                 </div>
@@ -60,13 +178,74 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="8" class="text-center py-5 text-muted">No sales records found.</td>
+                            <td colspan="9" class="text-center py-5 text-muted">
+                                <i class="fas fa-search fa-2x mb-3 opacity-25 d-block"></i>
+                                No invoices found{% if q %} for "<strong>{{ q }}</strong>"{% endif %}.
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
         </div>
+
+        <!-- Pagination -->
+        {% if paginator.num_pages > 1 %}
+        <div class="card-footer bg-white border-0 py-3 d-flex justify-content-between align-items-center flex-wrap gap-2 px-4">
+            <small class="text-muted">
+                Showing {{ page_obj.start_index }}–{{ page_obj.end_index }}
+                of {{ paginator.count }} records
+            </small>
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link rounded-start-pill"
+                            href="?page=1{% if q %}&q={{ q }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if payment %}&payment={{ payment }}{% endif %}">
+                            «
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link"
+                            href="?page={{ page_obj.previous_page_number }}{% if q %}&q={{ q }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if payment %}&payment={{ payment }}{% endif %}">
+                            ‹
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {% for num in paginator.page_range %}
+                        {% if num == page_obj.number %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ num }}</span>
+                        </li>
+                        {% elif num >= page_obj.number|add:"-3" and num <= page_obj.number|add:"3" %}
+                        <li class="page-item">
+                            <a class="page-link"
+                                href="?page={{ num }}{% if q %}&q={{ q }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if payment %}&payment={{ payment }}{% endif %}">
+                                {{ num }}
+                            </a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link"
+                            href="?page={{ page_obj.next_page_number }}{% if q %}&q={{ q }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if payment %}&payment={{ payment }}{% endif %}">
+                            ›
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link rounded-end-pill"
+                            href="?page={{ paginator.num_pages }}{% if q %}&q={{ q }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if payment %}&payment={{ payment }}{% endif %}">
+                            »
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
     </div>
 </div>
 
@@ -84,11 +263,50 @@ async function deleteInvoice(id) {
 
     const result = await response.json();
     if (result.success) {
-        document.getElementById(`invoice-${id}`).remove();
-        alert('Bill deleted and items returned to stock.');
+        const row = document.getElementById(`invoice-${id}`);
+        if (row) {
+            row.style.transition = 'opacity 0.3s';
+            row.style.opacity = '0';
+            setTimeout(() => row.remove(), 300);
+        }
     } else {
         alert('Error: ' + result.error);
     }
 }
+
+// Live search with 400ms debounce — submits form automatically
+let _searchTimer;
+document.getElementById('searchInput').addEventListener('input', function() {
+    clearTimeout(_searchTimer);
+    _searchTimer = setTimeout(() => {
+        // Reset to page 1 when searching
+        const form = document.getElementById('filterForm');
+        const hiddenPage = form.querySelector('input[name="page"]');
+        if (hiddenPage) hiddenPage.value = 1;
+        form.submit();
+    }, 500);
+});
 </script>
+
+<style>
+.pagination .page-link {
+    border: none;
+    color: #1a7a4a;
+    background: transparent;
+    border-radius: 8px !important;
+    margin: 0 2px;
+    font-weight: 600;
+    transition: all 0.15s;
+}
+.pagination .page-item.active .page-link {
+    background: linear-gradient(135deg, #1a7a4a, #2da05e);
+    color: #fff;
+    box-shadow: 0 3px 8px rgba(26,122,74,.25);
+}
+.pagination .page-link:hover {
+    background: #e8f5e9;
+    color: #1a7a4a;
+}
+</style>
+
 {% endblock %}

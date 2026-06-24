@@ -119,13 +119,40 @@
                             <div class="invalid-feedback">Patient address is required.</div>
                         </div>
                         <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <input type="text"
+                                id="patientPhone"
+                                class="form-control border-0 bg-light py-2"
+                                placeholder="Patient Mobile">
+                        </div>
+
+                        <div class="col-6">
+                            <input type="text"
+                                id="doctorName"
+                                list="doctorList"
+                                class="form-control border-0 bg-light py-2"
+                                placeholder="Dr. Name *"
+                                value="{% if default_doctor %}{{ default_doctor.name }}{% endif %}">
+
+                            <datalist id="doctorList">
+                                {% for doctor in doctors %}
+                                    <option value="{{ doctor.name }}">
+                                {% endfor %}
+                            </datalist>
+
+                            <div class="invalid-feedback">
+                                Doctor name is required.
+                            </div>
+                        </div>
+                    </div>
+                        <!-- <div class="row g-2 mb-2">
                             <div class="col-6"><input type="text" id="patientPhone"
                                     class="form-control border-0 bg-light py-2" placeholder="Mobile"></div>
                             <div class="col-6"><input type="text" id="doctorName"
                                     class="form-control border-0 bg-light py-2" placeholder="Dr. Name *"
                                     value="{% if default_doctor %}{{ default_doctor.name }}{% endif %}">
                                 <div class="invalid-feedback">Doctor name is required.</div></div>
-                        </div>
+                        </div> -->
                     </div>
 
                     <div class="mt-auto">
@@ -171,9 +198,9 @@
                                     </label>
                                 </div>
                                 <div class="col-6">
-                                    <input type="radio" class="btn-check" name="paymentMethod" id="payCard" value="Card">
+                                    <input type="radio" class="btn-check" name="paymentMethod" id="payCard" value="UPI">
                                     <label class="btn payment-btn w-100 py-2 rounded-3 fw-bold" for="payCard">
-                                        <i class="fas fa-credit-card me-1"></i> Card/UPI
+                                        <i class="fas fa-credit-card me-1"></i> UPI
                                     </label>
                                 </div>
                             </div>
