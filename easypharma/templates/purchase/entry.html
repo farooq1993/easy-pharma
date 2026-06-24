@@ -567,12 +567,30 @@
 </script>
 
 <script>
+    // ─── getCookie defined here so it's available immediately ────────────────
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let cookie of cookies) {
+                cookie = cookie.trim();
+                if (cookie.startsWith(name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     let items = [];
     let selectedProduct = null;
     let currentBatchHistory = [];   // store fetched batches for current product
     let availableCreditNotes = [];  // store fetched credit notes for selected supplier
     const editData = {{ edit_data|default:'null'|safe }};  // edit mode data from server
-    let csrfToken = '{{ csrf_token }}';
+    //let csrfToken = '{{ csrf_token }}';
+    let csrfToken = getCookie('csrftoken');
     let searchSelectedIndex = -1;
     let batchSelectedIndex = -1;
 
