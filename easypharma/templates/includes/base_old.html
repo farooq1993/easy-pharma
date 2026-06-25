@@ -260,13 +260,21 @@
 </script>
     {% block extra_js %}{% endblock %}
 
-    <!-- PWA: Service Worker Registration + Auto Update -->
+    <!-- PWA: Service Worker Registration -->
     <script>
     (function () {
         if (!('serviceWorker' in navigator)) return;
 
+        navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(function (reg) {
+                console.log('[PWA] Service Worker registered. Scope:', reg.scope);
+            })
+            .catch(function (err) {
+                console.warn('[PWA] Service Worker registration failed:', err);
+            });
+
         // ── Online / Offline indicator ──────────────────────────────
-        var badge     = document.getElementById('epNetworkBadge');
+        var badge = document.getElementById('epNetworkBadge');
         var badgeDot  = document.getElementById('epNetworkDot');
         var badgeText = document.getElementById('epNetworkText');
         var hideTimer = null;
@@ -277,86 +285,25 @@
             badge.style.display = 'flex';
             badge.style.opacity = '1';
             if (online) {
-                badgeDot.style.background = '#22c55e';
+                badgeDot.style.background  = '#22c55e';
                 badgeText.textContent = '✓ Back online';
+                // Auto-hide after 3 s when online
                 hideTimer = setTimeout(function () {
                     badge.style.opacity = '0';
                     setTimeout(function () { badge.style.display = 'none'; }, 350);
                 }, 3000);
             } else {
-                badgeDot.style.background = '#ef4444';
+                badgeDot.style.background  = '#ef4444';
                 badgeText.textContent = '🔴 You are offline — saving locally';
+                // Keep visible while offline
             }
         }
 
+        // Show immediately if already offline
         if (!navigator.onLine) showBadge(false);
+
         window.addEventListener('offline', function () { showBadge(false); });
         window.addEventListener('online',  function () { showBadge(true); });
-
-        // ── Update Banner ───────────────────────────────────────────
-        function showUpdateBanner(newWorker) {
-            if (document.getElementById('epUpdateBanner')) return;
-            var banner = document.createElement('div');
-            banner.id = 'epUpdateBanner';
-            banner.innerHTML = [
-                '<div style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);',
-                'background:#1a7a4a;color:#fff;padding:13px 22px;border-radius:14px;',
-                'box-shadow:0 8px 28px rgba(0,0,0,0.28);z-index:99999;display:flex;',
-                'align-items:center;gap:14px;font-family:Inter,sans-serif;font-size:0.9rem;',
-                'min-width:270px;max-width:92vw;">',
-                '<span>🔄 <strong>New update ready!</strong> Refresh karo latest version ke liye.</span>',
-                '<button id="epUpdateBtn" style="background:#fff;color:#1a7a4a;border:none;',
-                'padding:7px 18px;border-radius:9px;font-weight:700;cursor:pointer;',
-                'white-space:nowrap;font-size:0.88rem;">Update Now</button>',
-                '</div>'
-            ].join('');
-            document.body.appendChild(banner);
-
-            document.getElementById('epUpdateBtn').addEventListener('click', function () {
-                newWorker.postMessage('SKIP_WAITING');
-                banner.remove();
-            });
-
-            // Auto-dismiss after 40s (user busy ho sakta hai)
-            setTimeout(function () {
-                if (banner.parentNode) banner.remove();
-            }, 40000);
-        }
-
-        // ── Register SW ─────────────────────────────────────────────
-        var refreshing = false;
-
-        navigator.serviceWorker.register('/sw.js', {
-            scope: '/',
-            updateViaCache: 'none'   // sw.js ko browser cache se kabhi mat lo
-        }).then(function (reg) {
-            console.log('[PWA] SW registered. Scope:', reg.scope);
-
-            // Har 60s mein update check
-            setInterval(function () { reg.update(); }, 60000);
-
-            // Naya SW install ho raha hai
-            reg.addEventListener('updatefound', function () {
-                var newWorker = reg.installing;
-                newWorker.addEventListener('statechange', function () {
-                    // installed + purana SW active hai = update ready
-                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                        showUpdateBanner(newWorker);
-                    }
-                });
-            });
-
-        }).catch(function (err) {
-            console.warn('[PWA] SW registration failed:', err);
-        });
-
-        // Naya SW activate hone ke baad page reload
-        navigator.serviceWorker.addEventListener('controllerchange', function () {
-            if (refreshing) return;
-            refreshing = true;
-            window.location.reload();
-        });
-
     })();
     </script>
 </body>

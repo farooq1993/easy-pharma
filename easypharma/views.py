@@ -1,47 +1,61 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.contrib import messages
+from django.utils.timezone import now
 from .models import User
-# Create your views here.
-
 
 from .models.sales import SaleInvoice, Customer
 from .models.Items import Products
 from django.db.models import Sum
-from datetime import date
 
 @login_required
 def home_view(request):
-    today = date.today()
-    # Basic Stats
-    today_revenue = SaleInvoice.objects.filter(tenant=request.tenant, created_at__date=today).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-    total_customers = Customer.objects.filter(tenant=request.tenant).count()
-    low_stock_count = Products.objects.filter(tenant=request.tenant).count() # Placeholder logic
-    prescriptions_count = SaleInvoice.objects.filter(tenant=request.tenant, created_at__date=today).count()
+    today = now().date()   # timezone-aware — daily report se match karega
+
+    today_revenue = (
+        SaleInvoice.objects
+        .filter(tenant=request.tenant, created_at__date=today)
+        .aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+    )
+    total_customers   = Customer.objects.filter(tenant=request.tenant).count()
+    low_stock_count   = Products.objects.filter(tenant=request.tenant).count()
+    prescriptions_count = (
+        SaleInvoice.objects
+        .filter(tenant=request.tenant, created_at__date=today)
+        .count()
+    )
     context = {
-        'today_revenue': today_revenue,
-        'total_customers': total_customers,
-        'low_stock_count': low_stock_count,
-        'prescriptions_count': prescriptions_count,
-        'today_str': date.today().strftime('%Y-%m')
+        'today_revenue':        today_revenue,
+        'total_customers':      total_customers,
+        'low_stock_count':      low_stock_count,
+        'prescriptions_count':  prescriptions_count,
+        'today_str':            today.strftime('%Y-%m'),
     }
     return render(request, "home.html", context)
 
+@ensure_csrf_cookie
 def login_view(request):
+    # Already logged in → redirect
+    if request.user.is_authenticated:
+        return redirect("home")
+
     if request.method == "POST":
-        print("LOGIN PAGE USER:", request.user)
-        print("AUTH:", request.user.is_authenticated)
-        username = request.POST.get("username")
-        password = request.POST.get("password")
+        username = request.POST.get("username", "").strip()
+        password = request.POST.get("password", "")
         user = authenticate(request, username=username, password=password)
         if user:
             login(request, user)
             return redirect("home")
         else:
+            messages.error(request, "Invalid username or password.")
             return render(request, "accounts/login.html")
+
     return render(request, "accounts/login.html")
 
 def logout_view(request):
     if request.user.is_authenticated:
         logout(request)
         return redirect('login')
+    return redirect('login')

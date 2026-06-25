@@ -54,6 +54,7 @@ class SalesReturn(TenantAwareModel):
     return_inv_no = models.CharField(max_length=50, unique=True)
     sale_invoice = models.ForeignKey(SaleInvoice, on_delete=models.CASCADE, related_name='sales_return')
     return_qty = models.IntegerField()
+    return_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     return_at = models.DateTimeField(auto_now_add=True)
 
 
