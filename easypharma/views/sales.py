@@ -350,7 +350,7 @@ class PrintInvoiceView(LoginRequiredMixin, View):
         lines.append("-" * W)
 
         bill_text = "\n".join(lines)
-       
+        
         return render(
             request,
             self.template_name,
