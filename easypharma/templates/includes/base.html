@@ -126,7 +126,7 @@
             const shortcuts = {
                 'F1': function() { window.location.href = "{% url 'pos' %}"; },
                 'F2': function() { window.location.href = "{% url 'purchase_entry' %}"; },
-                'F3': function() { window.location.href = "{% url 'pos_returns_no_slash' %}"; },
+                'F3': function() { window.location.href = "{% url 'pos_returns' %}"; },
                 'F4': function() { window.location.href = "{% url 'patient_wise_sales' %}"; },
                 'F5': function() {
                     const ps = document.getElementById('productSearch');
@@ -240,7 +240,7 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const autoCollapseUrlNames = [
-            'pos', 'pos_list', 'pos_returns_no_slash', 'patient_wise_sales', 'prescription_reminders',
+            'pos', 'pos_list', 'pos_returns', 'patient_wise_sales', 'prescription_reminders',
             'purchase_entry', 'purchase_list', 'supplier_wise_purchase_report', 'expiry_return',
             'daily_sale_report', 'profit_report', 'bill_wise_profit_report', 'half_yearly_report',
             'gst_report', 'stock_report', 'product_history', 'purchase_analysis',

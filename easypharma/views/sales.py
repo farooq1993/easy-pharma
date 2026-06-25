@@ -7,6 +7,7 @@ from django.db import transaction
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import F, Q
 from django.core.cache import cache
+from easypharma.models.stock import StockBatch
 from easypharma.models.Items import Products
 from easypharma.models.sales import (SaleInvoice, SaleItem,
                                     Customer, SalesReturn, SalesReturnItem,PrescriptionReminder)
@@ -702,15 +703,15 @@ class SalesReturnView(LoginRequiredMixin,View):
             
             try:
                 with transaction.atomic():
-                    # Create sales return record
                     return_record = SalesReturn.objects.create(
                         tenant=request.tenant,
                         sale_invoice=invoice,
-                        return_qty=0  # Will be calculated from items
+                        return_qty=0,
+                        return_amount=0  # ADD
                     )
                     
                     total_returned_qty = 0
-                    from easypharma.models.stock import StockBatch
+                    total_return_amount = 0  # ADD
                     
                     for i, item_id in enumerate(return_items):
                         sale_item = SaleItem.objects.get(id=item_id, sale_invoice=invoice)
@@ -718,7 +719,6 @@ class SalesReturnView(LoginRequiredMixin,View):
                         reason = return_reasons[i] if i < len(return_reasons) else ''
                         
                         if qty_to_return > 0 and qty_to_return <= sale_item.quantity:
-                            # Create return item record
                             SalesReturnItem.objects.create(
                                 tenant=request.tenant,
                                 sales_return=return_record,
@@ -727,7 +727,6 @@ class SalesReturnView(LoginRequiredMixin,View):
                                 return_reason=reason
                             )
                             
-                            # Restore stock
                             StockBatch.objects.filter(
                                 tenant=request.tenant,
                                 product=sale_item.product,
@@ -735,19 +734,22 @@ class SalesReturnView(LoginRequiredMixin,View):
                             ).update(current_quantity=F('current_quantity') + qty_to_return)
                             
                             total_returned_qty += qty_to_return
+                            total_return_amount += qty_to_return * sale_item.unit_price  # ADD
                     
-                    # Update total return quantity
+                    # Dono save karo
                     return_record.return_qty = total_returned_qty
+                    return_record.return_amount = total_return_amount  # ADD
                     return_record.save()
                     
-                    messages.success(request, f"Sales return created ({return_record.return_inv_no}). {total_returned_qty} items returned and stock restored.")
-                    
+                    messages.success(request, f"Return created ({return_record.return_inv_no}). {total_returned_qty} items | ₹{total_return_amount} returned.")    
             except Exception as e:
+                import traceback
+                traceback.print_exc() 
                 messages.error(request, f"Unable to process return: {e}")
             
-            return redirect('pos_returns_no_slash')
+            return redirect('pos_returns')
         
-        return redirect('pos_returns_no_slash')
+        return redirect('pos_returns')
 
 
 class PatientWiseSales(LoginRequiredMixin,View):

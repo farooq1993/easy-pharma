@@ -134,7 +134,11 @@
                             </div>
                             {% endfor %}
                         </div>
-                        
+                        <!-- Total Amount Display -->
+                        <div class="alert alert-info d-flex justify-content-between align-items-center mb-3" id="returnTotalBox" style="display:none!important">
+                            <span>Total Return Amount:</span>
+                            <strong id="returnTotalAmount">₹0.00</strong>
+                        </div>
                         <button type="submit" class="btn btn-success w-100">Process Return</button>
                     </form>
                 </div>
@@ -159,6 +163,7 @@
                                     <th>Invoice</th>
                                     <th>Customer</th>
                                     <th>Items Returned</th>
+                                    <th>Amount</th>
                                     <th>Date</th>
                                 </tr>
                             </thead>
@@ -169,6 +174,7 @@
                                     <td>#{{ ret.sale_invoice.invoice_number }}</td>
                                     <td>{{ ret.sale_invoice.customer.name|default:"Walk-in" }}</td>
                                     <td>{{ ret.return_qty }}</td>
+                                    <td>₹{{ ret.return_amount }}</td>
                                     <td>{{ ret.return_at|date:"M d, Y H:i" }}</td>
                                 </tr>
                                 {% empty %}
@@ -186,6 +192,39 @@
 </div>
 
 <script>
+// Real-time return amount calculator
+document.querySelectorAll('input[name="return_quantities[]"]').forEach(function(input) {
+    input.addEventListener('input', calculateTotal);
+});
+
+function calculateTotal() {
+    let total = 0;
+    const items = document.querySelectorAll('.border.rounded.p-3.mb-2');
+    
+    items.forEach(function(item) {
+        const qtyInput = item.querySelector('input[name="return_quantities[]"]');
+        const priceText = item.querySelector('small.text-muted').textContent;
+        
+        // Price extract karo "Price: ₹95.50" se
+        const priceMatch = priceText.match(/Price:\s*₹([\d.]+)/);
+        if (priceMatch && qtyInput) {
+            const qty = parseInt(qtyInput.value) || 0;
+            const price = parseFloat(priceMatch[1]) || 0;
+            total += qty * price;
+        }
+    });
+
+    const totalBox = document.getElementById('returnTotalBox');
+    const totalAmount = document.getElementById('returnTotalAmount');
+    
+    if (total > 0) {
+        totalBox.style.display = 'flex !important';
+        totalBox.removeAttribute('style'); // override inline style
+        totalAmount.textContent = '₹' + total.toFixed(2);
+    } else {
+        totalBox.style.display = 'none';
+    }
+}
 // Auto-submit invoice selection  
 document.getElementById('invoice_id')?.addEventListener('change', function() {
     if (this.value) {
