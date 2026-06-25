@@ -664,7 +664,7 @@ class SalesReturnView(LoginRequiredMixin,View):
                     return redirect(f"{request.path}?customer_id={customer.id}")
                 return redirect(f"{request.path}?customer_name={quote_plus(customer_name)}")
             messages.error(request, 'Please select a valid customer from the list.')
-            return redirect('pos_returns')
+            return redirect('pos_returns_no_slash')
         
         elif action == 'select_invoice':
             customer_id = request.POST.get('customer_id')
@@ -745,9 +745,9 @@ class SalesReturnView(LoginRequiredMixin,View):
             except Exception as e:
                 messages.error(request, f"Unable to process return: {e}")
             
-            return redirect('pos_returns')
+            return redirect('pos_returns_no_slash')
         
-        return redirect('pos_returns')
+        return redirect('pos_returns_no_slash')
 
 
 class PatientWiseSales(LoginRequiredMixin,View):

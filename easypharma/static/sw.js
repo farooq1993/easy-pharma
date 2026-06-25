@@ -9,7 +9,7 @@
  * If the network is unavailable for those actions an offline notice is shown.
  */
 
-const SW_VERSION   = 'v1.1.0';           // ← bumped: forces old cache eviction
+const SW_VERSION   = 'v1.2.0';   // ← har deploy pe yeh badlo           // ← bumped: forces old cache eviction
 const CACHE_STATIC = `ep-static-${SW_VERSION}`;
 const CACHE_PAGES  = `ep-pages-${SW_VERSION}`;
 const CACHE_API    = `ep-api-${SW_VERSION}`;
@@ -30,6 +30,9 @@ const NETWORK_ONLY_PATTERNS = [
   /\/api\/save/,
   /\/api\/complete/,
   /\/api\/purchase/,
+  /\/pos\//,        
+  /\/entry\//,  
+  /\/purchase\//,
 ];
 
 // URLs that are pure static assets (Cache-First)
@@ -205,3 +208,9 @@ async function networkFirstWithTimeout(request, cacheName, timeout) {
     });
   }
 }
+// ─── Message from client → force activate ───────────────────────────────────
+self.addEventListener('message', event => {
+    if (event.data === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
+});
