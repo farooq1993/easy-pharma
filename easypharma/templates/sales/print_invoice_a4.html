@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: Arial, sans-serif;
+    font-size: 11px;
+    background: #fff;
+    color: #000;
+}
+
+/* ── Each copy takes exactly half of A4 ── */
+.copy {
+    width: 210mm;
+    height: 148.5mm;
+    padding: 6mm 8mm;
+    overflow: hidden;
+    position: relative;
+}
+
+.copy + .copy {
+    border-top: 1px dashed #666;
+}
+
+/* ── Copy label (ORIGINAL / DUPLICATE) ── */
+.copy-label {
+    position: absolute;
+    top: 3mm;
+    right: 8mm;
+    font-size: 8px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    color: #555;
+    border: 1px solid #555;
+    padding: 1px 5px;
+}
+
+/* ── Header ── */
+.header {
+    border-bottom: 2px solid #000;
+    padding-bottom: 4px;
+    margin-bottom: 4px;
+}
+
+.pharmacy-name {
+    font-size: 14px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.pharmacy-meta {
+    font-size: 9px;
+    color: #333;
+    margin-top: 2px;
+    line-height: 1.5;
+}
+
+/* ── Invoice title row ── */
+.invoice-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 4px 0;
+    padding: 3px 0;
+    border-top: 1px solid #000;
+    border-bottom: 1px solid #000;
+}
+
+.invoice-title {
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+.invoice-meta {
+    font-size: 9px;
+    text-align: right;
+    line-height: 1.6;
+}
+
+/* ── Patient info ── */
+.patient-row {
+    display: flex;
+    gap: 8mm;
+    margin: 3px 0;
+    font-size: 9.5px;
+    line-height: 1.6;
+}
+
+.patient-col { flex: 1; }
+
+.patient-col .label {
+    font-weight: bold;
+    color: #333;
+    min-width: 55px;
+    display: inline-block;
+}
+
+/* ── Items table ── */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 3px 0;
+    font-size: 9.5px;
+}
+
+thead tr {
+    background: #000;
+    color: #fff;
+}
+
+thead th {
+    padding: 3px 4px;
+    text-align: left;
+    font-weight: bold;
+    font-size: 9px;
+    letter-spacing: 0.3px;
+}
+
+thead th.right { text-align: right; }
+
+tbody tr {
+    border-bottom: 1px solid #ddd;
+}
+
+tbody tr:nth-child(even) {
+    background: #f9f9f9;
+}
+
+tbody td {
+    padding: 2px 4px;
+    vertical-align: middle;
+}
+
+tbody td.right { text-align: right; }
+tbody td.center { text-align: center; }
+
+.product-name { font-weight: bold; font-size: 9.5px; }
+.product-sub { font-size: 8px; color: #555; }
+
+/* ── Totals ── */
+.totals-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 2px;
+}
+
+.totals-table {
+    width: 52mm;
+    font-size: 9.5px;
+}
+
+.totals-table td {
+    padding: 1.5px 4px;
+}
+
+.totals-table td:last-child {
+    text-align: right;
+    font-weight: bold;
+}
+
+.totals-table .net-row td {
+    border-top: 2px solid #000;
+    font-size: 11px;
+    font-weight: bold;
+    padding-top: 3px;
+}
+
+/* ── Footer ── */
+.footer {
+    position: absolute;
+    bottom: 5mm;
+    left: 8mm;
+    right: 8mm;
+    border-top: 1px solid #ccc;
+    padding-top: 3px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    font-size: 8.5px;
+}
+
+.jurisdiction {
+    font-style: italic;
+    color: #555;
+}
+
+.signature-block {
+    text-align: center;
+}
+
+.signature-line {
+    border-top: 1px solid #000;
+    width: 100px;
+    margin: 0 auto 2px;
+}
+
+/* ── Print ── */
+@media print {
+    .action-bar { display: none !important; }
+
+    @page {
+        size: A4 portrait;
+        margin: 0;
+    }
+
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+.action-bar {
+    padding: 8px;
+    background: #f0f0f0;
+    border-bottom: 1px solid #ccc;
+}
+</style>
+</head>
+<body>
+
+<div class="action-bar">
+    <button onclick="window.print()">🖨 Print</button>
+</div>
+
+{% for copy_label in copies %}
+<div class="copy">
+    <div class="copy-label">{{ copy_label }}</div>
+
+    <!-- HEADER -->
+    <div class="header">
+        <div class="pharmacy-name">{{ invoice.tenant.pharmacy_name }}</div>
+        <div class="pharmacy-meta">
+            {{ invoice.tenant.address }}
+            {% if ps.show_dl_details and invoice.tenant.license_number %}
+            &nbsp;|&nbsp; DL: {{ invoice.tenant.license_number }}
+            {% endif %}
+            {% if ps.show_gst_details and invoice.tenant.gst_number %}
+            &nbsp;|&nbsp; GST: {{ invoice.tenant.gst_number }}
+            {% endif %}
+            &nbsp;|&nbsp; Ph: {{ invoice.tenant.phone }}
+        </div>
+    </div>
+
+    <!-- INVOICE TITLE ROW -->
+    <div class="invoice-title-row">
+        <div class="invoice-title">CASH MEMO</div>
+        <div class="invoice-meta">
+            <strong>Bill No:</strong> {{ invoice.invoice_number }}&nbsp;&nbsp;
+            <strong>Date:</strong> {{ invoice.created_at|date:"d/m/Y" }}
+        </div>
+    </div>
+
+    <!-- PATIENT INFO -->
+    <div class="patient-row">
+        <div class="patient-col">
+            <span class="label">Patient :</span> {{ invoice.patient_name|default:"CASH CUSTOMER" }}<br>
+            {% if invoice.patient_address %}
+            <span class="label">Address :</span> {{ invoice.patient_address }}<br>
+            {% endif %}
+            <span class="label">Doctor  :</span> {{ invoice.doctor_name|default:"SELF" }}
+        </div>
+        <div class="patient-col" style="text-align:right; font-size:9px; color:#444;">
+            Payment: <strong>{{ invoice.payment_mode }}</strong>
+        </div>
+    </div>
+
+    <!-- ITEMS TABLE -->
+    <table>
+        <thead>
+            <tr>
+                <th style="width:5%">#</th>
+                <th style="width:32%">PRODUCT</th>
+                <th style="width:10%">BATCH</th>
+                <th style="width:8%">EXP</th>
+                <th style="width:8%" class="right">MRP</th>
+                <th style="width:6%" class="right">QTY</th>
+                <th style="width:10%" class="right">RATE</th>
+                <th style="width:8%" class="right">GST%</th>
+                <th style="width:13%" class="right">AMOUNT</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in invoice.items.all %}
+            <tr>
+                <td class="center">{{ forloop.counter }}</td>
+                <td>
+                    <div class="product-name">{{ item.product.product_name|upper }}</div>
+                    <div class="product-sub">
+                        {% if item.product.compny_name %}{{ item.product.compny_name.sht_name }}{% endif %}
+                    </div>
+                </td>
+                <td>{{ item.batch_number|default:"-" }}</td>
+                <td>{% if item.expiry_date %}{{ item.expiry_date|date:"m/y" }}{% else %}-{% endif %}</td>
+                <td class="right">{{ item.unit_price|floatformat:2 }}</td>
+                <td class="right">{{ item.quantity }}</td>
+                <td class="right">{{ item.unit_price|floatformat:2 }}</td>
+                <td class="right">{{ item.tax_percentage|floatformat:0 }}%</td>
+                <td class="right">{{ item.total_amount|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- TOTALS -->
+    <div class="totals-row">
+        <table class="totals-table">
+            <tr>
+                <td>Sub Total</td>
+                <td>₹ {{ invoice.sub_total|floatformat:2 }}</td>
+            </tr>
+            <tr>
+                <td>GST</td>
+                <td>₹ {{ invoice.tax_amount|floatformat:2 }}</td>
+            </tr>
+            {% if invoice.discount_amount %}
+            <tr>
+                <td>Discount</td>
+                <td>- ₹ {{ invoice.discount_amount|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            <tr class="net-row">
+                <td>NET AMOUNT</td>
+                <td>₹ {{ invoice.total_amount|floatformat:2 }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="footer">
+        <div class="jurisdiction">
+            {% if invoice.tenant.city %}
+            Subject to Jurisdiction of {{ invoice.tenant.city }}
+            {% endif %}
+            <br>Items: {{ invoice.items.count }} &nbsp;|&nbsp; Total Qty: {{ total_qty }}
+        </div>
+        {% if ps.show_pharmacist_signature %}
+        <div class="signature-block">
+            <div class="signature-line"></div>
+            <div>Pharmacist Signature</div>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endfor %}
+
+</body>
+</html>
