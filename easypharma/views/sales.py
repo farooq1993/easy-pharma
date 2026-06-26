@@ -9,6 +9,7 @@ from django.db.models import F, Q
 from django.core.cache import cache
 from easypharma.models.stock import StockBatch
 from easypharma.models.Items import Products
+from easypharma.models.print_setup import PrintSetup
 from easypharma.models.sales import (SaleInvoice, SaleItem,
                                     Customer, SalesReturn, SalesReturnItem,PrescriptionReminder)
 import json
@@ -256,17 +257,10 @@ class POSView(LoginRequiredMixin,View):
             return JsonResponse({'success': False, 'error': str(e)})
 
 class PrintInvoiceView(LoginRequiredMixin, View):
-    template_name = 'sales/print_invoice.html'
 
     def get(self, request, invoice_id):
-        W = 65  # landscape 6x4 pe ~70 chars fit hote hain
-        from django.shortcuts import get_object_or_404
-        from easypharma.models.print_setup import PrintSetup
-
         invoice = get_object_or_404(
-            SaleInvoice.objects.prefetch_related(
-                'items', 'items__product'
-            ),
+            SaleInvoice.objects.prefetch_related('items', 'items__product'),
             id=invoice_id
         )
 
@@ -275,88 +269,174 @@ class PrintInvoiceView(LoginRequiredMixin, View):
         tenant = invoice.tenant or request.tenant
 
         ps, _ = PrintSetup.objects.get_or_create(tenant=tenant)
+        total_qty = sum(item.quantity for item in invoice.items.all())
+        # Paper size ke hisab se template aur width select karo
+        if ps.paper_size == 'A4':
+            W = 55
+            template = 'sales/print_invoice_a4.html'
+            bill_text = self.generate_bill_text(invoice, ps, W)
+            
 
+        elif ps.paper_size in ['4x6', '8x4']:
+            W = 65
+            template = 'sales/print_invoice.html'
+            single = self.generate_bill_text(invoice, ps, W)
+            bill_text = single + "\n" + single  # 2 copies ek ke baad ek
+
+        elif ps.paper_size in ['80mm', '58mm']:
+            W = 32 if ps.paper_size == '58mm' else 42
+            template = 'sales/print_invoice_thermal.html'
+            bill_text = self.generate_bill_text(invoice, ps, W)
+
+        else:
+            W = 55
+            template = 'sales/print_invoice_a4.html'
+            bill_text = self.generate_bill_text(invoice, ps, W)
+
+        return render(request, template, {
+            'invoice': invoice,
+            'ps': ps,
+            'bill_text': bill_text,
+            'copies': ['ORIGINAL', 'DUPLICATE'],  
+            'total_qty': total_qty,
+        })
+
+    def generate_bill_text(self, invoice, ps, W):
         lines = []
-        lines.append("")
+        lines.append(" ")
         invoice_date = invoice.created_at.strftime('%d/%m/%Y')
-
         # === HEADER ===
-        lines.append(invoice.tenant.pharmacy_name.upper()[:W])
+        lines.append(" " + invoice.tenant.pharmacy_name.upper()[:W])
         if invoice.tenant.address:
-            lines.append(invoice.tenant.address.upper()[:W])
-        lines.append(f"DL: {invoice.tenant.license_number or ''}  Ph: {invoice.tenant.phone or ''}"[:W])
-        lines.append(f"{'CASH MEMO: ' + invoice.invoice_number + '  Dt: ' + invoice_date:>{W}}")
-        lines.append("-" * W)
+            lines.append(" " + invoice.tenant.address.upper()[:W])
+
+        # DL number
+        if ps.show_dl_details and invoice.tenant.license_number:
+            lines.append(" " + f"DL: {invoice.tenant.license_number}  Ph: {invoice.tenant.phone or ''}"[:W])
+
+        # GST number
+        if ps.show_gst_details and hasattr(invoice.tenant, 'gst_number') and invoice.tenant.gst_number:
+            lines.append(" " + f"GST: {invoice.tenant.gst_number}"[:W])
+
+        # Custom header
+        if ps.custom_header:
+            for ch_line in ps.custom_header.splitlines():
+                lines.append(" " + ch_line[:W])
+
+        lines.append(" " + f"{'CASH MEMO: ' + invoice.invoice_number + '  Dt: ' + invoice_date:>{W}}")
+        lines.append(" " + "-" * W)
 
         # === PATIENT ===
-        lines.append(f"Pt  : {invoice.patient_name or 'CASH CUSTOMER'}"[:W])
+        lines.append(" " + f"Pt  : {invoice.patient_name or 'CASH CUSTOMER'}"[:W])
         if invoice.patient_address:
-            lines.append(f"Addr: {invoice.patient_address}"[:W])
-        lines.append(f"Dr  : {invoice.doctor_name or 'SELF'}"[:W])
-        lines.append("-" * W)
+            lines.append(" " + f"Addr: {invoice.patient_address}"[:W])
+        lines.append(" " + f"Dr  : {invoice.doctor_name or 'SELF'}"[:W])
+        lines.append(" " + "-" * W)
 
         # === ITEMS HEADER ===
-        # 70 chars: product(32) + mfg(6) + batch(10) + exp(7) + qty(5) + value(10) = 70
-        lines.append(
-            f"{'PRODUCT':<28}"
-            f"{'MFG':<6}"
-            f"{'BATCH':<9}"
-            f"{'EXP':<6}"
-            f"{'QT':>4}"
-            f"{'VALUE':>10}"
-        )
-        lines.append("-" * W)
+        # W=65: product(28) + mfg(6) + batch(9) + exp(6) + qty(4) + value(10) = 63 + 2 space = 65
+        # W=55: product(22) + mfg(5) + batch(8) + exp(6) + qty(4) + value(10) = 55
+        if W >= 65:
+            lines.append(" " +
+                f"{'PRODUCT':<28}"
+                f"{'MFG':<6}"
+                f"{'BATCH':<9}"
+                f"{'EXP':<6}"
+                f"{'QT':>4}"
+                f"{'VALUE':>10}"
+            )
+        else:
+            lines.append(" " +
+                f"{'PRODUCT':<22}"
+                f"{'MFG':<5}"
+                f"{'BATCH':<8}"
+                f"{'EXP':<6}"
+                f"{'QT':>4}"
+                f"{'VALUE':>10}"
+            )
+        lines.append(" " + "-" * W)
 
         # === ITEMS ===
         total_qty = 0
         for item in invoice.items.all():
             total_qty += item.quantity
-            product_name = (item.product.product_name or "")[:31].upper()
+
+            if W >= 65:
+                product_name = (item.product.product_name or "")[:27].upper()
+            else:
+                product_name = (item.product.product_name or "")[:21].upper()
+
             company_abbr = ""
-            if item.product.compny_name:
-                if item.product.compny_name.sht_name:
-                    company_abbr = item.product.compny_name.sht_name[:6].upper()
-                elif item.product.compny_name.company_name:
-                    company_abbr = item.product.compny_name.company_name[:6].upper()
-            batch = (item.batch_number or "")[:10]
+            if item.product.compny_name and item.product.compny_name.sht_name:
+                company_abbr = item.product.compny_name.sht_name[:6].upper()
+            elif item.product.company:
+                company_abbr = item.product.company.name[:6].upper()
+
+            batch = (item.batch_number or "")[:9]
             exp = item.expiry_date.strftime("%m/%y") if item.expiry_date else ""
 
-            lines.append(
-                f"{product_name:<28}"
-                f"{company_abbr:<6}"
-                f"{batch:<9}"
-                f"{exp:<6}"
-                f"{item.quantity:>4}"
-                f"{float(item.total_amount):>10.2f}"
-            )
+            if W >= 65:
+                lines.append(" " +
+                    f"{product_name:<28}"
+                    f"{company_abbr:<6}"
+                    f"{batch:<9}"
+                    f"{exp:<6}"
+                    f"{item.quantity:>4}"
+                    f"{float(item.total_amount):>10.2f}"
+                )
+            else:
+                lines.append(" " +
+                    f"{product_name:<22}"
+                    f"{company_abbr:<5}"
+                    f"{batch:<8}"
+                    f"{exp:<6}"
+                    f"{item.quantity:>4}"
+                    f"{float(item.total_amount):>10.2f}"
+                )
 
-        lines.append("-" * W)
+        lines.append(" " + "-" * W)
 
         # === FOOTER ===
-        lines.append(f"Items: {invoice.items.count()}  Qty: {total_qty}")
-        lines.append("-" * W)
+        lines.append(" " + f"Items: {invoice.items.count()}  Qty: {total_qty}")
+        lines.append(" " + "-" * W)
 
-        # Amounts simple — left side khali, right side values
-        lines.append(f"{'Sub Total :':<20}{invoice.sub_total:>10.2f}")
-        lines.append(f"{'GST Amount:':<20}{invoice.tax_amount:>10.2f}")
+        # Amounts
+        lines.append(" " + f"{'Sub Total :':<20}{invoice.sub_total:>10.2f}")
+        lines.append(" " + f"{'GST Amount:':<20}{invoice.tax_amount:>10.2f}")
+
+        if invoice.discount_amount and invoice.discount_amount > 0:
+            lines.append(" " + f"{'Discount  :':<20}{invoice.discount_amount:>10.2f}")
 
         round_off = invoice.total_amount - (
             invoice.sub_total + invoice.tax_amount - invoice.discount_amount
         )
         if abs(round_off) >= 0.01:
-            lines.append(f"{'Round Off :':<20}{round_off:>+10.2f}")
+            lines.append(" " + f"{'Round Off :':<20}{round_off:>+10.2f}")
 
-        lines.append(f"{'NET AMOUNT:':<20}{invoice.total_amount:>10.2f}")
-        lines.append("-" * W)
+        lines.append(" " + f"{'NET AMOUNT:':<20}{invoice.total_amount:>10.2f}")
+        lines.append(" " + "-" * W)
 
-        bill_text = "\n".join(lines)
-        
-        return render(
-            request,
-            self.template_name,
-            {'invoice': invoice, 'ps': ps, 'bill_text': bill_text}
-        )
-        
+        # Signature (dot matrix me text se)
+        if ps.show_pharmacist_signature:
+            lines.append("")
+            lines.append(" " + " " * 35 + "Pharmacist Signature")
+            # lines.append(" " + " " * 35 + "____________________")
+
+        # Custom footer
+        if ps.custom_footer:
+            lines.append("")
+            for cf_line in ps.custom_footer.splitlines():
+                lines.append(" " + cf_line[:W])
+
+        # Jurisdiction
+        city = getattr(invoice.tenant, 'city', None)
+        if city:
+            lines.append("")
+            lines.append(f" Subject to Jurisdiction of {city}"[:W])
+
+        lines.append(" " + "-" * W)
+
+        return "\n".join(lines)
 
 # class PrintInvoiceView(LoginRequiredMixin,View):
 #     template_name = 'sales/print_invoice.html'
