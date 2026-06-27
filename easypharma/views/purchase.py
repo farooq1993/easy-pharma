@@ -301,11 +301,9 @@ class PurchaseListView(LoginRequiredMixin,View):
             PurchaseInvoice.objects
             .filter(tenant=request.tenant)
             .select_related('supplier')
-            .order_by('-purchase_date', '-created_at')
+            .order_by('-voucher_number')
         )
-
-        #invoices = PurchaseInvoice.objects.filter(tenant=request.tenant).select_related('supplier').order_by('-purchase_date','-created_at')
-
+        
         # ── Search: voucher no / supplier invoice no / supplier name ─────────
         search_query = request.GET.get('q', '').strip()
         if search_query:

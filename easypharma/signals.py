@@ -15,7 +15,7 @@ from django.dispatch import receiver
 def _invalidate_on_sale(instance, **kwargs):
     """Har sale save/delete pe daily sale cache clear karo."""
     try:
-        from easypharma.reports import invalidate_daily_sale_cache
+        from easypharma.views.reports import invalidate_daily_sale_cache
         date_str = str(instance.created_at.date()) if instance.created_at else None
         invalidate_daily_sale_cache(instance.tenant_id, date_str=date_str)
     except Exception as e:
@@ -29,7 +29,7 @@ def _invalidate_on_sale(instance, **kwargs):
 def _invalidate_on_purchase(instance, **kwargs):
     """Har purchase save/delete pe stock report cache clear karo."""
     try:
-        from easypharma.reports import invalidate_stock_cache
+        from easypharma.views.reports import invalidate_stock_cache
         invalidate_stock_cache(instance.tenant_id)
     except Exception as e:
         import logging
