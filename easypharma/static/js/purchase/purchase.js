@@ -204,6 +204,19 @@ async function _csvFetchAndRender(file) {
     }
 
     _csvRenderPreviewTable(_csvParsedItems);
+
+    // If all products are missing (no matched items yet), disable Confirm & Load
+    // so user is guided to add missing products via the + Add buttons above.
+    const confirmBtn = document.getElementById('csvConfirmBtn');
+    if (_csvParsedItems.length === 0 && _csvMissing.length > 0) {
+        confirmBtn.disabled = true;
+        confirmBtn.style.opacity = '0.55';
+        confirmBtn.title = 'Pehle missing products add karo';
+    } else {
+        confirmBtn.disabled = false;
+        confirmBtn.style.opacity = '';
+        confirmBtn.title = '';
+    }
 }
 
 // Whenever quickAddModal closes (Save or Cancel) WHILE csvImportModal is still
@@ -223,6 +236,18 @@ function _csvRenderPreviewTable(items) {
     const tbody = document.getElementById('csvPreviewTbody');
     tbody.innerHTML = '';
     document.getElementById('csvItemCount').textContent = items.length;
+
+    // Show empty-state row when all products are missing
+    if (items.length === 0) {
+        const emptyTr = document.createElement('tr');
+        emptyTr.innerHTML = `
+            <td colspan="11" style="text-align:center;padding:28px 16px;color:#9ca3af;font-size:0.85rem;">
+                <i class="fas fa-box-open" style="font-size:1.8rem;display:block;margin-bottom:8px;opacity:0.4;"></i>
+                Koi matched product nahi mila — upar missing products add karo
+            </td>`;
+        tbody.appendChild(emptyTr);
+        return;
+    }
 
     items.forEach((item, idx) => {
         const expiryDisplay = item.expiry_date ? String(item.expiry_date).substring(0, 7) : '';
@@ -316,6 +341,20 @@ function _csvRecalcRow(idx) {
 function _csvRemoveRow(idx) {
     _csvParsedItems.splice(idx, 1);
     _csvRenderPreviewTable(_csvParsedItems);
+
+    // Disable "Confirm & Load" if ALL products are missing — user must add them first
+    const confirmBtn = document.getElementById('csvConfirmBtn');
+    if (confirmBtn) {
+        if (_csvParsedItems.length === 0 && _csvMissing.length > 0) {
+            confirmBtn.disabled = true;
+            confirmBtn.style.opacity = '0.55';
+            confirmBtn.title = 'Pehle missing products add karo';
+        } else {
+            confirmBtn.disabled = false;
+            confirmBtn.style.opacity = '';
+            confirmBtn.title = '';
+        }
+    }
 }
 
 function csvClearAll() {

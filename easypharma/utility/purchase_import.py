@@ -6,6 +6,54 @@ from easypharma.models.Items import Products
 from easypharma.models.purchase_invoice import PurchaseInvoice
 
 
+# ====================== PRODUCT LOOKUP ======================
+
+def normalize_name(name):
+    """Normalize product name: uppercase, replace - / . with space, collapse spaces."""
+    name = name.upper().strip()
+    name = re.sub(r'[-/.]', ' ', name)
+    name = re.sub(r'\s+', ' ', name)
+    return name.strip()
+
+
+def find_product(tenant, product_name):
+    """
+    Smart product lookup — 4 strategies:
+    1. Exact match (iexact)
+    2. Contains match (icontains)
+    3. Normalized exact match  (handles hyphen/slash differences)
+    4. Normalized contains match
+    """
+    name = product_name.strip()
+    if not name:
+        return None
+
+    # 1. Exact
+    p = Products.objects.filter(tenant=tenant, product_name__iexact=name).first()
+    if p:
+        return p
+
+    # 2. Contains
+    p = Products.objects.filter(tenant=tenant, product_name__icontains=name).first()
+    if p:
+        return p
+
+    # 3 & 4. Normalize then compare
+    norm = normalize_name(name)
+    first_word = norm.split()[0] if norm.split() else ''
+    if first_word and len(first_word) >= 3:
+        candidates = Products.objects.filter(tenant=tenant, product_name__icontains=first_word)
+        for candidate in candidates:
+            if normalize_name(candidate.product_name) == norm:
+                return candidate
+        for candidate in candidates:
+            cand_norm = normalize_name(candidate.product_name)
+            if norm in cand_norm or cand_norm in norm:
+                return candidate
+
+    return None
+
+
 # ====================== PARSERS ======================
 
 def parse_integer_value(value, default=0):
@@ -69,7 +117,7 @@ def parse_expiry(value):
 def detect_csv_format(rows):
     """
     Returns:
-      'marg'    → BAGDI / Marg Software format
+      'marg'     → BAGDI / Marg Software format
       'micropro' → MicroPro format (H/T row structure)
       'unknown'
     """
@@ -158,10 +206,7 @@ def parse_marg_format(rows, request):
         mrp            = parse_decimal_value(row[idx_mrp]  if idx_mrp  is not None and len(row) > idx_mrp  else 0)
         expiry_date    = parse_expiry(expiry_text)
 
-        product = (
-            Products.objects.filter(tenant=request.tenant, product_name__iexact=product_name).first()
-            or Products.objects.filter(tenant=request.tenant, product_name__icontains=product_name).first()
-        )
+        product = find_product(request.tenant, product_name)
 
         if not product:
             missing_products.append({'row': row_number, 'product': product_name})
@@ -197,20 +242,53 @@ def parse_marg_format(rows, request):
 
 # ====================== MICROPRO FORMAT ======================
 
+def detect_micropro_variant(rows):
+    """
+    MicroPro T-rows come in two layouts:
+
+    Variant A (older — e.g. I_NBVORASONS):
+      col[4] = ItemCode or Barcode  (compact alphanumeric, no spaces)
+      col[5] = ProductName
+
+    Variant B (newer — e.g. PDdC):
+      col[4] = CompanyName          (has spaces, or is empty string)
+      col[5] = ProductName
+
+    Both layouts share the same column positions from col[5] onward,
+    so only col[4] differs and product name is always at col[5].
+
+    Detection logic: if col[4] of the first T-row contains a space
+    OR is empty → Variant B (company name); otherwise → Variant A.
+    """
+    for row in rows:
+        if not row or str(row[0]).strip().upper() != 'T':
+            continue
+        if len(row) <= 4:
+            continue
+        col4 = str(row[4]).strip()
+        if ' ' in col4 or col4 == '':
+            return 'B'
+        return 'A'
+    return 'A'  # safe default
+
+
 def parse_micropro_format(rows, request):
     """
-    MicroPro CSV — pipe-delimited (no actual pipe; fixed column positions):
-      H row  → col[2]=InvoiceNo, col[3]=InvoiceDate (DDMMYYYY)
-      T rows → col[4]=ItemCode, col[5]=ProductName, col[6]=Packing, col[7]=Company,
-                col[8]=BatchNo,  col[9]=Expiry(DDMMYYYY),
-                col[11]=PurchaseRate, col[12]=MRP,
-                col[16]=Qty,     col[17]=FreeQty
-    MicroPro column indices (0-based):
-      0:RecType  1:-  2:InvNo  3:InvDate  4:ItemCode  5:ProductName  6:Packing  7:Company
-      8:BatchNo  9:Expiry  10:MFGDate  11:PurRate  12:PurRate2  13:MRP
-      14:Disc%  15:-  16:Qty  17:FreeQty  18:TotalQty  19:Disc  20:-  21:Amount
-      22:GST%  23:GSTAmt  24:GST%2  25:GSTAmt2  ...  30:HSN
+    MicroPro CSV — auto-detects column-layout variant.
+
+    Both variants share these column positions:
+      H row : col[2]=InvoiceNo   col[3]=InvoiceDate (DDMMYYYY)
+      T rows: col[5]=ProductName col[6]=Packing     col[7]=CompanyCode
+              col[8]=BatchNo     col[9]=Expiry(DDMMYYYY)
+              col[10]=PurRate    col[12]=MRP
+              col[15]=Qty        col[16]=FreeQty
+
+    Variant A adds an ItemCode/Barcode at col[4].
+    Variant B adds a CompanyName at col[4] (same slot, different content).
+    Since ProductName is always col[5], no offset adjustment is needed.
     """
+    variant = detect_micropro_variant(rows)  # logged for debugging; logic is same for both
+
     invoice_number = None
     invoice_date   = None
     items = []
@@ -229,34 +307,29 @@ def parse_micropro_format(rows, request):
                     invoice_number = inv_raw
             if len(row) > 3:
                 date_raw = str(row[3]).strip()
-                # DDMMYYYY format
                 if len(date_raw) == 8 and date_raw.isdigit():
                     invoice_date = f'{date_raw[4:8]}-{date_raw[2:4]}-{date_raw[0:2]}'
             continue
 
         # ── Transaction / item row ──
         if rec_type == 'T':
-            if len(row) < 17:
+            if len(row) < 16:
                 continue
 
-            product_name  = str(row[5]).strip()
+            # ProductName is always col[5] in both Variant A and Variant B
+            product_name = str(row[5]).strip()
             if not product_name or len(product_name) < 3:
                 continue
 
             batch_number   = str(row[8]).strip()  if len(row) > 8  else ''
             expiry_text    = str(row[9]).strip()   if len(row) > 9  else ''
-            # MicroPro T-row verified column mapping:
-            # col[10]=PurRate, col[12]=MRP, col[15]=Qty, col[16]=FreeQty
             purchase_price = parse_decimal_value(row[10] if len(row) > 10 else 0)
             mrp            = parse_decimal_value(row[12] if len(row) > 12 else 0)
             quantity       = parse_integer_value(row[15] if len(row) > 15 else 0)
             free_quantity  = parse_integer_value(row[16] if len(row) > 16 else 0)
             expiry_date    = parse_expiry(expiry_text)
 
-            product = (
-                Products.objects.filter(tenant=request.tenant, product_name__iexact=product_name).first()
-                or Products.objects.filter(tenant=request.tenant, product_name__icontains=product_name).first()
-            )
+            product = find_product(request.tenant, product_name)
 
             if not product:
                 missing_products.append({'row': row_number, 'product': product_name})
@@ -326,12 +399,9 @@ def process_csv_file(csv_file, request):
     ).exists():
         return {'success': False, 'error': f"Invoice {invoice_number} is already imported."}
 
-    if not result['items']:
-        msg = 'No valid products found in CSV.'
-        if result['missing_products']:
-            names = ', '.join(p['product'] for p in result['missing_products'][:5])
-            msg += f' Missing products: {names}'
-        return {'success': False, 'error': msg}
+    # Only fail if BOTH items and missing_products are empty (truly blank CSV)
+    if not result['items'] and not result['missing_products']:
+        return {'success': False, 'error': 'No valid products found in CSV.'}
 
     return {
         'success':          True,
