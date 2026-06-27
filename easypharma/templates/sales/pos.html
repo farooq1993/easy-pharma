@@ -42,6 +42,11 @@
         <!-- Main POS Area -->
         <div class="col-lg-8">
             <div class="card border-0 shadow-sm rounded-4 h-100">
+                <!-- Tab System for Multi-Bill -->
+                <div class="d-flex mb-3" id="billTabsContainer" style="gap: 10px; overflow-x: auto; padding-bottom: 5px;">
+                    <!-- Tabs will be injected here by JS -->
+                </div>
+
                 <div class="card-header bg-white border-0 py-3">
                     <h5 class="fw-bold mb-0 text-success">
                         <i class="fas fa-prescription me-2"></i> Pharmacy POS
@@ -1550,6 +1555,106 @@
         }
     }
 
+    // Multi-Bill State Management
+let bills = [{
+    id: Date.now(),
+    cart: [],
+    patient: { name: '', address: '', phone: '', doctor: '' },
+    active: true
+}];
+let activeBillIndex = 0;
+
+function updateBillTabsUI() {
+    const container = document.getElementById('billTabsContainer');
+    container.innerHTML = '';
+    
+    bills.forEach((bill, index) => {
+        const isActive = index === activeBillIndex;
+        const tab = document.createElement('button');
+        tab.className = `btn ${isActive ? 'btn-primary' : 'btn-outline-secondary'} btn-sm d-flex align-items-center`;
+        tab.style.minWidth = "120px";
+        tab.innerHTML = `
+            <span onclick="switchBill(${index})" class="flex-grow-1 text-truncate">Bill ${index + 1} ${bill.patient.name ? '- ' + bill.patient.name : ''}</span>
+            ${bills.length > 1 ? `<i class="fas fa-times ms-2 text-danger" onclick="closeBill(${index}, event)"></i>` : ''}
+        `;
+        container.appendChild(tab);
+    });
+
+    // Add "New Bill" button
+    const addBtn = document.createElement('button');
+    addBtn.className = "btn btn-success btn-sm";
+    addBtn.innerHTML = '<i class="fas fa-plus"></i> New (F1)';
+    addBtn.onclick = addNewBill;
+    container.appendChild(addBtn);
+}
+
+function addNewBill() {
+    // Current bill ko save karein pehle
+    saveCurrentState();
+    
+    // Naya bill object banayein
+    const newBill = {
+        id: Date.now(),
+        cart: [],
+        patient: { name: '', address: '', phone: '', doctor: '' },
+        active: true
+    };
+    bills.push(newBill);
+    activeBillIndex = bills.length - 1;
+    
+    loadBillState(activeBillIndex);
+    updateBillTabsUI();
+}
+
+    function saveCurrentState() {
+        bills[activeBillIndex].cart = [...cart]; // 'cart' aapka existing array hai
+        bills[activeBillIndex].patient = {
+            name: document.getElementById('patientName').value,
+            address: document.getElementById('patientAddress').value,
+            phone: document.getElementById('patientPhone').value,
+            doctor: document.getElementById('doctorName').value
+        };
+    }
+
+    function loadBillState(index) {
+        const bill = bills[index];
+        cart = [...bill.cart]; // UI update karne ke liye
+        document.getElementById('patientName').value = bill.patient.name;
+        document.getElementById('patientAddress').value = bill.patient.address;
+        document.getElementById('patientPhone').value = bill.patient.phone;
+        document.getElementById('doctorName').value = bill.patient.doctor || '';
+        
+        renderCart(); 
+    }
+
+    function switchBill(index) {
+        saveCurrentState();
+        activeBillIndex = index;
+        loadBillState(index);
+        updateBillTabsUI();
+    }
+
+    function closeBill(index, event) {
+        event.stopPropagation();
+        if (confirm("Close this bill? Data will be lost.")) {
+            bills.splice(index, 1);
+            if (activeBillIndex >= bills.length) activeBillIndex = bills.length - 1;
+            loadBillState(activeBillIndex);
+            updateBillTabsUI();
+        }
+    }
+
+    // F1 Key Listener
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'F1') {
+            e.preventDefault();
+            addNewBill();
+        }
+    });
+
+    // Initialize
+    window.addEventListener('load', updateBillTabsUI);
+
     function resetPOS(nextInvNum) {
         if (typeof editData !== 'undefined' && editData) {
             window.location.href = '/pos/';
@@ -1578,6 +1683,7 @@
 
         setTimeout(() => document.getElementById('productSearch').focus(), 300);
     }
+
 </script>
 
 <style>
