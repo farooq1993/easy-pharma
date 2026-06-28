@@ -1,0 +1,50 @@
+/* Enhanced Search Dropdown - Matching purchase_entry style */
+.search-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    max-height: 320px;
+    overflow-y: auto;
+    z-index: 1060;
+    margin-top: 6px;
+}
+
+.search-item {
+    padding: 12px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid #f1f3f5;
+    transition: all 0.2s ease;
+}
+
+.search-item:hover {
+    background: linear-gradient(90deg, #e8f0fe 0%, #f3f6ff 100%);
+    border-left: 4px solid #4361ee;
+    transform: translateX(4px);
+}
+
+.search-item:last-child {
+    border-bottom: none;
+}
+
+.search-item strong {
+    color: #1e2937;
+    font-size: 0.95rem;
+}
+
+.search-item small {
+    color: #64748b;
+    display: block;
+    margin-top: 3px;
+    font-size: 0.82rem;
+}
+
+/* Highlight selected product */
+.search-item.selected {
+    background: #dbeafe;
+    border-left-color: #2563eb;
+}

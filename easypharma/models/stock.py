@@ -8,7 +8,7 @@ class StockBatch(TenantAwareModel):
     expiry_date = models.DateField()
     purchase_price = models.DecimalField(max_digits=10, decimal_places=2)
     mrp = models.DecimalField(max_digits=10, decimal_places=2)
-    sale_price = models.DecimalField(max_digits=10, decimal_places=2)
+    sale_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     
     initial_quantity = models.PositiveIntegerField()
     current_quantity = models.PositiveIntegerField()

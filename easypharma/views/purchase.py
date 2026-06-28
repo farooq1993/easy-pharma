@@ -25,10 +25,6 @@ from decimal import Decimal
 
 # Import from your utility file
 from easypharma.utility.purchase_import import process_csv_file
-# from easypharma.utility.purchase_import import (normalize_column_name,find_column,looks_like_date,looks_like_integer,looks_like_decimal,
-#                                     is_likely_product_name,is_likely_batch,infer_purchase_columns,
-#                                     guess_invoice_number,guess_purchase_date,parse_decimal_value,
-#                                     parse_integer_value,parse_expiry,process_csv_file)
 
 
 class PurchaseEntryView(LoginRequiredMixin,View):
@@ -939,23 +935,40 @@ class OpeningStockEntryView(LoginRequiredMixin, View):
 
                 for item in data['items']:
                     product = Products.objects.get(id=item['product_id'], tenant=request.tenant)
+                    
+                    expiry_str = item['expiry_date']
+                    if expiry_str and len(expiry_str) <= 7:  # e.g. "01-28" or "01-2028"
+                        try:
+                            if '-' in expiry_str:
+                                month, year = expiry_str.split('-')
+                                if len(year) == 2:
+                                    year = '20' + year
+                                expiry_date = f"{year}-{month.zfill(2)}-01"
+                            else:
+                                expiry_date = expiry_str
+                        except:
+                            expiry_date = expiry_str + "-01" if len(expiry_str) == 5 else expiry_str
+                    else:
+                        expiry_date = expiry_str
+
                     OpeningStockItem.objects.create(
                         tenant=request.tenant,
                         opening_stock=stock,
                         product=product,
                         batch_number=item['batch_number'],
-                        expiry_date=item['expiry_date'] + "-01" if len(item['expiry_date']) == 7 else item['expiry_date'],
+                        expiry_date=expiry_date,
                         quantity=item['quantity'],
                         purchase_price=item['purchase_price'],
                         mrp=item['mrp'],
                         tax_percentage=item.get('tax_percentage', 0),
                         total_amount=item['total']
                     )
-
                 return JsonResponse({
                     'success': True,
                     'stock_id': stock.id,
                     'voucher_number': stock.voucher_number,
                 })
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
