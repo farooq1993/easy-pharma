@@ -1,0 +1,127 @@
+<!-- Quick Add Medicine Modal -->
+<div class="modal fade ep-modal" id="quickAddModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-plus-circle me-2" style="color:var(--brand);"></i>
+                    Quick Add Medicine
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+
+                <div class="mb-3">
+                    <label class="ep-label">Medicine Name <span class="text-danger">*</span></label>
+                    <input type="text" id="quickName" class="ep-input" placeholder="e.g. Paracetamol 500mg">
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="ep-label">Packing</label>
+                        <input type="text" id="quickPacking" class="ep-input" placeholder="e.g. 10 tablets / strip">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="ep-label">Conversion Factor</label>
+                        <input type="number" id="quickConv" class="ep-input" value="1" min="1">
+                    </div>
+                </div>
+
+                <!-- New Product Type Field -->
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="ep-label">Product Type</label>
+                        <select id="quickType" style="display:none;">
+                            {% for ptype in product_type %}
+                            <option value="{{ ptype.id }}">{{ ptype.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="qs-wrap" id="qs-wrap-quickType">
+                            <div class="qs-input-row">
+                                <input type="text" class="ep-input qs-input" id="qs-input-quickType" 
+                                    placeholder="Search type (Tablet, Capsule, Syrup...)">
+                                <button type="button" class="qs-clear-btn" id="qs-clear-quickType" 
+                                        onclick="qsClear('quickType')" style="display:none;">✕</button>
+                            </div>
+                            <div class="qs-dropdown" id="qs-drop-quickType" style="display:none;"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="ep-label">Tax Rate</label>
+                        <select id="quickTax" style="display:none;">
+                            {% for tax in product_taxes %}
+                            <option value="{{ tax.id }}">{{ tax.tax_name }} ({{ tax.tax_rate }}%)</option>
+                            {% endfor %}
+                        </select>
+                        <div class="qs-wrap" id="qs-wrap-quickTax">
+                            <div class="qs-input-row">
+                                <input type="text" class="ep-input qs-input" id="qs-input-quickTax" placeholder="Search tax rate...">
+                                <button type="button" class="qs-clear-btn" id="qs-clear-quickTax" onclick="qsClear('quickTax')" style="display:none;">✕</button>
+                            </div>
+                            <div class="qs-dropdown" id="qs-drop-quickTax" style="display:none;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-4">
+                        <label class="ep-label">Drug Schedule</label>
+                        <select id="quickSchedule" style="display:none;">
+                            {% for schedule in product_schedules %}
+                            <option value="{{ schedule.id }}">{{ schedule.schedule_name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="qs-wrap" id="qs-wrap-quickSchedule">
+                            <div class="qs-input-row">
+                                <input type="text" class="ep-input qs-input" id="qs-input-quickSchedule" placeholder="Search schedule...">
+                                <button type="button" class="qs-clear-btn" id="qs-clear-quickSchedule" onclick="qsClear('quickSchedule')" style="display:none;">✕</button>
+                            </div>
+                            <div class="qs-dropdown" id="qs-drop-quickSchedule" style="display:none;"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="ep-label">Product Content</label>
+                        <select id="quickContent" style="display:none;">
+                            {% for content in product_contents %}
+                            <option value="{{ content.id }}">{{ content.content_name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="qs-wrap" id="qs-wrap-quickContent">
+                            <div class="qs-input-row">
+                                <input type="text" class="ep-input qs-input" id="qs-input-quickContent" placeholder="Search content...">
+                                <button type="button" class="qs-clear-btn" id="qs-clear-quickContent" onclick="qsClear('quickContent')" style="display:none;">✕</button>
+                            </div>
+                            <div class="qs-dropdown" id="qs-drop-quickContent" style="display:none;"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="ep-label">Company Name</label>
+                        <select id="quickCompany" style="display:none;">
+                            {% for company in drug_companies %}
+                            <option value="{{ company.id }}">{{ company.company_name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="qs-wrap" id="qs-wrap-quickCompany">
+                            <div class="qs-input-row">
+                                <input type="text" class="ep-input qs-input" id="qs-input-quickCompany" placeholder="Search company...">
+                                <button type="button" class="qs-clear-btn" id="qs-clear-quickCompany" onclick="qsClear('quickCompany')" style="display:none;">✕</button>
+                            </div>
+                            <div class="qs-dropdown" id="qs-drop-quickCompany" style="display:none;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="ep-label">HSN Code</label>
+                    <input type="text" id="quickHsn" class="ep-input" placeholder="e.g. 30049099" maxlength="8">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-primary" onclick="handleSaveQuickProduct()">
+                    <i class="fas fa-save me-1"></i> Save Medicine
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

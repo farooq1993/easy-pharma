@@ -45,9 +45,59 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        ['quickTax','quickSchedule','quickContent','quickCompany'].forEach(initQuickSelect);
+        ['quickTax', 'quickSchedule', 'quickContent', 'quickCompany', 'quickType'].forEach(initQuickSelect);
     });
 })();
+
+// Quick Add Product Handler
+async function handleSaveQuickProduct() {
+    const name = document.getElementById('quickName').value.trim();
+    if (!name) {
+        showToast('Medicine name is required', 'error');
+        return;
+    }
+
+    const data = {
+        product_name: name,
+        packing: document.getElementById('quickPacking').value.trim(),
+        conversion_factor: parseInt(document.getElementById('quickConv').value) || 1,
+        tax_id: document.getElementById('quickTax').value || null,
+        schedule_id: document.getElementById('quickSchedule').value || null,
+        content_id: document.getElementById('quickContent').value || null,
+        company_id: document.getElementById('quickCompany').value || null,
+        type_id: document.getElementById('quickType').value || null,
+        hsn_code: document.getElementById('quickHsn').value.trim() || null
+    };
+
+    try {
+        const res = await fetch("/api/products/quick-add/", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(data)
+        });
+
+        const result = await res.json();
+
+        if (result.success) {
+            showToast('Medicine added successfully!', 'success');
+            const modal = bootstrap.Modal.getInstance(document.getElementById('quickAddModal'));
+            if (modal) modal.hide();
+
+            // Clear fields
+            document.getElementById('quickName').value = '';
+            document.getElementById('quickPacking').value = '';
+            document.getElementById('quickHsn').value = '';
+        } else {
+            showToast(result.error || 'Failed to save medicine', 'error');
+        }
+    } catch (e) {
+        console.error(e);
+        showToast('Error saving product. Check console.', 'error');
+    }
+}
 
 // ==================== MAIN VARIABLES ====================
 let openingItems = [];

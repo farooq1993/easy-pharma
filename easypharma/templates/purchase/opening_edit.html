@@ -1,0 +1,157 @@
+{% extends "includes/base.html" %}
+{% load static %}
+{% load custom_filters %}
+
+{% block title %}Edit Opening Stock{% endblock %}
+
+{% block content %}
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+<link rel="stylesheet" href="{% static 'css/customecss/purchase_entry.css' %}">
+<link rel="stylesheet" href="{% static 'css/customecss/openingStock.css' %}">
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+
+<div class="container-fluid py-3 px-4">
+    <div id="universalLoader" class="universal-loader d-none">
+        <div class="loader-spinner">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="loader-text">Please wait...</div>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">
+                <i class="fas fa-edit" style="color:var(--brand); margin-right:8px;"></i> 
+                Edit Opening Stock
+            </h1>
+            <p class="ep-label mt-1">Voucher: <strong id="editVoucherNumber"></strong></p>
+        </div>
+        <a href="{% url 'opening_stock' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Back to List
+        </a>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-9">
+            <!-- Stock Details -->
+            <div class="ep-card">
+                <div class="ep-card-header">
+                    <div class="step-badge">1</div>
+                    <h6>Stock Details</h6>
+                </div>
+                <div class="ep-card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="ep-label">Voucher Number</label>
+                            <input type="text" id="voucher_number" class="ep-input bg-light" readonly>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="ep-label">Opening Date <span class="text-danger">*</span></label>
+                            <input type="date" id="opening_date" class="ep-input">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add/Edit Items -->
+            <div class="ep-card">
+                <div class="ep-card-header">
+                    <div class="step-badge">2</div>
+                    <h6>Items</h6>
+                    <button class="btn-quick-add ms-auto" data-bs-toggle="modal" data-bs-target="#quickAddModal">
+                        <i class="fas fa-plus-circle"></i> Quick Add Medicine
+                    </button>
+                </div>
+                <div class="ep-card-body">
+                    <!-- Inline Add Form -->
+                    <div class="add-row-grid mb-4" style="grid-template-columns: 2fr 1fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px;">
+                        <div>
+                            <label class="ep-label">Medicine</label>
+                            <div class="search-wrap position-relative">
+                                <input type="text" id="newProductSearch" class="ep-input" placeholder="Search product...">
+                                <div id="newSearchResults" class="search-dropdown"></div>
+                            </div>
+                        </div>
+                        <div><label class="ep-label">Batch No.</label><input type="text" id="newBatch" class="ep-input"></div>
+                        <div><label class="ep-label">Expiry</label><input type="text" id="newExpiry" class="ep-input" placeholder="01-27"></div>
+                        <div><label class="ep-label">Qty</label><input type="number" id="newQty" class="ep-input" value="1"></div>
+                        <div><label class="ep-label">Pur Rate</label><input type="number" id="newPrice" class="ep-input" step="0.01"></div>
+                        <div><label class="ep-label">MRP</label><input type="number" id="newMrp" class="ep-input" step="0.01"></div>
+                        <div><label class="ep-label">GST %</label><input type="number" id="newTax" class="ep-input" value="5"></div>
+                        <div>
+                            <label class="ep-label">Total</label>
+                            <div id="newTotalDisplay" style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;padding:10px 12px;font-weight:700;">₹0.00</div>
+                        </div>
+                        <div class="d-flex align-items-end">
+                            <button class="btn-add-item" onclick="addOpeningItem()"><i class="fas fa-plus"></i></button>
+                        </div>
+                    </div>
+
+                    <table class="items-table" id="openingTable">
+                        <thead>
+                            <tr>
+                                <th>Product</th><th>Batch</th><th>Expiry</th><th>Qty</th><th>Pur Rate</th><th>MRP</th><th>GST</th><th>Total</th><th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="openingItemsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary -->
+        <div class="col-lg-3">
+            <div class="summary-card">
+                <div class="summary-header p-3"><i class="fas fa-boxes"></i> Summary</div>
+                <div class="summary-body p-3">
+                    <div class="summary-row"><span>Sub Total</span><span id="summarySubTotal">₹0.00</span></div>
+                    <div class="summary-row"><span>Total GST</span><span id="summaryTax">₹0.00</span></div>
+                    <hr>
+                    <div class="summary-total-row"><span class="fw-bold">Grand Total</span><span class="fw-bold fs-5" id="summaryGrandTotal">₹0.00</span></div>
+                    <button class="btn-complete mt-3" onclick="saveOpeningStock()">
+                        <i class="fas fa-save"></i> Update Opening Stock
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Add Modal (same as before) -->
+{% include "purchase/quick_add_modal.html" %}   <!-- Or paste the full modal here -->
+
+<div class="ep-toast" id="epToast"></div>
+
+<script src="{% static 'js/purchase/openingStock.js' %}"></script>
+
+<script src="{% static 'js/purchase/openingStock.js' %}"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const editDataStr = '{{ edit_data|safe }}';
+    if (editDataStr && editDataStr !== 'null') {
+        try {
+            const editData = JSON.parse(editDataStr);
+            
+            document.getElementById('voucher_number').value = editData.voucher_number || '';
+            document.getElementById('opening_date').value = editData.opening_stock_date || '';
+
+            // Normalize items
+            openingItems = editData.items.map(item => ({
+                ...item,
+                product_name: item.product_name || item.name || 'Unknown Product'
+            }));
+
+            renderOpeningTable();
+            updateSummary();
+            
+            console.log('✅ Edit data loaded successfully:', openingItems.length, 'items');
+        } catch(e) {
+            console.error('Failed to load edit data:', e);
+        }
+    }
+});
+</script>
+{% endblock %}
