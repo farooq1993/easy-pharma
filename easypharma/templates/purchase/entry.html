@@ -112,7 +112,7 @@
                             <div id="expiryHint" class="expiry-hint-text small text-muted mt-1"></div>
                         </div>
                         <!-- Qty -->
-                        <div><label class="ep-label">Qty (Packs)</label><input type="number" id="itemQty" class="ep-input" value="1" min="1"></div>
+                        <div><label class="ep-label">Qty (Packs)</label><input type="number" id="itemQty" class="ep-input" value="0" min="0"></div>
                         <!-- Free -->
                         <div><label class="ep-label" style="color:var(--green)">Free</label><input type="number" id="itemFreeQty" class="ep-input" value="0" min="0"></div>
                         <!-- Cost per pack -->
@@ -1500,29 +1500,55 @@
     });
 
     async function addItem() {
-        if (!selectedProduct) { showToast('Please select a product from search', 'error'); return; }
+        if (!selectedProduct) { 
+            showToast('Please select a product from search', 'error'); 
+            return; 
+        }
+        
         const batch = document.getElementById('itemBatch').value.trim();
         const expiry = document.getElementById('itemExpiry').value;
-        const qty = parseFloat(document.getElementById('itemQty').value);
+        const qty = parseFloat(document.getElementById('itemQty').value) || 0;
         const freeQty = parseFloat(document.getElementById('itemFreeQty').value) || 0;
         const price = parseFloat(document.getElementById('itemPrice').value);
         const taxPerc = parseFloat(document.getElementById('itemTax').value) || 0;
         let mrp = parseFloat(document.getElementById('itemMrp').value);
+
         if (!batch) { showToast('Batch number required', 'error'); return; }
-        if (!expiry) { showToast('Select expiry month and enter year (MM/YYYY)', 'error'); return; }
-        if (isNaN(qty) || qty <= 0) { showToast('Valid quantity required', 'error'); return; }
-        if (isNaN(price) || price <= 0) { showToast('Valid cost price required', 'error'); return; }
-        if (isNaN(mrp) || mrp <= 0) mrp = price * 1.2; // fallback
+        if (!expiry) { showToast('Expiry required', 'error'); return; }
+
+        // ✅ Free only items allowed
+        if (qty <= 0 && freeQty <= 0) {
+            showToast('Either Qty or Free quantity must be greater than 0', 'error');
+            return;
+        }
+        if (isNaN(price) || price <= 0) { 
+            showToast('Valid cost price required', 'error'); 
+            return; 
+        }
+        if (isNaN(mrp) || mrp <= 0) mrp = price * 1.2;
+
         const subTotal = qty * price;
         const taxAmount = (subTotal * taxPerc) / 100;
         const totalWithTax = subTotal + taxAmount;
         const totalUnits = (qty + freeQty) * (selectedProduct.conversion_factor || 1);
+
         items.push({
-            product_id: selectedProduct.id, name: selectedProduct.name, packing: selectedProduct.packing || '',
-            batch_number: batch, expiry_date: expiry + "-01", quantity: qty, free_quantity: freeQty,
-            total_units: totalUnits, purchase_price: price, tax_percentage: taxPerc, tax_amount: taxAmount,
-            mrp: mrp, sale_price: mrp / (selectedProduct.conversion_factor || 1), total: totalWithTax
+            product_id: selectedProduct.id, 
+            name: selectedProduct.name, 
+            packing: selectedProduct.packing || '',
+            batch_number: batch, 
+            expiry_date: expiry + "-01", 
+            quantity: qty, 
+            free_quantity: freeQty,
+            total_units: totalUnits, 
+            purchase_price: price, 
+            tax_percentage: taxPerc, 
+            tax_amount: taxAmount,
+            mrp: mrp, 
+            sale_price: mrp / (selectedProduct.conversion_factor || 1), 
+            total: totalWithTax
         });
+
         renderTable();
         resetAddForm();
         showToast(`${selectedProduct.name} added (Batch: ${batch})`);
@@ -1618,39 +1644,52 @@
     }
 
     function calculateSummary() {
-        // Original Sub Total (before any discount) - This is what user wants to see
-        const originalSub = items.reduce((s, i) => s + (i.quantity * i.purchase_price), 0);
-        const taxSum      = items.reduce((s, i) => s + i.tax_amount, 0);
-        const gross       = originalSub + taxSum;
+    // Safe Sub Total
+        const originalSub = items.reduce((s, i) => {
+            const qty = parseFloat(i.quantity) || 0;
+            const price = parseFloat(i.purchase_price) || 0;
+            return s + (qty * price);
+        }, 0);
 
-        const disc = parseFloat(document.getElementById('summaryDiscount').value) || 0;
-        const discountRatio = gross > 0 ? disc / gross : 0;
+        // Safe Tax Sum
+        const taxSum = items.reduce((s, i) => {
+            return s + (parseFloat(i.tax_amount) || 0);
+        }, 0);
 
-        // Effective values after discount (used for tax & grand total calculation)
+        const gross = originalSub + taxSum;
+
+        let discAmt  = parseFloat(document.getElementById('summaryDiscount').value) || 0;
+        let discPerc = parseFloat(document.getElementById('summaryDiscountPerc').value) || 0;
+
+        const discountRatio = gross > 0 ? discAmt / gross : 0;
+
         const effectiveSub = originalSub * (1 - discountRatio);
         const effectiveTax = taxSum * (1 - discountRatio);
 
-        // ── GST Bifurcation (after discount) ─────────────────────────────
+        // ==================== GST BIFURCATION ====================
         const gstMap = {};
         items.forEach(i => {
-            const rate        = parseFloat(i.tax_percentage) || 0;
-            const adjustedTax = i.tax_amount * (1 - discountRatio);
-            const cgst        = adjustedTax / 2;
-            const sgst        = adjustedTax / 2;
+            const rate = parseFloat(i.tax_percentage) || 0;
+            const adjustedTax = (parseFloat(i.tax_amount) || 0) * (1 - discountRatio);
+            const cgst = adjustedTax / 2;
+            const sgst = adjustedTax / 2;
 
-            if (!gstMap[rate]) gstMap[rate] = { total: 0, cgst: 0, sgst: 0 };
+            if (!gstMap[rate]) {
+                gstMap[rate] = { total: 0, cgst: 0, sgst: 0 };
+            }
             gstMap[rate].total += adjustedTax;
             gstMap[rate].cgst  += cgst;
             gstMap[rate].sgst  += sgst;
         });
 
+        // Render GST Bifurcation
         const gstDiv = document.getElementById('gstBifurcationSection');
         if (Object.keys(gstMap).length === 0) {
             gstDiv.innerHTML = '';
         } else {
             let html = '';
             Object.keys(gstMap).sort((a,b) => parseFloat(a) - parseFloat(b)).forEach(rate => {
-                const g     = gstMap[rate];
+                const g = gstMap[rate];
                 const cgstR = parseFloat(rate) / 2;
                 const sgstR = parseFloat(rate) / 2;
                 html += `
@@ -1671,47 +1710,25 @@
             });
             gstDiv.innerHTML = html;
         }
+        // ==================== GST BIFURCATION END ====================
 
-        const grandRaw     = effectiveSub + effectiveTax;
+        const grandRaw = effectiveSub + effectiveTax;
         const grandRounded = Math.round(grandRaw);
-        const roundOff     = grandRounded - grandRaw;
 
-        // Credit Notes
-        let totalCreditApplied = 0;
-        document.querySelectorAll('.cn-amt-input').forEach(inp => {
-            if (!inp.disabled) totalCreditApplied += (parseFloat(inp.value) || 0);
-        });
-        document.getElementById('summaryCreditApplied').innerText = `₹${totalCreditApplied.toFixed(2)}`;
-
-        // === FIXED: Show Original Sub Total (Before Discount) ===
+        // Update Summary Values
         document.getElementById('summarySubTotal').innerHTML = `₹${originalSub.toFixed(2)}`;
-        
-        document.getElementById('summaryTax').innerHTML      = `₹${effectiveTax.toFixed(2)}`;
-
-        // Round Off
-        const roundOffRow = document.getElementById('roundOffRow');
-        const roundOffEl  = document.getElementById('summaryRoundOff');
-        const roundSignEl = document.getElementById('roundOffSign');
-
-        if (Math.abs(roundOff) >= 0.005) {
-            roundOffRow.style.display = 'flex';
-            const sign = roundOff > 0 ? '+' : '−';
-            roundSignEl.textContent = `(${sign}${Math.abs(roundOff).toFixed(2)})`;
-            roundOffEl.style.color  = roundOff > 0 ? '#198754' : '#dc3545';
-            roundOffEl.innerHTML    = `${roundOff > 0 ? '+' : '−'}₹${Math.abs(roundOff).toFixed(2)}`;
-        } else {
-            roundOffRow.style.display = 'none';
-        }
-
+        document.getElementById('summaryTax').innerHTML = `₹${effectiveTax.toFixed(2)}`;
         document.getElementById('summaryGrandTotal').innerHTML = `₹${grandRounded.toFixed(2)}`;
 
-        // Balance Due
-        if (totalCreditApplied > 0) {
-            document.getElementById('summaryBalanceDueRow').classList.remove('d-none');
-            const balanceDue = Math.max(0, grandRounded - totalCreditApplied);
-            document.getElementById('summaryBalanceDue').innerHTML = `₹${balanceDue.toFixed(2)}`;
-        } else {
-            document.getElementById('summaryBalanceDueRow').classList.add('d-none');
+        // Round Off
+        const roundOff = grandRounded - grandRaw;
+        const roundOffRow = document.getElementById('roundOffRow');
+        if (roundOffRow) {
+            if (Math.abs(roundOff) >= 0.005) {
+                roundOffRow.style.display = 'flex';
+            } else {
+                roundOffRow.style.display = 'none';
+            }
         }
     }
 
