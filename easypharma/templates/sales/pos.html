@@ -114,6 +114,12 @@
                     <div class="mb-4">
                         <h6 class="fw-bold mb-3 small text-uppercase text-muted border-bottom pb-2">Patient Details</h6>
                         <div class="mb-2">
+                            <select id="admittedPatientSelect" class="form-select border-0 bg-light py-2 mb-2" onchange="fillPatientDetails()">
+                                <option value="">-- Walk-in / Select IPD Patient --</option>
+                                {% for p in admitted_patients %}
+                                <option value="{{ p.id }}" data-name="{{ p.name }}" data-phone="{{ p.phone|default:'' }}" data-doctor="{{ p.doctor_name|default:'' }}">{{ p.name }} (Room: {{ p.room_number|default:'-' }})</option>
+                                {% endfor %}
+                            </select>
                             <input type="text" id="patientName" class="form-control border-0 bg-light py-2"
                                 placeholder="Patient Name *" autocomplete="off">
                             <div class="invalid-feedback">Patient name is required.</div>
@@ -527,6 +533,10 @@
             <p class="text-muted mb-4">Invoice <span id="successInvoiceNum" class="fw-bold text-dark"></span> saved successfully.</p>
             
             <div class="d-grid gap-3">
+                <div class="d-flex align-items-center justify-content-between mb-2 p-2 bg-light rounded-3">
+                    <span class="text-muted fw-bold small">Print Copies:</span>
+                    <input type="number" class="form-control text-center form-control-sm" id="printCopies" value="1" min="1" max="5" style="width: 70px;">
+                </div>
                 <button type="button" class="btn btn-primary btn-lg rounded-pill fw-bold" id="btnSuccessPrint">
                     <i class="fas fa-print me-2"></i> Print Bill (Dot Matrix)
                 </button>
@@ -1381,6 +1391,24 @@
         return valid;
     }
 
+    function fillPatientDetails() {
+        const select = document.getElementById('admittedPatientSelect');
+        const selectedOption = select.options[select.selectedIndex];
+        if (selectedOption.value) {
+            document.getElementById('patientName').value = selectedOption.dataset.name || '';
+            document.getElementById('patientPhone').value = selectedOption.dataset.phone || '';
+            document.getElementById('patientAddress').value = 'IPD Room: ' + (selectedOption.text.split('Room: ')[1] || '').replace(')', '');
+            if (selectedOption.dataset.doctor) {
+                document.getElementById('doctorName').value = selectedOption.dataset.doctor;
+            }
+            // Auto select Credit for Admitted patients
+            document.getElementById('payCredit').checked = true;
+        } else {
+            // Reset to Cash
+            document.getElementById('payCash').checked = true;
+        }
+    }
+
     async function completeOrder() {
         if (cart.length === 0) return alert('Bill is empty');
         if (!validatePatientDetails()) return;
@@ -1391,6 +1419,7 @@
 
         const data = {
             invoice_id: editData?.invoice_id || null,
+            admitted_patient_id: document.getElementById('admittedPatientSelect').value || null,
             patient_name: document.getElementById('patientName').value,
             patient_address: document.getElementById('patientAddress').value,
             
@@ -1484,7 +1513,8 @@
                     
                     document.getElementById('btnSuccessPrint').style.display = 'inline-block';
                     document.getElementById('btnSuccessPrint').onclick = () => {
-                        window.open(`/pos/print/${result.invoice_id}/`, '_blank');
+                        const copies = document.getElementById('printCopies').value || 1;
+                        window.open(`/pos/print/${result.invoice_id}/?copies=${copies}`, '_blank');
                         setTimeout(() => resetPOS(result.next_invoice_number), 500);
                     };
                     

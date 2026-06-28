@@ -127,12 +127,16 @@ class POSView(LoginRequiredMixin,View):
             except SaleInvoice.DoesNotExist:
                 edit_data = None
 
+        from easypharma.models.sales import AdmittedPatient
+        admitted_patients = AdmittedPatient.objects.filter(tenant=request.tenant, status='Admitted')
+
         return render(request, self.template_name, {
             'product_taxes': product_taxes,
             'doctors':doctors,
             'default_doctor': default_doctor,
             'edit_data': edit_data,
             'next_invoice_number': next_invoice_number,
+            'admitted_patients': admitted_patients,
         })
 
     def post(self, request):
@@ -182,6 +186,12 @@ class POSView(LoginRequiredMixin,View):
                 invoice.total_amount = data['total_amount']
                 invoice.payment_mode = data['payment_mode']
                 invoice.sale_type = data.get('sale_type', 'Prescription')
+                
+                admitted_patient_id = data.get('admitted_patient_id')
+                if admitted_patient_id:
+                    invoice.admitted_patient_id = admitted_patient_id
+                    invoice.payment_mode = 'Credit'
+
                 if data.get('invoice_number'):
                     invoice.invoice_number = data['invoice_number']
                 invoice.save()
@@ -281,7 +291,8 @@ class PrintInvoiceView(LoginRequiredMixin, View):
             W = 65
             template = 'sales/print_invoice.html'
             single = self.generate_bill_text(invoice, ps, W)
-            bill_text = single + "\n" + single  # 2 copies ek ke baad ek
+            copies_requested = int(request.GET.get('copies', 2))
+            bill_text = "\n\n".join([single] * copies_requested)
 
         elif ps.paper_size in ['80mm', '58mm']:
             W = 32 if ps.paper_size == '58mm' else 42
@@ -968,3 +979,35 @@ def get_customer_invoices(request):
     return JsonResponse({
         'products': data
     })
+
+class AdmittedPatientView(LoginRequiredMixin, View):
+    def get(self, request):
+        from easypharma.models.sales import AdmittedPatient
+        from django.db.models import Sum
+        patients = AdmittedPatient.objects.filter(tenant=request.tenant).annotate(
+            outstanding=Sum('invoices__total_amount')
+        ).order_by('-id')
+        
+        return render(request, 'sales/ipd_dashboard.html', {'patients': patients})
+    
+    def post(self, request):
+        # Handle Discharge
+        from easypharma.models.sales import AdmittedPatient, SaleInvoice
+        from django.db.models import Sum
+        patient_id = request.POST.get('patient_id')
+        patient = get_object_or_404(AdmittedPatient, id=patient_id, tenant=request.tenant)
+        
+        if patient.status == 'Admitted':
+            patient.status = 'Discharged'
+            from django.utils import timezone
+            patient.discharge_date = timezone.now().date()
+            # Calculate total from credit invoices
+            total = SaleInvoice.objects.filter(
+                admitted_patient=patient, 
+                payment_mode='Credit'
+            ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+            
+            patient.total_bill_amount = total
+            patient.save()
+            
+        return redirect('ipd_dashboard')

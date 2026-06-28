@@ -14,9 +14,23 @@ class Customer(TenantAwareModel):
     def __str__(self):
         return self.name
 
+class AdmittedPatient(TenantAwareModel):
+    name = models.CharField(max_length=200)
+    phone = models.CharField(max_length=20, null=True, blank=True)
+    doctor_name = models.CharField(max_length=200, null=True, blank=True)
+    room_number = models.CharField(max_length=50, null=True, blank=True)
+    admission_date = models.DateField(auto_now_add=True)
+    discharge_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=50, choices=[('Admitted', 'Admitted'), ('Discharged', 'Discharged')], default='Admitted')
+    total_bill_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+
+    def __str__(self):
+        return f"{self.name} - {self.room_number}"
+
 class SaleInvoice(TenantAwareModel):
     invoice_number = models.CharField(max_length=50, unique=True)
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True)
+    admitted_patient = models.ForeignKey(AdmittedPatient, on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices')
     patient_name = models.CharField(max_length=200, null=True, blank=True)
     patient_address = models.CharField(max_length=200, null=True, blank=True)
     patient_phone = models.CharField(max_length=20, null=True, blank=True)

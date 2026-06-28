@@ -136,7 +136,16 @@
                     {% for field in fields %}
                     <div class="mb-3">
                         <label class="form-label small text-uppercase fw-bold">{{ field.label }}</label>
-                        <input type="{{ field.type }}" name="{{ field.name }}" class="form-control py-2" required>
+                        {% if field.type == 'select' or field.type == 'fk' %}
+                            <select name="{{ field.name }}" id="edit_{{ field.name }}" class="form-select py-2" required>
+                                <option value="">Select {{ field.label }}</option>
+                                {% for choice in field.choices %}
+                                <option value="{{ choice.0 }}">{{ choice.1 }}</option>
+                                {% endfor %}
+                            </select>
+                        {% else %}
+                            <input type="{{ field.type }}" name="{{ field.name }}" id="edit_{{ field.name }}" class="form-control py-2" {% if field.readonly %}readonly{% else %}required{% endif %}>
+                        {% endif %}
                     </div>
                     {% endfor %}
                 </div>

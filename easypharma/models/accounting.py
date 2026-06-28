@@ -49,3 +49,50 @@ class ExpiryReturnItem(TenantAwareModel):
 
     def __str__(self):
         return f"{self.product.name} - {self.batch_number} (x{self.quantity})"
+
+# --- General Accounting Models ---
+
+class AccountGroup(TenantAwareModel):
+    name = models.CharField(max_length=100)
+    nature = models.CharField(max_length=50, choices=[
+        ('Asset', 'Asset'),
+        ('Liability', 'Liability'),
+        ('Income', 'Income'),
+        ('Expense', 'Expense')
+    ])
+
+    def __str__(self):
+        return self.name
+
+class LedgerAccount(TenantAwareModel):
+    name = models.CharField(max_length=200)
+    group = models.ForeignKey(AccountGroup, on_delete=models.CASCADE, related_name='accounts')
+    opening_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    balance_type = models.CharField(max_length=10, choices=[('Dr', 'Debit'), ('Cr', 'Credit')], default='Dr')
+
+    def __str__(self):
+        return self.name
+
+class Voucher(TenantAwareModel):
+    voucher_type = models.CharField(max_length=50, choices=[
+        ('Receipt', 'Receipt'),
+        ('Payment', 'Payment'),
+        ('Contra', 'Contra'),
+        ('Journal', 'Journal')
+    ])
+    voucher_number = models.CharField(max_length=50)
+    date = models.DateField()
+    narration = models.TextField(null=True, blank=True)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2)
+
+    def __str__(self):
+        return f"{self.voucher_type} - {self.voucher_number}"
+
+class VoucherEntry(TenantAwareModel):
+    voucher = models.ForeignKey(Voucher, on_delete=models.CASCADE, related_name='entries')
+    account = models.ForeignKey(LedgerAccount, on_delete=models.CASCADE)
+    entry_type = models.CharField(max_length=10, choices=[('Dr', 'Debit'), ('Cr', 'Credit')])
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+
+    def __str__(self):
+        return f"{self.account.name} - {self.entry_type} {self.amount}"

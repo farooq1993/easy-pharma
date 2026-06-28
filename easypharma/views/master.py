@@ -33,6 +33,9 @@ class MasterCRUDView(LoginRequiredMixin,View):
             'drug-company': DrugCompany,
             'drug-supplier': Supplier,
             'pharmacy-link': apps.get_model('tenants', 'Tenant'),
+            'admitted-patient': apps.get_model('easypharma', 'AdmittedPatient'),
+            'account-group': apps.get_model('easypharma', 'AccountGroup'),
+            'ledger-account': apps.get_model('easypharma', 'LedgerAccount'),
         }
         return models_map.get(master_type)
 
@@ -45,6 +48,9 @@ class MasterCRUDView(LoginRequiredMixin,View):
             'drug-company': 'Drug Companies',
             'drug-supplier': 'Suppliers',
             'pharmacy-link': 'Firm/Pharmacy Details',
+            'admitted-patient': 'Admitted Patients',
+            'account-group': 'Account Groups',
+            'ledger-account': 'Ledger Accounts',
         }
         fields = {
             'product-type': [{'name': 'name', 'label': 'Type Name', 'type': 'text'}],
@@ -71,6 +77,22 @@ class MasterCRUDView(LoginRequiredMixin,View):
                 {'name': 'license_number', 'label': 'License Number (DL)', 'type': 'text'},
                 {'name': 'gst_number', 'label': 'GST Number', 'type': 'text'},
                 {'name': 'address', 'label': 'Address', 'type': 'text'}
+            ],
+            'admitted-patient': [
+                {'name': 'name', 'label': 'Patient Name', 'type': 'text'},
+                {'name': 'phone', 'label': 'Phone Number', 'type': 'text'},
+                {'name': 'doctor_name', 'label': 'Doctor Name', 'type': 'text'},
+                {'name': 'room_number', 'label': 'Room Number', 'type': 'text'}
+            ],
+            'account-group': [
+                {'name': 'name', 'label': 'Group Name', 'type': 'text'},
+                {'name': 'nature', 'label': 'Nature', 'type': 'select', 'choices': [('Asset','Asset'),('Liability','Liability'),('Income','Income'),('Expense','Expense')]}
+            ],
+            'ledger-account': [
+                {'name': 'name', 'label': 'Ledger Name', 'type': 'text'},
+                {'name': 'group', 'label': 'Group', 'type': 'fk', 'fk_model': 'easypharma.AccountGroup', 'fk_display': 'name'},
+                {'name': 'opening_balance', 'label': 'Opening Balance', 'type': 'number'},
+                {'name': 'balance_type', 'label': 'Dr/Cr', 'type': 'select', 'choices': [('Dr','Debit'),('Cr','Credit')]}
             ],
         }
         return {
