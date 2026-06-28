@@ -51,23 +51,26 @@
 
 // Quick Add Product Handler
 async function handleSaveQuickProduct() {
-    const name = document.getElementById('quickName').value.trim();
+    const name = (document.getElementById('quickName') || {}).value?.trim();
     if (!name) {
         showToast('Medicine name is required', 'error');
         return;
     }
 
     const data = {
-        product_name: name,
-        packing: document.getElementById('quickPacking').value.trim(),
-        conversion_factor: parseInt(document.getElementById('quickConv').value) || 1,
-        tax_id: document.getElementById('quickTax').value || null,
-        schedule_id: document.getElementById('quickSchedule').value || null,
-        content_id: document.getElementById('quickContent').value || null,
-        company_id: document.getElementById('quickCompany').value || null,
-        type_id: document.getElementById('quickType').value || null,
-        hsn_code: document.getElementById('quickHsn').value.trim() || null
+        name: name,
+        packing: (document.getElementById('quickPacking') || {}).value?.trim() || '',
+        conversion_factor: parseInt((document.getElementById('quickConv') || {}).value) || 1,
+        tax_id: (document.getElementById('quickTax') || {}).value || null,
+        schedule_id: (document.getElementById('quickSchedule') || {}).value || null,
+        content_id: (document.getElementById('quickContent') || {}).value || null,
+        company_id: (document.getElementById('quickCompany') || {}).value || null,
+        type_id: (document.getElementById('quickType') || {}).value || null,
+        hsn_code: (document.getElementById('quickHsn') || {}).value?.trim() || null
     };
+    
+    console.log("Sending data:", data);   // For debugging
+    console.log("Quick Name Value:", document.getElementById('quickName')?.value);
 
     try {
         const res = await fetch("/api/products/quick-add/", {
@@ -81,18 +84,32 @@ async function handleSaveQuickProduct() {
 
         const result = await res.json();
 
-        if (result.success) {
-            showToast('Medicine added successfully!', 'success');
-            const modal = bootstrap.Modal.getInstance(document.getElementById('quickAddModal'));
-            if (modal) modal.hide();
+    if (result.success) {
+        showToast('Medicine added successfully!', 'success');
+        
+        const modal = bootstrap.Modal.getInstance(document.getElementById('quickAddModal'));
+        if (modal) modal.hide();
 
-            // Clear fields
-            document.getElementById('quickName').value = '';
-            document.getElementById('quickPacking').value = '';
-            document.getElementById('quickHsn').value = '';
-        } else {
-            showToast(result.error || 'Failed to save medicine', 'error');
+        // Clear modal fields
+        document.getElementById('quickName').value = '';
+        document.getElementById('quickPacking').value = '';
+        document.getElementById('quickHsn').value = '';
+
+        // Force refresh product search
+        const searchInput = document.getElementById('newProductSearch');
+        if (searchInput) {
+            searchInput.value = '';  // Clear search box
+            // Trigger input event to reload results
+            setTimeout(() => {
+                const event = new Event('input', { bubbles: true });
+                searchInput.dispatchEvent(event);
+                console.log('Product search refreshed after quick add');
+            }, 400);
         }
+
+    } else {
+        showToast(result.error || 'Failed to save medicine', 'error');
+    }
     } catch (e) {
         console.error(e);
         showToast('Error saving product. Check console.', 'error');
