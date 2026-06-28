@@ -25,10 +25,6 @@ from decimal import Decimal
 
 # Import from your utility file
 from easypharma.utility.purchase_import import process_csv_file
-# from easypharma.utility.purchase_import import (normalize_column_name,find_column,looks_like_date,looks_like_integer,looks_like_decimal,
-#                                     is_likely_product_name,is_likely_batch,infer_purchase_columns,
-#                                     guess_invoice_number,guess_purchase_date,parse_decimal_value,
-#                                     parse_integer_value,parse_expiry,process_csv_file)
 
 
 class PurchaseEntryView(LoginRequiredMixin,View):
@@ -285,11 +281,14 @@ class QuickCreateProductView(LoginRequiredMixin,View):
                 product_hsn_code=data.get('hsn', ''),
                 conversion_factor=1
             )
+            print("product name:",product.product_name)
             return JsonResponse({'success': True, 'product': {
                 'id': product.id,
                 'name': product.product_name
             }})
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
 class PurchaseListView(LoginRequiredMixin,View):
@@ -939,23 +938,169 @@ class OpeningStockEntryView(LoginRequiredMixin, View):
 
                 for item in data['items']:
                     product = Products.objects.get(id=item['product_id'], tenant=request.tenant)
+                    
+                    expiry_str = item['expiry_date']
+                    if expiry_str and len(expiry_str) <= 7:  # e.g. "01-28" or "01-2028"
+                        try:
+                            if '-' in expiry_str:
+                                month, year = expiry_str.split('-')
+                                if len(year) == 2:
+                                    year = '20' + year
+                                expiry_date = f"{year}-{month.zfill(2)}-01"
+                            else:
+                                expiry_date = expiry_str
+                        except:
+                            expiry_date = expiry_str + "-01" if len(expiry_str) == 5 else expiry_str
+                    else:
+                        expiry_date = expiry_str
+
                     OpeningStockItem.objects.create(
                         tenant=request.tenant,
                         opening_stock=stock,
                         product=product,
                         batch_number=item['batch_number'],
-                        expiry_date=item['expiry_date'] + "-01" if len(item['expiry_date']) == 7 else item['expiry_date'],
+                        expiry_date=expiry_date,
                         quantity=item['quantity'],
                         purchase_price=item['purchase_price'],
                         mrp=item['mrp'],
                         tax_percentage=item.get('tax_percentage', 0),
                         total_amount=item['total']
                     )
-
                 return JsonResponse({
                     'success': True,
                     'stock_id': stock.id,
                     'voucher_number': stock.voucher_number,
                 })
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+
+class OpeningStockEditView(LoginRequiredMixin, View):
+    template_name = 'purchase/opening_edit.html'
+
+    def get(self, request, stock_id):
+        try:
+            stock = OpeningStock.objects.get(id=stock_id, tenant=request.tenant)
+        except OpeningStock.DoesNotExist:
+            return redirect('opening_stock_list')
+
+        products = Products.objects.filter(tenant=request.tenant).order_by('product_name')
+        product_taxes = ProductTax.objects.filter(tenant=request.tenant)
+        product_type = ProductType.objects.filter(tenant=request.tenant).order_by('name')
+        
+        product_schedules = ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True))
+        drug_companies = DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True))
+        product_contents = ProductContent.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('content_name')
+
+        items = [{
+            'product_id': item.product.id,
+            'name': item.product.product_name,
+            'batch_number': item.batch_number,
+            'expiry_date': item.expiry_date.strftime('%Y-%m') if item.expiry_date else '',
+            'quantity': item.quantity,
+            'purchase_price': float(item.purchase_price),
+            'mrp': float(item.mrp),
+            'tax_percentage': float(item.tax_percentage),
+            'total': float(item.total_amount)
+        } for item in stock.items.all()]
+
+        edit_data = {
+            'id': stock.id,
+            'voucher_number': stock.voucher_number,
+            'opening_stock_date': stock.opening_stock_date.strftime('%Y-%m-%d'),
+            'items': items,
+            'sub_total': float(stock.sub_total),
+            'tax_amount': float(stock.tax_amount),
+            'total_amount': float(stock.total_amount),
+        }
+
+        return render(request, self.template_name, {
+            'products': products,
+            'product_taxes': product_taxes,
+            'product_schedules': product_schedules,
+            'product_type':product_type,
+            'drug_companies': drug_companies,
+            'product_contents': product_contents,
+            'edit_data': json.dumps(edit_data),
+            'today': now().date(),
+            'is_edit': True,
+        })
+
+    def post(self, request, stock_id=None):
+        try:
+            data = json.loads(request.body)
+            with transaction.atomic():
+                if stock_id:
+                    # Revert old stock
+                    stock = OpeningStock.objects.get(id=stock_id, tenant=request.tenant)
+                    for item in stock.items.all():
+                        batch = StockBatch.objects.filter(
+                            tenant=request.tenant, 
+                            product=item.product, 
+                            batch_number=item.batch_number
+                        ).first()
+                        if batch:
+                            batch.current_quantity -= item.quantity * item.product.conversion_factor
+                            if batch.current_quantity < 0:
+                                batch.current_quantity = 0
+                            batch.save()
+                    stock.items.all().delete()
+                else:
+                    stock = OpeningStock(tenant=request.tenant)
+
+                stock.opening_stock_date = data['opening_stock_date']
+                stock.sub_total = data['sub_total']
+                stock.tax_amount = data['tax_amount']
+                stock.discount_percentage = data.get('discount_percentage', 0)
+                stock.discount_amount = data.get('discount_amount', 0)
+                stock.total_amount = data['total_amount']
+
+                if not stock_id or not stock.voucher_number:
+                    stock.voucher_number = OpeningStock.generate_voucher_number(
+                        tenant=request.tenant,
+                        opening_stock_date=data['opening_stock_date']
+                    )
+                stock.save()
+
+                for item in data['items']:
+                    product = Products.objects.get(id=item['product_id'], tenant=request.tenant)
+                    
+                    expiry_str = item['expiry_date']
+                    if expiry_str and len(expiry_str) <= 7:  # e.g. "01-28" or "01-2028"
+                        try:
+                            if '-' in expiry_str:
+                                month, year = expiry_str.split('-')
+                                if len(year) == 2:
+                                    year = '20' + year
+                                expiry_date = f"{year}-{month.zfill(2)}-01"
+                            else:
+                                expiry_date = expiry_str
+                        except:
+                            expiry_date = expiry_str + "-01" if len(expiry_str) == 5 else expiry_str
+                    else:
+                        expiry_date = expiry_str
+
+                    OpeningStockItem.objects.create(
+                        tenant=request.tenant,
+                        opening_stock=stock,
+                        product=product,
+                        batch_number=item['batch_number'],
+                        expiry_date=expiry_date,
+                        quantity=item['quantity'],
+                        purchase_price=item['purchase_price'],
+                        mrp=item['mrp'],
+                        tax_percentage=item.get('tax_percentage', 0),
+                        total_amount=item['total']
+                    )
+                return JsonResponse({
+                    'success': True,
+                    'stock_id': stock.id,
+                    'voucher_number': stock.voucher_number,
+                })
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)
+        return OpeningStockEntryView().post(request, stock_id=stock_id)

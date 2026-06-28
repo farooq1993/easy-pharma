@@ -203,7 +203,7 @@ class OpeningStockItem(TenantAwareModel):
                     'expiry_date': self.expiry_date,
                     'purchase_price': self.purchase_price,
                     'mrp': self.mrp,
-                    'sale_price': self.sale_price,
+                    # 'sale_price': self.sale_price,
                     'initial_quantity': total_units,
                     'current_quantity': total_units
                 }
