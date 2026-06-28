@@ -90,8 +90,13 @@ class MasterCRUDView(LoginRequiredMixin,View):
         else:
             items = model.objects.filter(tenant=request.tenant).order_by('id')
             
+        paginator = Paginator(items, 25) # 25 items per page
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+            
         context = self.get_context_data(master_type)
-        context['items'] = items
+        context['items'] = page_obj
+        context['page_obj'] = page_obj
         return render(request, 'masters/generic_master.html', context)
 
     def post(self, request, master_type):
