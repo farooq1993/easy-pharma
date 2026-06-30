@@ -6,7 +6,7 @@ from easypharma.models import User
 from django.contrib import messages
 from easypharma.models.sales import SaleInvoice, Customer, SaleItem
 from easypharma.models.Items import Products
-from django.db.models import Sum, Count, Q, F, DecimalField
+from django.db.models import Sum, Count, Q, F, DecimalField,ExpressionWrapper
 from django.db.models.functions import TruncDate
 from datetime import date, timedelta
 from tenants.models import Tenant
@@ -125,12 +125,24 @@ def home_view(request):
     top_product_names = [p['product__product_name'][:15] for p in top_products]
     top_product_qty = [p['total_qty'] for p in top_products]
     
-    # Total Inventory Value
+    
+    # Total Inventory Value - Make it consistent with Stock Report
     inventory_value = StockBatch.objects.filter(
-        tenant=request.tenant
+        tenant=request.tenant,
+        current_quantity__gt=0
     ).aggregate(
-        total_value=Sum(F('current_quantity') * F('purchase_price'), output_field=DecimalField())
+        total_value=Sum(
+            ExpressionWrapper(
+                F('current_quantity') * (F('purchase_price') / F('product__conversion_factor')),
+                output_field=DecimalField(max_digits=12, decimal_places=2)
+            )
+        )
     )['total_value'] or 0
+    # inventory_value = StockBatch.objects.filter(
+    #     tenant=request.tenant
+    # ).aggregate(
+    #     total_value=Sum(F('current_quantity') * F('purchase_price'), output_field=DecimalField())
+    # )['total_value'] or 0
     
     # Customer Growth (Last 7 days)
     new_customers_week = Customer.objects.filter(
