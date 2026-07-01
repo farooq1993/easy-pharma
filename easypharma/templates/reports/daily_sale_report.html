@@ -42,7 +42,7 @@
 
     <!-- Key Metrics -->
     <div class="row mb-4">
-        <div class="col-md-2">
+        <div class="col-md-3">
             <div class="card text-center border-0 shadow-sm">
                 <div class="card-body py-3">
                     <h6 class="card-title text-muted small">Total Sales</h6>
@@ -50,31 +50,30 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-2">
+        <div class="col-md-3">
             <div class="card text-center border-0 shadow-sm">
                 <div class="card-body py-3">
-                    <h6 class="card-title text-muted small">Total Amount</h6>
-                    <h3 class="text-success mb-0">₹{{ daily_stats.total_amount|default:"0"|floatformat:2 }}</h3>
+                    <h6 class="card-title text-muted small">Gross Sales</h6>
+                    <h3 class="text-success mb-0">₹{{ daily_stats.gross_total_amount|default:"0"|floatformat:2 }}</h3>
                 </div>
             </div>
         </div>
-        <div class="col-md-2">
+        <div class="col-md-3">
             <div class="card text-center border-0 shadow-sm">
                 <div class="card-body py-3">
-                    <h6 class="card-title text-muted small">Tax Collected</h6>
-                    <h3 class="text-info mb-0">₹{{ daily_stats.total_tax|default:"0"|floatformat:2 }}</h3>
+                    <h6 class="card-title text-muted small">Sales Return</h6>
+                    <h3 class="text-danger mb-0">₹{{ daily_stats.total_return_amount|default:"0"|floatformat:2 }}</h3>
                 </div>
             </div>
         </div>
-        <div class="col-md-2">
+        <div class="col-md-3">
             <div class="card text-center border-0 shadow-sm">
                 <div class="card-body py-3">
-                    <h6 class="card-title text-muted small">Discount Given</h6>
-                    <h3 class="text-warning mb-0">₹{{ daily_stats.total_discount|default:"0"|floatformat:2 }}</h3>
+                    <h6 class="card-title text-muted small">Net Sale Amount</h6>
+                    <h3 class="text-info mb-0">₹{{ daily_stats.total_amount|default:"0"|floatformat:2 }}</h3>
                 </div>
             </div>
         </div>
-        
     </div>
 
     <!-- Sale Type Breakdown -->
@@ -234,8 +233,13 @@
                         </tr>
                         {% endfor %}
                         {% if sales %}
+                        <tr class="table-warning fw-bold">
+                            <td colspan="7" class="text-end">Sales Returns:</td>
+                            <td>₹{{ daily_stats.total_return_amount|floatformat:2 }}</td>
+                            <td colspan="2"></td>
+                        </tr>
                         <tr class="table-success fw-bold">
-                            <td colspan="7" class="text-end">Daily Totals:</td>
+                            <td colspan="7" class="text-end">Net Daily Total:</td>
                             <td>₹{{ daily_stats.total_amount|floatformat:2 }}</td>
                             <td colspan="2"></td>
                         </tr>

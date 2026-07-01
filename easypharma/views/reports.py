@@ -10,7 +10,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from easypharma.models.stock import StockBatch
 from easypharma.models.Items import Products, ProductSchedule
 from easypharma.models.purchase_invoice import PurchaseInvoice, PurchaseItem
-from easypharma.models.sales import SaleInvoice, SaleItem
+from easypharma.models.sales import SaleInvoice, SaleItem, SalesReturn
 from django.db.models import Sum, F, DecimalField, ExpressionWrapper, Q, Count, Avg, Max, Min
 from django.utils.timezone import now
 from datetime import datetime, timedelta,date
@@ -172,32 +172,7 @@ class DailySaleReportView(LoginRequiredMixin,View):
     """Daily Sale Report - Show sales data for a specific date"""
     template_name = 'reports/daily_sale_report.html'
 
-    def get(self, request):
-        selected_schedule = request.GET.get('schedule', 'all')
-        # Get date from request or use today
-        date_str = request.GET.get('date', now().date())
-        if isinstance(date_str, str):
-            try:
-                date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
-            except ValueError:
-                date_obj = now().date()
-        else:
-            date_obj = date_str
-
-        is_csv = request.GET.get('csv') == '1'
-        is_pdf = request.GET.get('pdf') == '1'
-        cache_key = _daily_sale_cache_key(request.tenant.id, str(date_obj), selected_schedule)
-
-        # ── Serve from cache for plain HTML requests ──
-        if not is_csv and not is_pdf:
-            cached_ctx = cache.get(cache_key)
-            if cached_ctx is not None:
-                logger.debug('DailySaleReportView cache HIT tenant=%s date=%s', request.tenant.id, date_obj)
-                return render(request, self.template_name, cached_ctx)
-
-        logger.debug('DailySaleReportView.get date=%s schedule=%s tenant=%s user=%s', date_obj, selected_schedule, request.tenant, request.user)
-        
-        # Get sales for the day
+    def get_report_context(self, request, date_obj, selected_schedule):
         sales = SaleInvoice.objects.filter(
             tenant=request.tenant,
             created_at__date=date_obj
@@ -206,16 +181,27 @@ class DailySaleReportView(LoginRequiredMixin,View):
         if selected_schedule and selected_schedule.lower() != 'all':
             sales = sales.filter(items__product__product_schedule__schedule_name=selected_schedule).distinct()
 
-        # Calculate totals
+        sales_returns = SalesReturn.objects.filter(
+            tenant=request.tenant,
+            return_at__date=date_obj,
+        )
+        if selected_schedule and selected_schedule.lower() != 'all':
+            sales_returns = sales_returns.filter(
+                return_items__sale_item__product__product_schedule__schedule_name=selected_schedule
+            ).distinct()
+
         daily_stats = sales.aggregate(
             total_sales=Count('id'),
-            total_amount=Sum('total_amount'),
+            gross_total_amount=Sum('total_amount'),
             total_tax=Sum('tax_amount'),
             total_discount=Sum('discount_amount'),
             subtotal=Sum('sub_total')
         )
+        total_return_amount = sales_returns.aggregate(total_return_amount=Sum('return_amount'))['total_return_amount'] or Decimal('0')
+        daily_stats['gross_total_amount'] = daily_stats.get('gross_total_amount') or Decimal('0')
+        daily_stats['total_return_amount'] = total_return_amount
+        daily_stats['total_amount'] = daily_stats['gross_total_amount'] - total_return_amount
 
-        # Counter Sales vs Prescription Sales breakdown
         counter_stats = sales.filter(sale_type='Counter').aggregate(
             count=Count('id'),
             amount=Sum('total_amount')
@@ -225,13 +211,11 @@ class DailySaleReportView(LoginRequiredMixin,View):
             amount=Sum('total_amount')
         )
 
-        # Payment mode breakdown
         payment_breakdown = sales.values('payment_mode').annotate(
             count=Count('id'),
             amount=Sum('total_amount')
         )
 
-        # Top products sold
         top_products = SaleItem.objects.filter(
             tenant=request.tenant,
             sale_invoice__created_at__date=date_obj
@@ -246,7 +230,6 @@ class DailySaleReportView(LoginRequiredMixin,View):
 
         report_schedules = ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('schedule_name')
 
-        # ── Bill-wise Profit Calculation ──────────────────────────────────────
         bill_profit_data = {}
         sales_with_items = sales.prefetch_related(
             Prefetch('items', queryset=SaleItem.objects.select_related('product'))
@@ -281,15 +264,13 @@ class DailySaleReportView(LoginRequiredMixin,View):
         total_daily_margin = round(
             float(total_daily_profit / total_daily_revenue * 100), 1
         ) if total_daily_revenue > 0 else 0.0
-        # ─────────────────────────────────────────────────────────────────────
 
-        # Force evaluation of lazy querysets before caching
         sales_list = list(sales)
         payment_breakdown_list = list(payment_breakdown)
         top_products_list = list(top_products)
         report_schedules_list = list(report_schedules)
 
-        context = {
+        return {
             'date': date_obj,
             'sales': sales_list,
             'daily_stats': daily_stats,
@@ -299,21 +280,43 @@ class DailySaleReportView(LoginRequiredMixin,View):
             'top_products': top_products_list,
             'report_schedules': report_schedules_list,
             'selected_schedule': selected_schedule,
-            # profit data
             'bill_profit_data': bill_profit_data,
             'total_daily_profit': total_daily_profit,
             'total_daily_cost': total_daily_cost,
             'total_daily_margin': total_daily_margin,
         }
 
+    def get(self, request):
+        selected_schedule = request.GET.get('schedule', 'all')
+        date_str = request.GET.get('date', now().date())
+        if isinstance(date_str, str):
+            try:
+                date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+            except ValueError:
+                date_obj = now().date()
+        else:
+            date_obj = date_str
+
+        is_csv = request.GET.get('csv') == '1'
+        is_pdf = request.GET.get('pdf') == '1'
+        cache_key = _daily_sale_cache_key(request.tenant.id, str(date_obj), selected_schedule)
+
+        if not is_csv and not is_pdf:
+            cached_ctx = cache.get(cache_key)
+            if cached_ctx is not None:
+                logger.debug('DailySaleReportView cache HIT tenant=%s date=%s', request.tenant.id, date_obj)
+                return render(request, self.template_name, cached_ctx)
+
+        logger.debug('DailySaleReportView.get date=%s schedule=%s tenant=%s user=%s', date_obj, selected_schedule, request.tenant, request.user)
+        context = self.get_report_context(request, date_obj, selected_schedule)
+
         if is_csv:
             filename = f"daily_sale_report_{date_obj}.csv"
-            return export_sales_csv(request, sales_list, filename=filename)
+            return export_sales_csv(request, context['sales'], filename=filename)
 
         if is_pdf:
             return render_to_pdf(request, self.template_name, context, filename=f"daily_sale_report_{date_obj}.pdf")
 
-        # Cache the context for subsequent HTML requests
         cache.set(cache_key, context, DAILY_SALE_CACHE_TIMEOUT)
         return render(request, self.template_name, context)
 
@@ -751,14 +754,21 @@ def invalidate_stock_cache(tenant_id):
 
 
 def invalidate_daily_sale_cache(tenant_id, date_str=None):
-    """Call after any sale is saved. Invalidates today's date if date_str not provided."""
+    """Call after any sale or sales return is saved or deleted."""
     from django.utils.timezone import now as _now
     if date_str is None:
         date_str = str(_now().date())
-    # invalidate all schedule variants for this date by using pattern delete if possible
-    for sched in ['all', 'H', 'H1', 'X', 'OTC']:
+    # Invalidate all known schedule variants so filtered daily report caches clear.
+    schedule_keys = {'all', 'H', 'H1', 'X', 'OTC'}
+    try:
+        schedule_keys.update(
+            ProductSchedule.objects.filter(Q(tenant_id=tenant_id) | Q(tenant__isnull=True))
+            .values_list('schedule_name', flat=True)
+        )
+    except Exception:
+        pass
+    for sched in schedule_keys:
         cache.delete(_daily_sale_cache_key(tenant_id, date_str, sched))
-    cache.delete(_daily_sale_cache_key(tenant_id, date_str, 'all'))
 
 
 def invalidate_product_history_cache(tenant_id, product_id):
