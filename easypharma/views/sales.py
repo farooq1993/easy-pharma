@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.views import View
 from django.utils import timezone
 from django.shortcuts import render, redirect, get_object_or_404
@@ -678,6 +679,9 @@ class SalesReturnView(LoginRequiredMixin,View):
         customer_id = request.GET.get('customer_id')
         customer_name = request.GET.get('customer_name', '').strip()
         invoice_id = request.GET.get('invoice_id')
+        return_id = request.GET.get('return_id')
+        selected_return = None
+        selected_return_items = []
         
         context = {
             'customers': customers,
@@ -686,7 +690,9 @@ class SalesReturnView(LoginRequiredMixin,View):
             'invoices': [],
             'selected_invoice': None,
             'sale_items': [],
-            'returns': SalesReturn.objects.filter(tenant=request.tenant).order_by('-return_at')[:10]  # Recent returns
+            'returns': SalesReturn.objects.filter(tenant=request.tenant).order_by('-return_at')[:10],
+            'selected_return': None,
+            'selected_return_items': [],
         }
         
         if customer_id:
@@ -722,7 +728,20 @@ class SalesReturnView(LoginRequiredMixin,View):
                 context['sale_items'] = invoice.items.all().select_related('product')
             except SaleInvoice.DoesNotExist:
                 messages.error(request, 'Invoice not found.')
-        
+
+        if return_id:
+            try:
+                selected_return = SalesReturn.objects.get(id=return_id, tenant=request.tenant)
+                context['selected_return'] = selected_return
+                context['selected_invoice'] = selected_return.sale_invoice
+                context['selected_return_items'] = selected_return.return_items.select_related('sale_item__product').all()
+                if selected_return.sale_invoice.customer:
+                    context['selected_customer'] = selected_return.sale_invoice.customer
+                else:
+                    context['selected_customer_name'] = selected_return.sale_invoice.patient_name or ''
+            except SalesReturn.DoesNotExist:
+                messages.error(request, 'Return record not found.')
+
         return render(request, self.template_name, context)
 
     def post(self, request):
@@ -787,11 +806,11 @@ class SalesReturnView(LoginRequiredMixin,View):
                         tenant=request.tenant,
                         sale_invoice=invoice,
                         return_qty=0,
-                        return_amount=0  # ADD
+                        return_amount=Decimal('0')
                     )
                     
                     total_returned_qty = 0
-                    total_return_amount = 0  # ADD
+                    total_return_amount = Decimal('0')
                     
                     for i, item_id in enumerate(return_items):
                         sale_item = SaleItem.objects.get(id=item_id, sale_invoice=invoice)
@@ -814,21 +833,118 @@ class SalesReturnView(LoginRequiredMixin,View):
                             ).update(current_quantity=F('current_quantity') + qty_to_return)
                             
                             total_returned_qty += qty_to_return
-                            total_return_amount += qty_to_return * sale_item.unit_price  # ADD
+                            total_return_amount += Decimal(str(qty_to_return)) * sale_item.unit_price
                     
-                    # Dono save karo
                     return_record.return_qty = total_returned_qty
-                    return_record.return_amount = total_return_amount  # ADD
+                    return_record.return_amount = total_return_amount
                     return_record.save()
                     
-                    messages.success(request, f"Return created ({return_record.return_inv_no}). {total_returned_qty} items | ₹{total_return_amount} returned.")    
+                    try:
+                        from easypharma.views.reports import invalidate_daily_sale_cache
+                        invalidate_daily_sale_cache(request.tenant.id, date_str=str(return_record.return_at.date()))
+                    except Exception:
+                        pass
+                    
+                    messages.success(request, f"Return created ({return_record.return_inv_no}). {total_returned_qty} items | ₹{total_return_amount} returned.")
             except Exception as e:
                 import traceback
-                traceback.print_exc() 
+                traceback.print_exc()
                 messages.error(request, f"Unable to process return: {e}")
             
             return redirect('pos_returns')
-        
+
+        elif action == 'update_return':
+            return_id = request.POST.get('return_id')
+            return_item_ids = request.POST.getlist('return_item_ids[]')
+            return_quantities = request.POST.getlist('return_quantities[]')
+            return_reasons = request.POST.getlist('return_reasons[]')
+
+            if not return_id:
+                messages.error(request, 'Return record not found.')
+                return redirect('pos_returns')
+
+            try:
+                with transaction.atomic():
+                    return_record = SalesReturn.objects.select_for_update().get(id=return_id, tenant=request.tenant)
+                    total_returned_qty = 0
+                    total_return_amount = Decimal('0')
+
+                    for i, item_id in enumerate(return_item_ids):
+                        item = SalesReturnItem.objects.select_for_update().get(id=item_id, sales_return=return_record)
+                        new_qty = int(return_quantities[i])
+                        reason = return_reasons[i] if i < len(return_reasons) else ''
+                        delta_qty = new_qty - item.returned_quantity
+
+                        if new_qty < 0 or new_qty > item.sale_item.quantity:
+                            raise ValueError('Invalid return quantity.')
+
+                        batch_qs = StockBatch.objects.filter(
+                            tenant=request.tenant,
+                            product=item.sale_item.product,
+                            batch_number=item.sale_item.batch_number
+                        )
+                        batch_qs.update(current_quantity=F('current_quantity') + delta_qty)
+
+                        if new_qty == 0:
+                            item.delete()
+                        else:
+                            item.returned_quantity = new_qty
+                            item.return_reason = reason
+                            item.save()
+                            total_returned_qty += new_qty
+                            total_return_amount += Decimal(str(new_qty)) * item.sale_item.unit_price
+
+                    if total_returned_qty == 0:
+                        return_date = return_record.return_at.date()
+                        return_record.delete()
+                        messages.success(request, 'Return record deleted because there are no returned items.')
+                    else:
+                        return_record.return_qty = total_returned_qty
+                        return_record.return_amount = total_return_amount
+                        return_record.save()
+                        messages.success(request, f"Return updated ({return_record.return_inv_no}). {total_returned_qty} items | ₹{total_return_amount} returned.")
+
+                    try:
+                        from easypharma.views.reports import invalidate_daily_sale_cache
+                        invalidate_daily_sale_cache(request.tenant.id, date_str=str(return_record.return_at.date()))
+                    except Exception:
+                        pass
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                messages.error(request, f"Unable to update return: {e}")
+
+            return redirect(f"{request.path}?return_id={return_id}")
+
+        elif action == 'delete_return':
+            return_id = request.POST.get('return_id')
+            if not return_id:
+                messages.error(request, 'Return record not found.')
+                return redirect('pos_returns')
+            try:
+                with transaction.atomic():
+                    return_record = SalesReturn.objects.select_for_update().get(id=return_id, tenant=request.tenant)
+                    return_date = return_record.return_at.date()
+                    for item in return_record.return_items.select_related('sale_item'):
+                        StockBatch.objects.filter(
+                            tenant=request.tenant,
+                            product=item.sale_item.product,
+                            batch_number=item.sale_item.batch_number
+                        ).update(current_quantity=F('current_quantity') - item.returned_quantity)
+                    return_record.delete()
+                    try:
+                        from easypharma.views.reports import invalidate_daily_sale_cache
+                        invalidate_daily_sale_cache(request.tenant.id, date_str=str(return_date))
+                    except Exception:
+                        pass
+                    messages.success(request, 'Return record deleted successfully.')
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                messages.error(request, f"Unable to delete return: {e}")
+
+            return redirect('pos_returns')
+
         return redirect('pos_returns')
 
 

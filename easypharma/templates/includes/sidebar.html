@@ -199,9 +199,7 @@
             <ul class="collapse nav flex-column ms-3" id="utilityMenu">
                 <li><a href="{% url 'utility_home' %}" class="nav-link small">General Settings</a></li>
                 <li><a href="{% url 'printing_setup' %}" class="nav-link small">Printing Setup</a></li>
-                <!-- {% if user.user_type == 'admin' or user.is_superuser %} -->
                 <li><a href="{% url 'database_backup' %}" class="nav-link small">Database Backup</a></li>
-                <!-- {% endif %} -->
             </ul>
         </li>
         <li class="mt-3">

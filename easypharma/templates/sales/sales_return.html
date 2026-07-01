@@ -106,29 +106,47 @@
                         
                         <div class="mb-3">
                             <label class="form-label">Items to Return:</label>
-                            {% for item in sale_items %}
+                            {% if selected_return %}
+                                <p class="small text-muted mb-2">Editing return <strong>{{ selected_return.return_inv_no }}</strong> created on {{ selected_return.return_at|date:"d M Y H:i" }}</p>
+                            {% endif %}
+                            {% for item in selected_return_items|default:sale_items %}
                             <div class="border rounded p-3 mb-2">
                                 <div class="d-flex justify-content-between align-items-start">
                                     <div>
-                                        <strong>{{ item.product.product_name }}</strong><br>
-                                        <small class="text-muted">
-                                            Batch: {{ item.batch_number }} | 
-                                            Sold: {{ item.quantity }} | 
-                                            Price: ₹{{ item.unit_price }}
-                                        </small>
+                                        {% if selected_return %}
+                                            <strong>{{ item.sale_item.product.product_name }}</strong><br>
+                                            <small class="text-muted">
+                                                Batch: {{ item.sale_item.batch_number }} | 
+                                                Sold: {{ item.sale_item.quantity }} | 
+                                                Price: ₹{{ item.sale_item.unit_price }}
+                                            </small>
+                                        {% else %}
+                                            <strong>{{ item.product.product_name }}</strong><br>
+                                            <small class="text-muted">
+                                                Batch: {{ item.batch_number }} | 
+                                                Sold: {{ item.quantity }} | 
+                                                Price: ₹{{ item.unit_price }}
+                                            </small>
+                                        {% endif %}
                                     </div>
                                 </div>
                                 <div class="row mt-2">
                                     <div class="col-6">
                                         <label class="form-label small">Return Qty</label>
-                                        <input type="number" class="form-control form-control-sm" 
-                                               name="return_quantities[]" min="0" max="{{ item.quantity }}" value="0">
-                                        <input type="hidden" name="return_items[]" value="{{ item.id }}">
+                                        {% if selected_return %}
+                                            <input type="number" class="form-control form-control-sm" 
+                                                   name="return_quantities[]" min="0" max="{{ item.sale_item.quantity }}" value="{{ item.returned_quantity }}">
+                                            <input type="hidden" name="return_item_ids[]" value="{{ item.id }}">
+                                        {% else %}
+                                            <input type="number" class="form-control form-control-sm" 
+                                                   name="return_quantities[]" min="0" max="{{ item.quantity }}" value="0">
+                                            <input type="hidden" name="return_items[]" value="{{ item.id }}">
+                                        {% endif %}
                                     </div>
                                     <div class="col-6">
                                         <label class="form-label small">Reason (Optional)</label>
                                         <input type="text" class="form-control form-control-sm" 
-                                               name="return_reasons[]" placeholder="e.g., damaged, wrong item">
+                                               name="return_reasons[]" placeholder="e.g., damaged, wrong item" value="{% if selected_return %}{{ item.return_reason }}{% else %}{% endif %}">
                                     </div>
                                 </div>
                             </div>
@@ -139,7 +157,13 @@
                             <span>Total Return Amount:</span>
                             <strong id="returnTotalAmount">₹0.00</strong>
                         </div>
-                        <button type="submit" class="btn btn-success w-100">Process Return</button>
+                        <input type="hidden" name="return_id" value="{% if selected_return %}{{ selected_return.id }}{% endif %}">
+                        {% if selected_return %}
+                            <button type="submit" name="action" value="update_return" class="btn btn-success w-100">Update Return</button>
+                            <button type="submit" name="action" value="delete_return" class="btn btn-danger w-100 mt-2">Delete Return</button>
+                        {% else %}
+                            <button type="submit" name="action" value="process_return" class="btn btn-success w-100">Process Return</button>
+                        {% endif %}
                     </form>
                 </div>
             </div>
@@ -165,6 +189,7 @@
                                     <th>Items Returned</th>
                                     <th>Amount</th>
                                     <th>Date</th>
+                                    <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -176,6 +201,9 @@
                                     <td>{{ ret.return_qty }}</td>
                                     <td>₹{{ ret.return_amount }}</td>
                                     <td>{{ ret.return_at|date:"M d, Y H:i" }}</td>
+                                    <td>
+                                        <a href="?return_id={{ ret.id }}" class="btn btn-sm btn-outline-primary">Edit</a>
+                                    </td>
                                 </tr>
                                 {% empty %}
                                 <tr>

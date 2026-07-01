@@ -227,16 +227,16 @@
                 <span class="metric-value metric-blue">{{ daily_stats.total_sales|default:"0" }}</span>
             </td>
             <td>
-                <span class="metric-label">Total Amount</span>
-                <span class="metric-value metric-green">&#8377;{{ daily_stats.total_amount|default:"0"|floatformat:2 }}</span>
+                <span class="metric-label">Gross Sales</span>
+                <span class="metric-value metric-green">&#8377;{{ daily_stats.gross_total_amount|default:"0"|floatformat:2 }}</span>
             </td>
             <td>
-                <span class="metric-label">Tax Collected</span>
-                <span class="metric-value metric-teal">&#8377;{{ daily_stats.total_tax|default:"0"|floatformat:2 }}</span>
+                <span class="metric-label">Sales Return</span>
+                <span class="metric-value metric-amber">&#8377;{{ daily_stats.total_return_amount|default:"0"|floatformat:2 }}</span>
             </td>
             <td>
-                <span class="metric-label">Discount Given</span>
-                <span class="metric-value metric-amber">&#8377;{{ daily_stats.total_discount|default:"0"|floatformat:2 }}</span>
+                <span class="metric-label">Net Sale Amount</span>
+                <span class="metric-value metric-teal">&#8377;{{ daily_stats.total_amount|default:"0"|floatformat:2 }}</span>
             </td>
         </tr>
     </table>
