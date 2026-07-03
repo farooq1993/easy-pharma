@@ -253,10 +253,32 @@
                     </div>
                 </div>
 
-                <!-- Row 3: Tax + Drug Schedule -->
+                <!-- Row 3: Type + Tax + Drug Schedule -->
                 <div class="row g-3 mb-3">
-                    <div class="col-md-6">
-                        <label class="ep-label">Tax Rate</label>
+                    <div class="col-md-4">
+                        <label class="ep-label d-flex justify-content-between align-items-center">
+                            <span>Productd farooq Type</span>
+                            <a href="#" class="text-success text-decoration-none text-lowercase" onclick="openMasterAddModal('product-type', 'quickType', 'Product Type', 'name'); return false;">Add New</a>
+                        </label>
+                        <select id="quickType" style="display:none;">
+                            <option value="">— Select Type —</option>
+                            {% for ptype in product_types %}
+                            <option value="{{ ptype.id }}">{{ ptype.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="qs-wrap" id="qs-wrap-quickType">
+                            <div class="qs-input-row">
+                                <input type="text" class="ep-input qs-input" id="qs-input-quickType" placeholder="Search type..." autocomplete="off">
+                                <button type="button" class="qs-clear-btn" id="qs-clear-quickType" onclick="qsClear('quickType')" style="display:none;" title="Clear">&#x2715;</button>
+                            </div>
+                            <div class="qs-dropdown" id="qs-drop-quickType" style="display:none;"></div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="ep-label d-flex justify-content-between align-items-center">
+                            <span>Tax Rate</span>
+                            <a href="#" class="text-success text-decoration-none text-lowercase" onclick="openMasterAddModal('product-tax', 'quickTax', 'Tax Rate', 'tax_name'); return false;">Add New</a>
+                        </label>
                         <!-- hidden select keeps the real value -->
                         <select id="quickTax" style="display:none;">
                             <option value="">— Select Tax —</option>
@@ -272,8 +294,11 @@
                             <div class="qs-dropdown" id="qs-drop-quickTax" style="display:none;"></div>
                         </div>
                     </div>
-                    <div class="col-md-3">
-                        <label class="ep-label">Drug Schedule</label>
+                    <div class="col-md-4">
+                        <label class="ep-label d-flex justify-content-between align-items-center">
+                            <span>Drug Schedule</span>
+                            <a href="#" class="text-success text-decoration-none text-lowercase" onclick="openMasterAddModal('drug-schedule', 'quickSchedule', 'Drug Schedule', 'schedule_name'); return false;">Add New</a>
+                        </label>
                         <select id="quickSchedule" style="display:none;">
                             <option value="">— Select Schedule —</option>
                             {% for schedule in product_schedules %}
@@ -288,8 +313,15 @@
                             <div class="qs-dropdown" id="qs-drop-quickSchedule" style="display:none;"></div>
                         </div>
                     </div>
-                    <div class="col-md-3">
-                        <label class="ep-label">Product Content</label>
+                </div>
+
+                <!-- Row 4: Content + Company + HSN -->
+                <div class="row g-3 mb-1">
+                    <div class="col-md-4">
+                        <label class="ep-label d-flex justify-content-between align-items-center">
+                            <span>Product Content</span>
+                            <a href="#" class="text-success text-decoration-none text-lowercase" onclick="openMasterAddModal('product-content', 'quickContent', 'Product Content', 'content_name'); return false;">Add New</a>
+                        </label>
                         <select id="quickContent" style="display:none;">
                             <option value="">— Select Content —</option>
                             {% for content in product_contents %}
@@ -304,12 +336,11 @@
                             <div class="qs-dropdown" id="qs-drop-quickContent" style="display:none;"></div>
                         </div>
                     </div>
-                </div>
-
-                <!-- Row 4: Company + HSN Code -->
-                <div class="row g-3 mb-1">
-                    <div class="col-md-6">
-                        <label class="ep-label">Company Name</label>
+                    <div class="col-md-4">
+                        <label class="ep-label d-flex justify-content-between align-items-center">
+                            <span>Company Name</span>
+                            <a href="#" class="text-success text-decoration-none text-lowercase" onclick="openMasterAddModal('drug-company', 'quickCompany', 'Company', 'company_name'); return false;">Add New</a>
+                        </label>
                         <select id="quickCompany" style="display:none;">
                             <option value="">— Select Company —</option>
                             {% for company in drug_companies %}
@@ -324,7 +355,7 @@
                             <div class="qs-dropdown" id="qs-drop-quickCompany" style="display:none;"></div>
                         </div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label class="ep-label">HSN Code</label>
                         <input type="text" id="quickHsn" class="ep-input" placeholder="e.g. 30049099"
                                maxlength="8" inputmode="numeric"
@@ -376,6 +407,37 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary" onclick="saveSupplier()"><i class="fas fa-save me-1"></i> Save Supplier</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Generic Add Master Item Modal -->
+<div class="modal fade ep-modal" id="masterAddModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-md">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="masterAddTitle"><i class="fas fa-plus-circle me-2" style="color:var(--brand);"></i>Add New</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="masterAddType">
+                <input type="hidden" id="masterSelectId">
+                <input type="hidden" id="masterFieldName">
+
+                <div class="mb-3">
+                    <label class="ep-label" id="masterAddLabel">Name *</label>
+                    <input type="text" id="masterAddValue" class="ep-input" placeholder="Enter value">
+                </div>
+
+                <div class="mb-3" id="masterAddExtraRow" style="display:none;">
+                    <label class="ep-label" id="masterAddExtraLabel">Extra</label>
+                    <input type="text" id="masterAddExtraValue" class="ep-input" placeholder="Enter extra value">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="masterAddSaveBtn" onclick="submitMasterAdd()"><i class="fas fa-save me-1"></i> Save</button>
             </div>
         </div>
     </div>
@@ -545,13 +607,111 @@
         window.qsClear(selectId);
     };
 
-    // Init all 4 selects when DOM ready
+    let masterAddModal;
+
+    function openMasterAddModal(masterType, selectId, title, fieldName) {
+        document.getElementById('masterAddType').value = masterType;
+        document.getElementById('masterSelectId').value = selectId;
+        document.getElementById('masterFieldName').value = fieldName;
+        document.getElementById('masterAddTitle').innerHTML = `<i class="fas fa-plus-circle me-2" style="color:var(--brand);"></i>Add ${title}`;
+        document.getElementById('masterAddLabel').innerText = `${title} Name *`;
+        document.getElementById('masterAddValue').value = '';
+        document.getElementById('masterAddExtraValue').value = '';
+
+        const extraRow = document.getElementById('masterAddExtraRow');
+        const extraLabel = document.getElementById('masterAddExtraLabel');
+        if (masterType === 'product-tax') {
+            extraLabel.innerText = 'Tax Rate (%)';
+            document.getElementById('masterAddExtraValue').type = 'number';
+            document.getElementById('masterAddExtraValue').placeholder = 'Enter tax rate';
+            extraRow.style.display = 'block';
+        } else if (masterType === 'drug-company') {
+            extraLabel.innerText = 'Short Name';
+            document.getElementById('masterAddExtraValue').type = 'text';
+            document.getElementById('masterAddExtraValue').placeholder = 'Enter short name';
+            extraRow.style.display = 'block';
+        } else {
+            extraRow.style.display = 'none';
+        }
+
+        masterAddModal.show();
+    }
+
+    async function submitMasterAdd() {
+        const masterType = document.getElementById('masterAddType').value;
+        const selectId = document.getElementById('masterSelectId').value;
+        const fieldName = document.getElementById('masterFieldName').value;
+        const value = document.getElementById('masterAddValue').value.trim();
+        const extraValue = document.getElementById('masterAddExtraValue').value.trim();
+
+        if (!value) {
+            showToast('Please enter a value', 'error');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append(fieldName, value);
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+        if (masterType === 'product-tax') {
+            if (!extraValue) {
+                showToast('Tax rate is required', 'error');
+                return;
+            }
+            formData.append('tax_rate', extraValue);
+        }
+        if (masterType === 'drug-company') {
+            formData.append('sht_name', extraValue);
+        }
+
+        const saveBtn = document.getElementById('masterAddSaveBtn');
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving';
+
+        try {
+            const response = await fetch(`/type/${masterType}/`, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: formData
+            });
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(data.error || 'Unable to save');
+            }
+
+            const selectEl = document.getElementById(selectId);
+            if (selectEl) {
+                if (selectEl.tomselect) {
+                    selectEl.tomselect.addOption({ value: String(data.id), text: data.name });
+                    selectEl.tomselect.refreshOptions(false);
+                    selectEl.tomselect.setValue(String(data.id));
+                } else {
+                    const option = new Option(data.name, data.id, true, true);
+                    selectEl.add(option);
+                    selectEl.value = String(data.id);
+                }
+            }
+
+            masterAddModal.hide();
+            showToast(`${data.name} added successfully`);
+        } catch (err) {
+            showToast(err.message || 'Save failed', 'error');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fas fa-save me-1"></i> Save';
+        }
+    }
+
+    // Init all 5 selects when DOM ready
     document.addEventListener('DOMContentLoaded', function() {
-        ['quickTax', 'quickSchedule', 'quickContent', 'quickCompany'].forEach(initQuickSelect);
+        ['quickType', 'quickTax', 'quickSchedule', 'quickContent', 'quickCompany'].forEach(initQuickSelect);
+
+        masterAddModal = new bootstrap.Modal(document.getElementById('masterAddModal'));
 
         // Re-sync inputs when modal is shown (edit/CSV flow pre-sets select values)
         document.getElementById('quickAddModal').addEventListener('show.bs.modal', function() {
-            ['quickTax', 'quickSchedule', 'quickContent', 'quickCompany'].forEach(function(id) {
+            ['quickType', 'quickTax', 'quickSchedule', 'quickContent', 'quickCompany'].forEach(function(id) {
                 const sel   = document.getElementById(id);
                 const input = document.getElementById('qs-input-' + id);
                 const btn   = document.getElementById('qs-clear-' + id);
@@ -1847,9 +2007,11 @@
             name:              name,
             packing:           document.getElementById('quickPacking').value.trim(),
             conversion_factor: document.getElementById('quickConv').value || 1,
+            type_id:           document.getElementById('quickType').value || null,
             tax_id:            document.getElementById('quickTax').value || null,
             schedule_id:       document.getElementById('quickSchedule').value || null,
             company_id:        document.getElementById('quickCompany').value || null,
+            content_id:        document.getElementById('quickContent').value || null,
             hsn_code:          document.getElementById('quickHsn').value.trim() || null,
         };
 
