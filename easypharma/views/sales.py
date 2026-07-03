@@ -314,7 +314,7 @@ class PrintInvoiceView(LoginRequiredMixin, View):
         # DL number
         if ps.show_dl_details and invoice.tenant.license_number:
             lines.append(" " + f"DL: {invoice.tenant.license_number}  Ph: {invoice.tenant.phone or ''}"[:W])
-
+            lines.append(" " + f"Food License: {invoice.tenant.food_lic or ''}"[:W])
         # GST number
         if ps.show_gst_details and hasattr(invoice.tenant, 'gst_number') and invoice.tenant.gst_number:
             lines.append(" " + f"GST: {invoice.tenant.gst_number}"[:W])
