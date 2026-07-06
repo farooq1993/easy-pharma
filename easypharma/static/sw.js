@@ -9,7 +9,7 @@
  * Failed POST transactions are stored locally and retried when connectivity returns.
  */
 
-const SW_VERSION   = 'v1.3.0';   // ← har deploy pe yeh badlo
+const SW_VERSION = 'v1.3.4';   // ← har deploy pe yeh badlo
 const CACHE_STATIC = `ep-static-${SW_VERSION}`;
 const CACHE_PAGES  = `ep-pages-${SW_VERSION}`;
 const CACHE_API    = `ep-api-${SW_VERSION}`;
@@ -33,8 +33,8 @@ const PRECACHE_ASSETS = [
 const NETWORK_ONLY_PATTERNS = [
   /\/accounts\//,
   /\/admin\//,
-  /\/api\/save/,
-  /\/api\/complete/,
+  // /\/api\/save/,
+  // /\/api\/complete/,
 ];
 
 // URLs that are pure static assets (Cache-First)
@@ -57,9 +57,17 @@ const API_PATTERNS = [
 ];
 
 // API POST requests that should be queued when offline
+// Line ~60 ke aas-paas — isse replace kar do
 const OFFLINE_QUEUE_PATTERNS = [
-  /\/api\/(sales|purchase|returns?|invoice|order|checkout)/i,
+  /\/api\//i,
+  /\/pos\//i,           // ← Yeh important hai
+  /\/entry\//i,         // Purchase entry ke liye
+  /\/sales\//i,
+  /\/purchase\//i,
 ];
+// const OFFLINE_QUEUE_PATTERNS = [
+//   /\/api\/(sales|purchase|returns?|invoice|order|checkout)/i,
+// ];
 
 // ─── Install ────────────────────────────────────────────────────────────────
 self.addEventListener('install', event => {
@@ -168,6 +176,7 @@ async function handleOfflinePost(request, event) {
     } catch (syncError) {
       // Background sync not available; offline queue will still be processed later.
     }
+    console.log('[SW] POST intercepted for offline queuing:', request.url);
     return new Response(JSON.stringify({
       error: 'offline',
       queued: true,
@@ -197,11 +206,19 @@ async function saveRequestToQueue(request) {
   const db = await openDb();
   const tx = db.transaction(DB_STORE, 'readwrite');
   const store = tx.objectStore(DB_STORE);
+
   const headers = {};
   for (const [key, value] of request.headers.entries()) {
     headers[key] = value;
   }
-  const body = await request.clone().text();
+
+  let body = null;
+  try {
+    if (request.body) {
+      body = await request.clone().text();
+    }
+  } catch (e) {}
+
   const entry = {
     url: request.url,
     method: request.method,
@@ -209,7 +226,9 @@ async function saveRequestToQueue(request) {
     body,
     timestamp: Date.now(),
   };
-  store.add(entry);
+
+  await store.add(entry);
+  console.log('[SW] Request queued successfully:', request.url);
   return tx.complete;
 }
 
@@ -237,20 +256,28 @@ function deleteQueuedRequest(id) {
 
 async function replayQueuedRequests() {
   const queued = await getQueuedRequests();
+  console.log(`[SW] Replaying ${queued.length} queued requests...`);
+
   for (const item of queued) {
     try {
       const request = new Request(item.url, {
         method: item.method,
         headers: item.headers,
         body: item.body || null,
+        credentials: 'include',        // ← Important (cookies ke liye)
+        redirect: 'follow'
       });
+
       const response = await fetch(request);
-      if (response && response.ok) {
+      
+      console.log(`[SW] Replay ${item.url} → Status: ${response.status}`);
+
+      if (response && (response.ok || response.status === 200)) {
         await deleteQueuedRequest(item.id);
+        console.log('[SW] Successfully replayed and deleted from queue');
       }
     } catch (err) {
-      console.warn('[SW] Offline queue replay failed for', item.url, err);
-      // Keep item in queue for next retry
+      console.error('[SW] Replay failed for', item.url, err);
     }
   }
 }
