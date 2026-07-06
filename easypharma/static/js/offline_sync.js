@@ -81,36 +81,38 @@ const OfflineSync = {
             const reqData = await store.getItem(key);
             if (!reqData) continue;
 
-            console.log(`[OfflineSync] Trying to sync purchase:`, reqData.payload); // ← Extra log
-
             try {
+                console.log(`[OfflineSync] Sending queued purchase:`, reqData.url);
+
                 const response = await fetch(reqData.url, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRFToken': csrfToken,
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
+                        'X-CSRFToken': csrfToken || '',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
                     },
                     body: JSON.stringify(reqData.payload),
                     credentials: 'include'
                 });
 
-                console.log(`[OfflineSync] Response status for ${key}: ${response.status}`);
+                console.log(`[OfflineSync] Response Status: ${response.status}`);
 
-                if (response.ok) {
-                    const result = await response.json().catch(() => ({}));
-                    console.log(`[OfflineSync] Server response:`, result);
+                let result = {};
+                try {
+                    result = await response.json();
+                } catch (e) {}
 
-                    if (result.success || result.status === 'success' || response.status < 400) {
-                        console.log(`[OfflineSync] ✅ Successfully synced purchase ${key}`);
-                        await store.removeItem(key);
-                    }
+                console.log(`[OfflineSync] Server Result:`, result);
+
+                if (response.ok || response.status === 200 || response.status === 201 || result.success) {
+                    console.log(`[OfflineSync] ✅ Successfully synced ${key}`);
+                    await store.removeItem(key);
                 } else {
-                    console.warn(`[OfflineSync] Failed ${response.status} for ${key}`);
+                    console.warn(`[OfflineSync] Rejected by server:`, result);
                 }
             } catch (err) {
-                console.error(`[OfflineSync] Error syncing ${key}:`, err);
+                console.error(`[OfflineSync] Failed to sync ${key}:`, err);
             }
         }
     },

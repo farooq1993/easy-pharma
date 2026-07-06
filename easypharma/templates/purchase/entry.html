@@ -1765,20 +1765,25 @@
     async function savePurchase() {
         const supplier = document.getElementById('supplierSelect').value;
         const invNo = document.getElementById('invoiceNumber').value.trim();
-        if(!supplier) return showToast('Select supplier','error');
-        if(!invNo) return showToast('Enter invoice number','error');
-        if(items.length===0) return showToast('Add at least one item','error');
+
+        if (!supplier) return showToast('Select supplier', 'error');
+        if (!invNo) return showToast('Enter invoice number', 'error');
+        if (items.length === 0) return showToast('Add at least one item', 'error');
 
         const saveBtn = document.querySelector('.btn-complete');
-        if(saveBtn) { saveBtn.disabled = true; saveBtn.classList.add('disabled'); }
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.classList.add('disabled');
+        }
         showLoader('Saving purchase...');
 
+        // Credit notes
         const applied_returns = [];
         document.querySelectorAll('.cn-checkbox').forEach((chk) => {
-            if(chk.checked) {
+            if (chk.checked) {
                 const idx = chk.dataset.idx;
                 const amt = parseFloat(document.getElementById(`cn-amt-${idx}`).value) || 0;
-                if(amt > 0) {
+                if (amt > 0) {
                     applied_returns.push({
                         return_id: availableCreditNotes[idx].id,
                         amount: amt
@@ -1788,40 +1793,67 @@
         });
 
         const data = {
-            supplier_id: supplier,
+            supplier_id: parseInt(supplier),
             invoice_number: invNo,
             purchase_date: document.getElementById('purchaseDate').value,
             items: items,
-            sub_total: parseFloat(document.getElementById('summarySubTotal').innerText.replace('₹','')),
-            tax_amount: parseFloat(document.getElementById('summaryTax').innerText.replace('₹','')),
+            sub_total: parseFloat(document.getElementById('summarySubTotal').innerText.replace(/[^0-9.-]+/g, '')) || 0,
+            tax_amount: parseFloat(document.getElementById('summaryTax').innerText.replace(/[^0-9.-]+/g, '')) || 0,
             discount_percentage: parseFloat(document.getElementById('summaryDiscountPerc').value) || 0,
             discount_amount: parseFloat(document.getElementById('summaryDiscount').value) || 0,
-            payment_mode: document.getElementById('summaryPaymentMode').value,
-            total_amount: parseFloat(document.getElementById('summaryGrandTotal').innerText.replace('₹','')),
-            round_off: parseFloat(document.getElementById('summaryRoundOff').innerText.replace('₹','').replace('+','').replace('−','-')) || 0,
+            payment_mode: document.getElementById('summaryPaymentMode').value || 'Cash',
+            total_amount: parseFloat(document.getElementById('summaryGrandTotal').innerText.replace(/[^0-9.-]+/g, '')) || 0,
+            round_off: parseFloat(document.getElementById('summaryRoundOff').innerText.replace(/[^0-9.-]+/g, '')) || 0,
             applied_returns: applied_returns
         };
-        const endpoint = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
+
+        const endpoint = window.location.pathname.endsWith('/') 
+            ? window.location.pathname 
+            : window.location.pathname + '/';
 
         try {
             if (!navigator.onLine && typeof OfflineSync !== 'undefined') {
-                const fakeId = 'OFF_PUR_' + Date.now();
-                await OfflineSync.queueRequest(OfflineSync.purchaseStore, endpoint, data, 'Purchase saved offline!');
-                showPurchaseConfirm({ success: true, invoice_id: fakeId });
+                console.log('[Purchase] Queuing offline...', endpoint);
+                await OfflineSync.queueRequest(
+                    OfflineSync.purchaseStore, 
+                    endpoint, 
+                    data, 
+                    'Purchase saved offline! Will sync when online.'
+                );
+                showPurchaseConfirm({ success: true, purchase_number: 'OFF-' + Date.now() });
             } else {
-                const response = await fetch(endpoint, { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken}, body:JSON.stringify(data) });
-                const result = await response.json();
-                if(result.success) {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json().catch(() => ({}));
+
+                if (response.ok && (result.success || result.status === 'success')) {
                     showPurchaseConfirm(result);
                 } else {
-                    showToast('Error: '+ (result.error||'server'),'error');
+                    showToast(result.error || 'Server error occurred', 'error');
                 }
             }
         } catch (err) {
-            showToast('Error: ' + err.message, 'error');
+            console.error('[Purchase Save Error]', err);
+            if (!navigator.onLine && typeof OfflineSync !== 'undefined') {
+                await OfflineSync.queueRequest(OfflineSync.purchaseStore, endpoint, data, 'Purchase saved offline!');
+                showPurchaseConfirm({ success: true, purchase_number: 'OFF-' + Date.now() });
+            } else {
+                showToast('Network error: ' + err.message, 'error');
+            }
         } finally {
             hideLoader();
-            if(saveBtn) { saveBtn.disabled = false; saveBtn.classList.remove('disabled'); }
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.classList.remove('disabled');
+            }
         }
     }
 
@@ -2707,31 +2739,45 @@ async function saveEditProduct() {
 </div>
 {% include 'includes/purchase_import.html' %}
 <script>
-function showPurchaseConfirm(result) {
-    // Fill purchase number (backend may send as purchase_number, voucher_number, or id)
-    const pvNum = result.purchase_number || result.voucher_number || result.purchase_id
-                  ? (result.purchase_number || result.voucher_number || ('PV-' + result.purchase_id))
-                  : '—';
-    document.getElementById('confirmPurchaseNumber').textContent = pvNum;
+    function showPurchaseConfirm(result) {
+        // Purchase Voucher Number
+        let pvNum = 'OFF-' + Date.now();
+        if (result && (result.purchase_number || result.voucher_number || result.id)) {
+            pvNum = result.purchase_number || result.voucher_number || ('PV-' + result.id);
+        }
+        document.getElementById('confirmPurchaseNumber').textContent = pvNum;
 
-    // Fill summary from current form state
-    const suppSel = document.getElementById('supplierSelect');
-    const suppName = suppSel.options[suppSel.selectedIndex]
-                     ? suppSel.options[suppSel.selectedIndex].text.split(' | ')[0]
-                     : '—';
-    document.getElementById('confirmSupplier').textContent = suppName;
-    document.getElementById('confirmInvoice').textContent  =
-        document.getElementById('invoiceNumber').value || '—';
-    document.getElementById('confirmItems').textContent    =
-        items.length + ' item' + (items.length !== 1 ? 's' : '');
-    document.getElementById('confirmTotal').textContent    =
-        document.getElementById('summaryGrandTotal').innerText;
+        // Supplier Name - Safe way
+        let suppName = '—';
+        const suppSel = document.getElementById('supplierSelect');
+        if (suppSel && suppSel.options && suppSel.selectedIndex >= 0) {
+            const optionText = suppSel.options[suppSel.selectedIndex].textContent || '';
+            suppName = optionText.split('|')[0].trim();
+        }
+        document.getElementById('confirmSupplier').textContent = suppName;
 
-    hideLoader();
-    bootstrap.Modal.getOrCreateInstance(
-        document.getElementById('purchaseConfirmModal')
-    ).show();
-}
+        // Other fields
+        document.getElementById('confirmInvoice').textContent = 
+            document.getElementById('invoiceNumber').value || '—';
+
+        document.getElementById('confirmItems').textContent = 
+            (items ? items.length : 0) + ' item' + ((items && items.length !== 1) ? 's' : '');
+
+        document.getElementById('confirmTotal').textContent = 
+            document.getElementById('summaryGrandTotal').innerText || '₹0.00';
+
+        hideLoader();
+
+        // Show modal
+        const modalElement = document.getElementById('purchaseConfirmModal');
+        if (modalElement) {
+            const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+            modal.show();
+        } else {
+            console.warn('[Purchase] Confirm modal not found');
+            showToast('Purchase saved offline successfully!', 'success');
+        }
+    }
 </script>
 <script src="{% static 'js/purchase/purchase.js' %}"></script>
 {% endblock %}
