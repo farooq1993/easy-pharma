@@ -756,11 +756,24 @@
         searchSelectedIndex = -1;
         let batchIndex = 0;
 
-        if (data.length === 0) {
-            resultsDiv.innerHTML = '<div class="p-3 text-center text-muted small">No items found. <button class="btn btn-link btn-sm" data-bs-toggle="modal" data-bs-target="#quickAddModal">Add New?</button></div>';
-        }
+        // Safe data extraction
+        const products = data?.results || data?.products || data || [];
 
-        data.forEach(product => {
+        // if (data.length === 0) {
+        //     resultsDiv.innerHTML = '<div class="p-3 text-center text-muted small">No items found. <button class="btn btn-link btn-sm" data-bs-toggle="modal" data-bs-target="#quickAddModal">Add New?</button></div>';
+        // }
+        if (products.length === 0) {
+            resultsDiv.innerHTML = `
+                <div class="p-3 text-center text-muted small">
+                    No items found. 
+                    <button class="btn btn-link btn-sm" data-bs-toggle="modal" data-bs-target="#quickAddModal">
+                        Add New?
+                    </button>
+                </div>`;
+            resultsDiv.classList.remove('d-none');
+            return;
+        }
+        products.forEach(product => {
             const productGroup = document.createElement('div');
             productGroup.className = 'list-group-item p-3 border-bottom bg-white';
 
@@ -849,23 +862,30 @@
     searchInput.addEventListener('input', (e) => {
         clearTimeout(_posDebounceTimer);
         const query = e.target.value.trim();
-        if (query.length < 1) { resultsDiv.classList.add('d-none'); return; }
+        if (query.length < 1) { 
+            resultsDiv.classList.add('d-none'); 
+            return; 
+        }
 
-        // Cache hit — instant render, no API call
+        // Cache hit
         if (_posSearchCache[query]) {
             renderSearchResults(_posSearchCache[query]);
             return;
         }
 
-        // Debounce: wait 300ms after user stops typing before hitting API
         _posDebounceTimer = setTimeout(async () => {
             try {
                 const response = await fetch(`/api/products/search/?q=${encodeURIComponent(query)}`);
                 const data = await response.json();
-                _posSearchCache[query] = data;   // store in cache for next time
-                renderSearchResults(data);
+
+                _posSearchCache[query] = data;   
+                renderSearchResults(data);       // ← Yeh safe hai ab
+
             } catch (err) {
                 console.error('POS search error:', err);
+                // Offline fallback
+                renderSearchResults({ results: [] });
+                showToast('You are offline. Product search needs internet.', 'warning');
             }
         }, 300);
     });
