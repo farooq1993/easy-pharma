@@ -70,7 +70,7 @@ const OfflineSync = {
         } catch (e) {
             return [];
         }
-    }
+    },
 
     async queueRequest(store, url, payload, successMsg = 'Saved offline. Will sync when online.') {
         if (!store) {
