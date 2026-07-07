@@ -9,7 +9,7 @@
  * Failed POST transactions are stored locally and retried when connectivity returns.
  */
 
-const SW_VERSION = 'v1.5.2';   // 
+const SW_VERSION = 'v1.5.3';   // 
 const CACHE_STATIC = `ep-static-${SW_VERSION}`;
 const CACHE_PAGES  = `ep-pages-${SW_VERSION}`;
 const CACHE_API    = `ep-api-${SW_VERSION}`;
@@ -33,8 +33,6 @@ const PRECACHE_ASSETS = [
 const NETWORK_ONLY_PATTERNS = [
   /\/accounts\//,
   /\/admin\//,
-  // /\/api\/save/,
-  // /\/api\/complete/,
 ];
 
 // URLs that are pure static assets (Cache-First)
@@ -49,6 +47,7 @@ const STATIC_PATTERNS = [
 // API patterns — split by behaviour
 const API_NETWORK_ONLY_PATTERNS = [
   /\/api\/products\/search/,   // live stock search — never serve stale
+  /\/api\/products\/master-search/,
   /\/api\/products\/substitute/, // live stock substitute
   /\/api\/products\/.*search.*/, // extra safety
 ];
@@ -130,12 +129,17 @@ self.addEventListener('fetch', event => {
   }
 
   // 3a. Network-Only for live stock search APIs (must never return stale stock)
+    // 3a. Special handling for product search (live data)
   if (API_NETWORK_ONLY_PATTERNS.some(p => p.test(url.pathname))) {
     event.respondWith(
-      fetch(request).catch(() =>
-        new Response(JSON.stringify({ error: 'offline' }), {
+      fetch(request).catch(() => 
+        new Response(JSON.stringify({ 
+          results: [],
+          error: 'offline',
+          message: 'Product search requires internet.' 
+        }), {
           headers: { 'Content-Type': 'application/json' },
-          status: 503
+          status: 200   // ← 503 ki jagah 200 kar do taaki frontend crash na kare
         })
       )
     );
