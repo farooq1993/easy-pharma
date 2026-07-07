@@ -568,7 +568,29 @@
     let cart = [];
     let searchSelectedIndex = -1;
     const editData = {{ edit_data|default:'null'|safe }};
+    
+    function showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+            padding: 12px 24px; border-radius: 30px; z-index: 99999; font-weight: 600;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); color: white;
+        `;
+        
+        if (type === 'warning' || type === 'error') {
+            toast.style.background = '#f59e0b';
+        } else {
+            toast.style.background = '#10b981';
+        }
+        
+        toast.innerHTML = message;
+        document.body.appendChild(toast);
 
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            setTimeout(() => toast.remove(), 500);
+        }, 4000);
+    }
     // ── Bill Number Badge ──
     function updateBillNumberDisplay() {
         const badge = document.getElementById('runningBillNumber');
