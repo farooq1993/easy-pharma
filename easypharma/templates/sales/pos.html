@@ -568,7 +568,7 @@
     let cart = [];
     let searchSelectedIndex = -1;
     const editData = {{ edit_data|default:'null'|safe }};
-    
+
     function showToast(message, type = 'info') {
         const toast = document.createElement('div');
         toast.style.cssText = `
@@ -895,21 +895,24 @@
             return;
         }
 
-        _posDebounceTimer = setTimeout(async () => {
-            try {
-                const response = await fetch(`/api/products/search/?q=${encodeURIComponent(query)}`);
-                const data = await response.json();
+    _posDebounceTimer = setTimeout(async () => {
+        try {
+            const response = await fetch(`/api/products/search/?q=${encodeURIComponent(query)}`);
+            const data = await response.json();
 
-                _posSearchCache[query] = data;   
-                renderSearchResults(data);       // ← Yeh safe hai ab
-
-            } catch (err) {
-                console.error('POS search error:', err);
-                // Offline fallback
-                renderSearchResults({ results: [] });
-                showToast('You are offline. Product search needs internet.', 'warning');
+            // Cache for offline
+            if (data.results && data.results.length > 0) {
+                OfflineSync.cacheProducts(data.results);
             }
-        }, 300);
+
+            renderSearchResults(data);
+        } catch (err) {
+            console.log('Offline search activated');
+            const offlineResults = await OfflineSync.searchOfflineProducts(query);
+            renderSearchResults({ results: offlineResults });
+        }
+    }, 300);
+    
     });
 
     // ── Substitute lookup ──────────────────────────────────────────

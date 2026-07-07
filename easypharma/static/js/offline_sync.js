@@ -45,6 +45,33 @@ const OfflineSync = {
         return token;
     },
 
+    // Add this in OfflineSync object
+    async cacheProducts(products) {
+        try {
+            const store = localforage.createInstance({ name: 'ep_product_cache' });
+            await store.setItem('all_products', products);
+            console.log('[OfflineSync] Products cached for offline search');
+        } catch (e) {
+            console.warn('[OfflineSync] Failed to cache products', e);
+        }
+    },
+
+    async searchOfflineProducts(query) {
+        try {
+            const store = localforage.createInstance({ name: 'ep_product_cache' });
+            const allProducts = await store.getItem('all_products') || [];
+            
+            const lowerQuery = query.toLowerCase();
+            
+            return allProducts.filter(product => 
+                product.name.toLowerCase().includes(lowerQuery) ||
+                (product.content && product.content.toLowerCase().includes(lowerQuery))
+            ).slice(0, 30); // limit results
+        } catch (e) {
+            return [];
+        }
+    }
+
     async queueRequest(store, url, payload, successMsg = 'Saved offline. Will sync when online.') {
         if (!store) {
             console.error('[OfflineSync] Store not initialized');
