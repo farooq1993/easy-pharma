@@ -1333,6 +1333,51 @@
             }
         });
 
+         // ── Live duplicate invoice-number check (as soon as user types) ──
+        (function() {
+            const invEl = document.getElementById('invoiceNumber');
+            const supplierEl = document.getElementById('supplierSelect');
+            let debounceTimer = null;
+
+            async function checkInvoiceDuplicate() {
+                const invNo = invEl.value.trim();
+                const supplierId = supplierEl.value;
+
+                if (!invNo || !supplierId) {
+                    invEl.classList.remove('is-invalid');
+                    return;
+                }
+
+                const params = new URLSearchParams({
+                    supplier_id: supplierId,
+                    invoice_number: invNo
+                });
+                if (typeof editInvoiceId !== 'undefined' && editInvoiceId) {
+                    params.append('invoice_id', editInvoiceId);
+                }
+
+                try {
+                    const res = await fetch('/purchase/check-invoice-number/?' + params.toString());
+                    const data = await res.json();
+                    if (data.exists) {
+                        showToast(`Invoice number "${invNo}" already exists for this supplier`, 'error');
+                        invEl.classList.add('is-invalid');
+                    } else {
+                        invEl.classList.remove('is-invalid');
+                    }
+                } catch (e) {
+                    console.error('Invoice check failed', e);
+                }
+            }
+
+            invEl.addEventListener('input', function() {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(checkInvoiceDuplicate, 500);
+            });
+
+            invEl.addEventListener('blur', checkInvoiceDuplicate);
+        })();
+
         // Date → Medicine search on Enter
         document.getElementById('purchaseDate').addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
@@ -2797,6 +2842,7 @@ async function saveEditProduct() {
             showToast('Purchase saved offline successfully!', 'success');
         }
     }
+
 </script>
 <script src="{% static 'js/purchase/purchase.js' %}"></script>
 {% endblock %}

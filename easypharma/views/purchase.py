@@ -232,6 +232,24 @@ class PurchaseImportCSVView(View):
                 'error': str(e)
             })
 
+class CheckInvoiceNumberView(LoginRequiredMixin, View):
+    """Live check: invoice number already used for this supplier?"""
+    def get(self, request):
+        supplier_id = request.GET.get('supplier_id')
+        invoice_number = request.GET.get('invoice_number', '').strip()
+        invoice_id = request.GET.get('invoice_id')  # present only in edit mode
+
+        if not supplier_id or not invoice_number:
+            return JsonResponse({'exists': False})
+
+        qs = PurchaseInvoice.objects.filter(
+            tenant=request.tenant,
+            supplier_id=supplier_id,
+            invoice_number=invoice_number
+        )
+        if invoice_id:
+            qs = qs.exclude(id=invoice_id)  
+        return JsonResponse({'exists': qs.exists()})
 
 class SupplierAutocomplete(LoginRequiredMixin,View):
     def get(self, request):
