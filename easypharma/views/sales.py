@@ -556,7 +556,7 @@ class ProductSearchAPI(LoginRequiredMixin,View):
         
         products = Products.objects.filter(
             tenant=request.tenant,
-            product_name__icontains=query
+            product_name__istartswith=query
         ).select_related('product_tax', 'product_content', 'compny_name', 'product_schedule').prefetch_related('batches')[:10]
         data = []
         for p in products:
