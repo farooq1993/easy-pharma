@@ -35,8 +35,9 @@ class PurchaseEntryView(LoginRequiredMixin,View):
         products = Products.objects.filter(tenant=request.tenant).order_by('product_name')
         from easypharma.models.Items import ProductTax
         product_taxes = ProductTax.objects.filter(tenant=request.tenant)
-        product_schedules = ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True))
-        drug_companies = DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True))
+        product_type = ProductType.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('name')
+        product_schedules = ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('schedule_name')
+        drug_companies = DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('company_name')
         product_contents = ProductContent.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('content_name')
 
         edit_data = None
@@ -78,6 +79,7 @@ class PurchaseEntryView(LoginRequiredMixin,View):
             'suppliers': suppliers,
             'products': products,
             'product_taxes': product_taxes,
+            'product_type':product_type,
             'product_schedules': product_schedules,
             'drug_companies': drug_companies,
             'product_contents': product_contents,

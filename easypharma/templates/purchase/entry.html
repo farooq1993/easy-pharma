@@ -242,14 +242,32 @@
 
                 <!-- Row 2: Packing + Conversion -->
                 <div class="row g-3 mb-3">
-                    <div class="col-md-6">
+                    <div class="col-md-3">
                         <label class="ep-label">Packing</label>
                         <input type="text" id="quickPacking" class="ep-input" placeholder="e.g. 10 tablets / strip">
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-3">
                         <label class="ep-label">Conversion Factor</label>
                         <input type="number" id="quickConv" class="ep-input" value="1" min="1"
                                title="Units per pack (e.g. 10 for a strip of 10 tablets)">
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="ep-label">Product Type</label>
+                        <select id="quickType" style="display:none;">
+                            {% for ptype in product_type %}
+                            <option value="{{ ptype.id }}">{{ ptype.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="qs-wrap" id="qs-wrap-quickType">
+                            <div class="qs-input-row">
+                                <input type="text" class="ep-input qs-input" id="qs-input-quickType" 
+                                    placeholder="Search type (Tablet, Capsule, Syrup...)">
+                                <button type="button" class="qs-clear-btn" id="qs-clear-quickType" 
+                                        onclick="qsClear('quickType')" style="display:none;">✕</button>
+                            </div>
+                            <div class="qs-dropdown" id="qs-drop-quickType" style="display:none;"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -549,11 +567,11 @@
 
     // Init all 4 selects when DOM ready
     document.addEventListener('DOMContentLoaded', function() {
-        ['quickTax', 'quickSchedule', 'quickContent', 'quickCompany'].forEach(initQuickSelect);
+        ['quickType','quickTax', 'quickSchedule', 'quickContent', 'quickCompany'].forEach(initQuickSelect);
 
         // Re-sync inputs when modal is shown (edit/CSV flow pre-sets select values)
         document.getElementById('quickAddModal').addEventListener('show.bs.modal', function() {
-            ['quickTax', 'quickSchedule', 'quickContent', 'quickCompany'].forEach(function(id) {
+            ['quickType','quickTax', 'quickSchedule', 'quickContent', 'quickCompany'].forEach(function(id) {
                 const sel   = document.getElementById(id);
                 const input = document.getElementById('qs-input-' + id);
                 const btn   = document.getElementById('qs-clear-' + id);
@@ -808,6 +826,7 @@
             document.getElementById('quickName').value = productName;
             document.getElementById('quickPacking').value = '';
             document.getElementById('quickConv').value = 1;
+            document.getElementById('quickType').value = '';
             document.getElementById('quickTax').value = '';
             document.getElementById('quickSchedule').value = '';
             document.getElementById('quickCompany').value = '';
