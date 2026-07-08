@@ -1,0 +1,117 @@
+/* Enhanced Search Dropdown - Matching purchase_entry style */
+.search-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    max-height: 320px;
+    overflow-y: auto;
+    z-index: 1060;
+    margin-top: 6px;
+}
+
+.search-item {
+    padding: 12px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid #f1f3f5;
+    transition: all 0.2s ease;
+}
+
+.search-item:hover {
+    background: linear-gradient(90deg, #e8f0fe 0%, #f3f6ff 100%);
+    border-left: 4px solid #4361ee;
+    transform: translateX(4px);
+}
+
+.search-item:last-child {
+    border-bottom: none;
+}
+
+.search-item strong {
+    color: #1e2937;
+    font-size: 0.95rem;
+}
+
+.search-item small {
+    color: #64748b;
+    display: block;
+    margin-top: 3px;
+    font-size: 0.82rem;
+}
+
+/* Highlight selected product */
+.search-item.selected {
+    background: #dbeafe;
+    border-left-color: #2563eb;
+}
+
+/* Enhanced Quick Select Dropdown */
+.qs-wrap { position: relative; margin-bottom: 8px; }
+
+.qs-input-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.qs-input {
+    width: 100%;
+    padding-right: 35px;
+}
+
+.qs-clear-btn {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #9ca3af;
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 2px;
+}
+
+.qs-clear-btn:hover {
+    color: #ef4444;
+}
+
+.qs-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1.5px solid #6366f1;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(99, 102, 241, 0.15);
+    max-height: 260px;
+    overflow-y: auto;
+    z-index: 1100;
+    padding: 6px 0;
+}
+
+.qs-item {
+    padding: 10px 16px;
+    cursor: pointer;
+    font-size: 0.92rem;
+    transition: all 0.2s ease;
+    border-left: 3px solid transparent;
+}
+
+.qs-item:hover,
+.qs-item.qs-active {
+    background: linear-gradient(90deg, #e0e7ff, #f0f4ff);
+    border-left-color: #6366f1;
+    color: #4338ca;
+}
+
+/* Highlight for selected */
+.qs-item.selected {
+    background: #c7d2fe;
+    font-weight: 600;
+}
