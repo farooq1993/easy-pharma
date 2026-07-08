@@ -274,7 +274,7 @@ class ProductMasterSearchAPI(LoginRequiredMixin,View):
         query = request.GET.get('q', '')
         products = Products.objects.filter(
             tenant=request.tenant,
-            product_name__icontains=query
+            product_name__istartswith=query
         ).select_related('product_tax')[:20]
         
         data = []
