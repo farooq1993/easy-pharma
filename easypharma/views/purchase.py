@@ -29,7 +29,7 @@ from easypharma.utility.purchase_import import process_csv_file
 
 class PurchaseEntryView(LoginRequiredMixin,View):
     template_name = 'purchase/entry.html'
-
+    
     def get(self, request, invoice_id=None):
         suppliers = Supplier.objects.filter(tenant=request.tenant).order_by('name')
         products = Products.objects.filter(tenant=request.tenant).order_by('product_name')
@@ -105,6 +105,15 @@ class PurchaseEntryView(LoginRequiredMixin,View):
                     invoice.items.all().delete()
                 else:
                     invoice = PurchaseInvoice(tenant=request.tenant, user=request.user)
+
+                # Prevent duplicate invoice numbers for the same supplier
+                existing_invoice = PurchaseInvoice.objects.filter(
+                    tenant=request.tenant,
+                    supplier_id=data['supplier_id'],
+                    invoice_number=data['invoice_number']
+                ).exclude(id=invoice.id).first()
+                if existing_invoice:
+                    return JsonResponse({'error': 'Invoice number already exists for this supplier'}, status=400)
 
                 supplier = Supplier.objects.get(id=data['supplier_id'], tenant=request.tenant)
                 invoice.supplier = supplier
@@ -187,7 +196,7 @@ class PurchaseEntryView(LoginRequiredMixin,View):
                         'invoice_id': invoice.id,
                         'voucher_number': invoice.voucher_number,
                     })
-                #return JsonResponse({'success': True, 'invoice_id': invoice.id})
+
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
