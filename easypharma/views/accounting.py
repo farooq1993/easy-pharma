@@ -1,4 +1,5 @@
 from django.views import View
+from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.db import transaction
@@ -85,6 +86,44 @@ class SupplierLedgerView(View):
             'total_credit': sum(float(e['credit']) for e in ledger_entries if e['transaction_type'] != 'Opening Balance'),
             'total_debit': sum(float(e['debit']) for e in ledger_entries if e['transaction_type'] != 'Opening Balance'),
         })
+
+    def post(self, request):
+        supplier_id = request.POST.get('supplier_id')
+        entry_date = request.POST.get('date')
+        entry_type = request.POST.get('entry_type')
+        amount = request.POST.get('amount')
+        reference_number = request.POST.get('reference_number')
+        remarks = request.POST.get('remarks')
+
+        if not supplier_id or not entry_date or not amount or not entry_type:
+            messages.error(request, "Missing required fields for JV entry.")
+            return redirect('supplier_ledger')
+
+        supplier = get_object_or_404(Supplier, id=supplier_id, tenant=request.tenant)
+        
+        try:
+            debit_val = 0.00
+            credit_val = 0.00
+            if entry_type == 'Debit':
+                debit_val = float(amount)
+            else:
+                credit_val = float(amount)
+
+            SupplierLedger.objects.create(
+                tenant=request.tenant,
+                supplier=supplier,
+                date=entry_date,
+                transaction_type='JV',
+                reference_number=reference_number or '',
+                debit=debit_val,
+                credit=credit_val,
+                remarks=remarks or ''
+            )
+            messages.success(request, f"Journal Voucher (JV) entry of Rs. {amount} added successfully for {supplier.name}!")
+        except Exception as e:
+            messages.error(request, f"Failed to save JV entry: {str(e)}")
+
+        return redirect(f'/accounting/supplier-ledger/?supplier_id={supplier_id}')
 
 class SupplierPaymentView(View):
     template_name = 'accounting/supplier_payment.html'

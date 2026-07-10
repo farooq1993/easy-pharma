@@ -8,6 +8,7 @@ from easypharma.views.reports import (
     ProductHistoryView,
     ScheduleHReportView,
     NarcoticDrugReportView,
+    ScheduleH1PurchaseReportView,
     GSTR3BReportView,
     GSTR1ReportView,
     PurchaseAnalysisView,
@@ -28,6 +29,7 @@ urlpatterns = [
     # Drug Register Reports
     path('schedule-h/', ScheduleHReportView.as_view(), name='schedule_h_report'),
     path('narcotic-drug/', NarcoticDrugReportView.as_view(), name='narcotic_drug_report'),
+    path('schedule-h1-purchase/', ScheduleH1PurchaseReportView.as_view(), name='schedule_h1_purchase_report'),
 
     # GST Compliance Reports
     path('gstr3b/', GSTR3BReportView.as_view(), name='gstr3b_report'),

@@ -119,22 +119,34 @@ class StockReportView(LoginRequiredMixin,View):
 
     def get(self, request):
         is_pdf = request.GET.get('pdf') == '1'
-        cache_key = _stock_report_cache_key(request.tenant.id)
+        schedule_filter = request.GET.get('schedule_filter', '')
+        
+        base_cache_key = _stock_report_cache_key(request.tenant.id)
+        cache_key = f"{base_cache_key}:{schedule_filter}"
 
         # ── Try cache first (skip for PDF to always get fresh data) ──
         if not is_pdf:
             cached_ctx = cache.get(cache_key)
             if cached_ctx is not None:
-                logger.debug('StockReportView cache HIT tenant=%s', request.tenant.id)
+                logger.debug('StockReportView cache HIT tenant=%s filter=%s', request.tenant.id, schedule_filter)
                 return render(request, self.template_name, cached_ctx)
 
-        logger.debug('StockReportView cache MISS tenant=%s', request.tenant.id)
-        # Aggregate stock by product
-        stocks = StockBatch.objects.filter(tenant=request.tenant, current_quantity__gt=0).select_related('product')
+        logger.debug('StockReportView cache MISS tenant=%s filter=%s', request.tenant.id, schedule_filter)
         
+        # Aggregate stock by product
+        stocks = StockBatch.objects.filter(tenant=request.tenant, current_quantity__gt=0).select_related('product', 'product__product_schedule')
+        
+        if schedule_filter == 'H1':
+            stocks = stocks.filter(product__product_schedule__schedule_name__iexact='Schedule H1')
+            
         # Also group by product for a summary
         from django.db.models import ExpressionWrapper, DecimalField
-        product_summary = StockBatch.objects.filter(tenant=request.tenant).values(
+        product_summary = StockBatch.objects.filter(tenant=request.tenant).select_related('product', 'product__product_schedule')
+        
+        if schedule_filter == 'H1':
+            product_summary = product_summary.filter(product__product_schedule__schedule_name__iexact='Schedule H1')
+
+        product_summary = product_summary.values(
             'product__product_name', 'product__product_packing', 'product__conversion_factor'
         ).annotate(
             total_stock=Sum('current_quantity'),
@@ -149,19 +161,27 @@ class StockReportView(LoginRequiredMixin,View):
         # Force evaluation before caching (QuerySets are lazy)
         stocks_list = list(stocks)
         summary_list = list(product_summary)
-        total_value = sum(item['total_value'] for item in summary_list)
+        
+        # Calculate stock value for each batch
+        for s in stocks_list:
+            cf = s.product.conversion_factor or 1
+            s.purchase_rate_per_unit = float(s.purchase_price or 0) / cf
+            s.stock_value = s.current_quantity * s.purchase_rate_per_unit
+
+        total_value = sum(item['total_value'] or 0 for item in summary_list)
         
         context = {
             'stocks': stocks_list,
             'summary': summary_list,
-            'total_value': total_value
+            'total_value': total_value,
+            'schedule_filter': schedule_filter,
         }
 
         if not is_pdf:
             cache.set(cache_key, context, STOCK_REPORT_CACHE_TIMEOUT)
         
         if is_pdf:
-            return render_to_pdf(self.template_name, context, filename="stock_report.pdf")
+            return render_to_pdf(request, self.template_name, context, filename="stock_report.pdf")
 
         return render(request, self.template_name, context)
 
@@ -1005,6 +1025,86 @@ class ScheduleHReportView(LoginRequiredMixin,View):
         if request.GET.get('pdf') == '1':
             fn = f"schedule_h_register_{schedule_type.replace(' ', '_')}_{start_date}_{end_date}.pdf"
             return render_to_pdf(self.template_name, context, filename=fn)
+
+        return render(request, self.template_name, context)
+
+
+class ScheduleH1PurchaseReportView(LoginRequiredMixin, View):
+    """
+    Schedule H1 Purchase Report — lists all purchases of Schedule H1 drugs
+    as required for statutory records.
+    """
+    template_name = 'reports/schedule_h1_purchase_report.html'
+
+    def get(self, request):
+        start_date_str = request.GET.get('start_date')
+        end_date_str = request.GET.get('end_date')
+
+        if start_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                start_date = now().date().replace(day=1)
+        else:
+            start_date = now().date().replace(day=1)
+
+        if end_date_str:
+            try:
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                end_date = now().date()
+        else:
+            end_date = now().date()
+
+        # Get purchase items for Schedule H1 in the date range
+        purchase_items = PurchaseItem.objects.filter(
+            tenant=request.tenant,
+            product__product_schedule__schedule_name__iexact='Schedule H1',
+            purchase_invoice__purchase_date__gte=start_date,
+            purchase_invoice__purchase_date__lte=end_date,
+        ).select_related(
+            'product',
+            'product__product_schedule',
+            'purchase_invoice',
+            'purchase_invoice__supplier',
+        ).order_by('purchase_invoice__purchase_date')
+
+        # Build register rows
+        register_rows = []
+        serial = 1
+        for item in purchase_items:
+            inv = item.purchase_invoice
+            register_rows.append({
+                'sr': serial,
+                'date': inv.purchase_date.strftime('%d/%m/%Y') if inv.purchase_date else '—',
+                'supplier_name': inv.supplier.name if inv.supplier else '—',
+                'supplier_dl': inv.supplier.dl_number if inv.supplier and hasattr(inv.supplier, 'dl_number') else '—',
+                'inv_no': inv.invoice_number,
+                'product_name': item.product.product_name,
+                'batch_number': item.batch_number or '—',
+                'expiry_date': item.expiry_date.strftime('%m/%Y') if item.expiry_date else '—',
+                'quantity': item.quantity,
+                'unit_price': float(item.purchase_price),
+                'total': float(item.total_amount),
+            })
+            serial += 1
+
+        # Summary stats
+        total_qty = sum(r['quantity'] for r in register_rows)
+        total_value = sum(r['total'] for r in register_rows)
+
+        context = {
+            'start_date': start_date,
+            'end_date': end_date,
+            'register_rows': register_rows,
+            'total_qty': total_qty,
+            'total_value': total_value,
+            'pharmacy': request.tenant,
+        }
+
+        if request.GET.get('pdf') == '1':
+            fn = f"schedule_h1_purchase_register_{start_date}_{end_date}.pdf"
+            return render_to_pdf(request, 'reports/schedule_h1_purchase_report_pdf.html', context, filename=fn)
 
         return render(request, self.template_name, context)
 

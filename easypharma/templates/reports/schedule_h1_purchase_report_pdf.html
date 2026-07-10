@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Schedule H1 Drug Purchase Register</title>
+  <style>
+    @page { size: A4 landscape; margin: 15mm 10mm; }
+    body { font-family: Arial, sans-serif; font-size: 9px; color: #000; }
+    .header { text-align: center; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 8px; }
+    .header h2 { font-size: 16px; margin: 0 0 2px; }
+    .header h3 { font-size: 13px; margin: 0 0 4px; color: #b71c1c; }
+    .header p { margin: 1px 0; font-size: 9px; }
+    table { width: 100%; border-collapse: collapse; font-size: 8px; }
+    th { background: #b71c1c; color: #fff; padding: 4px 3px; text-align: left; font-size: 8px; white-space: nowrap; }
+    td { padding: 3px; border-bottom: 1px solid #ddd; vertical-align: top; }
+    tr:nth-child(even) td { background: #f5f5f5; }
+    tfoot td { background: #fee; font-weight: bold; border-top: 2px solid #b71c1c; }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+    .footer { margin-top: 15px; display: flex; justify-content: space-between; font-size: 9px; }
+    .sig-line { border-top: 1px solid #000; padding-top: 4px; margin-top: 30px; width: 150px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>{{ pharmacy.pharmacy_name }}</h2>
+    <h3>Schedule H1 Drug Purchase Register</h3>
+    <p>{{ pharmacy.address }} | Ph: {{ pharmacy.phone }}</p>
+    <p>DL No: {{ pharmacy.license_number|default:'N/A' }} | GST: {{ pharmacy.gst_number|default:'N/A' }}</p>
+    <p>Period: {{ start_date|date:"d M Y" }} to {{ end_date|date:"d M Y" }}</p>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Sr.</th>
+        <th>Purchase Date</th>
+        <th>Supplier Name</th>
+        <th>Supplier DL</th>
+        <th>Inv No.</th>
+        <th>Medicine Name</th>
+        <th>Batch No.</th>
+        <th>Expiry</th>
+        <th class="text-center">Qty</th>
+        <th class="text-right">Purchase Rate (₹)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in register_rows %}
+      <tr>
+        <td>{{ row.sr }}</td>
+        <td>{{ row.date }}</td>
+        <td>{{ row.supplier_name }}</td>
+        <td>{{ row.supplier_dl }}</td>
+        <td>{{ row.inv_no }}</td>
+        <td><strong>{{ row.product_name }}</strong></td>
+        <td>{{ row.batch_number }}</td>
+        <td>{{ row.expiry_date }}</td>
+        <td class="text-center">{{ row.quantity }}</td>
+        <td class="text-right">{{ row.unit_price|floatformat:2 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="8" class="text-right">TOTAL</td>
+        <td class="text-center">{{ total_qty }}</td>
+        <td class="text-right">{{ total_value|floatformat:2 }}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="footer">
+    <div class="sig-line">Pharmacist / Chemist Signature</div>
+    <div style="font-size:8px; text-align:center;">
+      <p>Total {{ register_rows|length }} entries | Total Qty: {{ total_qty }}</p>
+      <p>This is a computer generated statutory purchase register.</p>
+    </div>
+    <div class="sig-line">Proprietor Signature</div>
+  </div>
+</body>
+</html>
