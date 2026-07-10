@@ -1,0 +1,147 @@
+{% extends 'includes/base.html' %}
+{% load static %}
+{% block title %}Schedule H1 Purchase Register{% endblock %}
+{% block content %}
+<style>
+.register-table { font-size: 12px; }
+.register-table th { background: #1a237e; color: #fff; white-space: nowrap; vertical-align: middle; }
+.register-table td { vertical-align: middle; }
+</style>
+
+<div class="container-fluid py-4">
+
+  <!-- Header -->
+  <div class="row align-items-center mb-4">
+    <div class="col-md-7">
+      <div class="d-flex align-items-center gap-3">
+        <div style="background:linear-gradient(135deg,#e53935,#b71c1c);width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;">
+          <i class="bi bi-journal-medical text-white fs-4"></i>
+        </div>
+        <div>
+          <h4 class="mb-0 fw-bold">Schedule H1 Purchase Register</h4>
+          <small class="text-muted">
+            Statutory Purchase Register &nbsp;|&nbsp;
+            {{ start_date|date:"d M Y" }} — {{ end_date|date:"d M Y" }}
+          </small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-5">
+      <form method="GET" class="row g-2 justify-content-end">
+        <div class="col-md-4">
+          <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date|date:'Y-m-d' }}">
+        </div>
+        <div class="col-md-4">
+          <input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date|date:'Y-m-d' }}">
+        </div>
+        <div class="col-md-3 d-flex gap-1">
+          <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-filter"></i> Filter</button>
+          <a href="?start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}&pdf=1"
+             class="btn btn-danger btn-sm" title="Export PDF" target="_blank">
+            <i class="bi bi-file-earmark-pdf"></i>
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Stats cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm rounded-4 text-center py-3">
+        <div class="card-body">
+          <h6 class="text-muted small text-uppercase fw-bold">Total Entries</h6>
+          <h3 class="text-primary fw-bold mb-0">{{ register_rows|length }}</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm rounded-4 text-center py-3">
+        <div class="card-body">
+          <h6 class="text-muted small text-uppercase fw-bold">Total Quantity</h6>
+          <h3 class="text-success fw-bold mb-0">{{ total_qty }}</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm rounded-4 text-center py-3">
+        <div class="card-body">
+          <h6 class="text-muted small text-uppercase fw-bold">Total Purchase Value</h6>
+          <h3 class="text-warning fw-bold mb-0">₹{{ total_value|floatformat:2 }}</h3>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm rounded-4 text-center py-3">
+        <div class="card-body">
+          <h6 class="text-muted small text-uppercase fw-bold">Period</h6>
+          <h6 class="fw-bold mb-0">{{ start_date|date:"M Y" }}{% if start_date.month != end_date.month %} – {{ end_date|date:"M Y" }}{% endif %}</h6>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Register Table -->
+  <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+    <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center py-3 px-4">
+      <h6 class="mb-0 fw-bold">
+        <i class="bi bi-table me-2 text-danger"></i>Schedule H1 Drug Purchase Register
+      </h6>
+      <span class="badge bg-danger">{{ register_rows|length }} records</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 register-table">
+          <thead>
+            <tr>
+              <th class="ps-3">Sr.</th>
+              <th>Purchase Date</th>
+              <th>Supplier Name</th>
+              <th>Supplier DL</th>
+              <th>Inv No.</th>
+              <th>Medicine Name</th>
+              <th>Batch</th>
+              <th>Expiry</th>
+              <th class="text-center">Qty</th>
+              <th class="text-end pe-3">Purchase Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in register_rows %}
+            <tr>
+              <td class="ps-3 text-muted small">{{ row.sr }}</td>
+              <td class="small fw-bold text-nowrap">{{ row.date }}</td>
+              <td class="fw-bold small">{{ row.supplier_name }}</td>
+              <td class="small text-muted font-monospace">{{ row.supplier_dl }}</td>
+              <td><span class="badge bg-light text-dark border">#{{ row.inv_no }}</span></td>
+              <td class="fw-bold small text-primary">{{ row.product_name }}</td>
+              <td class="small font-monospace">{{ row.batch_number }}</td>
+              <td class="small text-muted">{{ row.expiry_date }}</td>
+              <td class="text-center fw-bold">{{ row.quantity }}</td>
+              <td class="text-end fw-bold pe-3">₹{{ row.unit_price|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="10" class="text-center py-5 text-muted">
+                <i class="bi bi-journal-x fs-1 opacity-25 d-block mb-2"></i>
+                No Schedule H1 drug purchases found for the selected period.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          {% if register_rows %}
+          <tfoot class="bg-light fw-bold">
+            <tr>
+              <td colspan="8" class="ps-3 text-end">TOTAL</td>
+              <td class="text-center">{{ total_qty }}</td>
+              <td class="text-end pe-3">₹{{ total_value|floatformat:2 }}</td>
+            </tr>
+          </tfoot>
+          {% endif %}
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

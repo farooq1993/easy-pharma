@@ -6,7 +6,7 @@ from .Items import Products
 class SupplierLedger(TenantAwareModel):
     supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE, related_name='ledger_entries')
     date = models.DateField()
-    transaction_type = models.CharField(max_length=50, choices=[('Purchase', 'Purchase'), ('Payment', 'Payment'), ('Return', 'Return')])
+    transaction_type = models.CharField(max_length=50, choices=[('Purchase', 'Purchase'), ('Payment', 'Payment'), ('Return', 'Return'), ('JV', 'Journal Voucher')])
     reference_number = models.CharField(max_length=100, null=True, blank=True)
     debit = models.DecimalField(max_digits=12, decimal_places=2, default=0.00) # Payment to supplier, Return
     credit = models.DecimalField(max_digits=12, decimal_places=2, default=0.00) # Purchase from supplier

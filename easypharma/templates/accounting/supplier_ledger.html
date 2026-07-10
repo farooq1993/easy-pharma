@@ -4,10 +4,15 @@
 {% block content %}
 <div class="container-fluid py-4">
     <div class="row mb-4">
-        <div class="col-12">
+        <div class="col-12 d-flex justify-content-between align-items-center">
             <h2 class="mb-0 text-dark">Supplier Ledger</h2>
+            <button type="button" class="btn btn-warning fw-bold text-dark shadow-sm" data-bs-toggle="modal" data-bs-target="#addJvModal">
+                <i class="fas fa-plus-circle me-1"></i> Add JV Entry
+            </button>
         </div>
     </div>
+
+    {% include 'includes/messages.html' %}
 
     <div class="card shadow-sm border-0 mb-4">
         <div class="card-body">
@@ -68,6 +73,8 @@
                                 {% elif entry.transaction_type == 'Payment' %}
                                 <span class="badge bg-success">Payment</span>
                                 {% if entry.is_adjusted %}<small class="ms-1 text-info fw-bold">(Adjusted)</small>{% endif %}
+                                {% elif entry.transaction_type == 'JV' %}
+                                <span class="badge bg-info text-white">JV (Adjustment)</span>
                                 {% else %}
                                 <span class="badge bg-warning text-dark">Return</span>
                                 {% endif %}
@@ -97,5 +104,60 @@
         </div>
     </div>
     {% endif %}
+    <!-- Add JV Modal -->
+    <div class="modal fade" id="addJvModal" tabindex="-1" aria-labelledby="addJvModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 1rem; overflow: hidden;">
+                <form method="POST" action="{% url 'supplier_ledger' %}">
+                    {% csrf_token %}
+                    <!-- Premium Header -->
+                    <div class="modal-header text-dark border-0 py-3" style="background: linear-gradient(135deg, #ffc107 0%, #ffb300 100%);">
+                        <h5 class="modal-title fw-bold" id="addJvModalLabel">
+                            <i class="fas fa-plus-circle me-2"></i>Add Journal Voucher (JV) Entry
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-4 bg-light">
+                        <div class="mb-3">
+                            <label for="jvSupplier" class="form-label fw-bold">Supplier</label>
+                            <select id="jvSupplier" name="supplier_id" class="form-select" required>
+                                <option value="">-- Select Supplier --</option>
+                                {% for s in suppliers %}
+                                <option value="{{ s.id }}" {% if selected_supplier and selected_supplier.id == s.id %}selected{% endif %}>{{ s.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="jvDate" class="form-label fw-bold">Date</label>
+                            <input type="date" id="jvDate" name="date" class="form-control" value="{% now 'Y-m-d' %}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="jvEntryType" class="form-label fw-bold">Entry Type</label>
+                            <select id="jvEntryType" name="entry_type" class="form-select" required>
+                                <option value="Debit">Debit (Decreases Owed Balance - e.g., Discount/Adjustment)</option>
+                                <option value="Credit">Credit (Increases Owed Balance - e.g., Charges/Opening Balance)</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="jvAmount" class="form-label fw-bold">Amount (Rs.)</label>
+                            <input type="number" id="jvAmount" name="amount" class="form-control text-end fw-bold" step="0.01" min="0.01" placeholder="0.00" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="jvRef" class="form-label fw-bold">Reference Number</label>
+                            <input type="text" id="jvRef" name="reference_number" class="form-control" placeholder="Optional e.g. JV-101">
+                        </div>
+                        <div class="mb-3">
+                            <label for="jvRemarks" class="form-label fw-bold">Remarks / Description</label>
+                            <textarea id="jvRemarks" name="remarks" class="form-control" rows="3" placeholder="Describe adjustment reason..." required></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 bg-white">
+                        <button type="button" class="btn btn-secondary px-4 py-2" data-bs-dismiss="modal" style="border-radius: 0.5rem;">Cancel</button>
+                        <button type="submit" class="btn btn-warning px-4 py-2 fw-bold text-dark" style="border-radius: 0.5rem; background: linear-gradient(135deg, #ffc107 0%, #ffb300 100%); border: none;">Save Entry</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
