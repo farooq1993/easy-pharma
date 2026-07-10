@@ -1,0 +1,413 @@
+{% extends 'includes/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12 d-flex justify-content-between align-items-center">
+            <h2 class="mb-0 text-dark">Customer Payments (Payment In)</h2>
+            <button class="btn btn-success fw-bold" data-bs-toggle="modal" data-bs-target="#paymentModal">
+                <i class="bi bi-plus-lg me-2"></i>Record Payment In
+            </button>
+        </div>
+    </div>
+
+    {% include 'includes/messages.html' %}
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-3">Date</th>
+                            <th>Customer/Patient</th>
+                            <th>Payment Mode</th>
+                            <th>Ref Number</th>
+                            <th>Remarks</th>
+                            <th class="text-end">Amount Received</th>
+                            <th class="text-center" style="width: 100px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in payments %}
+                        <tr>
+                            <td class="ps-3">{{ p.payment_date|date:"Y-m-d" }}</td>
+                            <td class="fw-bold text-dark">{{ p.customer.name }}</td>
+                            <td><span class="badge bg-light text-dark border">{{ p.payment_mode }}</span></td>
+                            <td>{{ p.reference_number|default:"-" }}</td>
+                            <td>{{ p.remarks|default:"-" }}</td>
+                            <td class="text-end fw-bold text-success">₹{{ p.amount|floatformat:2 }}</td>
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-outline-primary me-1" 
+                                    onclick='editPayment({{ p.id }}, {{ p.customer.id }}, "{{ p.payment_date|date:"Y-m-d" }}", "{{ p.amount }}", "{{ p.payment_mode }}", "{{ p.reference_number|escapejs }}", "{{ p.remarks|escapejs }}")' title="Edit Payment">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="deletePayment({{ p.id }})" title="Delete Payment">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">No customer payments recorded yet.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Payment Modal -->
+<div class="modal fade" id="paymentModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 1rem; overflow: hidden;">
+            <div class="modal-header bg-success text-white border-0 py-3">
+                <h5 class="modal-title fw-bold" id="paymentModalLabel">Record Customer Payment In</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 bg-light">
+                <!-- Customer Outstanding Balance Alert -->
+                <div id="customerBalanceDiv" class="alert alert-warning d-none mb-3 shadow-sm border-0">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="fw-bold"><i class="bi bi-info-circle-fill me-2"></i>Outstanding Credit Balance:</span>
+                        <strong id="customerBalanceText" class="fs-5 text-danger">₹0.00</strong>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark">Customer/Patient *</label>
+                        <select id="paymentCustomer" class="form-select" required>
+                            <option value="">-- Choose Customer --</option>
+                            {% for c in customers %}
+                            <option value="{{ c.id }}" data-balance="{{ c.current_balance }}">{{ c.name }} {% if c.phone %}({{ c.phone }}){% endif %} (Bal: ₹{{ c.current_balance|floatformat:2 }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark">Payment Date *</label>
+                        <input type="date" id="payment_date" class="form-control" value="{% now 'Y-m-d' %}" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark">Payment Mode *</label>
+                        <select id="payment_mode" class="form-select" required>
+                            <option value="Cash">Cash</option>
+                            <option value="UPI">UPI</option>
+                            <option value="Card">Card</option>
+                            <option value="Bank">Bank Transfer</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark">Amount Received *</label>
+                        <input type="number" step="0.01" min="0.01" id="amount" class="form-control fw-bold text-success" placeholder="0.00" required>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark">Reference Number</label>
+                        <input type="text" id="reference_number" class="form-control" placeholder="Transaction ID, UPI Ref, Cheque No">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold text-dark">Remarks</label>
+                        <input type="text" id="remarks" class="form-control" placeholder="Description...">
+                    </div>
+                </div>
+
+                <!-- Invoice Adjustments Section -->
+                <div id="creditBillsContainer" class="d-none mt-4">
+                    <h6 class="text-success mb-2 border-bottom pb-2 fw-bold"><i class="bi bi-file-earmark-check-fill me-2"></i>Adjust against Credit Sale Invoices</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered bg-white" id="creditBillsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Invoice #</th>
+                                    <th>Date</th>
+                                    <th class="text-end">Bill Amount</th>
+                                    <th class="text-end">Balance Due</th>
+                                    <th class="text-end" style="width: 200px;">Allocate</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <th colspan="4" class="text-end">Total Allocated:</th>
+                                    <th class="text-end text-success" id="totalAllocated">0.00</th>
+                                </tr>
+                                <tr>
+                                    <th colspan="4" class="text-end">Unallocated Advance:</th>
+                                    <th class="text-end text-primary" id="unallocatedAmount">0.00</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+            <div class="modal-footer border-0 bg-white">
+                <button type="button" class="btn btn-secondary px-4 py-2" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success px-4 py-2 fw-bold" id="savePaymentBtn">Save Payment</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const customerSelect = document.getElementById('paymentCustomer');
+    const paymentDate = document.getElementById('payment_date');
+    const paymentMode = document.getElementById('payment_mode');
+    const amountInput = document.getElementById('amount');
+    const refInput = document.getElementById('reference_number');
+    const remarksInput = document.getElementById('remarks');
+    
+    const balanceDiv = document.getElementById('customerBalanceDiv');
+    const balanceText = document.getElementById('customerBalanceText');
+    const creditBillsContainer = document.getElementById('creditBillsContainer');
+    const creditBillsTableBody = document.querySelector('#creditBillsTable tbody');
+    
+    let currentBills = [];
+    let editingPaymentId = null;
+
+    // Show outstanding balance dynamically in modal
+    customerSelect.addEventListener('change', async function() {
+        const customerId = this.value;
+        if (!customerId) {
+            balanceDiv.classList.add('d-none');
+            creditBillsContainer.classList.add('d-none');
+            currentBills = [];
+            return;
+        }
+
+        // Show outstanding balance from option attribute
+        const selectedOpt = this.options[this.selectedIndex];
+        const balance = parseFloat(selectedOpt.dataset.balance) || 0;
+        if (balance > 0) {
+            balanceText.textContent = '₹' + balance.toFixed(2);
+            balanceDiv.classList.remove('d-none');
+        } else {
+            balanceDiv.classList.add('d-none');
+        }
+
+        // Fetch unpaid invoices for adjustment
+        try {
+            const res = await fetch(`/api/customer-credit-bills/?customer_id=${customerId}`);
+            const data = await res.json();
+            currentBills = data;
+            
+            if (data.length > 0) {
+                renderBills();
+                creditBillsContainer.classList.remove('d-none');
+            } else {
+                creditBillsContainer.classList.add('d-none');
+            }
+        } catch(e) {
+            console.error(e);
+        }
+    });
+
+    function renderBills() {
+        creditBillsTableBody.innerHTML = '';
+        currentBills.forEach((bill, index) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${bill.invoice_number}</td>
+                <td>${bill.created_at}</td>
+                <td class="text-end">₹${bill.total_amount.toFixed(2)}</td>
+                <td class="text-end text-danger fw-bold">₹${bill.balance.toFixed(2)}</td>
+                <td>
+                    <div class="d-flex align-items-center justify-content-end">
+                        <input class="form-check-input mt-0 me-2 allocate-check border-secondary" type="checkbox" data-index="${index}" title="Auto Allocate">
+                        <input type="number" step="0.01" class="form-control form-control-sm text-end allocate-input" 
+                               data-index="${index}" data-balance="${bill.balance}" value="0.00" style="width: 100px;">
+                    </div>
+                </td>
+            `;
+            creditBillsTableBody.appendChild(tr);
+        });
+
+        document.querySelectorAll('.allocate-input').forEach(inp => {
+            inp.addEventListener('input', calculateAllocations);
+        });
+        
+        document.querySelectorAll('.allocate-check').forEach(chk => {
+            chk.addEventListener('change', function() {
+                const idx = this.dataset.index;
+                const input = document.querySelector(`.allocate-input[data-index="${idx}"]`);
+                if (this.checked) {
+                    let totalAmount = parseFloat(amountInput.value) || 0;
+                    let currentlyAllocated = 0;
+                    document.querySelectorAll('.allocate-input').forEach(inp => {
+                        if (inp !== input) {
+                            currentlyAllocated += parseFloat(inp.value) || 0;
+                        }
+                    });
+                    let unallocated = totalAmount - currentlyAllocated;
+                    let balance = parseFloat(input.dataset.balance);
+                    let allocateAmt = Math.min(unallocated > 0 ? unallocated : 0, balance);
+                    input.value = allocateAmt.toFixed(2);
+                } else {
+                    input.value = "0.00";
+                }
+                calculateAllocations();
+            });
+        });
+    }
+
+    function calculateAllocations() {
+        let totalAllocated = 0;
+        let totalAmount = parseFloat(amountInput.value) || 0;
+
+        document.querySelectorAll('.allocate-input').forEach(inp => {
+            let val = parseFloat(inp.value) || 0;
+            let bal = parseFloat(inp.dataset.balance);
+            if (val > bal) {
+                val = bal;
+                inp.value = val.toFixed(2);
+            }
+            totalAllocated += val;
+        });
+
+        document.getElementById('totalAllocated').textContent = totalAllocated.toFixed(2);
+        
+        let unallocated = totalAmount - totalAllocated;
+        document.getElementById('unallocatedAmount').textContent = unallocated.toFixed(2);
+        
+        if (unallocated < 0) {
+            document.getElementById('unallocatedAmount').classList.replace('text-primary', 'text-danger');
+        } else {
+            document.getElementById('unallocatedAmount').classList.replace('text-danger', 'text-primary');
+        }
+    }
+
+    amountInput.addEventListener('input', calculateAllocations);
+
+    // Save payment
+    document.getElementById('savePaymentBtn').addEventListener('click', async function() {
+        const customer_id = customerSelect.value;
+        const p_date = paymentDate.value;
+        const amount = parseFloat(amountInput.value) || 0;
+        const mode = paymentMode.value;
+        const ref = refInput.value;
+        const remarks = remarksInput.value;
+
+        if (!customer_id || !p_date || amount <= 0) {
+            return alert('Please fill customer, date and a valid amount.');
+        }
+
+        let totalAllocated = 0;
+        let adjusted_invoices = [];
+
+        document.querySelectorAll('.allocate-input').forEach((inp, idx) => {
+            let val = parseFloat(inp.value) || 0;
+            if (val > 0) {
+                totalAllocated += val;
+                adjusted_invoices.push({
+                    id: currentBills[idx].id,
+                    amount: val
+                });
+            }
+        });
+
+        if (totalAllocated > amount) {
+            return alert('Allocated amount cannot exceed total payment amount.');
+        }
+
+        const data = {
+            payment_id: editingPaymentId,
+            customer_id,
+            payment_date: p_date,
+            amount,
+            payment_mode: mode,
+            reference_number: ref,
+            remarks,
+            adjusted_invoices
+        };
+
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = 'Saving...';
+
+        try {
+            const res = await fetch("{% url 'customer_payment' %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify(data)
+            });
+            const result = await res.json();
+            
+            if (result.success) {
+                window.location.reload();
+            } else {
+                alert('Error: ' + result.error);
+                btn.disabled = false;
+                btn.innerHTML = 'Save Payment';
+            }
+        } catch(e) {
+            console.error(e);
+            alert('Server error');
+            btn.disabled = false;
+            btn.innerHTML = 'Save Payment';
+        }
+    });
+
+    window.editPayment = function(id, customer_id, date, amount, mode, ref, remarks) {
+        editingPaymentId = id;
+        customerSelect.value = customer_id;
+        paymentDate.value = date;
+        amountInput.value = amount;
+        paymentMode.value = mode;
+        refInput.value = ref;
+        remarksInput.value = remarks;
+        
+        // Trigger customer balance update and fetch outstanding invoices
+        customerSelect.dispatchEvent(new Event('change'));
+        
+        document.getElementById('paymentModalLabel').textContent = 'Edit Customer Payment';
+        new bootstrap.Modal(document.getElementById('paymentModal')).show();
+    };
+
+    // Reset modal on close
+    document.getElementById('paymentModal').addEventListener('hidden.bs.modal', function () {
+        editingPaymentId = null;
+        customerSelect.value = '';
+        amountInput.value = '';
+        remarksInput.value = '';
+        refInput.value = '';
+        document.getElementById('paymentModalLabel').textContent = 'Record Customer Payment In';
+        balanceDiv.classList.add('d-none');
+        creditBillsContainer.classList.add('d-none');
+        currentBills = [];
+    });
+});
+
+async function deletePayment(id) {
+    if (!confirm('Are you sure you want to delete this payment record? This will also revert any adjusted credit invoices and ledger entries.')) return;
+    
+    try {
+        const res = await fetch(`/accounting/customer-payment/${id}/delete/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        });
+        const result = await res.json();
+        if (result.success) {
+            window.location.reload();
+        } else {
+            alert('Error deleting payment: ' + result.error);
+        }
+    } catch(e) {
+        console.error(e);
+        alert('Server error while deleting payment');
+    }
+}
+</script>
+{% endblock %}
