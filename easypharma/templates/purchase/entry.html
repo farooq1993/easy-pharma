@@ -1153,12 +1153,7 @@
                 }
             });
 
-            // product search
-        searchInput.addEventListener('input', async (e) => {
-            const query = e.target.value.trim();
-            if (query.length < 1) { searchResultsDiv.classList.remove('open'); searchResultsDiv.style.display = 'none'; return; }
-            const resp = await fetch(`/api/products/master-search/?q=${encodeURIComponent(query)}`);
-            const data = await resp.json();
+        function renderPurchaseSearchResults(data) {
             searchResultsDiv.innerHTML = '';
             searchSelectedIndex = -1;
             if (data.length === 0) {
@@ -1186,6 +1181,7 @@
                         document.getElementById('productInfo').style.display = 'block';
                         updateUnitPreview();
                         searchResultsDiv.style.display = 'none';
+                        searchResultsDiv.classList.remove('open');
                         // Clear previous batch suggestions & fetch fresh batch history for this product
                         suggestionsDiv.innerHTML = '';
                         suggestionsDiv.classList.remove('show');
@@ -1198,7 +1194,74 @@
                     searchResultsDiv.appendChild(btn);
                 });
             }
+            searchResultsDiv.classList.add('open');
             searchResultsDiv.style.display = 'block';
+        }
+
+        async function showDefaultProductsPurchase() {
+            try {
+                let products = [];
+                if (navigator.onLine) {
+                    const response = await fetch('/api/products/master-search/?limit=50');
+                    if (response.ok) {
+                        products = await response.json();
+                    }
+                }
+                if (!products || products.length === 0) {
+                    if (typeof OfflineSync !== 'undefined') {
+                        const store = localforage.createInstance({ name: 'ep_product_cache' });
+                        products = await store.getItem('master_products') || [];
+                    }
+                }
+                
+                if (products && products.length > 0) {
+                    renderPurchaseSearchResults(products);
+                } else {
+                    searchResultsDiv.innerHTML = `<div class="search-item p-2 text-muted">No products cached</div>`;
+                    searchResultsDiv.classList.add('open');
+                    searchResultsDiv.style.display = 'block';
+                }
+            } catch (err) {
+                console.error('Failed to load default purchase products', err);
+            }
+        }
+
+        // product search
+        searchInput.addEventListener('input', async (e) => {
+            const query = e.target.value.trim();
+            if (query.length < 1) { 
+                showDefaultProductsPurchase(); 
+                return; 
+            }
+            try {
+                const resp = await fetch(`/api/products/master-search/?q=${encodeURIComponent(query)}`);
+                const data = await resp.json();
+                renderPurchaseSearchResults(data);
+            } catch (err) {
+                console.log('[Purchase] Offline product search activated');
+                if (typeof OfflineSync !== 'undefined') {
+                    const offlineResults = await OfflineSync.searchOfflineProducts(query, 'master');
+                    renderPurchaseSearchResults(offlineResults);
+                }
+            }
+        });
+
+        searchInput.addEventListener('focus', () => {
+            if (searchInput.value.trim().length === 0) {
+                showDefaultProductsPurchase();
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!searchInput.contains(e.target) && !searchResultsDiv.contains(e.target)) {
+                searchResultsDiv.style.display = 'none';
+                searchResultsDiv.classList.remove('open');
+            }
+        });
+
+        // Load default products on load
+        window.addEventListener('load', () => {
+            showDefaultProductsPurchase();
         });
 
         // Keydown listener on searchInput for keyboard dropdown navigation
@@ -1900,13 +1963,15 @@
 
                 if (response.ok && (result.success || result.status === 'success')) {
                     showPurchaseConfirm(result);
+                } else if (result.queued) {
+                    showPurchaseConfirm({ success: true, purchase_number: 'SW-OFF-' + Date.now() });
                 } else {
                     showToast(result.error || 'Server error occurred', 'error');
                 }
             }
         } catch (err) {
             console.error('[Purchase Save Error]', err);
-            if (!navigator.onLine && typeof OfflineSync !== 'undefined') {
+            if (typeof OfflineSync !== 'undefined') {
                 await OfflineSync.queueRequest(OfflineSync.purchaseStore, endpoint, data, 'Purchase saved offline!');
                 showPurchaseConfirm({ success: true, purchase_number: 'OFF-' + Date.now() });
             } else {
