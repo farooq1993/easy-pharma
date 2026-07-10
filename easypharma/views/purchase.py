@@ -985,7 +985,7 @@ class OpeningStockEntryView(LoginRequiredMixin, View):
 
                     OpeningStockItem.objects.create(
                         tenant=request.tenant,
-                        opening_stock=stock,
+                        opening_stock_id=stock.id,
                         product=product,
                         batch_number=item['batch_number'],
                         expiry_date=expiry_date,
