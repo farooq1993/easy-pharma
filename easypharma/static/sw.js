@@ -9,7 +9,7 @@
  * Failed POST transactions are stored locally and retried when connectivity returns.
  */
 
-const SW_VERSION = 'v1.5.5';   // 
+const SW_VERSION = 'v1.5.6';   // 
 const CACHE_STATIC = `ep-static-${SW_VERSION}`;
 const CACHE_PAGES  = `ep-pages-${SW_VERSION}`;
 const CACHE_API    = `ep-api-${SW_VERSION}`;
@@ -31,8 +31,11 @@ const PRECACHE_ASSETS = [
 
 // URLs whose responses should always come from the network (write/auth pages)
 const NETWORK_ONLY_PATTERNS = [
+  /^\/$/,              // Root URL (login page)
   /\/accounts\//,
   /\/admin\//,
+  /\/logout/,
+  /\/createuser/,
 ];
 
 // URLs that are pure static assets (Cache-First)

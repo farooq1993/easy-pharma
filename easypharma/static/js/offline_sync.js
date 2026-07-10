@@ -14,6 +14,9 @@ const OfflineSync = {
 
         console.log('[OfflineSync] Initialized successfully with 3 stores.');
 
+        // Preload product cache for offline use
+        this.preloadProductCache();
+
         // Listen for back online
         window.addEventListener('online', () => {
             console.log('[OfflineSync] 🔄 Back online. Starting sync...');
@@ -45,25 +48,146 @@ const OfflineSync = {
         return token;
     },
 
+    async preloadProductCache() {
+        if (!navigator.onLine) return;
+        try {
+            console.log('[OfflineSync] Preloading product cache...');
+            // Fetch products for POS (with batches)
+            const posResponse = await fetch('/api/products/search/?limit=500');
+            if (posResponse.ok) {
+                const products = await posResponse.json();
+                if (Array.isArray(products) && products.length > 0) {
+                    const store = localforage.createInstance({ name: 'ep_product_cache' });
+                    await store.setItem('pos_products', products);
+                    console.log(`[OfflineSync] Cached ${products.length} products for POS offline use.`);
+                }
+            }
+            
+            // Fetch products for Purchase Entry (without batches)
+            const masterResponse = await fetch('/api/products/master-search/?limit=500');
+            if (masterResponse.ok) {
+                const products = await masterResponse.json();
+                if (Array.isArray(products) && products.length > 0) {
+                    const store = localforage.createInstance({ name: 'ep_product_cache' });
+                    await store.setItem('master_products', products);
+                    console.log(`[OfflineSync] Cached ${products.length} products for Purchase offline use.`);
+                }
+            }
+        } catch (e) {
+            console.warn('[OfflineSync] Failed to preload product cache', e);
+        }
+    },
+
+    async syncServiceWorkerQueue() {
+        const dbName = 'ep-offline-requests';
+        const storeName = 'requests';
+        
+        return new Promise((resolve) => {
+            const request = indexedDB.open(dbName);
+            request.onsuccess = async (event) => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains(storeName)) {
+                    db.close();
+                    resolve();
+                    return;
+                }
+                
+                const tx = db.transaction(storeName, 'readwrite');
+                const store = tx.objectStore(storeName);
+                const getAllRequest = store.getAll();
+                
+                getAllRequest.onsuccess = async (e) => {
+                    const items = e.target.result || [];
+                    if (items.length === 0) {
+                        db.close();
+                        resolve();
+                        return;
+                    }
+                    
+                    console.log(`[OfflineSync] Syncing ${items.length} Service Worker queued requests...`);
+                    const csrfToken = await this.getCSRFToken();
+                    
+                    for (const item of items) {
+                        try {
+                            const headers = { ...item.headers };
+                            if (csrfToken) {
+                                headers['X-CSRFToken'] = csrfToken;
+                            }
+                            headers['X-Requested-With'] = 'XMLHttpRequest';
+                            
+                            const response = await fetch(item.url, {
+                                method: item.method,
+                                headers: headers,
+                                body: item.body,
+                                credentials: 'include'
+                            });
+                            
+                            let result = {};
+                            try {
+                                result = await response.json();
+                            } catch (err) {}
+                            
+                            if (response.ok || response.status === 200 || result.success) {
+                                const deleteTx = db.transaction(storeName, 'readwrite');
+                                const deleteStore = deleteTx.objectStore(storeName);
+                                deleteStore.delete(item.id);
+                                console.log(`[OfflineSync] Successfully synced SW request: ${item.url}`);
+                            }
+                        } catch (err) {
+                            console.error(`[OfflineSync] Failed to sync SW request:`, err);
+                        }
+                    }
+                    db.close();
+                    resolve();
+                };
+                getAllRequest.onerror = () => {
+                    db.close();
+                    resolve();
+                };
+            };
+            request.onerror = () => {
+                resolve();
+            };
+        });
+    },
+
     // Add this in OfflineSync object
     async cacheProducts(products) {
         try {
             const store = localforage.createInstance({ name: 'ep_product_cache' });
-            await store.setItem('all_products', products);
+            // Merge with existing cached products instead of overwriting entirely
+            let existing = await store.getItem('all_products') || [];
+            const existingIds = new Set(existing.map(p => p.id));
+            products.forEach(p => {
+                if (!existingIds.has(p.id)) {
+                    existing.push(p);
+                }
+            });
+            await store.setItem('all_products', existing.slice(0, 1000)); // limit total cache size
             console.log('[OfflineSync] Products cached for offline search');
         } catch (e) {
             console.warn('[OfflineSync] Failed to cache products', e);
         }
     },
 
-    async searchOfflineProducts(query) {
+    async searchOfflineProducts(query, type = 'pos') {
         try {
             const store = localforage.createInstance({ name: 'ep_product_cache' });
             const allProducts = await store.getItem('all_products') || [];
+            const preloadedKey = type === 'pos' ? 'pos_products' : 'master_products';
+            const preloadedProducts = await store.getItem(preloadedKey) || [];
+            
+            const combined = [...allProducts];
+            const combinedIds = new Set(combined.map(p => p.id));
+            preloadedProducts.forEach(p => {
+                if (!combinedIds.has(p.id)) {
+                    combined.push(p);
+                }
+            });
             
             const lowerQuery = query.toLowerCase();
             
-            return allProducts.filter(product => 
+            return combined.filter(product => 
                 product.name.toLowerCase().includes(lowerQuery) ||
                 (product.content && product.content.toLowerCase().includes(lowerQuery))
             ).slice(0, 30); // limit results
@@ -152,6 +276,12 @@ const OfflineSync = {
             console.warn('[OfflineSync] CSRF token not found. Sync may fail.');
         }
 
+        // Notify SW to sync its background queue
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage('SYNC_OFFLINE');
+        }
+
+        await this.syncServiceWorkerQueue();
         await this.processQueue(this.salesStore, csrfToken);
         await this.processQueue(this.purchaseStore, csrfToken);
         await this.processQueue(this.masterStore, csrfToken);

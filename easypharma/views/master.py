@@ -272,10 +272,15 @@ class QuickProductAPI(LoginRequiredMixin,View):
 class ProductMasterSearchAPI(LoginRequiredMixin,View):
     def get(self, request):
         query = request.GET.get('q', '')
+        limit_str = request.GET.get('limit', '20')
+        try:
+            limit = int(limit_str)
+        except ValueError:
+            limit = 20
         products = Products.objects.filter(
             tenant=request.tenant,
             product_name__istartswith=query
-        ).select_related('product_tax')[:20]
+        ).select_related('product_tax')[:limit]
         
         data = []
         for p in products:
