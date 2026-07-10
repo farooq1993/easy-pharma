@@ -544,6 +544,25 @@
 
 <script src="{% static 'js/localforage.min.js' %}"></script>
 <script>
+    const pharmacyInfo = {
+        name: "{{ request.tenant.pharmacy_name|escapejs }}",
+        address: "{{ request.tenant.address|escapejs }}",
+        phone: "{{ request.tenant.phone|escapejs }}",
+        dlNumber: "{{ request.tenant.license_number|escapejs }}",
+        foodLic: "{{ request.tenant.food_lic|escapejs }}",
+        gstin: "{{ request.tenant.gst_number|escapejs }}",
+    };
+
+    const printSetup = {
+        paperSize: "{{ ps.paper_size|escapejs }}",
+        showCustomerSignature: {{ ps.show_customer_signature|yesno:"true,false" }},
+        showPharmacistSignature: {{ ps.show_pharmacist_signature|yesno:"true,false" }},
+        customHeader: "{{ ps.custom_header|escapejs }}",
+        customFooter: "{{ ps.custom_footer|escapejs }}",
+        showLogo: {{ ps.show_logo|yesno:"true,false" }},
+        showGstDetails: {{ ps.show_gst_details|yesno:"true,false" }},
+        showDlDetails: {{ ps.show_dl_details|yesno:"true,false" }},
+    };
 
     function getCookie(name) {
         let cookieValue = null;
@@ -755,6 +774,162 @@
         calculateDiscount('amt');
     }
 
+    function printInvoiceOffline(data) {
+        const W = printSetup.paperSize === '58mm' ? 32 : (printSetup.paperSize === '80mm' ? 42 : 55);
+        const lines = [];
+        lines.push(" ");
+        
+        const invoiceDate = new Date().toLocaleDateString('en-GB'); // dd/mm/yyyy
+        
+        lines.push(" " + pharmacyInfo.name.toUpperCase().substring(0, W));
+        if (pharmacyInfo.address) {
+            lines.push(" " + pharmacyInfo.address.toUpperCase().substring(0, W));
+        }
+        
+        if (printSetup.showDlDetails && pharmacyInfo.dlNumber) {
+            lines.push(" " + `DL: ${pharmacyInfo.dlNumber}  Ph: ${pharmacyInfo.phone || ''}`.substring(0, W));
+            if (pharmacyInfo.foodLic) {
+                lines.push(" " + `Food License: ${pharmacyInfo.foodLic}`.substring(0, W));
+            }
+        }
+        
+        if (printSetup.showGstDetails && pharmacyInfo.gstin) {
+            lines.push(" " + `GST: ${pharmacyInfo.gstin}`.substring(0, W));
+        }
+        
+        if (printSetup.customHeader) {
+            printSetup.customHeader.split('\n').forEach(chLine => {
+                lines.push(" " + chLine.substring(0, W));
+            });
+        }
+        
+        const invNoStr = `CASH MEMO: Pending Sync*  Dt: ${invoiceDate}`;
+        lines.push(" " + invNoStr.padStart(W));
+        lines.push(" " + "-".repeat(W));
+        
+        // Patient details
+        const patientName = data.patient_name || 'CASH CUSTOMER';
+        lines.push(" " + `Pt  : ${patientName}`.substring(0, W));
+        if (data.patient_address) {
+            lines.push(" " + `Addr: ${data.patient_address}`.substring(0, W));
+        }
+        const doctorName = data.doctor_name || 'SELF';
+        lines.push(" " + `Dr  : ${doctorName}`.substring(0, W));
+        lines.push(" " + "-".repeat(W));
+        
+        // Items header
+        if (W >= 65) {
+            lines.push(" " + "PRODUCT".padEnd(28) + "MFG".padEnd(6) + "BATCH".padEnd(9) + "EXP".padEnd(6) + "QT".padStart(4) + "VALUE".padStart(10));
+        } else {
+            lines.push(" " + "PRODUCT".padEnd(22) + "MFG".padEnd(5) + "BATCH".padEnd(8) + "EXP".padEnd(6) + "QT".padStart(4) + "VALUE".padStart(10));
+        }
+        lines.push(" " + "-".repeat(W));
+        
+        // Items
+        let totalQty = 0;
+        cart.forEach(item => {
+            totalQty += item.quantity;
+            let productName = item.name.toUpperCase();
+            if (W >= 65) {
+                productName = productName.substring(0, 27);
+            } else {
+                productName = productName.substring(0, 21);
+            }
+            
+            const batchNo = item.batch_no || 'OFFLINE';
+            const exp = item.expiry || '—';
+            const mfg = '—';
+            const qty = item.quantity.toString();
+            const value = (item.price * item.quantity).toFixed(2);
+            
+            if (W >= 65) {
+                lines.push(" " + productName.padEnd(28) + mfg.padEnd(6) + batchNo.padEnd(9) + exp.padEnd(6) + qty.padStart(4) + value.padStart(10));
+            } else {
+                lines.push(" " + productName.padEnd(22) + mfg.padEnd(5) + batchNo.padEnd(8) + exp.padEnd(6) + qty.padStart(4) + value.padStart(10));
+            }
+        });
+        
+        lines.push(" " + "-".repeat(W));
+        
+        // Totals
+        const subTotalStr = `Sub Total:  ₹${data.sub_total.toFixed(2)}`;
+        lines.push(" " + subTotalStr.padStart(W));
+        if (data.tax_amount > 0) {
+            const taxStr = `Tax Amount: ₹${data.tax_amount.toFixed(2)}`;
+            lines.push(" " + taxStr.padStart(W));
+        }
+        if (data.discount_amount > 0) {
+            const discStr = `Discount:   X${data.discount_amount.toFixed(2)}`;
+            const discStrFixed = discStr.replace('X', '₹');
+            lines.push(" " + discStrFixed.padStart(W));
+        }
+        if (data.round_off !== 0) {
+            const roStr = `Round Off:  X${data.round_off.toFixed(2)}`;
+            const roStrFixed = roStr.replace('X', '₹');
+            lines.push(" " + roStrFixed.padStart(W));
+        }
+        lines.push(" " + "-".repeat(W));
+        
+        const grandTotalStr = `GRAND TOTAL: X${data.total_amount.toFixed(2)}`;
+        const grandTotalStrFixed = grandTotalStr.replace('X', '₹');
+        lines.push(" " + grandTotalStrFixed.padStart(W));
+        
+        const totalItemsStr = `Total Qty: ${totalQty} (${cart.length} items)`;
+        lines.push(" " + totalItemsStr.substring(0, W));
+        lines.push(" " + "-".repeat(W));
+        
+        if (printSetup.customFooter) {
+            printSetup.customFooter.split('\n').forEach(fLine => {
+                lines.push(" " + fLine.substring(0, W));
+            });
+        }
+        
+        if (printSetup.showPharmacistSignature) {
+            lines.push("\n\n" + "For Pharmacist".padStart(W));
+        }
+        
+        const billText = lines.join('\n');
+        
+        const printWindow = window.open('', '_blank', 'width=600,height=600');
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <title>Print Offline Bill</title>
+                <style>
+                    body { margin: 0; padding: 0; }
+                    pre {
+                        font-family: "Courier New", monospace;
+                        font-size: 12px;
+                        font-weight: bold;
+                        line-height: 1.15;
+                        margin: 0;
+                        padding: 0 0 0 3mm;
+                        white-space: pre;
+                    }
+                    @media print {
+                        @page {
+                            size: ${printSetup.paperSize === 'A4' ? 'A4' : '80mm auto'};
+                            margin: 0;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                <pre>${billText}</pre>
+                <script>
+                    window.onload = function() {
+                        window.print();
+                        setTimeout(() => window.close(), 500);
+                    };
+                <\/script>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+    }
+
     function updateSearchSelection() {
         const results = document.querySelectorAll('.batch-item');
         results.forEach((el, idx) => {
@@ -773,6 +948,33 @@
 
     const _posSearchCache = {};       // query → API data
     let   _posDebounceTimer = null;   // debounce handle
+
+    async function showDefaultProducts() {
+        try {
+            let products = [];
+            if (navigator.onLine) {
+                const response = await fetch('/api/products/search/?limit=50');
+                if (response.ok) {
+                    products = await response.json();
+                }
+            }
+            if (!products || products.length === 0) {
+                if (typeof OfflineSync !== 'undefined') {
+                    const store = localforage.createInstance({ name: 'ep_product_cache' });
+                    products = await store.getItem('pos_products') || [];
+                }
+            }
+            
+            if (products && products.length > 0) {
+                renderSearchResults({ results: products });
+            } else {
+                resultsDiv.innerHTML = '<div class="p-3 text-center text-muted small">No items cached yet. Search while online to cache items.</div>';
+                resultsDiv.classList.remove('d-none');
+            }
+        } catch (err) {
+            console.error('Failed to load default products', err);
+        }
+    }
 
     function renderSearchResults(data) {
         resultsDiv.innerHTML = '';
@@ -886,7 +1088,7 @@
         clearTimeout(_posDebounceTimer);
         const query = e.target.value.trim();
         if (query.length < 1) { 
-            resultsDiv.classList.add('d-none'); 
+            showDefaultProducts();
             return; 
         }
 
@@ -914,6 +1116,23 @@
         }
     }, 300);
     
+    });
+
+    searchInput.addEventListener('focus', () => {
+        if (searchInput.value.trim().length === 0) {
+            showDefaultProducts();
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!searchInput.contains(e.target) && !resultsDiv.contains(e.target)) {
+            resultsDiv.classList.add('d-none');
+        }
+    });
+
+    // Load default products on load
+    window.addEventListener('load', () => {
+        showDefaultProducts();
     });
 
     // ── Substitute lookup ──────────────────────────────────────────
@@ -1273,7 +1492,7 @@
             alert('Product saved offline. It will be available for search once internet reconnects and syncs.');
         } else {
             const response = await fetch('/api/products/quick-add/', {
-                method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
                 body: JSON.stringify(data)
             });
             const result = await response.json();
@@ -1468,7 +1687,11 @@
                 
                 // Show offline success modal
                 document.getElementById('successInvoiceNum').textContent = "Pending Sync";
-                document.getElementById('btnSuccessPrint').style.display = 'none'; // Cannot print dot matrix offline without server
+                document.getElementById('btnSuccessPrint').style.display = 'inline-block';
+                document.getElementById('btnSuccessPrint').onclick = () => {
+                    printInvoiceOffline(data);
+                    setTimeout(() => resetPOS("Pending Sync*"), 500);
+                };
                 
                 document.getElementById('btnSuccessWhatsApp').onclick = () => {
                     let phone = data.patient_phone;
@@ -1523,7 +1746,7 @@
                 }, { once: true });
 
             } else {
-                const response = await fetch('/pos/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' }, body: JSON.stringify(data) });
+                const response = await fetch('/pos/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') }, body: JSON.stringify(data) });
                 const result = await response.json();
                 if (result.success) {
                     // Show Success Modal instead of reloading
@@ -1590,8 +1813,41 @@
                             };
                         }
                     }, { once: true });
+                } else if (result.queued) {
+                    // Service Worker queued it offline
+                    document.getElementById('successInvoiceNum').textContent = "Pending Sync";
+                    document.getElementById('btnSuccessPrint').style.display = 'inline-block';
+                    document.getElementById('btnSuccessPrint').onclick = () => {
+                        printInvoiceOffline(data);
+                        setTimeout(() => resetPOS("Pending Sync*"), 500);
+                    };
+                    
+                    document.getElementById('btnSuccessWhatsApp').onclick = () => {
+                        let phone = data.patient_phone;
+                        if (!phone || phone.length < 10) {
+                            phone = prompt("Enter patient's 10-digit WhatsApp number:", "");
+                            if (!phone) return;
+                        }
+                        if(phone.length === 10) phone = '91' + phone;
+                        let msg = `*EASY PHARMA - INVOICE (Offline)*\n`;
+                        msg += `Patient: ${data.patient_name || 'Cash Customer'}\n\n`;
+                        msg += `*ITEMS:*\n`;
+                        cart.forEach(item => {
+                            msg += `- ${item.name} (x${item.quantity}) = ₹${(item.price * item.quantity).toFixed(2)}\n`;
+                        });
+                        msg += `\n*Total Amount: ₹${data.total_amount.toFixed(2)}*\n\n`;
+                        msg += `Thank you for your visit!\n`;
+                        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+                    };
+                    document.getElementById('btnSuccessNewSale').onclick = () => {
+                        resetPOS("Pending Sync*");
+                    };
+
+                    const successModalEl = document.getElementById('checkoutSuccessModal');
+                    const successModal = new bootstrap.Modal(successModalEl);
+                    successModal.show();
                 } else {
-                    alert('Error whatsapp: ' + result.error);
+                    alert('Error: ' + result.error);
                 }
             }
         } catch (err) {

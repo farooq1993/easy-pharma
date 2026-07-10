@@ -128,12 +128,16 @@ class POSView(LoginRequiredMixin,View):
             except SaleInvoice.DoesNotExist:
                 edit_data = None
 
+        from easypharma.models import PrintSetup
+        ps, _ = PrintSetup.objects.get_or_create(tenant=request.tenant)
+
         return render(request, self.template_name, {
             'product_taxes': product_taxes,
             'doctors':doctors,
             'default_doctor': default_doctor,
             'edit_data': edit_data,
             'next_invoice_number': next_invoice_number,
+            'ps': ps,
         })
 
     def post(self, request):
@@ -544,8 +548,15 @@ class ProductSearchAPI(LoginRequiredMixin,View):
 
     def get(self, request):
         query = request.GET.get('q', '').strip()
+        limit_str = request.GET.get('limit', '10')
+        try:
+            limit = int(limit_str)
+        except ValueError:
+            limit = 10
         tenant_id = request.tenant.id
-        cache_key = self._cache_key(tenant_id, query)
+        
+        # Include limit in cache key if preloading/limiting
+        cache_key = f"{self._cache_key(tenant_id, query)}:lim{limit}"
 
         # ── Cache hit: return instantly without touching DB ──
         cached = cache.get(cache_key)
@@ -557,7 +568,7 @@ class ProductSearchAPI(LoginRequiredMixin,View):
         products = Products.objects.filter(
             tenant=request.tenant,
             product_name__istartswith=query
-        ).select_related('product_tax', 'product_content', 'compny_name', 'product_schedule').prefetch_related('batches')[:10]
+        ).select_related('product_tax', 'product_content', 'compny_name', 'product_schedule').prefetch_related('batches')[:limit]
         data = []
         for p in products:
             batches = p.batches.filter(current_quantity__gt=0).order_by('expiry_date')
