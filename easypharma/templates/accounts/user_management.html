@@ -1,0 +1,181 @@
+{% extends 'includes/base.html' %}
+{% load static %}
+
+{% block title %}User Management — {{ tenant.pharmacy_name }}{% endblock %}
+
+{% block content %}
+<style>
+:root {
+  --pm-bg: #0f172a;
+  --pm-card: #1e293b;
+  --pm-border: #334155;
+  --pm-accent: #6366f1;
+  --pm-accent2: #8b5cf6;
+  --pm-green: #10b981;
+  --pm-red: #ef4444;
+  --pm-yellow: #f59e0b;
+  --pm-text: #e2e8f0;
+  --pm-muted: #94a3b8;
+}
+.pm-header { background: linear-gradient(135deg, var(--pm-accent) 0%, var(--pm-accent2) 100%); border-radius: 1rem; padding: 2rem; margin-bottom: 2rem; }
+.pm-card { background: var(--pm-card); border: 1px solid var(--pm-border); border-radius: 1rem; }
+.pm-table thead th { background: rgba(99,102,241,0.15); color: var(--pm-muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; border: none; padding: .9rem 1.2rem; }
+.pm-table tbody tr { border-bottom: 1px solid var(--pm-border); transition: background .18s; }
+.pm-table tbody tr:hover { background: rgba(99,102,241,0.07); }
+.pm-table tbody td { color: var(--pm-text); padding: .85rem 1.2rem; border: none; vertical-align: middle; }
+.role-badge { display: inline-flex; align-items: center; gap: .35rem; padding: .25rem .75rem; border-radius: 999px; font-size: .72rem; font-weight: 600; letter-spacing: .03em; }
+.role-owner   { background: rgba(99,102,241,.2);  color: #a5b4fc; }
+.role-pharma  { background: rgba(16,185,129,.18); color: #6ee7b7; }
+.role-employee{ background: rgba(245,158,11,.18); color: #fcd34d; }
+.role-admin   { background: rgba(239,68,68,.18);  color: #fca5a5; }
+.status-pill  { display: inline-flex; align-items: center; gap: .3rem; padding: .2rem .65rem; border-radius: 999px; font-size: .72rem; font-weight: 600; }
+.status-on  { background: rgba(16,185,129,.18); color: #6ee7b7; }
+.status-off { background: rgba(239,68,68,.18);  color: #fca5a5; }
+.perm-chip { display: inline-block; padding: .15rem .5rem; border-radius: .4rem; font-size: .65rem; font-weight: 600; margin: .1rem; }
+.perm-yes { background: rgba(16,185,129,.18); color: #6ee7b7; }
+.perm-no  { background: rgba(100,116,139,.18); color: #64748b; }
+.btn-icon { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border-radius: .5rem; border: 1px solid; transition: all .18s; cursor: pointer; }
+.btn-icon-edit   { border-color: rgba(99,102,241,.4); color: #818cf8; background: rgba(99,102,241,.1); }
+.btn-icon-edit:hover { background: rgba(99,102,241,.25); border-color: #818cf8; }
+.btn-icon-toggle { border-color: rgba(245,158,11,.4); color: #fbbf24; background: rgba(245,158,11,.1); }
+.btn-icon-toggle:hover { background: rgba(245,158,11,.25); border-color: #fbbf24; }
+.btn-icon-del    { border-color: rgba(239,68,68,.4); color: #f87171; background: rgba(239,68,68,.1); }
+.btn-icon-del:hover { background: rgba(239,68,68,.25); border-color: #f87171; }
+.empty-state { text-align:center; padding: 4rem 2rem; color: var(--pm-muted); }
+.add-btn { background: linear-gradient(135deg, var(--pm-accent), var(--pm-accent2)); border: none; color: #fff; padding: .6rem 1.4rem; border-radius: .6rem; font-weight: 600; transition: transform .15s, box-shadow .15s; text-decoration: none; display: inline-flex; align-items: center; gap: .4rem; }
+.add-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(99,102,241,.35); color: #fff; }
+</style>
+
+<div class="container-fluid py-4" style="color: #e2e8f0;">
+
+  <!-- Header -->
+  <div class="pm-header d-flex align-items-center justify-content-between flex-wrap gap-3">
+    <div>
+      <h1 class="h3 fw-bold text-white mb-1"><i class="bi bi-people-fill me-2"></i>User Management</h1>
+      <p class="mb-0 text-white opacity-75">{{ tenant.pharmacy_name }} &mdash; manage staff access &amp; permissions</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{% url 'activity_logs' %}" class="add-btn" style="background: rgba(255,255,255,.15);">
+        <i class="bi bi-clock-history"></i> Activity Logs
+      </a>
+      <a href="{% url 'create_tenant_user' %}" class="add-btn" id="btn-add-user">
+        <i class="bi bi-person-plus-fill"></i> Add User
+      </a>
+    </div>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show rounded-3 mb-3">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <!-- Table Card -->
+  <div class="pm-card overflow-hidden">
+    {% if users %}
+    <div class="table-responsive">
+      <table class="table pm-table mb-0">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Username</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>Permissions</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+          <tr>
+            <td class="text-muted small">{{ forloop.counter }}</td>
+            <td>
+              <div class="d-flex align-items-center gap-2">
+                <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white"
+                     style="width:34px;height:34px;font-size:13px;
+                     background: linear-gradient(135deg,#6366f1,#8b5cf6);">
+                  {{ u.username|slice:":1"|upper }}
+                </div>
+                <span class="fw-semibold">{{ u.username }}</span>
+              </div>
+            </td>
+            <td>
+              {% if u.user_type == 'tenant_owner' %}<span class="role-badge role-owner"><i class="bi bi-crown-fill"></i>Owner</span>
+              {% elif u.user_type == 'pharmacist' %}<span class="role-badge role-pharma"><i class="bi bi-capsule"></i>Pharmacist</span>
+              {% elif u.user_type == 'employee' %}<span class="role-badge role-employee"><i class="bi bi-person-badge"></i>Employee</span>
+              {% elif u.user_type == 'admin' %}<span class="role-badge role-admin"><i class="bi bi-shield-fill"></i>Admin</span>
+              {% else %}<span class="role-badge role-employee">{{ u.get_user_type_display }}</span>{% endif %}
+            </td>
+            <td>
+              {% if u.is_active %}
+                <span class="status-pill status-on"><i class="bi bi-check-circle-fill"></i>Active</span>
+              {% else %}
+                <span class="status-pill status-off"><i class="bi bi-x-circle-fill"></i>Inactive</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if u.user_type == 'admin' or u.user_type == 'tenant_owner' %}
+                <span class="perm-chip perm-yes">All Access</span>
+              {% else %}
+                {% with p=u.permission_record %}
+                  {% if p %}
+                    {% if p.can_access_sales %}<span class="perm-chip perm-yes">Sales</span>{% endif %}
+                    {% if p.can_access_purchase %}<span class="perm-chip perm-yes">Purchase</span>{% endif %}
+                    {% if p.can_access_master %}<span class="perm-chip perm-yes">Master</span>{% endif %}
+                    {% if p.can_access_reports %}<span class="perm-chip perm-yes">Reports</span>{% endif %}
+                    {% if p.can_access_gst %}<span class="perm-chip perm-yes">GST</span>{% endif %}
+                    {% if p.can_access_accounting %}<span class="perm-chip perm-yes">Accounting</span>{% endif %}
+                    {% if p.can_access_utility %}<span class="perm-chip perm-yes">Utility</span>{% endif %}
+                    {% if p.can_manage_users %}<span class="perm-chip perm-yes">Users</span>{% endif %}
+                  {% else %}
+                    <span class="perm-chip perm-no">No Record</span>
+                  {% endif %}
+                {% endwith %}
+              {% endif %}
+            </td>
+            <td>
+              <div class="d-flex gap-2">
+                {% if u.user_type not in 'admin,tenant_owner' %}
+                <a href="{% url 'edit_user_permissions' u.id %}" class="btn-icon btn-icon-edit" title="Edit Permissions">
+                  <i class="bi bi-sliders2" style="font-size:.85rem;"></i>
+                </a>
+                {% endif %}
+                <form method="POST" action="{% url 'toggle_user_active' u.id %}" style="margin:0;">
+                  {% csrf_token %}
+                  <button type="submit" class="btn-icon btn-icon-toggle" title="{% if u.is_active %}Deactivate{% else %}Activate{% endif %}">
+                    <i class="bi bi-{% if u.is_active %}pause-fill{% else %}play-fill{% endif %}" style="font-size:.85rem;"></i>
+                  </button>
+                </form>
+                {% if u.user_type not in 'admin,tenant_owner' %}
+                <form method="POST" action="{% url 'delete_tenant_user' u.id %}" style="margin:0;"
+                      onsubmit="return confirm('Delete user \'{{ u.username }}\'? This cannot be undone.')">
+                  {% csrf_token %}
+                  <button type="submit" class="btn-icon btn-icon-del" title="Delete User">
+                    <i class="bi bi-trash3" style="font-size:.85rem;"></i>
+                  </button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <i class="bi bi-people fs-1 d-block mb-3 opacity-25"></i>
+      <p class="fw-semibold mb-1">No other users yet</p>
+      <p class="small opacity-75 mb-3">Add staff members to manage pharmacy operations.</p>
+      <a href="{% url 'create_tenant_user' %}" class="add-btn">
+        <i class="bi bi-person-plus-fill"></i> Add First User
+      </a>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

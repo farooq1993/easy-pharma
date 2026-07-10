@@ -1,0 +1,199 @@
+{% extends 'includes/base.html' %}
+{% load static %}
+
+{% block title %}Add User — {{ tenant.pharmacy_name }}{% endblock %}
+
+{% block content %}
+<style>
+:root{--pm-bg:#0f172a;--pm-card:#1e293b;--pm-border:#334155;--pm-accent:#6366f1;--pm-accent2:#8b5cf6;}
+.pm-card{background:var(--pm-card);border:1px solid var(--pm-border);border-radius:1rem;}
+.pm-header{background:linear-gradient(135deg,var(--pm-accent),var(--pm-accent2));border-radius:1rem;padding:2rem;margin-bottom:2rem;}
+.form-control,.form-select{background:#0f172a;border:1px solid var(--pm-border);color:#e2e8f0;border-radius:.6rem;}
+.form-control:focus,.form-select:focus{background:#0f172a;border-color:var(--pm-accent);box-shadow:0 0 0 3px rgba(99,102,241,.2);color:#e2e8f0;}
+.form-label{color:#94a3b8;font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;}
+.toggle-card{background:rgba(255,255,255,.03);border:1px solid var(--pm-border);border-radius:.8rem;padding:1rem 1.25rem;display:flex;align-items:center;justify-content:space-between;transition:background .18s,border-color .18s;}
+.toggle-card:hover{background:rgba(99,102,241,.07);border-color:rgba(99,102,241,.4);}
+.toggle-card label{color:#e2e8f0;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:.6rem;margin:0;}
+.toggle-card .mod-icon{width:30px;height:30px;border-radius:.5rem;display:flex;align-items:center;justify-content:center;font-size:.9rem;}
+.form-check-input[type=checkbox]{width:2.4rem;height:1.3rem;cursor:pointer;background-color:#1e293b;border-color:#475569;}
+.form-check-input[type=checkbox]:checked{background-color:var(--pm-accent);border-color:var(--pm-accent);}
+.btn-save{background:linear-gradient(135deg,var(--pm-accent),var(--pm-accent2));border:none;color:#fff;padding:.7rem 2rem;border-radius:.7rem;font-weight:700;transition:transform .15s,box-shadow .15s;}
+.btn-save:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(99,102,241,.35);color:#fff;}
+.section-label{color:#6366f1;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:.5rem 0 .25rem;border-bottom:1px solid rgba(99,102,241,.2);margin-bottom:.75rem;}
+</style>
+
+<div class="container-fluid py-4" style="color:#e2e8f0;">
+
+  <div class="pm-header">
+    <h1 class="h3 fw-bold text-white mb-1"><i class="bi bi-person-plus-fill me-2"></i>Add New User</h1>
+    <p class="mb-0 text-white opacity-75">Create a new staff member for <strong>{{ tenant.pharmacy_name }}</strong></p>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show rounded-3 mb-3">
+        {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <form method="POST" id="create-user-form">
+    {% csrf_token %}
+    <div class="row g-4">
+
+      <!-- Left: User Info -->
+      <div class="col-lg-5">
+        <div class="pm-card p-4">
+          <div class="section-label">User Details</div>
+
+          <div class="mb-3">
+            <label for="id_username" class="form-label">Username *</label>
+            <input type="text" name="username" id="id_username" class="form-control" placeholder="e.g. john_pharma" required>
+          </div>
+
+          <div class="mb-3">
+            <label for="id_user_type" class="form-label">Role *</label>
+            <select name="user_type" id="id_user_type" class="form-select" onchange="togglePermDefaults(this.value)">
+              <option value="pharmacist">Pharmacist</option>
+              <option value="employee">Employee</option>
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label for="id_password" class="form-label">Password *</label>
+            <div class="input-group">
+              <input type="password" name="password" id="id_password" class="form-control" placeholder="Min 6 characters" required>
+              <button type="button" class="btn btn-outline-secondary" onclick="togglePw('id_password',this)" tabindex="-1">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <label for="id_confirm_password" class="form-label">Confirm Password *</label>
+            <div class="input-group">
+              <input type="password" name="confirm_password" id="id_confirm_password" class="form-control" placeholder="Repeat password" required>
+              <button type="button" class="btn btn-outline-secondary" onclick="togglePw('id_confirm_password',this)" tabindex="-1">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn-save flex-grow-1">
+              <i class="bi bi-person-check-fill me-1"></i>Create User
+            </button>
+            <a href="{% url 'user_management' %}" class="btn btn-outline-secondary px-3">Cancel</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Permissions -->
+      <div class="col-lg-7">
+        <div class="pm-card p-4">
+          <div class="section-label">Module Permissions</div>
+          <p class="text-muted small mb-3">Select which modules this user can access. You can change these anytime.</p>
+
+          <div class="d-flex flex-column gap-2" id="perm-grid">
+
+            <div class="toggle-card">
+              <label for="perm_sales">
+                <div class="mod-icon bg-success bg-opacity-10 text-success"><i class="bi bi-cart-fill"></i></div>
+                <div><div class="fw-semibold">Sales</div><div class="small text-muted">POS, invoices, returns</div></div>
+              </label>
+              <input class="form-check-input" type="checkbox" name="can_access_sales" id="perm_sales" checked>
+            </div>
+
+            <div class="toggle-card">
+              <label for="perm_purchase">
+                <div class="mod-icon bg-primary bg-opacity-10 text-primary"><i class="bi bi-bag-check-fill"></i></div>
+                <div><div class="fw-semibold">Purchase</div><div class="small text-muted">Purchases, suppliers, expiry</div></div>
+              </label>
+              <input class="form-check-input" type="checkbox" name="can_access_purchase" id="perm_purchase" checked>
+            </div>
+
+            <div class="toggle-card">
+              <label for="perm_master">
+                <div class="mod-icon bg-info bg-opacity-10 text-info"><i class="bi bi-box2-fill"></i></div>
+                <div><div class="fw-semibold">Master / Inventory</div><div class="small text-muted">Products, companies, doctors</div></div>
+              </label>
+              <input class="form-check-input" type="checkbox" name="can_access_master" id="perm_master" checked>
+            </div>
+
+            <div class="toggle-card">
+              <label for="perm_reports">
+                <div class="mod-icon bg-warning bg-opacity-10 text-warning"><i class="bi bi-bar-chart-fill"></i></div>
+                <div><div class="fw-semibold">Reports</div><div class="small text-muted">Daily, GST, stock reports</div></div>
+              </label>
+              <input class="form-check-input" type="checkbox" name="can_access_reports" id="perm_reports">
+            </div>
+
+            <div class="toggle-card">
+              <label for="perm_gst">
+                <div class="mod-icon" style="background:rgba(16,185,129,.1);color:#10b981;"><i class="bi bi-file-earmark-check-fill"></i></div>
+                <div><div class="fw-semibold">GST Compliance</div><div class="small text-muted">Filings, config, reminders</div></div>
+              </label>
+              <input class="form-check-input" type="checkbox" name="can_access_gst" id="perm_gst">
+            </div>
+
+            <div class="toggle-card">
+              <label for="perm_accounting">
+                <div class="mod-icon" style="background:rgba(245,158,11,.1);color:#f59e0b;"><i class="bi bi-wallet2"></i></div>
+                <div><div class="fw-semibold">Accounting</div><div class="small text-muted">Supplier payments, ledger</div></div>
+              </label>
+              <input class="form-check-input" type="checkbox" name="can_access_accounting" id="perm_accounting">
+            </div>
+
+            <div class="toggle-card">
+              <label for="perm_utility">
+                <div class="mod-icon" style="background:rgba(139,92,246,.1);color:#8b5cf6;"><i class="bi bi-tools"></i></div>
+                <div><div class="fw-semibold">Utility / Settings</div><div class="small text-muted">General settings, backup</div></div>
+              </label>
+              <input class="form-check-input" type="checkbox" name="can_access_utility" id="perm_utility">
+            </div>
+
+            <div class="toggle-card">
+              <label for="perm_firm">
+                <div class="mod-icon" style="background:rgba(99,102,241,.1);color:#6366f1;"><i class="bi bi-building"></i></div>
+                <div><div class="fw-semibold">Firm Details</div><div class="small text-muted">Pharmacy profile</div></div>
+              </label>
+              <input class="form-check-input" type="checkbox" name="can_access_firm_details" id="perm_firm">
+            </div>
+
+            <div class="toggle-card" style="border-color:rgba(239,68,68,.3);">
+              <label for="perm_users">
+                <div class="mod-icon" style="background:rgba(239,68,68,.1);color:#ef4444;"><i class="bi bi-people-fill"></i></div>
+                <div><div class="fw-semibold">User Management</div><div class="small text-muted">Can add/edit/delete users</div></div>
+              </label>
+              <input class="form-check-input" type="checkbox" name="can_manage_users" id="perm_users">
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </form>
+</div>
+
+<script>
+function togglePw(id, btn) {
+  var inp = document.getElementById(id);
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  btn.querySelector('i').className = inp.type === 'password' ? 'bi bi-eye' : 'bi bi-eye-slash';
+}
+function togglePermDefaults(role) {
+  // Pharmacist: sales + purchase + master ON
+  // Employee:   sales + master ON
+  document.getElementById('perm_sales').checked    = true;
+  document.getElementById('perm_purchase').checked = (role === 'pharmacist');
+  document.getElementById('perm_master').checked   = true;
+  document.getElementById('perm_reports').checked  = false;
+  document.getElementById('perm_gst').checked      = false;
+  document.getElementById('perm_accounting').checked= false;
+  document.getElementById('perm_utility').checked  = false;
+  document.getElementById('perm_firm').checked     = false;
+  document.getElementById('perm_users').checked    = false;
+}
+</script>
+{% endblock %}
