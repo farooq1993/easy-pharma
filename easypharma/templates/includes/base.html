@@ -325,23 +325,37 @@
 
         navigator.serviceWorker.register('/sw.js', {
             scope: '/',
-            updateViaCache: 'none'   // sw.js ko browser cache se kabhi mat lo
+            updateViaCache: 'none'
         }).then(function (reg) {
             console.log('[PWA] SW registered. Scope:', reg.scope);
+
+            // 1. Check if there's already a waiting worker
+            if (reg.waiting) {
+                showUpdateBanner(reg.waiting);
+            }
+
+            // 2. Check if there's an installing worker
+            if (reg.installing) {
+                trackInstalling(reg.installing);
+            }
 
             // Har 60s mein update check
             setInterval(function () { reg.update(); }, 60000);
 
-            // Naya SW install ho raha hai
+            // 3. Listen for future updates
             reg.addEventListener('updatefound', function () {
-                var newWorker = reg.installing;
-                newWorker.addEventListener('statechange', function () {
-                    // installed + purana SW active hai = update ready
-                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                        showUpdateBanner(newWorker);
+                if (reg.installing) {
+                    trackInstalling(reg.installing);
+                }
+            });
+
+            function trackInstalling(worker) {
+                worker.addEventListener('statechange', function () {
+                    if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+                        showUpdateBanner(worker);
                     }
                 });
-            });
+            }
 
         }).catch(function (err) {
             console.warn('[PWA] SW registration failed:', err);
