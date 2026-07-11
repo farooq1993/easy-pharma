@@ -10,12 +10,12 @@
         </div>
     </div>
     <!-- Mode Notice Banner -->
-    <div id="counterSaleBanner" class="alert alert-info border-0 shadow-sm rounded-4 d-none align-items-center gap-3 mb-3 p-3 animate-fade-in" style="background: linear-gradient(135deg, #e3f2fd, #bbdefb); border-left: 5px solid #1e88e5 !important;">
+    <div id="counterSaleBanner" class="alert alert-info border-0 shadow-sm rounded-4 d-none align-items-center gap-3 mb-3 p-3 animate-fade-in">
         <div class="rounded-circle bg-white p-2 d-flex align-items-center justify-content-center text-primary shadow-sm" style="width: 40px; height: 40px;">
             <i class="fas fa-cash-register fa-lg"></i>
         </div>
         <div>
-            <h6 class="fw-bold mb-0 text-primary-emphasis" style="color: #0d47a1 !important;">Counter Sale Mode (General Billing)</h6>
+            <h6 class="fw-bold mb-0">Counter Sale Mode (General Billing)</h6>
             <p class="mb-0 x-small text-muted">Bypassing prescription/doctor details. Direct, fast checkouts are active.</p>
         </div>
         <button type="button" class="btn-close ms-auto" aria-label="Close" onclick="exitCounterMode()"></button>
@@ -26,12 +26,13 @@
         <div class="col-12">
             <div class="position-relative">
                 <input type="text" id="productSearch"
-                    class="form-control py-3 ps-5 rounded-pill border-0 bg-light shadow-md"
-                    placeholder="🔍 Search by medicine name (Press / to focus)..."
-                    style="font-size: 1rem; min-height: 50px; border: 2px solid transparent; transition: all 0.3s;" autoComplete="off">
-                <i class="fas fa-search position-absolute top-50 start-0 translate-middle-y ms-4 text-muted"></i>
-                <span class="position-absolute top-50 end-0 translate-middle-y me-4 text-muted x-small fw-bold">Press
-                    <kbd>↓</kbd> | <kbd>↑</kbd> | <kbd>↵</kbd> to Add</span>
+                    class="form-control py-3 ps-5 rounded-pill shadow-sm"
+                    placeholder="Search by medicine name... (press / to focus)"
+                    style="font-size: 1rem; min-height: 52px; transition: all 0.2s;" autoComplete="off">
+                <i class="fas fa-search position-absolute top-50 start-0 translate-middle-y ms-4" style="color: var(--brand);"></i>
+                <span class="position-absolute top-50 end-0 translate-middle-y me-4 text-muted x-small fw-bold d-none d-md-inline-flex align-items-center gap-1">
+                    <kbd>↓</kbd><kbd>↑</kbd><kbd>↵</kbd>&nbsp;to add
+                </span>
                 <div id="searchResults" class="list-group position-absolute w-100 shadow-lg d-none mt-2"
                     style="z-index: 1050; max-height: 400px; overflow-y: auto;"></div>
             </div>
@@ -47,15 +48,14 @@
                     <!-- Tabs will be injected here by JS -->
                 </div>
 
-                <div class="card-header bg-white border-0 py-3">
-                    <h5 class="fw-bold mb-0 text-success">
-                        <i class="fas fa-prescription me-2"></i> Pharmacy POS
+                <div class="card-header py-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <h5 class="fw-bold mb-0 text-primary">
+                        <i class="fas fa-prescription me-2"></i>Pharmacy POS
                     </h5>
-                     <span class="text-muted x-small text-uppercase fw-bold">Bill No.</span>
-                        <span id="runningBillNumber" class="badge fs-6 fw-bold px-3 py-2 rounded-pill"
-                            style="background: linear-gradient(135deg, #e8f5e9, #c8e6c9); color: #1b5e20; border: 1.5px solid #a5d6a7;">
-                            —
-                        </span>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="text-muted x-small text-uppercase fw-bold">Bill No.</span>
+                        <span id="runningBillNumber" class="badge fs-6 fw-bold px-3 py-2 rounded-pill">—</span>
+                    </div>
                 </div>
 
                 <div class="card-body p-0">
@@ -76,13 +76,35 @@
                         </table>
 
                         <!-- Empty State -->
-                        <div id="emptyState" class="text-center py-5">
-                            <div class="mb-3 opacity-25"><i class="fas fa-keyboard" style="font-size: 4rem;"></i></div>
-                            <h5 class="text-muted fw-bold">Ready for Billing</h5>
-                            <p class="text-muted small mb-3">Type <b>/</b> or use the search bar to find medicines</p>
+                        <div id="emptyState" class="text-center py-5 px-4">
+                            <div class="mb-4 opacity-50"><i class="fas fa-prescription-bottle-medical text-primary" style="font-size: 4rem;"></i></div>
+                            <h4 class="fw-bold text-dark mb-1">Ready for billing</h4>
+                            <p class="text-muted small mb-4 mx-auto" style="max-width: 450px;">
+                                Type <kbd>/</kbd> or use the search bar to find medicines, or use our premium AI scanner to automate the process.
+                            </p>
+
+                            <!-- Premium AI Scanning Banner Inside Cart Area -->
+                            <div class="card border-0 rounded-4 bg-light shadow-sm p-4 mx-auto mb-4 border border-2 border-dashed border-primary position-relative overflow-hidden hover-grow" style="max-width: 500px; cursor: pointer; border-style: dashed !important; transition: all 0.2s;" data-bs-toggle="modal" data-bs-target="#scanPrescriptionModal" onmouseover="this.style.backgroundColor='var(--brand-tint)'" onmouseout="this.style.backgroundColor=''">
+                                <!-- Subtle laser line sweep -->
+                                <div class="scan-bar position-absolute w-100 bg-primary opacity-25" style="height: 2px; top: 0; left: 0; animation: scan-anim 3s infinite ease-in-out;"></div>
+                                <div class="d-flex align-items-center gap-3 text-start">
+                                    <div class="rounded-circle p-3 text-white shadow-sm" style="background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dk) 100%);">
+                                        <i class="fas fa-magic fa-lg"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="fw-bold text-dark mb-0 d-flex align-items-center gap-2">
+                                            Auto-Billing with AI Scanner
+                                            <span class="badge bg-danger text-uppercase fw-bold" style="font-size: 0.55rem;">⚡ FAST</span>
+                                        </h6>
+                                        <p class="x-small text-muted mb-0 mt-1">
+                                            Got a doctor's handwritten prescription? Upload or scan it here to automatically match stock batches and populate this bill in seconds!
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="alert alert-info small mx-4" role="alert">
-                                <strong>💡 Quick Tip:</strong> Type product name → Press <kbd>↓</kbd> to select → Press
-                                <kbd>↵</kbd> to add → Enter Qty → Press <kbd>↵</kbd> to add next item
+                                <strong>Quick tip:</strong> Type product name → <kbd>↓</kbd> select → <kbd>↵</kbd> add → enter qty → <kbd>↵</kbd> next item
                             </div>
                         </div>
                     </div>
@@ -111,8 +133,28 @@
         <div class="col-lg-4">
             <div class="card border-0 shadow-sm rounded-4 h-100">
                 <div class="card-body p-4 d-flex flex-column">
+                    <!-- Premium AI Scanner Feature Card -->
+                    <div class="card border-0 rounded-4 mb-4 text-white overflow-hidden position-relative shadow-sm hover-grow" style="background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dk) 100%); cursor: pointer;" data-bs-toggle="modal" data-bs-target="#scanPrescriptionModal">
+                        <!-- Subtle background glow -->
+                        <div class="position-absolute rounded-circle opacity-25" style="width: 150px; height: 150px; background: #FFF; filter: blur(50px); top: -50px; right: -50px;"></div>
+                        <div class="card-body p-3 position-relative">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="badge bg-danger text-uppercase fw-bold animate-pulse" style="letter-spacing: 0.05em; font-size: 0.6rem;">⚡ Fast AI Billing</span>
+                                <i class="fas fa-magic text-warning animate-bounce"></i>
+                            </div>
+                            <h6 class="fw-bold mb-1 text-white" style="font-size: 0.9rem;">Prescription AI Scanner</h6>
+                            <p class="text-white opacity-75 mb-0" style="font-size: 0.72rem; line-height: 1.35;">
+                                Click to scan handwritten doctor prescriptions and automatically match stock batches instantly!
+                            </p>
+                        </div>
+                    </div>
+
                     <div class="mb-4">
-                        <h6 class="fw-bold mb-3 small text-uppercase text-muted border-bottom pb-2">Patient Details</h6>
+                        <div class="d-flex justify-content-between align-items-center mb-3 border-bottom pb-2">
+                            <h6 class="fw-bold mb-0 small text-uppercase text-muted">
+                                <i class="fas fa-user-injured me-1" style="color: var(--brand);"></i> Patient Details
+                            </h6>
+                        </div>
                         <div class="mb-2">
                             <input type="text" id="patientName" class="form-control border-0 bg-light py-2"
                                 placeholder="Patient Name *" autocomplete="off">
@@ -196,16 +238,22 @@
 
                         <div class="payment-modes mb-4">
                             <div class="row g-2">
-                                <div class="col-6">
+                                <div class="col-4">
                                     <input type="radio" class="btn-check" name="paymentMethod" id="payCash" value="Cash" checked>
-                                    <label class="btn payment-btn payment-btn-active w-100 py-2 rounded-3 fw-bold" for="payCash">
-                                        <i class="fas fa-money-bill-wave me-1"></i> Cash
+                                    <label class="btn payment-btn payment-btn-active w-100 py-2 rounded-3 fw-bold" for="payCash" style="font-size: 0.9rem;">
+                                        <i class="fas fa-money-bill-wave"></i> Cash
                                     </label>
                                 </div>
-                                <div class="col-6">
+                                <div class="col-4">
                                     <input type="radio" class="btn-check" name="paymentMethod" id="payCard" value="UPI">
-                                    <label class="btn payment-btn w-100 py-2 rounded-3 fw-bold" for="payCard">
-                                        <i class="fas fa-credit-card me-1"></i> UPI
+                                    <label class="btn payment-btn w-100 py-2 rounded-3 fw-bold" for="payCard" style="font-size: 0.9rem;">
+                                        <i class="fas fa-mobile-alt"></i> UPI
+                                    </label>
+                                </div>
+                                <div class="col-4">
+                                    <input type="radio" class="btn-check" name="paymentMethod" id="payCredit" value="Credit">
+                                    <label class="btn payment-btn w-100 py-2 rounded-3 fw-bold" for="payCredit" style="font-size: 0.9rem;">
+                                        <i class="fas fa-user-tag"></i> Credit
                                     </label>
                                 </div>
                             </div>
@@ -244,6 +292,168 @@
                     <p class="text-muted mt-2">No substitutes found with stock available.</p>
                     <small class="text-muted">Ensure products have same drug content assigned in masters.</small>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- AI Prescription Scanner Modal -->
+<div class="modal fade" id="scanPrescriptionModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-0 bg-light rounded-top-4 py-3">
+                <h5 class="modal-title fw-bold text-primary">
+                    <i class="fas fa-file-prescription me-2"></i>AI Prescription Scan & Auto-Billing
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" id="closeScanModalBtn"></button>
+            </div>
+            
+            <div class="modal-body p-4">
+                <!-- Navigation / Steps -->
+                <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+                    <div class="step-indicator d-flex gap-4">
+                        <div class="step-item active" id="stepIndicator1">
+                            <span class="step-number bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center me-2" style="width:28px;height:28px;">1</span>
+                            <span class="fw-bold small text-dark">Upload & Scan</span>
+                        </div>
+                        <div class="step-item text-muted" id="stepIndicator2">
+                            <span class="step-number bg-secondary text-white rounded-circle d-inline-flex align-items-center justify-content-center me-2" style="width:28px;height:28px;">2</span>
+                            <span class="fw-bold small">Verify & Match</span>
+                        </div>
+                        <div class="step-item text-muted" id="stepIndicator3">
+                            <span class="step-number bg-secondary text-white rounded-circle d-inline-flex align-items-center justify-content-center me-2" style="width:28px;height:28px;">3</span>
+                            <span class="fw-bold small">Patient Info</span>
+                        </div>
+                    </div>
+                    <div class="scan-usage-badge badge bg-light text-dark px-3 py-2 rounded-pill">
+                        <i class="fas fa-info-circle me-1 text-primary"></i>
+                        Scans Today: <strong id="scansTodayCount">0</strong> / <span id="maxScansCount">100</span>
+                    </div>
+                </div>
+
+                <!-- STEP 1: UPLOAD AND SCAN -->
+                <div class="step-content" id="stepContent1">
+                    <div class="row g-4">
+                        <!-- Left: File Upload Zone -->
+                        <div class="col-md-6">
+                            <div class="upload-dropzone border-dashed border-2 border-primary rounded-4 p-5 text-center bg-light position-relative" id="dropzone" style="cursor: pointer; border-style: dashed !important; transition: all 0.2s;">
+                                <input type="file" id="prescriptionImageInput" class="position-absolute top-0 start-0 w-100 h-100 opacity-0" accept="image/*,application/pdf" style="cursor: pointer;">
+                                <div class="py-4">
+                                    <div class="mb-3">
+                                        <i class="fas fa-cloud-upload-alt fa-3x text-primary animate-bounce"></i>
+                                    </div>
+                                    <h6 class="fw-bold text-dark mb-1">Drag and drop prescription image</h6>
+                                    <p class="text-muted small mb-3">Supports JPG, PNG, WEBP or PDF (Max 10MB)</p>
+                                    <button class="btn btn-primary btn-sm px-4 rounded-pill">Browse File</button>
+                                </div>
+                            </div>
+                            
+                            <div class="text-center my-3">
+                                <span class="text-muted small fw-bold">— OR —</span>
+                            </div>
+
+                            <div class="text-center">
+                                <button class="btn btn-outline-primary rounded-pill btn-sm px-4" id="startCameraBtn">
+                                    <i class="fas fa-camera me-1"></i> Use Device Camera
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Right: Camera View or Upload Preview -->
+                        <div class="col-md-6">
+                            <div class="preview-container border rounded-4 bg-light d-flex align-items-center justify-content-center position-relative overflow-hidden" style="min-height: 290px;">
+                                <div class="text-center text-muted" id="previewPlaceholder">
+                                    <i class="fas fa-image fa-3x mb-2 text-secondary opacity-50"></i>
+                                    <p class="small mb-0">Upload preview or camera stream will appear here</p>
+                                </div>
+                                <img id="prescriptionPreviewImg" class="img-fluid d-none" style="max-height: 290px; object-fit: contain;">
+                                <video id="cameraStream" class="w-100 d-none rounded-4" style="max-height: 290px; object-fit: cover;" autoplay playsinline></video>
+                                <button class="btn btn-danger btn-sm rounded-pill position-absolute bottom-0 mb-3 d-none" id="captureBtn">
+                                    <i class="fas fa-camera me-1"></i> Capture Photo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 2: VERIFY AND MATCH (HIDDEN BY DEFAULT) -->
+                <div class="step-content d-none" id="stepContent2">
+                    <div class="row g-3">
+                        <!-- Left: Prescription Image for Reference -->
+                        <div class="col-lg-4">
+                            <div class="card border bg-light h-100" style="max-height: 450px;">
+                                <div class="card-header bg-white py-2 small fw-bold text-uppercase d-flex justify-content-between align-items-center">
+                                    <span>Prescription Reference</span>
+                                </div>
+                                <div class="card-body p-0 d-flex align-items-center justify-content-center overflow-auto position-relative bg-dark" style="height: 400px;">
+                                    <img id="prescriptionRefImg" class="img-fluid" style="max-height: 100%; object-fit: contain;">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Right: Matching Grid -->
+                        <div class="col-lg-8">
+                            <div class="card border h-100" style="max-height: 450px;">
+                                <div class="card-header bg-white py-2 small fw-bold text-uppercase">
+                                    <span>Extracted Items & Local Stock Matching</span>
+                                </div>
+                                <div class="card-body p-0 overflow-auto" style="height: 400px;">
+                                    <div class="table-responsive">
+                                        <table class="table table-hover align-middle mb-0" id="matchingTable">
+                                            <thead class="bg-light text-muted small text-uppercase" style="position: sticky; top: 0; z-index: 10;">
+                                                <tr>
+                                                    <th class="ps-3" style="width: 35%;">AI Extracted Name</th>
+                                                    <th style="width: 35%;">Matched Product</th>
+                                                    <th style="width: 20%;">Select Batch (FEFO)</th>
+                                                    <th style="width: 10%;">Qty</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="matchingTableBody">
+                                                <!-- Dynamic matched rows injected here -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 3: PATIENT INFO (HIDDEN BY DEFAULT) -->
+                <div class="step-content d-none" id="stepContent3">
+                    <div class="card border rounded-4 p-4 mx-auto" style="max-width: 600px;">
+                        <h6 class="fw-bold mb-3 text-primary"><i class="fas fa-id-card me-2"></i> Patient & Doctor Details</h6>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Patient Name</label>
+                            <input type="text" id="scanPatientName" class="form-control py-2 border bg-light" placeholder="Patient Name">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Patient Phone</label>
+                            <input type="text" id="scanPatientPhone" class="form-control py-2 border bg-light" placeholder="Patient Mobile Number">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Doctor Name</label>
+                            <input type="text" id="scanDoctorName" class="form-control py-2 border bg-light" placeholder="Dr. Name">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LOADING/PROCESSING SCREEN -->
+                <div id="scanLoader" class="text-center py-5 d-none animate-fade-in">
+                    <div class="position-relative d-inline-block mb-3">
+                        <i class="fas fa-prescription fa-4x text-primary" style="font-size:4.5rem;"></i>
+                        <div class="scan-bar position-absolute w-100 bg-primary opacity-50" style="height:4px; top:0; animation: scan-anim 2s infinite ease-in-out;"></div>
+                    </div>
+                    <h5 class="fw-bold text-dark mt-3 mb-1">AI Prescription Analysis in progress...</h5>
+                    <p class="text-muted small">Reading handwriting, strength, quantity and matching with local batches...</p>
+                    <div class="spinner-border text-primary spinner-border-sm" role="status"></div>
+                </div>
+            </div>
+
+            <div class="modal-footer border-0 bg-light rounded-bottom-4 py-3">
+                <button type="button" class="btn btn-secondary rounded-pill px-4" id="prevStepBtn" disabled>Back</button>
+                <button type="button" class="btn btn-primary rounded-pill px-4" id="nextStepBtn">Scan & Next</button>
+                <button type="button" class="btn btn-success rounded-pill px-4 d-none" id="applyCartBtn">Apply to Cart</button>
             </div>
         </div>
     </div>
@@ -541,7 +751,27 @@
     </div>
 </div>
 
+<script src="{% static 'js/localforage.min.js' %}"></script>
 <script>
+    const pharmacyInfo = {
+        name: "{{ request.tenant.pharmacy_name|escapejs }}",
+        address: "{{ request.tenant.address|escapejs }}",
+        phone: "{{ request.tenant.phone|escapejs }}",
+        dlNumber: "{{ request.tenant.license_number|escapejs }}",
+        foodLic: "{{ request.tenant.food_lic|escapejs }}",
+        gstin: "{{ request.tenant.gst_number|escapejs }}",
+    };
+
+    const printSetup = {
+        paperSize: "{{ ps.paper_size|escapejs }}",
+        showCustomerSignature: {{ ps.show_customer_signature|yesno:"true,false" }},
+        showPharmacistSignature: {{ ps.show_pharmacist_signature|yesno:"true,false" }},
+        customHeader: "{{ ps.custom_header|escapejs }}",
+        customFooter: "{{ ps.custom_footer|escapejs }}",
+        showLogo: {{ ps.show_logo|yesno:"true,false" }},
+        showGstDetails: {{ ps.show_gst_details|yesno:"true,false" }},
+        showDlDetails: {{ ps.show_dl_details|yesno:"true,false" }},
+    };
 
     function getCookie(name) {
         let cookieValue = null;
@@ -565,18 +795,41 @@
     }
     
     let cart = [];
+    let shouldFocusLastQty = false;
     let searchSelectedIndex = -1;
     const editData = {{ edit_data|default:'null'|safe }};
 
+    function showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+            padding: 12px 24px; border-radius: 30px; z-index: 99999; font-weight: 600;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); color: white;
+        `;
+        
+        if (type === 'warning' || type === 'error') {
+            toast.style.background = '#f59e0b';
+        } else {
+            toast.style.background = '#10b981';
+        }
+        
+        toast.innerHTML = message;
+        document.body.appendChild(toast);
+
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            setTimeout(() => toast.remove(), 500);
+        }, 4000);
+    }
     // ── Bill Number Badge ──
     function updateBillNumberDisplay() {
         const badge = document.getElementById('runningBillNumber');
         if (!badge) return;
         if (editData && editData.invoice_number) {
             badge.textContent = editData.invoice_number;
-            badge.style.background = 'linear-gradient(135deg, #fff3e0, #ffe0b2)';
-            badge.style.color = '#e65100';
-            badge.style.border = '1.5px solid #ffcc80';
+            badge.style.background = '#FDF1E1';
+            badge.style.color = '#9A5B00';
+            badge.style.border = '1.5px solid #F3D8A6';
         } else {
             const nextNum = "{% if next_invoice_number %}{{ next_invoice_number }}{% endif %}";
             badge.textContent = nextNum ? nextNum : 'NEW';
@@ -731,6 +984,162 @@
         calculateDiscount('amt');
     }
 
+    function printInvoiceOffline(data) {
+        const W = printSetup.paperSize === '58mm' ? 32 : (printSetup.paperSize === '80mm' ? 42 : 55);
+        const lines = [];
+        lines.push(" ");
+        
+        const invoiceDate = new Date().toLocaleDateString('en-GB'); // dd/mm/yyyy
+        
+        lines.push(" " + pharmacyInfo.name.toUpperCase().substring(0, W));
+        if (pharmacyInfo.address) {
+            lines.push(" " + pharmacyInfo.address.toUpperCase().substring(0, W));
+        }
+        
+        if (printSetup.showDlDetails && pharmacyInfo.dlNumber) {
+            lines.push(" " + `DL: ${pharmacyInfo.dlNumber}  Ph: ${pharmacyInfo.phone || ''}`.substring(0, W));
+            if (pharmacyInfo.foodLic) {
+                lines.push(" " + `Food License: ${pharmacyInfo.foodLic}`.substring(0, W));
+            }
+        }
+        
+        if (printSetup.showGstDetails && pharmacyInfo.gstin) {
+            lines.push(" " + `GST: ${pharmacyInfo.gstin}`.substring(0, W));
+        }
+        
+        if (printSetup.customHeader) {
+            printSetup.customHeader.split('\n').forEach(chLine => {
+                lines.push(" " + chLine.substring(0, W));
+            });
+        }
+        
+        const invNoStr = `CASH MEMO: Pending Sync*  Dt: ${invoiceDate}`;
+        lines.push(" " + invNoStr.padStart(W));
+        lines.push(" " + "-".repeat(W));
+        
+        // Patient details
+        const patientName = data.patient_name || 'CASH CUSTOMER';
+        lines.push(" " + `Pt  : ${patientName}`.substring(0, W));
+        if (data.patient_address) {
+            lines.push(" " + `Addr: ${data.patient_address}`.substring(0, W));
+        }
+        const doctorName = data.doctor_name || 'SELF';
+        lines.push(" " + `Dr  : ${doctorName}`.substring(0, W));
+        lines.push(" " + "-".repeat(W));
+        
+        // Items header
+        if (W >= 65) {
+            lines.push(" " + "PRODUCT".padEnd(28) + "MFG".padEnd(6) + "BATCH".padEnd(9) + "EXP".padEnd(6) + "QT".padStart(4) + "VALUE".padStart(10));
+        } else {
+            lines.push(" " + "PRODUCT".padEnd(22) + "MFG".padEnd(5) + "BATCH".padEnd(8) + "EXP".padEnd(6) + "QT".padStart(4) + "VALUE".padStart(10));
+        }
+        lines.push(" " + "-".repeat(W));
+        
+        // Items
+        let totalQty = 0;
+        cart.forEach(item => {
+            totalQty += item.quantity;
+            let productName = item.name.toUpperCase();
+            if (W >= 65) {
+                productName = productName.substring(0, 27);
+            } else {
+                productName = productName.substring(0, 21);
+            }
+            
+            const batchNo = item.batch_no || 'OFFLINE';
+            const exp = item.expiry || '—';
+            const mfg = '—';
+            const qty = item.quantity.toString();
+            const value = (item.price * item.quantity).toFixed(2);
+            
+            if (W >= 65) {
+                lines.push(" " + productName.padEnd(28) + mfg.padEnd(6) + batchNo.padEnd(9) + exp.padEnd(6) + qty.padStart(4) + value.padStart(10));
+            } else {
+                lines.push(" " + productName.padEnd(22) + mfg.padEnd(5) + batchNo.padEnd(8) + exp.padEnd(6) + qty.padStart(4) + value.padStart(10));
+            }
+        });
+        
+        lines.push(" " + "-".repeat(W));
+        
+        // Totals
+        const subTotalStr = `Sub Total:  ₹${data.sub_total.toFixed(2)}`;
+        lines.push(" " + subTotalStr.padStart(W));
+        if (data.tax_amount > 0) {
+            const taxStr = `Tax Amount: ₹${data.tax_amount.toFixed(2)}`;
+            lines.push(" " + taxStr.padStart(W));
+        }
+        if (data.discount_amount > 0) {
+            const discStr = `Discount:   X${data.discount_amount.toFixed(2)}`;
+            const discStrFixed = discStr.replace('X', '₹');
+            lines.push(" " + discStrFixed.padStart(W));
+        }
+        if (data.round_off !== 0) {
+            const roStr = `Round Off:  X${data.round_off.toFixed(2)}`;
+            const roStrFixed = roStr.replace('X', '₹');
+            lines.push(" " + roStrFixed.padStart(W));
+        }
+        lines.push(" " + "-".repeat(W));
+        
+        const grandTotalStr = `GRAND TOTAL: X${data.total_amount.toFixed(2)}`;
+        const grandTotalStrFixed = grandTotalStr.replace('X', '₹');
+        lines.push(" " + grandTotalStrFixed.padStart(W));
+        
+        const totalItemsStr = `Total Qty: ${totalQty} (${cart.length} items)`;
+        lines.push(" " + totalItemsStr.substring(0, W));
+        lines.push(" " + "-".repeat(W));
+        
+        if (printSetup.customFooter) {
+            printSetup.customFooter.split('\n').forEach(fLine => {
+                lines.push(" " + fLine.substring(0, W));
+            });
+        }
+        
+        if (printSetup.showPharmacistSignature) {
+            lines.push("\n\n" + "For Pharmacist".padStart(W));
+        }
+        
+        const billText = lines.join('\n');
+        
+        const printWindow = window.open('', '_blank', 'width=600,height=600');
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <title>Print Offline Bill</title>
+                <style>
+                    body { margin: 0; padding: 0; }
+                    pre {
+                        font-family: "Courier New", monospace;
+                        font-size: 12px;
+                        font-weight: bold;
+                        line-height: 1.15;
+                        margin: 0;
+                        padding: 0 0 0 3mm;
+                        white-space: pre;
+                    }
+                    @media print {
+                        @page {
+                            size: ${printSetup.paperSize === 'A4' ? 'A4' : '80mm auto'};
+                            margin: 0;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                <pre>${billText}</pre>
+                <script>
+                    window.onload = function() {
+                        window.print();
+                        setTimeout(() => window.close(), 500);
+                    };
+                <\/script>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+    }
+
     function updateSearchSelection() {
         const results = document.querySelectorAll('.batch-item');
         results.forEach((el, idx) => {
@@ -750,16 +1159,56 @@
     const _posSearchCache = {};       // query → API data
     let   _posDebounceTimer = null;   // debounce handle
 
+    async function showDefaultProducts() {
+        try {
+            let products = [];
+            if (navigator.onLine) {
+                const response = await fetch('/api/products/search/?limit=50');
+                if (response.ok) {
+                    products = await response.json();
+                }
+            }
+            if (!products || products.length === 0) {
+                if (typeof OfflineSync !== 'undefined') {
+                    const store = localforage.createInstance({ name: 'ep_product_cache' });
+                    products = await store.getItem('pos_products') || [];
+                }
+            }
+            
+            if (products && products.length > 0) {
+                renderSearchResults({ results: products });
+            } else {
+                resultsDiv.innerHTML = '<div class="p-3 text-center text-muted small">No items cached yet. Search while online to cache items.</div>';
+                resultsDiv.classList.remove('d-none');
+            }
+        } catch (err) {
+            console.error('Failed to load default products', err);
+        }
+    }
+
     function renderSearchResults(data) {
         resultsDiv.innerHTML = '';
         searchSelectedIndex = -1;
         let batchIndex = 0;
 
-        if (data.length === 0) {
-            resultsDiv.innerHTML = '<div class="p-3 text-center text-muted small">No items found. <button class="btn btn-link btn-sm" data-bs-toggle="modal" data-bs-target="#quickAddModal">Add New?</button></div>';
-        }
+        // Safe data extraction
+        const products = data?.results || data?.products || data || [];
 
-        data.forEach(product => {
+        // if (data.length === 0) {
+        //     resultsDiv.innerHTML = '<div class="p-3 text-center text-muted small">No items found. <button class="btn btn-link btn-sm" data-bs-toggle="modal" data-bs-target="#quickAddModal">Add New?</button></div>';
+        // }
+        if (products.length === 0) {
+            resultsDiv.innerHTML = `
+                <div class="p-3 text-center text-muted small">
+                    No items found. 
+                    <button class="btn btn-link btn-sm" data-bs-toggle="modal" data-bs-target="#quickAddModal">
+                        Add New?
+                    </button>
+                </div>`;
+            resultsDiv.classList.remove('d-none');
+            return;
+        }
+        products.forEach(product => {
             const productGroup = document.createElement('div');
             productGroup.className = 'list-group-item p-3 border-bottom bg-white';
 
@@ -848,25 +1297,56 @@
     searchInput.addEventListener('input', (e) => {
         clearTimeout(_posDebounceTimer);
         const query = e.target.value.trim();
-        if (query.length < 1) { resultsDiv.classList.add('d-none'); return; }
+        if (query.length < 1) { 
+            showDefaultProducts();
+            return; 
+        }
 
-        // Cache hit — instant render, no API call
+        // Cache hit
         if (_posSearchCache[query]) {
             renderSearchResults(_posSearchCache[query]);
             return;
         }
 
-        // Debounce: wait 300ms after user stops typing before hitting API
-        _posDebounceTimer = setTimeout(async () => {
-            try {
-                const response = await fetch(`/api/products/search/?q=${encodeURIComponent(query)}`);
-                const data = await response.json();
-                _posSearchCache[query] = data;   // store in cache for next time
-                renderSearchResults(data);
-            } catch (err) {
-                console.error('POS search error:', err);
+    _posDebounceTimer = setTimeout(async () => {
+        try {
+            const response = await fetch(`/api/products/search/?q=${encodeURIComponent(query)}`);
+            if (!response.ok) {
+                throw new Error('Offline');
             }
-        }, 300);
+            const data = await response.json();
+
+            // Cache for offline
+            const productsToCache = data?.results || data?.products || data || [];
+            if (Array.isArray(productsToCache) && productsToCache.length > 0) {
+                OfflineSync.cacheProducts(productsToCache);
+            }
+
+            renderSearchResults(data);
+        } catch (err) {
+            console.log('Offline search activated');
+            const offlineResults = await OfflineSync.searchOfflineProducts(query);
+            renderSearchResults({ results: offlineResults });
+        }
+    }, 300);
+    
+    });
+
+    searchInput.addEventListener('focus', () => {
+        if (searchInput.value.trim().length === 0) {
+            showDefaultProducts();
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!searchInput.contains(e.target) && !resultsDiv.contains(e.target)) {
+            resultsDiv.classList.add('d-none');
+        }
+    });
+
+    // Load default products on load
+    window.addEventListener('load', () => {
+        showDefaultProducts();
     });
 
     // ── Substitute lookup ──────────────────────────────────────────
@@ -1226,11 +1706,14 @@
             alert('Product saved offline. It will be available for search once internet reconnects and syncs.');
         } else {
             const response = await fetch('/api/products/quick-add/', {
-                method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
                 body: JSON.stringify(data)
             });
             const result = await response.json();
             if (result.success) {
+                if (typeof OfflineSync !== 'undefined') {
+                    OfflineSync.preloadProductCache();
+                }
                 bootstrap.Modal.getInstance(document.getElementById('quickAddModal')).hide();
                 document.getElementById('productSearch').value = result.name;
                 document.getElementById('productSearch').dispatchEvent(new Event('input'));
@@ -1263,37 +1746,52 @@
     }
 
     function calculateGrandTotal() {
-        // MRP is tax-inclusive, so calculate totals correctly
-        const subTotal = cart.reduce((sum, item) => {
-            const basePrice = item.price / (1 + item.tax_rate / 100);
-            return sum + (basePrice * item.quantity);
-        }, 0);
-        const totalTax = cart.reduce((sum, item) => {
-            const basePrice = item.price / (1 + item.tax_rate / 100);
-            const taxPerItem = item.price - basePrice;
-            return sum + (taxPerItem * item.quantity);
-        }, 0);
-        const discount = parseFloat(document.getElementById('summaryDiscount').value) || 0;
-        let grandTotal = (subTotal + totalTax) - discount;
+        try {
+            // MRP is tax-inclusive, so calculate totals correctly
+            const subTotal = cart.reduce((sum, item) => {
+                const price = parseFloat(item.price) || 0;
+                const taxRate = parseFloat(item.tax_rate) || 0;
+                const basePrice = price / (1 + taxRate / 100);
+                return sum + (basePrice * (parseInt(item.quantity) || 0));
+            }, 0);
+            const totalTax = cart.reduce((sum, item) => {
+                const price = parseFloat(item.price) || 0;
+                const taxRate = parseFloat(item.tax_rate) || 0;
+                const basePrice = price / (1 + taxRate / 100);
+                const taxPerItem = price - basePrice;
+                return sum + (taxPerItem * (parseInt(item.quantity) || 0));
+            }, 0);
+            
+            console.log("POS CART STATE:", JSON.stringify(cart));
+            console.log("Calculated SubTotal:", subTotal, "TotalTax:", totalTax);
+            
+            const validSubTotal = isNaN(subTotal) ? 0 : subTotal;
+            const validTotalTax = isNaN(totalTax) ? 0 : totalTax;
+            
+            const discount = parseFloat(document.getElementById('summaryDiscount').value) || 0;
+            let grandTotal = (validSubTotal + validTotalTax) - discount;
 
-        // ── Round Off ──
-        const roundedTotal = Math.round(grandTotal);
-        const roundOff = roundedTotal - grandTotal;
-        grandTotal = roundedTotal;
+            // ── Round Off ──
+            const roundedTotal = Math.round(grandTotal);
+            const roundOff = roundedTotal - grandTotal;
+            grandTotal = roundedTotal;
 
-        document.getElementById('summarySubTotal').innerText = subTotal.toFixed(2);
-        document.getElementById('summaryTax').innerText = totalTax.toFixed(2);
-        document.getElementById('summaryGrandTotal').innerText = grandTotal.toFixed(2);
+            document.getElementById('summarySubTotal').innerText = validSubTotal.toFixed(2);
+            document.getElementById('summaryTax').innerText = validTotalTax.toFixed(2);
+            document.getElementById('summaryGrandTotal').innerText = grandTotal.toFixed(2);
 
-        const roundOffEl = document.getElementById('summaryRoundOff');
-        if (roundOffEl) {
-            roundOffEl.innerText = (roundOff >= 0 ? '+' : '') + roundOff.toFixed(2);
+            const roundOffEl = document.getElementById('summaryRoundOff');
+            if (roundOffEl) {
+                roundOffEl.innerText = (roundOff >= 0 ? '+' : '') + roundOff.toFixed(2);
+            }
+
+            // Update footer counters
+            const itemCount = cart.reduce((sum, item) => sum + (parseInt(item.quantity) || 0), 0);
+            document.getElementById('cartItemCount').innerText = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;
+            document.getElementById('cartTotal').innerText = grandTotal.toFixed(2);
+        } catch (e) {
+            console.error("Error in calculateGrandTotal:", e);
         }
-
-        // Update footer counters
-        const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-        document.getElementById('cartItemCount').innerText = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;
-        document.getElementById('cartTotal').innerText = grandTotal.toFixed(2);
     }
 
     function calculateDiscount(changed) {
@@ -1351,21 +1849,22 @@
         });
     });
 
-    // ── Patient details validation ──
     function validatePatientDetails() {
         const isCounterMode = !document.getElementById('counterSaleBanner').classList.contains('d-none');
-        if (isCounterMode) return true;
+        const paymentMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
+        
+        if (isCounterMode && paymentMethod !== 'Credit') return true;
 
         const fields = [
-            { id: 'patientName',    value: document.getElementById('patientName').value.trim() },
-            { id: 'patientAddress', value: document.getElementById('patientAddress').value.trim() },
-            { id: 'doctorName',     value: document.getElementById('doctorName').value.trim() },
+            { id: 'patientName',    value: document.getElementById('patientName').value.trim(), required: true },
+            { id: 'patientAddress', value: document.getElementById('patientAddress').value.trim(), required: !isCounterMode },
+            { id: 'doctorName',     value: document.getElementById('doctorName').value.trim(), required: !isCounterMode },
         ];
 
         let valid = true;
         fields.forEach(f => {
             const el = document.getElementById(f.id);
-            if (!f.value) {
+            if (f.required && !f.value) {
                 el.classList.add('is-invalid');
                 el.addEventListener('input', () => el.classList.remove('is-invalid'), { once: true });
                 valid = false;
@@ -1421,7 +1920,11 @@
                 
                 // Show offline success modal
                 document.getElementById('successInvoiceNum').textContent = "Pending Sync";
-                document.getElementById('btnSuccessPrint').style.display = 'none'; // Cannot print dot matrix offline without server
+                document.getElementById('btnSuccessPrint').style.display = 'inline-block';
+                document.getElementById('btnSuccessPrint').onclick = () => {
+                    printInvoiceOffline(data);
+                    setTimeout(() => resetPOS("Pending Sync*"), 500);
+                };
                 
                 document.getElementById('btnSuccessWhatsApp').onclick = () => {
                     let phone = data.patient_phone;
@@ -1476,7 +1979,7 @@
                 }, { once: true });
 
             } else {
-                const response = await fetch('/pos/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' }, body: JSON.stringify(data) });
+                const response = await fetch('/pos/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') }, body: JSON.stringify(data) });
                 const result = await response.json();
                 if (result.success) {
                     // Show Success Modal instead of reloading
@@ -1543,8 +2046,41 @@
                             };
                         }
                     }, { once: true });
+                } else if (result.queued) {
+                    // Service Worker queued it offline
+                    document.getElementById('successInvoiceNum').textContent = "Pending Sync";
+                    document.getElementById('btnSuccessPrint').style.display = 'inline-block';
+                    document.getElementById('btnSuccessPrint').onclick = () => {
+                        printInvoiceOffline(data);
+                        setTimeout(() => resetPOS("Pending Sync*"), 500);
+                    };
+                    
+                    document.getElementById('btnSuccessWhatsApp').onclick = () => {
+                        let phone = data.patient_phone;
+                        if (!phone || phone.length < 10) {
+                            phone = prompt("Enter patient's 10-digit WhatsApp number:", "");
+                            if (!phone) return;
+                        }
+                        if(phone.length === 10) phone = '91' + phone;
+                        let msg = `*EASY PHARMA - INVOICE (Offline)*\n`;
+                        msg += `Patient: ${data.patient_name || 'Cash Customer'}\n\n`;
+                        msg += `*ITEMS:*\n`;
+                        cart.forEach(item => {
+                            msg += `- ${item.name} (x${item.quantity}) = ₹${(item.price * item.quantity).toFixed(2)}\n`;
+                        });
+                        msg += `\n*Total Amount: ₹${data.total_amount.toFixed(2)}*\n\n`;
+                        msg += `Thank you for your visit!\n`;
+                        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+                    };
+                    document.getElementById('btnSuccessNewSale').onclick = () => {
+                        resetPOS("Pending Sync*");
+                    };
+
+                    const successModalEl = document.getElementById('checkoutSuccessModal');
+                    const successModal = new bootstrap.Modal(successModalEl);
+                    successModal.show();
                 } else {
-                    alert('Error whatsapp: ' + result.error);
+                    alert('Error: ' + result.error);
                 }
             }
         } catch (err) {
@@ -1684,23 +2220,788 @@ function addNewBill() {
         setTimeout(() => document.getElementById('productSearch').focus(), 300);
     }
 
+    // ────────────────────────────────────────────────────────
+    // AI PRESCRIPTION SCANNER LOGIC
+    // ────────────────────────────────────────────────────────
+    let currentStep = 1;
+    let prescriptionFile = null;
+    let cameraStreamObj = null;
+    let currentScanResults = [];
+
+    const scanModal = document.getElementById('scanPrescriptionModal');
+    if (scanModal) {
+        scanModal.addEventListener('hidden.bs.modal', function () {
+            stopCamera();
+            resetScanModal();
+        });
+    }
+
+    const dropzone = document.getElementById('dropzone');
+    const imageInput = document.getElementById('prescriptionImageInput');
+    const startCameraBtn = document.getElementById('startCameraBtn');
+    const captureBtn = document.getElementById('captureBtn');
+    const cameraStream = document.getElementById('cameraStream');
+    const previewPlaceholder = document.getElementById('previewPlaceholder');
+    const previewImg = document.getElementById('prescriptionPreviewImg');
+    const nextStepBtn = document.getElementById('nextStepBtn');
+    const prevStepBtn = document.getElementById('prevStepBtn');
+    const applyCartBtn = document.getElementById('applyCartBtn');
+
+    if (imageInput) {
+        imageInput.addEventListener('change', function(e) {
+            if (e.target.files.length > 0) {
+                handleSelectedFile(e.target.files[0]);
+            }
+        });
+    }
+
+    if (dropzone) {
+        dropzone.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            dropzone.style.backgroundColor = 'var(--brand-tint)';
+            dropzone.style.borderColor = 'var(--brand)';
+        });
+
+        dropzone.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            dropzone.style.backgroundColor = '';
+            dropzone.style.borderColor = '';
+        });
+
+        dropzone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            dropzone.style.backgroundColor = '';
+            dropzone.style.borderColor = '';
+            if (e.dataTransfer.files.length > 0) {
+                handleSelectedFile(e.dataTransfer.files[0]);
+            }
+        });
+    }
+
+    if (startCameraBtn) {
+        startCameraBtn.addEventListener('click', async function() {
+            try {
+                stopCamera();
+                previewPlaceholder.classList.add('d-none');
+                previewImg.classList.add('d-none');
+                cameraStream.classList.remove('d-none');
+                captureBtn.classList.remove('d-none');
+
+                cameraStreamObj = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' }
+                });
+                cameraStream.srcObject = cameraStreamObj;
+            } catch (err) {
+                alert('Could not access camera: ' + err.message);
+                resetScanModal();
+            }
+        });
+    }
+
+    if (captureBtn) {
+        captureBtn.addEventListener('click', function() {
+            if (!cameraStreamObj) return;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = cameraStream.videoWidth || 640;
+            canvas.height = cameraStream.videoHeight || 480;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(cameraStream, 0, 0, canvas.width, canvas.height);
+
+            canvas.toBlob(function(blob) {
+                const file = new File([blob], "captured_prescription.jpg", { type: "image/jpeg" });
+                handleSelectedFile(file);
+                stopCamera();
+            }, 'image/jpeg', 0.95);
+        });
+    }
+
+    function stopCamera() {
+        if (cameraStreamObj) {
+            cameraStreamObj.getTracks().forEach(track => track.stop());
+            cameraStreamObj = null;
+        }
+        if (cameraStream) {
+            cameraStream.srcObject = null;
+            cameraStream.classList.add('d-none');
+        }
+        if (captureBtn) {
+            captureBtn.classList.add('d-none');
+        }
+    }
+
+    function handleSelectedFile(file) {
+        prescriptionFile = file;
+        
+        // Show preview
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            previewPlaceholder.classList.add('d-none');
+            cameraStream.classList.add('d-none');
+            captureBtn.classList.add('d-none');
+            
+            previewImg.src = e.target.result;
+            previewImg.classList.remove('d-none');
+            
+            // Set for reference in Step 2
+            document.getElementById('prescriptionRefImg').src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function resetScanModal() {
+        currentStep = 1;
+        prescriptionFile = null;
+        currentScanResults = [];
+        if (previewImg) {
+            previewImg.src = '';
+            previewImg.classList.add('d-none');
+        }
+        if (previewPlaceholder) {
+            previewPlaceholder.classList.remove('d-none');
+        }
+        document.getElementById('prescriptionRefImg').src = '';
+        document.getElementById('matchingTableBody').innerHTML = '';
+        document.getElementById('scanPatientName').value = '';
+        document.getElementById('scanPatientPhone').value = '';
+        document.getElementById('scanDoctorName').value = '';
+        showStep(1);
+    }
+
+    function showStep(step) {
+        currentStep = step;
+        
+        // Toggle contents
+        document.querySelectorAll('.step-content').forEach(el => el.classList.add('d-none'));
+        document.getElementById('scanLoader').classList.add('d-none');
+        document.getElementById('stepContent' + step).classList.remove('d-none');
+        
+        // Update indicators
+        for (let i = 1; i <= 3; i++) {
+            const ind = document.getElementById('stepIndicator' + i);
+            const num = ind.querySelector('.step-number');
+            if (i === step) {
+                ind.classList.remove('text-muted');
+                ind.classList.add('active');
+                num.classList.remove('bg-secondary');
+                num.classList.add('bg-primary');
+            } else if (i < step) {
+                ind.classList.remove('text-muted', 'active');
+                num.classList.remove('bg-secondary', 'bg-primary');
+                num.classList.add('bg-success');
+            } else {
+                ind.classList.add('text-muted');
+                ind.classList.remove('active');
+                num.classList.remove('bg-primary', 'bg-success');
+                num.classList.add('bg-secondary');
+            }
+        }
+        
+        // Update buttons
+        prevStepBtn.disabled = step === 1;
+        
+        if (step === 1) {
+            nextStepBtn.innerText = 'Scan & Next';
+            nextStepBtn.classList.remove('d-none');
+            applyCartBtn.classList.add('d-none');
+        } else if (step === 2) {
+            nextStepBtn.innerText = 'Next';
+            nextStepBtn.classList.remove('d-none');
+            applyCartBtn.classList.add('d-none');
+        } else if (step === 3) {
+            nextStepBtn.classList.add('d-none');
+            applyCartBtn.classList.remove('d-none');
+        }
+    }
+
+    if (prevStepBtn) {
+        prevStepBtn.addEventListener('click', function() {
+            if (currentStep > 1) {
+                showStep(currentStep - 1);
+            }
+        });
+    }
+
+    if (nextStepBtn) {
+        nextStepBtn.addEventListener('click', function() {
+            if (currentStep === 1) {
+                if (!prescriptionFile) {
+                    alert('Please select or capture a prescription image first.');
+                    return;
+                }
+                uploadAndScanPrescription();
+            } else if (currentStep === 2) {
+                showStep(3);
+            }
+        });
+    }
+
+    function compressImage(file, callback) {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = function(event) {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = function() {
+                const maxDim = 1024;
+                let width = img.width;
+                let height = img.height;
+                
+                if (width > maxDim || height > maxDim) {
+                    if (width > height) {
+                        height = Math.round((height * maxDim) / width);
+                        width = maxDim;
+                    } else {
+                        width = Math.round((width * maxDim) / height);
+                        height = maxDim;
+                    }
+                }
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                canvas.toBlob(function(blob) {
+                    callback(blob);
+                }, 'image/jpeg', 0.75);
+            };
+        };
+    }
+
+    function uploadAndScanPrescription() {
+        // Hide Step 1 and show loader
+        document.getElementById('stepContent1').classList.add('d-none');
+        const loader = document.getElementById('scanLoader');
+        loader.classList.remove('d-none');
+        
+        nextStepBtn.classList.add('d-none');
+        prevStepBtn.disabled = true;
+
+        compressImage(prescriptionFile, function(compressedBlob) {
+            const formData = new FormData();
+            formData.append('prescription_image', compressedBlob, 'scan.jpg');
+
+            fetch('/api/pos/scan-prescription/', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('scansTodayCount').innerText = data.scans_today;
+                    document.getElementById('maxScansCount').innerText = data.max_scans;
+                    
+                    document.getElementById('scanPatientName').value = data.patient_name || '';
+                    document.getElementById('scanPatientPhone').value = data.patient_phone || '';
+                    document.getElementById('scanDoctorName').value = data.doctor_name || '';
+                    
+                    renderMatchingTable(data.results);
+                    showStep(2);
+                } else {
+                    alert(data.error || 'Failed to scan prescription.');
+                    showStep(1);
+                }
+            })
+            .catch(err => {
+                alert('Error scanning prescription: ' + err.message);
+                showStep(1);
+            });
+        });
+    }
+
+    function renderMatchingTable(results) {
+        const tbody = document.getElementById('matchingTableBody');
+        tbody.innerHTML = '';
+        currentScanResults = results;
+        
+        if (results.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-muted">No medicines could be extracted.</td></tr>`;
+            return;
+        }
+        
+        results.forEach((row, rowIndex) => {
+            const tr = document.createElement('tr');
+            tr.dataset.rowIndex = rowIndex;
+            
+            let productOptionsHtml = '';
+            if (row.matches && row.matches.length > 0) {
+                row.matches.forEach((p, pIndex) => {
+                    const isSelected = pIndex === 0 ? 'selected' : '';
+                    productOptionsHtml += `<option value="${p.id}" data-index="${pIndex}" ${isSelected}>${p.name} (${p.packing || 'N/A'}) - ${p.company || 'Unknown'}</option>`;
+                });
+            } else {
+                productOptionsHtml += `<option value="" selected>⚠️ No match found in stock</option>`;
+            }
+            // Append Search option
+            productOptionsHtml += `<option value="__search__">🔍 Search another product...</option>`;
+            
+            let batchOptionsHtml = '';
+            const bestProduct = row.best_match;
+            if (bestProduct && bestProduct.batches && bestProduct.batches.length > 0) {
+                bestProduct.batches.forEach((b, bIndex) => {
+                    const isSelected = bIndex === 0 ? 'selected' : '';
+                    batchOptionsHtml += `<option value="${b.batch_id}" data-price="${b.price}" data-batch-no="${b.batch_no}" data-expiry="${b.expiry}" data-stock="${b.stock}" ${isSelected}>${b.batch_no} (Exp: ${b.expiry}, Stock: ${b.stock})</option>`;
+                });
+            } else {
+                batchOptionsHtml += `<option value="">No Batch</option>`;
+            }
+            
+            const isOutOfStock = !bestProduct || !bestProduct.batches || bestProduct.batches.length === 0;
+            
+            tr.innerHTML = `
+                <td class="ps-3">
+                    <span class="fw-bold small text-dark">${row.scanned_name}</span>
+                </td>
+                <td>
+                    <select class="form-select form-select-sm product-match-select" onchange="onMatchedProductChange(this, ${rowIndex})">
+                        ${productOptionsHtml}
+                    </select>
+                </td>
+                <td>
+                    <select class="form-select form-select-sm batch-match-select" ${isOutOfStock ? 'disabled' : ''}>
+                        ${batchOptionsHtml}
+                    </select>
+                </td>
+                <td>
+                    <input type="number" class="form-control form-control-sm qty-match-input" value="${row.scanned_qty}" min="1" style="width: 70px;">
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    window.onMatchedProductChange = function(selectElem, rowIndex) {
+        const productIndex = selectElem.selectedIndex;
+        const selectedOption = selectElem.options[productIndex];
+        
+        // Handle database manual search option
+        if (selectElem.value === '__search__') {
+            const query = prompt("Search inventory for a product/substitute:");
+            if (!query) {
+                // Reset select to first option
+                selectElem.selectedIndex = 0;
+                onMatchedProductChange(selectElem, rowIndex);
+                return;
+            }
+            
+            selectElem.innerHTML = `<option value="">Searching...</option>`;
+            
+            fetch(`/api/products/search/?q=${encodeURIComponent(query)}`)
+            .then(res => res.json())
+            .then(products => {
+                let optionsHtml = '';
+                if (products && products.length > 0) {
+                    currentScanResults[rowIndex].matches = products;
+                    products.forEach((p, pIndex) => {
+                        optionsHtml += `<option value="${p.id}" data-index="${pIndex}">${p.name} (${p.packing || 'N/A'}) - Stock: ${p.batches.reduce((acc, b) => acc + b.stock, 0)}</option>`;
+                    });
+                } else {
+                    optionsHtml += `<option value="" selected>⚠️ No match found in stock</option>`;
+                }
+                optionsHtml += `<option value="__search__">🔍 Search another product...</option>`;
+                selectElem.innerHTML = optionsHtml;
+                
+                selectElem.selectedIndex = 0;
+                onMatchedProductChange(selectElem, rowIndex);
+            })
+            .catch(err => {
+                alert('Search failed: ' + err.message);
+                selectElem.selectedIndex = 0;
+                onMatchedProductChange(selectElem, rowIndex);
+            });
+            return;
+        }
+        
+        const pIndex = parseInt(selectedOption.dataset.index);
+        const row = currentScanResults[rowIndex];
+        
+        const tr = selectElem.closest('tr');
+        const batchSelect = tr.querySelector('.batch-match-select');
+        
+        if (isNaN(pIndex) || !row.matches[pIndex]) {
+            batchSelect.innerHTML = '<option value="">No Batch</option>';
+            batchSelect.disabled = true;
+            return;
+        }
+        
+        const product = row.matches[pIndex];
+        let batchOptionsHtml = '';
+        if (product.batches && product.batches.length > 0) {
+            product.batches.forEach((b, bIndex) => {
+                const isSelected = bIndex === 0 ? 'selected' : '';
+                batchOptionsHtml += `<option value="${b.batch_id}" data-price="${b.price}" data-batch-no="${b.batch_no}" data-expiry="${b.expiry}" data-stock="${b.stock}" ${isSelected}>${b.batch_no} (Exp: ${b.expiry}, Stock: ${b.stock})</option>`;
+            });
+            batchSelect.disabled = false;
+        } else {
+            batchOptionsHtml += '<option value="">No Batch</option>';
+            batchSelect.disabled = true;
+        }
+        batchSelect.innerHTML = batchOptionsHtml;
+    };
+
+    if (applyCartBtn) {
+        applyCartBtn.addEventListener('click', function() {
+            const rows = document.querySelectorAll('#matchingTableBody tr');
+            const itemsToAdd = [];
+            
+            rows.forEach(tr => {
+                const rowIndex = parseInt(tr.dataset.rowIndex);
+                if (isNaN(rowIndex)) return;
+                
+                const productSelect = tr.querySelector('.product-match-select');
+                const batchSelect = tr.querySelector('.batch-match-select');
+                const qtyInput = tr.querySelector('.qty-match-input');
+                
+                if (!productSelect || !batchSelect || !qtyInput) return;
+                
+                const productId = productSelect.value;
+                const batchId = batchSelect.value;
+                const qty = parseInt(qtyInput.value);
+                
+                if (!productId || !batchId || isNaN(qty) || qty <= 0) return;
+                
+                const selectedProductOption = productSelect.options[productSelect.selectedIndex];
+                const selectedBatchOption = batchSelect.options[batchSelect.selectedIndex];
+                
+                const pIndex = parseInt(selectedProductOption.dataset.index);
+                const row = currentScanResults[rowIndex];
+                const product = row.matches[pIndex];
+                
+                const price = parseFloat(selectedBatchOption.dataset.price);
+                const batchNo = selectedBatchOption.dataset.batchNo;
+                const expiry = selectedBatchOption.dataset.expiry;
+                const stock = parseInt(selectedBatchOption.dataset.stock);
+                
+                itemsToAdd.push({
+                    id: parseInt(productId),
+                    batch_id: parseInt(batchId),
+                    name: product.name,
+                    batch_no: batchNo,
+                    expiry: expiry,
+                    price: price,
+                    tax_rate: parseFloat(product.tax_rate),
+                    quantity: qty,
+                    stock: stock
+                });
+            });
+            
+            if (itemsToAdd.length === 0) {
+                alert('No valid items selected to add to cart.');
+                return;
+            }
+            
+            // Add items to POS cart
+            itemsToAdd.forEach(item => {
+                const existing = cart.find(
+                    cartItem => cartItem.id === item.id && cartItem.batch_id === item.batch_id
+                );
+                if (existing) {
+                    existing.quantity += item.quantity;
+                } else {
+                    cart.push({
+                        id: item.id,
+                        batch_id: item.batch_id,
+                        name: item.name,
+                        batch_no: item.batch_no,
+                        expiry: item.expiry,
+                        price: item.price,
+                        tax_rate: item.tax_rate,
+                        quantity: item.quantity,
+                        max_stock: item.stock
+                    });
+                }
+            });
+            
+            // Auto fill patient info on the main POS form
+            document.getElementById('patientName').value = document.getElementById('scanPatientName').value || 'CASH CUSTOMER';
+            document.getElementById('patientPhone').value = document.getElementById('scanPatientPhone').value || '';
+            document.getElementById('doctorName').value = document.getElementById('scanDoctorName').value || 'Self';
+            document.getElementById('patientAddress').value = 'Prescription Scan';
+            
+            // Dispatch input and change events to ensure all handlers capture the updates
+            ['patientName', 'patientPhone', 'doctorName', 'patientAddress'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+
+            // Sync with Multi-Bill Tab System
+            saveCurrentState();
+            updateBillTabsUI();
+            
+            // Render the cart rows and calculate totals
+            renderCart();
+            calculateGrandTotal();
+            
+            // Close modal
+            const bootstrapModal = bootstrap.Modal.getInstance(scanModal);
+            if (bootstrapModal) {
+                bootstrapModal.hide();
+            }
+            showToast('AI prescription items and patient details loaded into bill.', 'success');
+        });
+    }
+
 </script>
 
 <style>
-    .x-small {
-        font-size: 0.65rem;
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap');
+
+    /* ══════════════════════════════════════════════════
+       DESIGN TOKENS — Pharmacy POS
+       Palette: deep clinical teal (brand/trust) + emerald
+       (money/success) + amber (caution/schedule) on a warm
+       paper background. Numeric data (prices, qty, batch
+       codes, bill totals) always renders in monospace —
+       a receipt/label-precision signature that lets a
+       cashier scan figures at a glance under time pressure.
+       ══════════════════════════════════════════════════ */
+    :root {
+        --ink:            #16241F;
+        --muted:          #64766F;
+        --bg:             #F5F7F3;
+        --surface:        #FFFFFF;
+        --border:         #E3E8E1;
+
+        --brand:          #0C6B58;
+        --brand-dk:       #084A3D;
+        --brand-tint:     #E7F2EE;
+
+        --success:        #059669;
+        --success-dk:     #047857;
+        --success-tint:   #E5F6EE;
+
+        --accent:         #D97706;
+        --accent-tint:    #FDF1E1;
+
+        --danger:         #DC2626;
+        --danger-tint:    #FCEBEA;
+
+        --r-lg: 16px;
+        --r-md: 12px;
+        --r-sm: 8px;
+        --shadow:    0 2px 10px rgba(22,36,31,.06), 0 1px 2px rgba(22,36,31,.05);
+        --shadow-lg: 0 16px 40px rgba(22,36,31,.14);
     }
+
+    body { background: var(--bg); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; }
+
+    h1, h2, h3, h4, h5, h6, .modal-title, .fw-bold {
+        font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+        letter-spacing: -0.01em;
+    }
+
+    /* Monospace signature for all figures: money, qty, batch codes, bill no. */
+    #posTable td, .qty-input, .batch-item, .summary-card span,
+    #summarySubTotal, #summaryTax, #summaryGrandTotal, #summaryRoundOff,
+    #cartTotal, #runningBillNumber, #successInvoiceNum,
+    #searchResults .fw-bold.text-primary, #searchResults .badge.bg-white {
+        font-family: 'JetBrains Mono', ui-monospace, monospace;
+        font-variant-numeric: tabular-nums;
+    }
+    #posTable td .fw-bold, #posTable td .text-muted { font-family: 'Inter', sans-serif; } /* medicine name / exp stay in body font */
+    .x-small { font-size: 0.65rem; }
+
+    /* ── Base surfaces ── */
+    .card {
+        border-radius: var(--r-lg) !important;
+        border: 1px solid var(--border) !important;
+        box-shadow: var(--shadow) !important;
+    }
+    .rounded-4 { border-radius: var(--r-lg) !important; }
+    .rounded-3 { border-radius: var(--r-md) !important; }
+    .shadow-sm { box-shadow: var(--shadow) !important; }
+    .shadow-lg { box-shadow: var(--shadow-lg) !important; }
+    .card-header { background: var(--surface) !important; border-bottom: 1px solid var(--border) !important; }
+    .card-footer { background: var(--surface) !important; border-top: 1px solid var(--border) !important; }
+
+    /* ── Brand color takeover (keeps Bootstrap class names, new palette) ── */
+    .text-success { color: var(--success) !important; }
+    .text-primary { color: var(--brand) !important; }
+    .btn-success { background: var(--success) !important; border-color: var(--success) !important; }
+    .btn-success:hover { background: var(--success-dk) !important; border-color: var(--success-dk) !important; }
+    .btn-primary { background: var(--brand) !important; border-color: var(--brand) !important; }
+    .btn-primary:hover { background: var(--brand-dk) !important; border-color: var(--brand-dk) !important; }
+    .btn-outline-primary { color: var(--brand) !important; border-color: var(--brand) !important; }
+    .btn-outline-primary:hover { background: var(--brand) !important; color: #fff !important; }
+
+    #runningBillNumber {
+        background: var(--brand-tint) !important;
+        color: var(--brand-dk) !important;
+        border: 1px solid rgba(12,107,88,.25) !important;
+        letter-spacing: 0.02em;
+    }
+
+    /* ── Top search bar ── */
+    #productSearch {
+        background: var(--surface) !important;
+        border: 1.5px solid var(--border) !important;
+        color: var(--ink);
+    }
+    #productSearch:focus {
+        background: var(--surface) !important;
+        border: 1.5px solid var(--brand) !important;
+        box-shadow: 0 0 0 4px var(--brand-tint) !important;
+        padding-left: 3rem;
+    }
+    #productSearch::placeholder { color: var(--muted); opacity: .8; }
+
+    /* ── Search results dropdown ── */
+    #searchResults {
+        border-radius: var(--r-lg) !important;
+        border: 1px solid var(--border) !important;
+        box-shadow: var(--shadow-lg) !important;
+        overflow: hidden;
+        margin-top: 10px;
+        background: var(--surface);
+    }
+    #searchResults .list-group-item {
+        border-color: var(--border) !important;
+        background: var(--surface) !important;
+    }
+    #searchResults .h6.fw-bold { font-size: 0.95rem; }
+    #searchResults .badge.bg-light {
+        background: var(--bg) !important;
+        border-color: var(--border) !important;
+        color: var(--muted) !important;
+        font-weight: 500;
+    }
+    #searchResults .badge.bg-info-soft,
+    .bg-info-soft { background: var(--brand-tint) !important; color: var(--brand-dk) !important; }
+    .bg-success-soft { background: var(--success-tint) !important; color: var(--success-dk) !important; }
+    .bg-primary-soft { background: var(--brand-tint) !important; color: var(--brand-dk) !important; }
+
+    .batch-list { max-height: 220px; overflow-y: auto; padding-right: 2px; }
+
+    .batch-item {
+        cursor: pointer;
+        border-radius: var(--r-sm) !important;
+        background: #FAFBF9 !important;
+        border-left: 4px solid var(--brand) !important;
+        transition: background .12s ease, border-left-color .12s ease, transform .1s ease !important;
+    }
+    .batch-item:hover {
+        background: var(--brand-tint) !important;
+        border-left-color: var(--brand-dk) !important;
+        transform: translateX(3px) !important;
+    }
+    .batch-item.selected-batch, .batch-item.selected-batch:hover {
+        background: var(--brand-tint) !important;
+        border-left-color: var(--brand-dk) !important;
+        box-shadow: inset 0 0 0 1px rgba(12,107,88,.18) !important;
+        transform: translateX(4px) !important;
+    }
+    .batch-item .fw-bold.text-primary { color: var(--brand-dk) !important; }
+    .batch-item .badge.bg-success { background: var(--success) !important; }
+    .batch-item .add-btn, .batch-item.selected-batch .add-btn {
+        background: var(--brand) !important;
+        border-color: var(--brand) !important;
+        letter-spacing: 0.03em;
+    }
+    .batch-item:hover .add-btn { background: var(--brand-dk) !important; border-color: var(--brand-dk) !important; }
+    .selected-batch {
+        background-color: var(--brand-tint) !important;
+        border-color: var(--brand) !important;
+        box-shadow: 0 0 0 2px rgba(12,107,88,.20);
+    }
+
+    /* ── Cart table ── */
+    #posTable thead {
+        background: var(--bg) !important;
+        color: var(--muted);
+        letter-spacing: 0.04em;
+        border-bottom: 1px solid var(--border);
+    }
+    .cart-row { transition: all .18s ease; border-left: 3px solid transparent; }
+    .cart-row:hover { background: var(--brand-tint) !important; border-left-color: var(--brand) !important; }
+    .cart-row td { border-color: var(--border) !important; }
+
+    .qty-input { font-weight: 700; transition: all .2s; }
+    .qty-input:focus {
+        background-color: #fff !important;
+        border-color: var(--brand) !important;
+        box-shadow: 0 0 0 3px var(--brand-tint) !important;
+    }
+
+    /* ── Empty state ── */
+    #emptyState .opacity-25 { color: var(--brand); }
+    #emptyState .alert-info {
+        border-radius: var(--r-md) !important;
+        background: var(--brand-tint) !important;
+        border: none !important;
+        color: var(--brand-dk) !important;
+    }
+
+    /* ── Checkout / summary sidebar ── */
+    .summary-card {
+        background: var(--bg) !important;
+        border: 1px solid var(--border);
+        border-radius: var(--r-lg) !important;
+    }
+    #summaryGrandTotal { color: var(--success) !important; font-size: 1.6rem; }
+
+    .payment-btn {
+        border: 1.5px solid var(--border) !important;
+        background: var(--surface) !important;
+        color: var(--muted);
+        border-radius: var(--r-md) !important;
+        transition: all .2s ease;
+    }
+    .payment-btn:hover { border-color: var(--success) !important; background: var(--success-tint) !important; color: var(--success-dk) !important; }
+    .payment-btn-active {
+        border-color: var(--success) !important;
+        background: var(--success-tint) !important;
+        color: var(--success-dk) !important;
+        font-weight: 700;
+        box-shadow: 0 0 0 3px rgba(5,150,105,.15) !important;
+    }
+
+    /* Complete & Print CTA */
+    .btn-success.btn-lg {
+        background: linear-gradient(135deg, var(--success), var(--success-dk)) !important;
+        border: none !important;
+        letter-spacing: 0.03em;
+        box-shadow: 0 10px 24px rgba(5,150,105,.28) !important;
+        transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .btn-success.btn-lg:hover { transform: translateY(-1px); box-shadow: 0 14px 28px rgba(5,150,105,.34) !important; }
+
+    /* ── Patient details inputs ── */
+    #patientName, #patientAddress, #patientPhone, #doctorName {
+        background: var(--bg) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: var(--r-sm) !important;
+    }
+    #patientName:focus, #patientAddress:focus, #patientPhone:focus, #doctorName:focus {
+        background: var(--surface) !important;
+        border-color: var(--brand) !important;
+        box-shadow: 0 0 0 3px var(--brand-tint) !important;
+    }
+
+    /* ── Mode banner ── */
+    #counterSaleBanner {
+        background: var(--brand-tint) !important;
+        border-left: 4px solid var(--brand) !important;
+    }
+    #counterSaleBanner h6 { color: var(--brand-dk) !important; }
 
     /* Validation styles */
     .form-control.is-invalid {
-        border: 1.5px solid #dc3545 !important;
-        background-color: #fff5f5 !important;
+        border: 1.5px solid var(--danger) !important;
+        background-color: var(--danger-tint) !important;
         animation: fieldShake 0.3s ease;
     }
     .form-control.is-invalid + .invalid-feedback {
         display: block;
         font-size: 0.75rem;
-        color: #dc3545;
+        color: var(--danger);
         margin-top: 4px;
     }
     @keyframes fieldShake {
@@ -1709,112 +3010,31 @@ function addNewBill() {
         75%       { transform: translateX(4px); }
     }
 
-    /* Payment mode buttons */
-    .payment-btn {
-        border: 2px solid #dee2e6;
-        background: #f8f9fa;
-        color: #495057;
-        transition: all 0.2s ease;
-    }
-    .payment-btn:hover {
-        border-color: #28a745;
-        background: #f0fdf4;
-        color: #28a745;
-    }
-    .payment-btn-active {
-        border-color: #28a745 !important;
-        background: #e8f5e9 !important;
-        color: #28a745 !important;
-        font-weight: 600;
-        box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
-    }
-
     /* Modal Button Focus Highlight */
     #checkoutSuccessModal .btn:focus {
         outline: none;
-        box-shadow: 0 0 0 5px rgba(245, 158, 11, 0.5) !important;
-        border-color: #f59e0b !important;
+        box-shadow: 0 0 0 5px rgba(217,119,6,.35) !important;
+        border-color: var(--accent) !important;
         transform: scale(1.02);
         transition: all 0.15s ease-in-out;
     }
+    #checkoutSuccessModal i.fa-check-circle { color: var(--success) !important; }
 
-    .toast-container {
-        z-index: 1056;
-    }
-
-    .w-60 {
-        width: 60%;
-    }
-
-    .bg-success-soft {
-        background-color: rgba(25, 135, 84, 0.1);
-    }
-
-    .bg-primary-soft {
-        background-color: rgba(13, 110, 253, 0.1);
-    }
-
-    .bg-info-soft {
-        background-color: rgba(13, 202, 240, 0.1);
-    }
-
-    #searchResults {
-        border-radius: 15px;
-        border: 1px solid #dee2e6;
-        overflow: hidden;
-        margin-top: 8px;
-        background: white;
-    }
-
-    /* ── Product dropdown batch-item highlight ── */
-    .batch-item {
-        cursor: pointer;
-        transition: background 0.12s ease, border-left-color 0.12s ease, transform 0.1s ease !important;
-    }
-    .batch-item:hover {
-        background: linear-gradient(90deg, #e8f0fe 0%, #f3f6ff 100%) !important;
-        border-left-color: #4361ee !important;
-        transform: translateX(3px) !important;
-    }
-    .batch-item.selected-batch {
-        background: linear-gradient(90deg, #d0e4ff 0%, #e8f1ff 100%) !important;
-        border-left-color: #2563eb !important;
-        border-left-width: 4px !important;
-        box-shadow: inset 0 0 0 1px rgba(37,99,235,0.18) !important;
-        transform: translateX(4px) !important;
-    }
-    .batch-item.selected-batch .fw-bold.text-primary {
-        color: #1d4ed8 !important;
-    }
-    .batch-item.selected-batch .add-btn {
-        background: #1d4ed8 !important;
-        border-color: #1d4ed8 !important;
-        box-shadow: 0 2px 8px rgba(29,78,216,0.35);
-    }
+    .toast-container { z-index: 1056; }
+    .w-60 { width: 60%; }
 
     /* ── Patient Details section pulse on Tab-in ── */
     @keyframes patientPulse {
-        0%   { box-shadow: 0 0 0 0 rgba(34,197,94,0.0); background: transparent; }
-        30%  { box-shadow: 0 0 0 6px rgba(34,197,94,0.25); background: rgba(34,197,94,0.07); }
-        70%  { box-shadow: 0 0 0 10px rgba(34,197,94,0.10); background: rgba(34,197,94,0.04); }
-        100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.0); background: transparent; }
+        0%   { box-shadow: 0 0 0 0 rgba(12,107,88,0.0); background: transparent; }
+        30%  { box-shadow: 0 0 0 6px rgba(12,107,88,0.20); background: rgba(12,107,88,0.06); }
+        70%  { box-shadow: 0 0 0 10px rgba(12,107,88,0.10); background: rgba(12,107,88,0.03); }
+        100% { box-shadow: 0 0 0 0 rgba(12,107,88,0.0); background: transparent; }
     }
     .patient-section-pulse {
         animation: patientPulse 1.2s ease forwards;
         border-radius: 10px;
         padding: 8px !important;
         margin: -8px !important;
-    }
-
-    .batch-list {
-        max-height: 200px;
-        overflow-y: auto;
-    }
-
-    .selected-batch {
-        background-color: #e9ecef !important;
-        border-color: #0d6efd !important;
-        box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
     }
 
     .universal-loader {
@@ -1824,81 +3044,86 @@ function addNewBill() {
         display: flex;
         align-items: center;
         justify-content: center;
-        background: rgba(255, 255, 255, 0.88);
-        backdrop-filter: blur(2px);
+        background: rgba(245, 247, 243, 0.9);
+        backdrop-filter: blur(3px);
     }
-
-    .universal-loader.d-none {
-        display: none !important;
-    }
-
+    .universal-loader.d-none { display: none !important; }
     .loader-spinner {
         display: flex;
         align-items: center;
         gap: 0.75rem;
         padding: 1rem 1.25rem;
-        background: #ffffff;
-        border-radius: 0.75rem;
-        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.12);
+        background: var(--surface);
+        border-radius: var(--r-md);
+        box-shadow: var(--shadow-lg);
     }
-
-    .loader-text {
-        font-weight: 600;
-        color: #212529;
-    }
-
-    /* Enhanced POS Cart Styling */
-    .cart-row {
-        transition: all 0.2s ease;
-        border-left: 3px solid transparent;
-    }
-
-    .cart-row:hover {
-        background-color: #f8f9fa;
-        border-left-color: #28a745;
-    }
-
-    .qty-input {
-        font-weight: 600;
-        transition: all 0.2s;
-    }
-
-    .qty-input:focus {
-        background-color: #fff !important;
-        border-color: #0d6efd !important;
-        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
-    }
-
-    #productSearch:focus {
-        background-color: #ffffff !important;
-        border: 2px solid #28a745 !important;
-        box-shadow: 0 0 0 0.3rem rgba(40, 167, 69, 0.15);
-        padding-left: 3rem;
-    }
-
-    .batch-item {
-        cursor: pointer;
-        transition: all 0.2s;
-    }
-
-    .batch-item:hover {
-        background-color: #f1f3f5 !important;
-        transform: translateX(5px);
-    }
+    .loader-text { font-weight: 600; color: var(--ink); }
 
     kbd {
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 3px;
-        padding: 2px 6px;
-        font-size: 0.75rem;
-        font-family: monospace;
+        background-color: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--ink);
+        border-radius: 5px;
+        padding: 2px 7px;
+        font-size: 0.72rem;
+        font-family: 'JetBrains Mono', monospace;
         display: inline-block;
-        box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
+        box-shadow: 0 1px 0 rgba(0,0,0,0.06);
     }
 
     .alert-info {
-        border-radius: 12px;
+        border-radius: var(--r-md);
+        background: var(--brand-tint);
+        border: none;
+        color: var(--brand-dk);
+    }
+
+    /* AI Prescription Scanner CSS */
+    .border-dashed {
+        border-style: dashed !important;
+    }
+    .step-item {
+        transition: all 0.3s ease;
+    }
+    .step-item.active .step-number {
+        transform: scale(1.1);
+        box-shadow: 0 0 10px rgba(12, 107, 88, 0.4);
+    }
+    .upload-dropzone:hover {
+        background-color: var(--brand-tint) !important;
+        border-color: var(--brand) !important;
+    }
+    .btn-xs {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+        border-radius: 0.25rem;
+    }
+    @keyframes scan-anim {
+        0% { top: 0%; }
+        50% { top: 100%; }
+        100% { top: 0%; }
+    }
+    .scan-bar {
+        left: 0;
+        right: 0;
+        height: 4px;
+        box-shadow: 0 0 8px var(--brand);
+    }
+
+    /* Hover effects and animations */
+    .hover-grow {
+        transition: all 0.2s ease-in-out;
+    }
+    .hover-grow:hover {
+        transform: translateY(-2px) scale(1.02);
+        box-shadow: 0 8px 20px rgba(12, 107, 88, 0.25) !important;
+    }
+    .animate-pulse {
+        animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes pulse-ring {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
     }
 </style>
 {% endblock %}

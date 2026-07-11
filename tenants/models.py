@@ -20,6 +20,7 @@ class Tenant(models.Model):
     gst_number = models.CharField(max_length=50, null=True, blank=True)
     invoice_message = models.TextField(null=True, blank=True)
     access_key = models.CharField(max_length=100, blank=True, unique=True, null=True)
+    max_daily_scans = models.PositiveIntegerField(default=100, help_text="Maximum allowed prescription scans per day")
     
     def __str__(self):
         return f"{self.pharmacy_name} ({self.subdomain})"

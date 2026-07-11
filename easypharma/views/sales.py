@@ -14,6 +14,7 @@ from easypharma.models.print_setup import PrintSetup
 from easypharma.models.sales import (SaleInvoice, SaleItem,
                                     Customer, SalesReturn, SalesReturnItem,PrescriptionReminder)
 import json
+import re
 from datetime import datetime
 from urllib.parse import quote_plus
 
@@ -128,12 +129,16 @@ class POSView(LoginRequiredMixin,View):
             except SaleInvoice.DoesNotExist:
                 edit_data = None
 
+        from easypharma.models import PrintSetup
+        ps, _ = PrintSetup.objects.get_or_create(tenant=request.tenant)
+
         return render(request, self.template_name, {
             'product_taxes': product_taxes,
             'doctors':doctors,
             'default_doctor': default_doctor,
             'edit_data': edit_data,
             'next_invoice_number': next_invoice_number,
+            'ps': ps,
         })
 
     def post(self, request):
@@ -165,6 +170,8 @@ class POSView(LoginRequiredMixin,View):
                             batch.current_quantity += old_item.quantity
                             batch.save()
                     invoice.items.all().delete()
+                    from easypharma.models.accounting import CustomerLedger
+                    CustomerLedger.objects.filter(tenant=request.tenant, reference_number=invoice.invoice_number).delete()
                 else:
                     invoice = SaleInvoice(
                         tenant=request.tenant,
@@ -183,9 +190,43 @@ class POSView(LoginRequiredMixin,View):
                 invoice.total_amount = data['total_amount']
                 invoice.payment_mode = data['payment_mode']
                 invoice.sale_type = data.get('sale_type', 'Prescription')
+                if invoice.payment_mode != 'Credit':
+                    invoice.paid_amount = data['total_amount']
+                else:
+                    invoice.paid_amount = 0.00
                 if data.get('invoice_number'):
                     invoice.invoice_number = data['invoice_number']
                 invoice.save()
+
+                # If payment mode is Credit, link/create customer account and post to CustomerLedger
+                if invoice.payment_mode == 'Credit' and invoice.patient_name:
+                    from easypharma.models.sales import Customer
+                    customer, created = Customer.objects.get_or_create(
+                        tenant=request.tenant,
+                        name=invoice.patient_name.strip(),
+                        defaults={
+                            'phone': invoice.patient_phone or '',
+                            'address': invoice.patient_address or '',
+                        }
+                    )
+                    if not created and invoice.patient_phone and not customer.phone:
+                        customer.phone = invoice.patient_phone
+                        customer.save()
+                    
+                    invoice.customer = customer
+                    invoice.save(update_fields=['customer'])
+                    
+                    from easypharma.models.accounting import CustomerLedger
+                    CustomerLedger.objects.create(
+                        tenant=request.tenant,
+                        customer=customer,
+                        date=invoice.created_at.date() if invoice.created_at else now().date(),
+                        transaction_type='Sale',
+                        reference_number=invoice.invoice_number,
+                        debit=invoice.total_amount,
+                        credit=0.00,
+                        remarks=f"Sale Invoice #{invoice.invoice_number}"
+                    )
                 
                 # Create Sale Items & Deduct Stock
                 for item in data.get('items', []):
@@ -540,12 +581,20 @@ class ProductSearchAPI(LoginRequiredMixin,View):
     def _cache_key(tenant_id, query):
         # Include version so invalidate_pos_cache() busts all search entries at once
         version = _pos_search_version(tenant_id)
-        return f'pos_search:{tenant_id}:v{version}:{query.lower().strip()}'
+        clean_query = query.lower().strip().replace(' ', '_')
+        return f'pos_search:{tenant_id}:v{version}:{clean_query}'
 
     def get(self, request):
         query = request.GET.get('q', '').strip()
+        limit_str = request.GET.get('limit', '10')
+        try:
+            limit = int(limit_str)
+        except ValueError:
+            limit = 10
         tenant_id = request.tenant.id
-        cache_key = self._cache_key(tenant_id, query)
+        
+        # Include limit in cache key if preloading/limiting
+        cache_key = f"{self._cache_key(tenant_id, query)}:lim{limit}"
 
         # ── Cache hit: return instantly without touching DB ──
         cached = cache.get(cache_key)
@@ -556,8 +605,8 @@ class ProductSearchAPI(LoginRequiredMixin,View):
         
         products = Products.objects.filter(
             tenant=request.tenant,
-            product_name__icontains=query
-        ).select_related('product_tax', 'product_content', 'compny_name', 'product_schedule').prefetch_related('batches')[:10]
+            product_name__istartswith=query
+        ).select_related('product_tax', 'product_content', 'compny_name', 'product_schedule').prefetch_related('batches')[:limit]
         data = []
         for p in products:
             batches = p.batches.filter(current_quantity__gt=0).order_by('expiry_date')
@@ -1084,3 +1133,158 @@ def get_customer_invoices(request):
     return JsonResponse({
         'products': data
     })
+
+
+from easypharma.models.prescription_scan_log import PrescriptionScanLog
+from easypharma.utility.prescription_service import extract_prescription_data
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+
+@method_decorator(csrf_exempt, name='dispatch')
+class PrescriptionScanAPI(LoginRequiredMixin, View):
+    def post(self, request):
+        if not request.tenant:
+            return JsonResponse({'success': False, 'error': 'No Pharmacy detected!'})
+            
+        # 1. Check daily limit
+        today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        scans_today = PrescriptionScanLog.objects.filter(
+            tenant=request.tenant,
+            created_at__gte=today_start
+        ).count()
+        
+        limit = request.tenant.max_daily_scans
+        if scans_today >= limit:
+            return JsonResponse({
+                'success': False, 
+                'error': f'Daily prescription scan limit of {limit} reached! Please upgrade your subscription plan.'
+            })
+            
+        # 2. Get uploaded file
+        prescription_file = request.FILES.get('prescription_image')
+        if not prescription_file:
+            return JsonResponse({'success': False, 'error': 'No prescription image file uploaded.'})
+            
+        # 3. Call service to parse image
+        try:
+            parsed_data = extract_prescription_data(prescription_file)
+        except ValueError as ve:
+            return JsonResponse({'success': False, 'error': str(ve)})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': f'AI Scanning failed: {str(e)}'})
+            
+        # 4. Success: Log the scan
+        PrescriptionScanLog.objects.create(
+            tenant=request.tenant,
+            user=request.user
+        )
+        
+        # 5. Match extracted medicines with database Products and Stock batches
+        extracted_items = parsed_data.get('medicines', [])
+        matched_results = []
+        
+        for item in extracted_items:
+            name = (item.get('name') or '').strip()
+            dosage = (item.get('dosage') or '').strip()
+            try:
+                qty = int(item.get('qty') or 10)
+            except (ValueError, TypeError):
+                qty = 10
+                
+            # Smart token-based database matching
+            clean_search = re.sub(r'(\d+)', r' \1 ', name.lower())
+            clean_search = re.sub(r'[-/(),]', ' ', clean_search)
+            tokens = [t.strip() for t in clean_search.split() if t.strip()]
+            
+            matched_products = []
+            if tokens:
+                brand_token = tokens[0]
+                candidates = Products.objects.filter(
+                    tenant=request.tenant
+                ).filter(
+                    Q(product_name__istartswith=brand_token) | Q(product_name__icontains=name)
+                ).select_related('product_tax', 'product_content', 'compny_name')[:50]
+                
+                candidate_scores = []
+                for p in candidates:
+                    p_name_lower = p.product_name.lower()
+                    score = 0
+                    
+                    # 1. Prefix matches brand name (e.g. starts with "pan")
+                    if p_name_lower.startswith(brand_token):
+                        score += 100
+                        
+                    # 2. Contains the clean extracted name as a whole substring
+                    if name.lower() in p_name_lower:
+                        score += 50
+                        
+                    # 3. Individual token matching overlap count
+                    for token in tokens:
+                        if token in p_name_lower:
+                            score += 10
+                            
+                    # 4. Length penalty (prefer closer matches over bloated names)
+                    score -= len(p.product_name) * 0.1
+                    
+                    candidate_scores.append((score, p))
+                
+                # Sort by score descending
+                candidate_scores.sort(key=lambda x: x[0], reverse=True)
+                matched_products = [x[1] for x in candidate_scores[:5]]
+            
+            if not matched_products and name:
+                # Try generic salt matching if brand name doesn't match
+                matched_products = list(Products.objects.filter(
+                    tenant=request.tenant,
+                    product_content__content_name__icontains=name
+                ).select_related('product_tax', 'product_content', 'compny_name')[:5])
+                
+            product_matches = []
+            for p in matched_products:
+                # Get active batches (FEFO)
+                batches = p.batches.filter(current_quantity__gt=0).order_by('expiry_date')
+                
+                batch_list = []
+                for batch in batches:
+                    unit_price = float(batch.sale_price) if batch.sale_price else 0.0
+                    if p.conversion_factor > 1 and batch.mrp:
+                        unit_price = float(batch.mrp) / p.conversion_factor
+                    elif unit_price == 0 and batch.mrp:
+                        unit_price = float(batch.mrp)
+                        
+                    batch_list.append({
+                        'batch_id': batch.id,
+                        'batch_no': batch.batch_number,
+                        'expiry': batch.expiry_date.strftime('%m/%y') if batch.expiry_date else '',
+                        'stock': batch.current_quantity,
+                        'price': unit_price,
+                        'mrp_pack': float(batch.mrp) if batch.mrp else 0.0
+                    })
+                    
+                product_matches.append({
+                    'id': p.id,
+                    'name': p.product_name,
+                    'packing': p.product_packing,
+                    'content': p.product_content.content_name if p.product_content else None,
+                    'company': p.compny_name.company_name if p.compny_name else None,
+                    'tax_rate': p.product_tax.tax_rate if p.product_tax else 0,
+                    'conversion_factor': p.conversion_factor,
+                    'batches': batch_list
+                })
+                
+            matched_results.append({
+                'scanned_name': f"{name} {dosage}".strip(),
+                'scanned_qty': qty,
+                'matches': product_matches,
+                'best_match': product_matches[0] if product_matches else None
+            })
+            
+        return JsonResponse({
+            'success': True,
+            'patient_name': parsed_data.get('patient_name'),
+            'patient_phone': parsed_data.get('patient_phone'),
+            'doctor_name': parsed_data.get('doctor_name'),
+            'results': matched_results,
+            'scans_today': scans_today + 1,
+            'max_scans': limit
+        })

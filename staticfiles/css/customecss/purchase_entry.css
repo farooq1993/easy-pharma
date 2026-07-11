@@ -435,3 +435,48 @@ body {
 .ep-toast.error {
     background: var(--red);
 }
+
+/* ── CSV Import Modal Styles ── */
+.csv-step {
+    display: flex; align-items: center; gap: 6px;
+}
+.csv-step-num {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: rgba(255,255,255,0.25); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.72rem; font-weight: 700; flex-shrink: 0;
+    transition: background .3s;
+}
+.csv-step.active .csv-step-num {
+    background: #fff; color: #1e3a8a;
+}
+.csv-step-label {
+    color: rgba(255,255,255,0.65); font-size: 0.78rem; font-weight: 500;
+    transition: color .3s;
+}
+.csv-step.active .csv-step-label {
+    color: #fff; font-weight: 700;
+}
+.csv-step-line {
+    flex: 1; height: 2px; background: rgba(255,255,255,0.2);
+    max-width: 60px; border-radius: 2px;
+}
+/* Editable cells in preview table */
+.csv-editable {
+    background: transparent; border: none; outline: none;
+    width: 100%; font-size: 0.82rem; font-family: inherit;
+    color: inherit; padding: 2px 4px; border-radius: 4px;
+    transition: background .15s;
+}
+.csv-editable:focus {
+    background: #eff6ff; outline: 2px solid #3b82f6;
+}
+.csv-row-missing td {
+    background: #fef9c3 !important;
+}
+.csv-remove-btn {
+    background: none; border: none; color: #dc2626; cursor: pointer;
+    padding: 2px 6px; border-radius: 4px; font-size: 0.78rem;
+    transition: background .15s;
+}
+.csv-remove-btn:hover { background: #fee2e2; }

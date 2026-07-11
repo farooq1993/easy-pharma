@@ -29,14 +29,15 @@ from easypharma.utility.purchase_import import process_csv_file
 
 class PurchaseEntryView(LoginRequiredMixin,View):
     template_name = 'purchase/entry.html'
-
+    
     def get(self, request, invoice_id=None):
         suppliers = Supplier.objects.filter(tenant=request.tenant).order_by('name')
         products = Products.objects.filter(tenant=request.tenant).order_by('product_name')
         from easypharma.models.Items import ProductTax
         product_taxes = ProductTax.objects.filter(tenant=request.tenant)
-        product_schedules = ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True))
-        drug_companies = DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True))
+        product_type = ProductType.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('name')
+        product_schedules = ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('schedule_name')
+        drug_companies = DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('company_name')
         product_contents = ProductContent.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('content_name')
         product_types = ProductType.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('name')
         
@@ -80,6 +81,7 @@ class PurchaseEntryView(LoginRequiredMixin,View):
             'products': products,
             'product_types': product_types,
             'product_taxes': product_taxes,
+            'product_type':product_type,
             'product_schedules': product_schedules,
             'drug_companies': drug_companies,
             'product_contents': product_contents,
@@ -107,6 +109,15 @@ class PurchaseEntryView(LoginRequiredMixin,View):
                     invoice.items.all().delete()
                 else:
                     invoice = PurchaseInvoice(tenant=request.tenant, user=request.user)
+
+                # Prevent duplicate invoice numbers for the same supplier
+                existing_invoice = PurchaseInvoice.objects.filter(
+                    tenant=request.tenant,
+                    supplier_id=data['supplier_id'],
+                    invoice_number=data['invoice_number']
+                ).exclude(id=invoice.id).first()
+                if existing_invoice:
+                    return JsonResponse({'error': 'Invoice number already exists for this supplier'}, status=400)
 
                 supplier = Supplier.objects.get(id=data['supplier_id'], tenant=request.tenant)
                 invoice.supplier = supplier
@@ -189,7 +200,7 @@ class PurchaseEntryView(LoginRequiredMixin,View):
                         'invoice_id': invoice.id,
                         'voucher_number': invoice.voucher_number,
                     })
-                #return JsonResponse({'success': True, 'invoice_id': invoice.id})
+
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
@@ -223,6 +234,24 @@ class PurchaseImportCSVView(View):
                 'error': str(e)
             })
 
+class CheckInvoiceNumberView(LoginRequiredMixin, View):
+    """Live check: invoice number already used for this supplier?"""
+    def get(self, request):
+        supplier_id = request.GET.get('supplier_id')
+        invoice_number = request.GET.get('invoice_number', '').strip()
+        invoice_id = request.GET.get('invoice_id')  # present only in edit mode
+
+        if not supplier_id or not invoice_number:
+            return JsonResponse({'exists': False})
+
+        qs = PurchaseInvoice.objects.filter(
+            tenant=request.tenant,
+            supplier_id=supplier_id,
+            invoice_number=invoice_number
+        )
+        if invoice_id:
+            qs = qs.exclude(id=invoice_id)  
+        return JsonResponse({'exists': qs.exists()})
 
 class SupplierAutocomplete(LoginRequiredMixin,View):
     def get(self, request):
@@ -975,7 +1004,7 @@ class OpeningStockEntryView(LoginRequiredMixin, View):
 
                     OpeningStockItem.objects.create(
                         tenant=request.tenant,
-                        opening_stock=stock,
+                        opening_stock_id=stock.id,
                         product=product,
                         batch_number=item['batch_number'],
                         expiry_date=expiry_date,

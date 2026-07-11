@@ -211,3 +211,5 @@ class OpeningStockItem(TenantAwareModel):
             if not created:
                 batch.current_quantity += total_units
                 batch.save()
+    class Meta:
+        db_table = 'easypharma_opening_stock_item'

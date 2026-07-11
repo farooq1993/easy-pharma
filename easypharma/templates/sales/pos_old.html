@@ -1,0 +1,1950 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="py-2">
+    <div id="universalLoader" class="universal-loader d-none" role="status" aria-live="polite" aria-busy="false">
+        <div class="loader-spinner">
+            <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+            <div class="loader-text">Please wait...</div>
+        </div>
+    </div>
+    <!-- Mode Notice Banner -->
+    <div id="counterSaleBanner" class="alert alert-info border-0 shadow-sm rounded-4 d-none align-items-center gap-3 mb-3 p-3 animate-fade-in" style="background: linear-gradient(135deg, #e3f2fd, #bbdefb); border-left: 5px solid #1e88e5 !important;">
+        <div class="rounded-circle bg-white p-2 d-flex align-items-center justify-content-center text-primary shadow-sm" style="width: 40px; height: 40px;">
+            <i class="fas fa-cash-register fa-lg"></i>
+        </div>
+        <div>
+            <h6 class="fw-bold mb-0 text-primary-emphasis" style="color: #0d47a1 !important;">Counter Sale Mode (General Billing)</h6>
+            <p class="mb-0 x-small text-muted">Bypassing prescription/doctor details. Direct, fast checkouts are active.</p>
+        </div>
+        <button type="button" class="btn-close ms-auto" aria-label="Close" onclick="exitCounterMode()"></button>
+    </div>
+
+    <!-- Search Bar Row -->
+    <div class="row g-3 mb-3">
+        <div class="col-12">
+            <div class="position-relative">
+                <input type="text" id="productSearch"
+                    class="form-control py-3 ps-5 rounded-pill border-0 bg-light shadow-md"
+                    placeholder="🔍 Search by medicine name (Press / to focus)..."
+                    style="font-size: 1rem; min-height: 50px; border: 2px solid transparent; transition: all 0.3s;" autoComplete="off">
+                <i class="fas fa-search position-absolute top-50 start-0 translate-middle-y ms-4 text-muted"></i>
+                <span class="position-absolute top-50 end-0 translate-middle-y me-4 text-muted x-small fw-bold">Press
+                    <kbd>↓</kbd> | <kbd>↑</kbd> | <kbd>↵</kbd> to Add</span>
+                <div id="searchResults" class="list-group position-absolute w-100 shadow-lg d-none mt-2"
+                    style="z-index: 1050; max-height: 400px; overflow-y: auto;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <!-- Main POS Area -->
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <!-- Tab System for Multi-Bill -->
+                <div class="d-flex mb-3" id="billTabsContainer" style="gap: 10px; overflow-x: auto; padding-bottom: 5px;">
+                    <!-- Tabs will be injected here by JS -->
+                </div>
+
+                <div class="card-header bg-white border-0 py-3">
+                    <h5 class="fw-bold mb-0 text-success">
+                        <i class="fas fa-prescription me-2"></i> Pharmacy POS
+                    </h5>
+                     <span class="text-muted x-small text-uppercase fw-bold">Bill No.</span>
+                        <span id="runningBillNumber" class="badge fs-6 fw-bold px-3 py-2 rounded-pill"
+                            style="background: linear-gradient(135deg, #e8f5e9, #c8e6c9); color: #1b5e20; border: 1.5px solid #a5d6a7;">
+                            —
+                        </span>
+                </div>
+
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="min-height: 500px;">
+                        <table class="table table-hover align-middle mb-0" id="posTable">
+                            <thead class="bg-light text-muted small text-uppercase">
+                                <tr>
+                                    <th class="ps-4" style="width: 35%;">Medicine</th>
+                                    <th style="width: 15%;">Batch / Exp</th>
+                                    <th style="width: 12%;">Price</th>
+                                    <th style="width: 15%;">Qty</th>
+                                    <th style="width: 13%;">GST/Tax</th>
+                                    <th style="width: 10%;">Total</th>
+                                    <th class="text-end pe-4" style="width: 5%;"></th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+
+                        <!-- Empty State -->
+                        <div id="emptyState" class="text-center py-5">
+                            <div class="mb-3 opacity-25"><i class="fas fa-keyboard" style="font-size: 4rem;"></i></div>
+                            <h5 class="text-muted fw-bold">Ready for Billing</h5>
+                            <p class="text-muted small mb-3">Type <b>/</b> or use the search bar to find medicines</p>
+                            <div class="alert alert-info small mx-4" role="alert">
+                                <strong>💡 Quick Tip:</strong> Type product name → Press <kbd>↓</kbd> to select → Press
+                                <kbd>↵</kbd> to add → Enter Qty → Press <kbd>↵</kbd> to add next item
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer bg-white border-0 py-3">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div>
+                            <button class="btn btn-sm btn-outline-danger border-0 small" onclick="clearCart()">
+                                <i class="fas fa-trash-alt me-1"></i> Clear Cart
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary border-0 small ms-2" data-bs-toggle="modal"
+                                data-bs-target="#workflowModal">
+                                <i class="fas fa-keyboard me-1"></i> Shortcuts
+                            </button>
+                        </div>
+                        <div class="d-flex gap-2 align-items-center">
+                            <span class="badge bg-success" id="cartItemCount">0 items</span>
+                            <span class="text-muted x-small">Total: <strong id="cartTotal">0.00</strong></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Checkout Sidebar -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-body p-4 d-flex flex-column">
+                    <div class="mb-4">
+                        <h6 class="fw-bold mb-3 small text-uppercase text-muted border-bottom pb-2">Patient Details</h6>
+                        <div class="mb-2">
+                            <input type="text" id="patientName" class="form-control border-0 bg-light py-2"
+                                placeholder="Patient Name *" autocomplete="off">
+                            <div class="invalid-feedback">Patient name is required.</div>
+                        </div>
+                        <div class="mb-2">
+                            <input type="text" id="patientAddress" class="form-control border-0 bg-light py-2"
+                                placeholder="Patient Address *" autocomplete="off">
+                            <div class="invalid-feedback">Patient address is required.</div>
+                        </div>
+                        <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <input type="text"
+                                id="patientPhone"
+                                class="form-control border-0 bg-light py-2"
+                                placeholder="Patient Mobile">
+                        </div>
+
+                        <div class="col-6">
+                            <input type="text"
+                                id="doctorName"
+                                list="doctorList"
+                                class="form-control border-0 bg-light py-2"
+                                placeholder="Dr. Name *"
+                                value="{% if default_doctor %}{{ default_doctor.name }}{% endif %}">
+
+                            <datalist id="doctorList">
+                                {% for doctor in doctors %}
+                                    <option value="{{ doctor.name }}">
+                                {% endfor %}
+                            </datalist>
+
+                            <div class="invalid-feedback">
+                                Doctor name is required.
+                            </div>
+                        </div>
+                    </div>
+                        <!-- <div class="row g-2 mb-2">
+                            <div class="col-6"><input type="text" id="patientPhone"
+                                    class="form-control border-0 bg-light py-2" placeholder="Mobile"></div>
+                            <div class="col-6"><input type="text" id="doctorName"
+                                    class="form-control border-0 bg-light py-2" placeholder="Dr. Name *"
+                                    value="{% if default_doctor %}{{ default_doctor.name }}{% endif %}">
+                                <div class="invalid-feedback">Doctor name is required.</div></div>
+                        </div> -->
+                    </div>
+
+                    <div class="mt-auto">
+                        <div class="summary-card bg-light p-3 rounded-4 mb-4">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="text-muted small">Sub Total</span>
+                                <span class="fw-bold h6 mb-0" id="summarySubTotal">0.00</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="text-muted small">GST Total</span>
+                                <span class="fw-bold text-primary small" id="summaryTax">0.00</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="text-muted small">Discount</span>
+                                <div class="d-flex gap-2 align-items-center">
+                                    <input type="number"
+                                        class="form-control form-control-sm w-25 text-end border-0 bg-white shadow-sm"
+                                        id="summaryDiscount" value="0" oninput="calculateDiscount('amt')">
+                                    <input type="number"
+                                        class="form-control form-control-sm w-25 text-end border-0 bg-white shadow-sm"
+                                        id="summaryDiscountPerc" value="0" placeholder="%"
+                                        oninput="calculateDiscount('perc')">
+                                </div>
+                            </div>
+                            <hr class="opacity-10">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="text-muted small">Round Off</span>
+                                <span class="fw-bold small" id="summaryRoundOff">0.00</span>
+                            </div>
+                            <hr class="opacity-10">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="h6 fw-bold mb-0">Total Payable</span>
+                                <span class="h3 fw-bold text-success mb-0" id="summaryGrandTotal">0.00</span>
+                            </div>
+                        </div>
+
+                        <div class="payment-modes mb-4">
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <input type="radio" class="btn-check" name="paymentMethod" id="payCash" value="Cash" checked>
+                                    <label class="btn payment-btn payment-btn-active w-100 py-2 rounded-3 fw-bold" for="payCash">
+                                        <i class="fas fa-money-bill-wave me-1"></i> Cash
+                                    </label>
+                                </div>
+                                <div class="col-6">
+                                    <input type="radio" class="btn-check" name="paymentMethod" id="payCard" value="UPI">
+                                    <label class="btn payment-btn w-100 py-2 rounded-3 fw-bold" for="payCard">
+                                        <i class="fas fa-credit-card me-1"></i> UPI
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button class="btn btn-success btn-lg w-100 py-3 fw-bold rounded-4 shadow-sm"
+                            onclick="completeOrder()">
+                            <i class="fas fa-check-circle me-2"></i> COMPLETE & PRINT
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Substitute Modal -->
+<div class="modal fade" id="substituteModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-0 pb-0" style="background:linear-gradient(135deg,#fff5f0,#fff);">
+                <div>
+                    <h5 class="modal-title fw-bold text-warning"><i class="fas fa-exchange-alt me-2"></i>Drug Substitutes</h5>
+                    <p class="text-muted small mb-0" id="subModalSubtitle">Same composition available in stock</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div id="substituteLoader" class="text-center py-4">
+                    <div class="spinner-border text-warning" role="status"></div>
+                    <div class="mt-2 text-muted small">Searching substitutes...</div>
+                </div>
+                <div id="substituteList" class="d-none"></div>
+                <div id="substituteEmpty" class="d-none text-center py-4">
+                    <i class="fas fa-search" style="font-size:2rem;color:#ccc;"></i>
+                    <p class="text-muted mt-2">No substitutes found with stock available.</p>
+                    <small class="text-muted">Ensure products have same drug content assigned in masters.</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="workflowModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-0 bg-light rounded-top-4">
+                <h5 class="modal-title fw-bold">
+                    <i class="fas fa-keyboard me-2 text-primary"></i> POS Keyboard Shortcuts & Workflow
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <h6 class="fw-bold mb-3 text-primary">
+                            <i class="fas fa-arrow-right me-2"></i> Add Items Workflow
+                        </h6>
+                        <ol class="small">
+                            <li class="mb-2">Press <kbd>/</kbd> or click search box</li>
+                            <li class="mb-2">Type medicine name (autocomplete)</li>
+                            <li class="mb-2">Press <kbd>↓</kbd> or <kbd>↑</kbd> to navigate batches</li>
+                            <li class="mb-2">Press <kbd>↵ Enter</kbd> to add selected batch</li>
+                            <li class="mb-2">Enter quantity in table row</li>
+                            <li class="mb-2">Press <kbd>↵ Enter</kbd> to search next item</li>
+                            <li class="mb-2">Repeat steps 2-6 for more items</li>
+                        </ol>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="fw-bold mb-3 text-success">
+                            <i class="fas fa-keyboard me-2"></i> Quick Keys
+                        </h6>
+                        <div class="small">
+                            <div class="mb-3 p-2 bg-light rounded">
+                                <div><kbd>/</kbd> → Focus search</div>
+                            </div>
+                            <div class="mb-3 p-2 bg-light rounded">
+                                <div><kbd>↓</kbd> → Next batch in results</div>
+                            </div>
+                            <div class="mb-3 p-2 bg-light rounded">
+                                <div><kbd>↑</kbd> → Previous batch</div>
+                            </div>
+                            <div class="mb-3 p-2 bg-light rounded">
+                                <div><kbd>↵</kbd> → Add item / Go to search</div>
+                            </div>
+                            <div class="mb-3 p-2 bg-light rounded">
+                                <div><kbd>Esc</kbd> → Focus search from qty field</div>
+                            </div>
+                            <div class="mb-3 p-2 bg-light rounded">
+                                <div><kbd>Tab</kbd> → Jump to Patient Details (from last item)</div>
+                            </div>
+                            <div class="p-2 bg-light rounded">
+                                <div><kbd>F12</kbd> → Complete billing</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <hr class="my-4">
+                <h6 class="fw-bold mb-3 text-warning">
+                    <i class="fas fa-bolt me-2"></i> Global Function Keys (F1 - F12)
+                </h6>
+                <div class="row g-3 small">
+                    <div class="col-md-6">
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
+                            <span class="fw-bold"><kbd class="bg-primary text-white">F1</kbd> New POS Sale</span>
+                            <span class="text-muted">Open billing page</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
+                            <span class="fw-bold"><kbd class="bg-primary text-white">F2</kbd> New Purchase</span>
+                            <span class="text-muted">Open purchase entry</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
+                            <span class="fw-bold"><kbd class="bg-primary text-white">F3</kbd> Sales Return</span>
+                            <span class="text-muted">Open return page</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
+                            <span class="fw-bold"><kbd class="bg-primary text-white">F4</kbd> Patient History</span>
+                            <span class="text-muted">View patient record</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
+                            <span class="fw-bold"><kbd class="bg-primary text-white">F5</kbd> Drug Substitute</span>
+                            <span class="text-muted">Focus search / Alternatives</span>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
+                            <span class="fw-bold"><kbd class="bg-primary text-white">F6</kbd> Product History</span>
+                            <span class="text-muted">Trace product transaction flow</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
+                            <span class="fw-bold"><kbd class="bg-primary text-white">F7</kbd> Daily Sales</span>
+                            <span class="text-muted">Open sales reports</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
+                            <span class="fw-bold"><kbd class="bg-primary text-white">F8</kbd> Counter Sale</span>
+                            <span class="text-muted">Open general billing</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
+                            <span class="fw-bold"><kbd class="bg-primary text-white">F9</kbd> Focus Search</span>
+                            <span class="text-muted">Focus primary search box</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
+                            <span class="fw-bold"><kbd class="bg-primary text-white">F10</kbd> Focus Header</span>
+                            <span class="text-muted">Focus Patient / Supplier</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded border-start border-primary border-3">
+                            <span class="fw-bold"><kbd class="bg-primary text-white">F12</kbd> Save / Complete</span>
+                            <span class="text-muted">Finish sale / Purchase entry</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Add Modal -->
+<div class="modal fade" id="quickAddModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold">Quick Add Product</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Medicine Name</label>
+                    <input type="text" id="quickName" class="form-control bg-light border-0 py-2"
+                        placeholder="e.g. Paracetamol 500mg">
+                </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="form-label small fw-bold">Packing</label>
+                        <input type="text" id="quickPacking" class="form-control bg-light border-0 py-2"
+                            placeholder="e.g. 10 Tabs">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small fw-bold">Conv. Factor</label>
+                        <input type="number" id="quickConv" class="form-control bg-light border-0 py-2" value="1"
+                            title="Tablets per strip">
+                    </div>
+                </div>
+                <div class="mb-0">
+                    <label class="form-label small fw-bold">Tax Rate</label>
+                    <select id="quickTax" class="form-select bg-light border-0 py-2">
+                        {% for tax in product_taxes %}
+                        <option value="{{ tax.id }}">{{ tax.tax_name }} ({{ tax.tax_rate }}%)</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-light rounded-3 px-4" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary rounded-3 px-4 shadow-sm" onclick="saveQuickProduct()">Save
+                    Medicine</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Inline Product History Modal -->
+<div class="modal fade" id="inlineHistoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-0 bg-light rounded-top-4">
+                <h5 class="modal-title fw-bold text-primary">
+                    <i class="fas fa-history me-2"></i>Product History Dashboard
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <h5 id="historyModalProductName" class="fw-bold mb-3 text-dark">Medicine Name</h5>
+                
+                <ul class="nav nav-pills mb-3 bg-light p-1 rounded-3" id="inlineHistoryTabs" role="tablist">
+                    <li class="nav-item flex-fill text-center" role="presentation">
+                        <button class="nav-link active w-100 fw-bold py-2" id="inline-sales-tab" data-bs-toggle="pill" data-bs-target="#inlineSalesPanel" type="button" role="tab">
+                            <i class="fas fa-cash-register me-2"></i>Previous Sales & Customers
+                        </button>
+                    </li>
+                    <li class="nav-item flex-fill text-center" role="presentation">
+                        <button class="nav-link w-100 fw-bold py-2" id="inline-purchases-tab" data-bs-toggle="pill" data-bs-target="#inlinePurchasesPanel" type="button" role="tab">
+                            <i class="fas fa-shopping-basket me-2"></i>Previous Purchase History
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content" id="inlineHistoryContent">
+                    <!-- Previous Sales -->
+                    <div class="tab-pane fade show active" id="inlineSalesPanel" role="tabpanel">
+                        <div class="table-responsive" style="max-height: 300px;">
+                            <table class="table table-hover align-middle mb-0" id="inlineSalesTable">
+                                <thead class="bg-light text-muted small text-uppercase">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Invoice No.</th>
+                                        <th>Patient/Customer</th>
+                                        <th>Batch</th>
+                                        <th>Qty Sold</th>
+                                        <th>Rate</th>
+                                        <th class="text-end">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="7" class="text-center py-4 text-muted">No sale entries found.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Previous Purchases -->
+                    <div class="tab-pane fade" id="inlinePurchasesPanel" role="tabpanel">
+                        <div class="table-responsive" style="max-height: 300px;">
+                            <table class="table table-hover align-middle mb-0" id="inlinePurchasesTable">
+                                <thead class="bg-light text-muted small text-uppercase">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Invoice No.</th>
+                                        <th>Supplier</th>
+                                        <th>Batch</th>
+                                        <th>Qty</th>
+                                        <th>Cost Price</th>
+                                        <th class="text-end">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="7" class="text-center py-4 text-muted">No purchase entries found.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Schedule H1 / Narcotic Drug Alert Modal -->
+<div class="modal fade" id="h1AlertModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+            <div class="modal-body p-0">
+                <div class="text-center pt-4 pb-3 px-4" style="background: linear-gradient(135deg, #fff3e0, #ffe0b2);">
+                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-white shadow-sm mb-2"
+                         style="width: 64px; height: 64px;">
+                        <i class="fas fa-exclamation-triangle fa-2x text-warning"></i>
+                    </div>
+                    <h5 class="fw-bold mb-0" style="color:#e65100;">Schedule H1</h5>
+                </div>
+                <div class="p-4 text-center">
+                    <p class="mb-1 text-muted small text-uppercase fw-bold">Product</p>
+                    <h6 class="fw-bold mb-3" id="h1AlertProductName">—</h6>
+                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle px-3 py-2 mb-3 fs-6" id="h1AlertScheduleLabel">SCHEDULE H1</span>
+                    <p class="text-muted small mb-0 mt-2">
+                        Please ensure prescription details (Doctor Name, Patient Name &amp; Address) are correctly recorded for this sale as per regulations.
+                    </p>
+                </div>
+                <div class="modal-footer border-0 pt-0 justify-content-center pb-4">
+                    <button type="button" class="btn btn-warning rounded-pill px-5 fw-bold text-white" data-bs-dismiss="modal">
+                        <i class="fas fa-check me-1"></i> Understood
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Success Checkout Modal -->
+<div class="modal fade" id="checkoutSuccessModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 text-center p-4">
+            <div class="mb-3">
+                <i class="fas fa-check-circle text-success" style="font-size: 4rem;"></i>
+            </div>
+            <h4 class="fw-bold mb-2">Bill Generated!</h4>
+            <p class="text-muted mb-4">Invoice <span id="successInvoiceNum" class="fw-bold text-dark"></span> saved successfully.</p>
+            
+            <div class="d-grid gap-3">
+                <button type="button" class="btn btn-primary btn-lg rounded-pill fw-bold" id="btnSuccessPrint">
+                    <i class="fas fa-print me-2"></i> Print Bill (Dot Matrix)
+                </button>
+                <button type="button" class="btn btn-success btn-lg rounded-pill fw-bold" id="btnSuccessWhatsApp">
+                    <i class="fab fa-whatsapp me-2"></i> Send WhatsApp
+                </button>
+                <button type="button" class="btn btn-outline-secondary rounded-pill fw-bold mt-2" id="btnSuccessNewSale">
+                    <i class="fas fa-plus me-2"></i> New Sale
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{% static 'js/localforage.min.js' %}"></script>
+<script>
+
+    function getCookie(name) {
+        let cookieValue = null;
+
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+
+            for (let cookie of cookies) {
+                cookie = cookie.trim();
+
+                if (cookie.startsWith(name + '=')) {
+                    cookieValue = decodeURIComponent(
+                        cookie.substring(name.length + 1)
+                    );
+                    break;
+                }
+            }
+        }
+
+        return cookieValue;
+    }
+    
+    let cart = [];
+    let searchSelectedIndex = -1;
+    const editData = {{ edit_data|default:'null'|safe }};
+
+    function showToast(message, type = 'info') {
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+            padding: 12px 24px; border-radius: 30px; z-index: 99999; font-weight: 600;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); color: white;
+        `;
+        
+        if (type === 'warning' || type === 'error') {
+            toast.style.background = '#f59e0b';
+        } else {
+            toast.style.background = '#10b981';
+        }
+        
+        toast.innerHTML = message;
+        document.body.appendChild(toast);
+
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            setTimeout(() => toast.remove(), 500);
+        }, 4000);
+    }
+    // ── Bill Number Badge ──
+    function updateBillNumberDisplay() {
+        const badge = document.getElementById('runningBillNumber');
+        if (!badge) return;
+        if (editData && editData.invoice_number) {
+            badge.textContent = editData.invoice_number;
+            badge.style.background = 'linear-gradient(135deg, #fff3e0, #ffe0b2)';
+            badge.style.color = '#e65100';
+            badge.style.border = '1.5px solid #ffcc80';
+        } else {
+            const nextNum = "{% if next_invoice_number %}{{ next_invoice_number }}{% endif %}";
+            badge.textContent = nextNum ? nextNum : 'NEW';
+        }
+    }
+    // Check if ?mode=counter is present in URL
+    document.addEventListener('DOMContentLoaded', () => {
+        updateBillNumberDisplay();
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('mode') === 'counter') {
+            enableCounterMode();
+        } else {
+            // Auto focus search box on load for normal mode too
+            const searchInput = document.getElementById('productSearch');
+            if (searchInput) searchInput.focus();
+        }
+    });
+
+    function enableCounterMode() {
+        const banner = document.getElementById('counterSaleBanner');
+        if (banner) {
+            banner.classList.remove('d-none');
+            banner.classList.add('d-flex');
+        }
+        
+        // Fill counter sale fields
+        document.getElementById('patientName').value = "COUNTER SALE";
+        document.getElementById('patientAddress').value = "COUNTER";
+        document.getElementById('patientPhone').value = "9999999999";
+        document.getElementById('doctorName').value = "SELF";
+
+        // Read-only fields to prevent user confusion
+        document.getElementById('patientName').readOnly = true;
+        document.getElementById('patientAddress').readOnly = true;
+        document.getElementById('patientPhone').readOnly = true;
+        document.getElementById('doctorName').readOnly = true;
+
+        // Auto focus product search input immediately
+        setTimeout(() => {
+            const searchInput = document.getElementById('productSearch');
+            if (searchInput) {
+                searchInput.focus();
+                searchInput.select();
+            }
+        }, 100);
+    }
+
+    function exitCounterMode() {
+        // Remove query param from URL without page reload
+        const url = new URL(window.location.href);
+        url.searchParams.delete('mode');
+        window.history.pushState({}, '', url);
+
+        const banner = document.getElementById('counterSaleBanner');
+        if (banner) {
+            banner.classList.remove('d-flex');
+            banner.classList.add('d-none');
+        }
+
+        // Reset fields
+        document.getElementById('patientName').value = "";
+        document.getElementById('patientAddress').value = "";
+        document.getElementById('patientPhone').value = "";
+        document.getElementById('doctorName').value = "{% if default_doctor %}{{ default_doctor.name }}{% endif %}";
+
+        document.getElementById('patientName').readOnly = false;
+        document.getElementById('patientAddress').readOnly = false;
+        document.getElementById('patientPhone').readOnly = false;
+        document.getElementById('doctorName').readOnly = false;
+        
+        document.getElementById('productSearch').focus();
+    }
+
+    // Keyboard Shortcuts
+    document.addEventListener('keydown', (e) => {
+        const results = document.querySelectorAll('.batch-item');
+
+        // Close H1/Narcotic alert modal on Enter
+        const h1ModalEl = document.getElementById('h1AlertModal');
+        if (e.key === 'Enter' && h1ModalEl.classList.contains('show')) {
+            e.preventDefault();
+            bootstrap.Modal.getInstance(h1ModalEl).hide();
+            return;
+        }
+
+        // ESC close search dropdown
+        if (e.key === 'Escape') {
+
+            resultsDiv.classList.add('d-none');
+
+            searchInput.value = '';
+
+            searchSelectedIndex = -1;
+        }
+
+        if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
+            e.preventDefault();
+            document.getElementById('productSearch').focus();
+        }
+        
+        if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
+            e.preventDefault(); document.getElementById('productSearch').focus();
+        }
+
+        if (e.key === 'ArrowDown' && !resultsDiv.classList.contains('d-none')) {
+            e.preventDefault();
+            searchSelectedIndex = Math.min(searchSelectedIndex + 1, results.length - 1);
+            updateSearchSelection();
+        }
+
+        if (e.key === 'ArrowUp' && !resultsDiv.classList.contains('d-none')) {
+            e.preventDefault();
+            searchSelectedIndex = Math.max(searchSelectedIndex - 1, 0);
+            updateSearchSelection();
+        }
+
+        if (e.key === 'Enter' && searchSelectedIndex > -1 && !resultsDiv.classList.contains('d-none')) {
+            e.preventDefault();
+            results[searchSelectedIndex].querySelector('.add-btn').click();
+        }
+
+        if (e.key === 'F12') { e.preventDefault(); completeOrder(); }
+    });
+
+    function populateEditData(data) {
+        if (!data) return;
+        document.getElementById('patientName').value = data.patient_name || '';
+        document.getElementById('patientAddress').value = data.patient_address || '';
+        document.getElementById('patientPhone').value = data.patient_phone || '';
+        document.getElementById('doctorName').value = data.doctor_name || '';
+        console.log('pateint address:', data.patient_address);
+        if (data.payment_mode) {
+            const paymentOption = document.querySelector(`input[name="paymentMethod"][value="${data.payment_mode}"]`);
+            if (paymentOption) paymentOption.checked = true;
+        }
+        document.getElementById('summaryDiscount').value = parseFloat(data.discount_amount || 0).toFixed(2);
+        document.getElementById('summaryDiscountPerc').value = parseFloat(data.discount_percentage || 0).toFixed(2);
+        cart = data.items.map(item => ({
+            id: item.product_id,
+            batch_id: item.batch_id,
+            batch_number: item.batch_number,
+            expiry: item.expiry_date ? item.expiry_date.substring(0, 7) : '',
+            name: item.product_name,
+            price: item.price,
+            quantity: item.quantity,
+            tax_rate: item.tax_rate,
+            total: item.total,
+            discount_percentage: item.discount_percentage || 0,
+            max_stock: 9999
+        }));
+        renderCart();
+        calculateDiscount('amt');
+    }
+
+    function updateSearchSelection() {
+        const results = document.querySelectorAll('.batch-item');
+        results.forEach((el, idx) => {
+            if (idx === searchSelectedIndex) {
+                el.classList.add('selected-batch');
+                el.scrollIntoView({ block: 'nearest' });
+            } else {
+                el.classList.remove('selected-batch');
+            }
+        });
+    }
+
+    // Product Search — with Debounce (300ms) + In-Memory Cache
+    const searchInput = document.getElementById('productSearch');
+    const resultsDiv = document.getElementById('searchResults');
+
+    const _posSearchCache = {};       // query → API data
+    let   _posDebounceTimer = null;   // debounce handle
+
+    function renderSearchResults(data) {
+        resultsDiv.innerHTML = '';
+        searchSelectedIndex = -1;
+        let batchIndex = 0;
+
+        // Safe data extraction
+        const products = data?.results || data?.products || data || [];
+
+        // if (data.length === 0) {
+        //     resultsDiv.innerHTML = '<div class="p-3 text-center text-muted small">No items found. <button class="btn btn-link btn-sm" data-bs-toggle="modal" data-bs-target="#quickAddModal">Add New?</button></div>';
+        // }
+        if (products.length === 0) {
+            resultsDiv.innerHTML = `
+                <div class="p-3 text-center text-muted small">
+                    No items found. 
+                    <button class="btn btn-link btn-sm" data-bs-toggle="modal" data-bs-target="#quickAddModal">
+                        Add New?
+                    </button>
+                </div>`;
+            resultsDiv.classList.remove('d-none');
+            return;
+        }
+        products.forEach(product => {
+            const productGroup = document.createElement('div');
+            productGroup.className = 'list-group-item p-3 border-bottom bg-white';
+
+            // ── Product header info ──
+            const contentBadge = product.content
+                ? `<span class="badge bg-light text-secondary border x-small me-1"><i class="fas fa-flask me-1"></i>${product.content}</span>`
+                : '';
+            const companyBadge = product.company
+                ? `<span class="badge bg-light text-muted border x-small">${product.company}</span>`
+                : '';
+
+            if (product.out_of_stock) {
+                // Out of stock — show greyed card with substitute button
+                productGroup.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="fw-bold text-muted h6 mb-0" style="text-decoration:line-through;opacity:.6;">${product.name}</div>
+                            <div class="mt-1">${contentBadge}${companyBadge}</div>
+                            <div class="text-muted x-small mt-1">Packing: ${product.packing || '—'}</div>
+                        </div>
+                        <div class="d-flex flex-column align-items-end gap-1">
+                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="fas fa-times-circle me-1"></i>Out of Stock</span>
+                            ${product.content ? `
+                            <button class="btn btn-warning btn-sm px-3 rounded-pill fw-bold sub-btn mt-1"
+                                onclick="openSubstitutes(${product.id}, '${product.name.replace(/'/g,"\\'")}')"
+                                title="Find same-composition drugs in stock">
+                                <i class="fas fa-exchange-alt me-1"></i>Substitute
+                            </button>` : '<small class="text-muted" style="font-size:9px;">No content linked</small>'}
+                        </div>
+                    </div>`;
+                resultsDiv.appendChild(productGroup);
+                return; // no batches to render
+            }
+
+            let batchesHtml = '';
+            product.batches.forEach(b => {
+                batchesHtml += `
+                <div class="d-flex justify-content-between align-items-center mt-2 p-2 rounded bg-light border-start border-4 border-primary batch-item" data-batch-index="${batchIndex++}">
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="badge bg-white text-dark border x-small">B: ${b.batch_no}</span>
+                            <span class="text-muted x-small">Exp: ${b.expiry}</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="fw-bold text-primary">₹${b.price.toFixed(2)}</span>
+                            <span class="badge bg-success text-white x-small">${b.stock} left</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary btn-sm ms-3 px-3 rounded-pill fw-bold add-btn" 
+                        onclick='addToCart({
+                            id: ${product.id}, 
+                            batch_id: ${b.batch_id}, 
+                            name: "${product.name.replace(/"/g,"&quot;")}", 
+                            batch_no: "${b.batch_no}", 
+                            expiry: "${b.expiry}", 
+                            price: ${b.price}, 
+                            tax_rate: ${product.tax_rate}, 
+                            stock: ${b.stock},
+                            schedule: "${(product.schedule || '').replace(/"/g,'&quot;')}"
+                        })'>+ ADD</button>
+                </div>`;
+            });
+
+            productGroup.innerHTML = `
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                    <div>
+                        <div class="fw-bold text-dark h6 mb-0">${product.name}</div>
+                        <div class="mt-1">${contentBadge}${companyBadge}</div>
+                        <div class="text-muted x-small mt-1">Packing: ${product.packing || '1'} | Factor: ${product.conversion_factor}</div>
+                    </div>
+                    <div class="d-flex flex-column align-items-end gap-1">
+                        <span class="badge bg-info-soft text-info x-small">${product.batches.length} Batch(es)</span>
+                        <div class="d-flex gap-1 mt-1">
+                            ${product.content ? `<button class="btn btn-outline-secondary btn-sm rounded-pill x-small px-2" onclick="openSubstitutes(${product.id}, '${product.name.replace(/'/g,"\\'")}')"><i class="fas fa-exchange-alt me-1"></i>Alt</button>` : ''}
+                            <button class="btn btn-outline-primary btn-sm rounded-pill x-small px-2" onclick="openProductHistoryInline(${product.id}, '${product.name.replace(/'/g,"\\'")}')"><i class="fas fa-history me-1"></i>History</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="batch-list">${batchesHtml}</div>
+            `;
+            resultsDiv.appendChild(productGroup);
+        });
+        resultsDiv.classList.remove('d-none');
+    }
+
+    searchInput.addEventListener('input', (e) => {
+        clearTimeout(_posDebounceTimer);
+        const query = e.target.value.trim();
+        if (query.length < 1) { 
+            resultsDiv.classList.add('d-none'); 
+            return; 
+        }
+
+        // Cache hit
+        if (_posSearchCache[query]) {
+            renderSearchResults(_posSearchCache[query]);
+            return;
+        }
+
+    _posDebounceTimer = setTimeout(async () => {
+        try {
+            const response = await fetch(`/api/products/search/?q=${encodeURIComponent(query)}`);
+            const data = await response.json();
+
+            // Cache for offline
+            if (data.results && data.results.length > 0) {
+                OfflineSync.cacheProducts(data.results);
+            }
+
+            renderSearchResults(data);
+        } catch (err) {
+            console.log('Offline search activated');
+            const offlineResults = await OfflineSync.searchOfflineProducts(query);
+            renderSearchResults({ results: offlineResults });
+        }
+    }, 300);
+    
+    });
+
+    // ── Substitute lookup ──────────────────────────────────────────
+    async function openSubstitutes(productId, productName) {
+        // Close search dropdown
+        resultsDiv.classList.add('d-none');
+
+        document.getElementById('subModalSubtitle').textContent = `Substitutes for: ${productName}`;
+        document.getElementById('substituteLoader').classList.remove('d-none');
+        document.getElementById('substituteList').classList.add('d-none');
+        document.getElementById('substituteEmpty').classList.add('d-none');
+
+        const modal = new bootstrap.Modal(document.getElementById('substituteModal'));
+        modal.show();
+
+        const resp = await fetch(`/api/products/substitute/?product_id=${productId}`);
+        const subs = await resp.json();
+
+        document.getElementById('substituteLoader').classList.add('d-none');
+
+        if (subs.length === 0) {
+            document.getElementById('substituteEmpty').classList.remove('d-none');
+            return;
+        }
+
+        const listEl = document.getElementById('substituteList');
+        listEl.innerHTML = '';
+
+        // content badge (same for all)
+        const contentLabel = subs[0]?.content || '';
+        if (contentLabel) {
+            listEl.innerHTML += `<div class="mb-3 p-2 rounded" style="background:#fff8e1;border-left:3px solid #f59e0b;">
+                <span class="small fw-bold text-warning"><i class="fas fa-flask me-1"></i>Composition: </span>
+                <span class="small">${contentLabel}</span>
+            </div>`;
+        }
+
+        subs.forEach(s => {
+            const batches = s.batches.map(b => `
+                <div class="d-flex justify-content-between align-items-center p-2 rounded bg-light border-start border-3 border-success mt-1">
+                    <div>
+                        <span class="badge bg-white text-dark border x-small">B: ${b.batch_no}</span>
+                        <span class="text-muted x-small ms-2">Exp: ${b.expiry}</span>
+                        <span class="badge bg-success text-white x-small ms-2">${b.stock} left</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="fw-bold text-success">₹${b.price.toFixed(2)}</span>
+                        <button class="btn btn-success btn-sm px-3 rounded-pill fw-bold"
+                            onclick='addToCart({id:${s.id},batch_id:${b.batch_id},name:"${s.name.replace(/"/g,"&quot;")}",batch_no:"${b.batch_no}",expiry:"${b.expiry}",price:${b.price},tax_rate:${s.tax_rate},stock:${b.stock},schedule:"${(s.schedule || '').replace(/"/g,'&quot;')}"}); bootstrap.Modal.getInstance(document.getElementById("substituteModal")).hide();'>
+                            + ADD
+                        </button>
+                    </div>
+                </div>`).join('');
+
+            listEl.innerHTML += `
+                <div class="card border-0 shadow-sm rounded-3 mb-3">
+                    <div class="card-body p-3">
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <div>
+                                <div class="fw-bold">${s.name}</div>
+                                <div class="text-muted x-small">${s.company} &nbsp;·&nbsp; ${s.packing || '—'}</div>
+                            </div>
+                            <span class="badge bg-success-subtle text-success border border-success-subtle">In Stock</span>
+                        </div>
+                        ${batches}
+                    </div>
+                </div>`;
+        });
+        listEl.classList.remove('d-none');
+    }
+
+    async function openProductHistoryInline(productId, productName) {
+        // Close search dropdown to keep it clean
+        resultsDiv.classList.add('d-none');
+
+        document.getElementById('historyModalProductName').textContent = productName;
+        
+        // Show loaders
+        const salesTbody = document.querySelector('#inlineSalesTable tbody');
+        const purchasesTbody = document.querySelector('#inlinePurchasesTable tbody');
+        
+        salesTbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin me-2"></i>Loading sales & customer records...</td></tr>';
+        purchasesTbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted"><i class="fas fa-spinner fa-spin me-2"></i>Loading past purchase invoices...</td></tr>';
+
+        const modal = new bootstrap.Modal(document.getElementById('inlineHistoryModal'));
+        modal.show();
+
+        try {
+            const resp = await fetch(`/product-history/?product_id=${productId}&ajax=1`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const data = await resp.json();
+
+            // Render Sales
+            salesTbody.innerHTML = '';
+            if (!data.sales || data.sales.length === 0) {
+                salesTbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">No sales entries recorded for this medicine.</td></tr>';
+            } else {
+                data.sales.forEach(s => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${s.date}</td>
+                        <td><span class="badge bg-light text-dark border">${s.invoice_number}</span></td>
+                        <td class="fw-bold text-dark">${s.patient_name}</td>
+                        <td><span class="badge bg-warning-soft text-warning px-2 py-1">${s.batch_number}</span></td>
+                        <td class="fw-bold">${s.quantity}</td>
+                        <td>₹${s.unit_price.toFixed(2)}</td>
+                        <td class="text-end fw-bold text-success">₹${s.total.toFixed(2)}</td>
+                    `;
+                    salesTbody.appendChild(row);
+                });
+            }
+
+            // Render Purchases
+            purchasesTbody.innerHTML = '';
+            if (!data.purchases || data.purchases.length === 0) {
+                purchasesTbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">No purchase entries recorded for this medicine.</td></tr>';
+            } else {
+                data.purchases.forEach(p => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${p.date}</td>
+                        <td><span class="badge bg-light text-dark border">${p.invoice_number}</span></td>
+                        <td class="fw-bold text-dark">${p.supplier_name}</td>
+                        <td><span class="badge bg-secondary-soft text-secondary px-2 py-1">${p.batch_number}</span></td>
+                        <td class="fw-bold">${p.quantity}</td>
+                        <td>₹${p.purchase_price.toFixed(2)}</td>
+                        <td class="text-end fw-bold text-primary">₹${p.total.toFixed(2)}</td>
+                    `;
+                    purchasesTbody.appendChild(row);
+                });
+            }
+        } catch (error) {
+            console.error('Error fetching product history inline:', error);
+            salesTbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-danger">Error loading sales history</td></tr>';
+            purchasesTbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-danger">Error loading purchase history</td></tr>';
+        }
+    }
+
+    function showH1Alert(productName, scheduleLabel) {
+        document.getElementById('h1AlertProductName').textContent = productName;
+        document.getElementById('h1AlertScheduleLabel').textContent = scheduleLabel || 'SCHEDULE H1';
+        const h1ModalEl = document.getElementById('h1AlertModal');
+        const modal = new bootstrap.Modal(h1ModalEl);
+        // After user clicks "Understood", focus the last qty input
+        h1ModalEl.addEventListener('hidden.bs.modal', () => {
+            const inputs = document.querySelectorAll('#posTable tbody .qty-input');
+            const lastQtyInput = inputs[inputs.length - 1];
+            if (lastQtyInput) {
+                lastQtyInput.focus();
+                lastQtyInput.select();
+            }
+        }, { once: true });
+        modal.show();
+    }
+
+    function addToCart(product) {
+        if (product.stock <= 0) {
+            return alert('Out of stock!');
+        }
+
+        // ── Schedule H1 / Narcotic Drug Alert ──
+        const scheduleStr = (product.schedule || '').toUpperCase();
+        if (scheduleStr.includes('H1') || scheduleStr.includes('NARCOTIC')) {
+            showH1Alert(product.name, product.schedule);
+        }
+
+        const existing = cart.find(
+            item =>
+                item.id === product.id &&
+                item.batch_id === product.batch_id
+        );
+
+        if (existing) {
+
+            existing.quantity++;
+
+        } else {
+
+            cart.push({
+                id: product.id,
+                batch_id: product.batch_id,
+                name: product.name,
+                batch_no: product.batch_no,
+                expiry: product.expiry,
+                price: product.price,
+                tax_rate: product.tax_rate,
+                quantity: 1,
+                max_stock: product.stock
+            });
+        }
+
+        searchInput.value = '';
+
+        resultsDiv.classList.add('d-none');
+
+        shouldFocusLastQty = true;
+
+        renderCart();
+    }
+
+    function renderCart() {
+        const tbody = document.querySelector('#posTable tbody');
+        const emptyState = document.getElementById('emptyState');
+
+        tbody.innerHTML = '';
+
+        if (cart.length === 0) {
+
+            emptyState.classList.remove('d-none');
+
+        } else {
+
+            emptyState.classList.add('d-none');
+
+            cart.forEach((item, index) => {
+
+                const total = item.price * item.quantity;
+
+                const basePrice = item.price / (1 + item.tax_rate / 100);
+
+                const taxAmount = item.price - basePrice;
+
+                const totalTaxAmount = taxAmount * item.quantity;
+
+                const tr = document.createElement('tr');
+
+                tr.className = 'cart-row';
+
+                tr.innerHTML = `
+                    <td class="ps-4">
+                        <div class="fw-bold text-dark small">${item.name}</div>
+                        <div class="text-muted x-small">Exp: ${item.expiry}</div>
+                    </td>
+
+                    <td>
+                        <div class="badge bg-light text-muted x-small">
+                            B: ${item.batch_no}
+                        </div>
+                    </td>
+
+                    <td class="small">₹${item.price.toFixed(2)}</td>
+
+                    <td>
+                        <input type="number"
+                            class="form-control form-control-sm border-0 bg-light text-center fw-bold qty-input"
+                            value="${item.quantity}"
+                            data-index="${index}"
+                            min="1"
+                            max="${item.max_stock}"
+                            oninput="updateQty(${index}, this.value)"
+                            onkeydown="handleQtyKeydown(event, ${index})"
+                            style="width:70px; cursor:text; border:1px solid #dee2e6 !important;">
+                    </td>
+
+                    <td class="text-primary small">
+                        ₹${totalTaxAmount.toFixed(2)}
+                        <span class="text-muted x-small">
+                            (${item.tax_rate}% incl.)
+                        </span>
+                    </td>
+
+                    <td class="fw-bold small">
+                        ₹${total.toFixed(2)}
+                    </td>
+
+                    <td class="text-end pe-4">
+                        <button class="btn btn-sm text-danger border-0"
+                            onclick="removeFromCart(${index})">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </td>
+                `;
+
+                tbody.appendChild(tr);
+            });
+
+            if (shouldFocusLastQty) {
+
+                setTimeout(() => {
+
+                    const inputs = tbody.querySelectorAll('.qty-input');
+
+                    const lastQtyInput = inputs[inputs.length - 1];
+
+                    if (lastQtyInput) {
+                        lastQtyInput.focus();
+                        lastQtyInput.select();
+                    }
+
+                    shouldFocusLastQty = false;
+
+                }, 50);
+            }
+        }
+
+        calculateGrandTotal();
+    }
+
+    function handleQtyKeydown(event, index) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            // Clear search and focus on it for next item
+            document.getElementById('productSearch').value = '';
+            document.getElementById('productSearch').focus();
+            document.getElementById('searchResults').classList.add('d-none');
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            document.getElementById('productSearch').focus();
+        } else if (event.key === 'Tab') {
+            // If this is the LAST qty row, Tab should jump to Patient Details
+            const allQtyInputs = document.querySelectorAll('.qty-input');
+            const isLast = index === cart.length - 1;
+            if (isLast && !event.shiftKey) {
+                event.preventDefault();
+                focusPatientDetails();
+            }
+            // If not last, let Tab naturally move to next qty input (browser default)
+        }
+    }
+
+    function focusPatientDetails() {
+        const patientNameInput = document.getElementById('patientName');
+        if (!patientNameInput) return;
+
+        // Scroll sidebar into view smoothly
+        patientNameInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // Pulse-highlight the entire Patient Details section
+        const section = patientNameInput.closest('.mb-4');
+        if (section) {
+            section.classList.add('patient-section-pulse');
+            setTimeout(() => section.classList.remove('patient-section-pulse'), 1200);
+        }
+
+        // Focus the name field after scroll settles
+        setTimeout(() => {
+            patientNameInput.focus();
+            patientNameInput.select();
+        }, 180);
+    }
+
+    async function saveQuickProduct() {
+        const data = {
+            name: document.getElementById('quickName').value,
+            packing: document.getElementById('quickPacking').value,
+            conversion_factor: document.getElementById('quickConv').value,
+            tax_id: document.getElementById('quickTax').value
+        };
+        if (!data.name) return alert('Name is required');
+
+        if (!navigator.onLine && typeof OfflineSync !== 'undefined') {
+            await OfflineSync.queueRequest(OfflineSync.masterStore, '/api/products/quick-add/', data, 'Product queued offline!');
+            bootstrap.Modal.getInstance(document.getElementById('quickAddModal')).hide();
+            document.getElementById('productSearch').value = data.name;
+            // Note: Since it's offline, the actual search won't return it yet, but we inform the user.
+            alert('Product saved offline. It will be available for search once internet reconnects and syncs.');
+        } else {
+            const response = await fetch('/api/products/quick-add/', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+                body: JSON.stringify(data)
+            });
+            const result = await response.json();
+            if (result.success) {
+                bootstrap.Modal.getInstance(document.getElementById('quickAddModal')).hide();
+                document.getElementById('productSearch').value = result.name;
+                document.getElementById('productSearch').dispatchEvent(new Event('input'));
+            } else { alert('Error: ' + result.error); }
+        }
+    }
+
+    function updateQty(index, val) {
+        const item = cart[index]; const newQty = parseInt(val) || 0;
+        if (newQty > 0 && newQty <= item.max_stock) {
+            item.quantity = newQty;
+        } else if (newQty > item.max_stock) {
+            item.quantity = item.max_stock;
+            alert('Stock limit reached');
+        }
+        // Update only the total cell of this row (avoids losing focus)
+        const rows = document.querySelectorAll('#posTable tbody tr');
+        if (rows[index]) {
+            const total = item.price * item.quantity;
+            const basePrice = item.price / (1 + item.tax_rate / 100);
+            const taxAmount = (item.price - basePrice) * item.quantity;
+            // Total column is 6th td (index 5)
+            const totalCell = rows[index].querySelectorAll('td')[5];
+            if (totalCell) totalCell.innerHTML = `₹${total.toFixed(2)}`;
+            // GST/Tax column is 5th td (index 4)
+            const taxCell = rows[index].querySelectorAll('td')[4];
+            if (taxCell) taxCell.innerHTML = `₹${taxAmount.toFixed(2)} <span class="text-muted x-small">(${item.tax_rate}% incl.)</span>`;
+        }
+        calculateGrandTotal();
+    }
+
+    function calculateGrandTotal() {
+        // MRP is tax-inclusive, so calculate totals correctly
+        const subTotal = cart.reduce((sum, item) => {
+            const basePrice = item.price / (1 + item.tax_rate / 100);
+            return sum + (basePrice * item.quantity);
+        }, 0);
+        const totalTax = cart.reduce((sum, item) => {
+            const basePrice = item.price / (1 + item.tax_rate / 100);
+            const taxPerItem = item.price - basePrice;
+            return sum + (taxPerItem * item.quantity);
+        }, 0);
+        const discount = parseFloat(document.getElementById('summaryDiscount').value) || 0;
+        let grandTotal = (subTotal + totalTax) - discount;
+
+        // ── Round Off ──
+        const roundedTotal = Math.round(grandTotal);
+        const roundOff = roundedTotal - grandTotal;
+        grandTotal = roundedTotal;
+
+        document.getElementById('summarySubTotal').innerText = subTotal.toFixed(2);
+        document.getElementById('summaryTax').innerText = totalTax.toFixed(2);
+        document.getElementById('summaryGrandTotal').innerText = grandTotal.toFixed(2);
+
+        const roundOffEl = document.getElementById('summaryRoundOff');
+        if (roundOffEl) {
+            roundOffEl.innerText = (roundOff >= 0 ? '+' : '') + roundOff.toFixed(2);
+        }
+
+        // Update footer counters
+        const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+        document.getElementById('cartItemCount').innerText = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;
+        document.getElementById('cartTotal').innerText = grandTotal.toFixed(2);
+    }
+
+    function calculateDiscount(changed) {
+        const subTotal = cart.reduce((sum, item) => {
+            const basePrice = item.price / (1 + item.tax_rate / 100);
+            return sum + (basePrice * item.quantity);
+        }, 0);
+        const totalTax = cart.reduce((sum, item) => {
+            const basePrice = item.price / (1 + item.tax_rate / 100);
+            const taxPerItem = item.price - basePrice;
+            return sum + (taxPerItem * item.quantity);
+        }, 0);
+        const gross = subTotal + totalTax;
+        let amount = parseFloat(document.getElementById('summaryDiscount').value) || 0;
+        let percent = parseFloat(document.getElementById('summaryDiscountPerc').value) || 0;
+
+        if (changed === 'perc') {
+            amount = gross * percent / 100;
+            document.getElementById('summaryDiscount').value = amount.toFixed(2);
+        } else {
+            percent = gross > 0 ? (amount / gross) * 100 : 0;
+            document.getElementById('summaryDiscountPerc').value = percent.toFixed(2);
+        }
+
+        calculateGrandTotal();
+    }
+
+    function showLoader(message = 'Please wait...') {
+        const loader = document.getElementById('universalLoader');
+        if (!loader) return;
+        loader.querySelector('.loader-text').innerText = message;
+        loader.classList.remove('d-none');
+        loader.setAttribute('aria-busy', 'true');
+    }
+
+    function hideLoader() {
+        const loader = document.getElementById('universalLoader');
+        if (!loader) return;
+        loader.classList.add('d-none');
+        loader.setAttribute('aria-busy', 'false');
+    }
+
+    function clearCart() { if (confirm('Clear all?')) { cart = []; renderCart(); } }
+
+    if (editData) {
+        populateEditData(editData);
+    }
+    function removeFromCart(index) { cart.splice(index, 1); renderCart(); }
+
+    // ── Payment mode highlight toggle ──
+    document.querySelectorAll('input[name="paymentMethod"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+            document.querySelectorAll('label.payment-btn').forEach(l => l.classList.remove('payment-btn-active'));
+            document.querySelector(`label[for="${radio.id}"]`).classList.add('payment-btn-active');
+        });
+    });
+
+    // ── Patient details validation ──
+    function validatePatientDetails() {
+        const isCounterMode = !document.getElementById('counterSaleBanner').classList.contains('d-none');
+        if (isCounterMode) return true;
+
+        const fields = [
+            { id: 'patientName',    value: document.getElementById('patientName').value.trim() },
+            { id: 'patientAddress', value: document.getElementById('patientAddress').value.trim() },
+            { id: 'doctorName',     value: document.getElementById('doctorName').value.trim() },
+        ];
+
+        let valid = true;
+        fields.forEach(f => {
+            const el = document.getElementById(f.id);
+            if (!f.value) {
+                el.classList.add('is-invalid');
+                el.addEventListener('input', () => el.classList.remove('is-invalid'), { once: true });
+                valid = false;
+            } else {
+                el.classList.remove('is-invalid');
+            }
+        });
+
+        if (!valid) {
+            const first = document.querySelector('#patientName.is-invalid, #patientAddress.is-invalid, #doctorName.is-invalid');
+            if (first) { first.scrollIntoView({ behavior: 'smooth', block: 'center' }); first.focus(); }
+        }
+        return valid;
+    }
+
+    async function completeOrder() {
+        if (cart.length === 0) return alert('Bill is empty');
+        if (!validatePatientDetails()) return;
+
+        const checkoutBtn = document.querySelector('.btn-success.btn-lg');
+        if (checkoutBtn) { checkoutBtn.disabled = true; }
+        showLoader('Generating bill...');
+
+        const data = {
+            invoice_id: editData?.invoice_id || null,
+            patient_name: document.getElementById('patientName').value,
+            patient_address: document.getElementById('patientAddress').value,
+            
+            patient_phone: document.getElementById('patientPhone').value,
+            doctor_name: document.getElementById('doctorName').value,
+            payment_mode: document.querySelector('input[name="paymentMethod"]:checked').value,
+            items: cart.map(item => ({
+                product_id: item.id,
+                batch_id: item.batch_id,
+                quantity: item.quantity,
+                price: item.price,
+                // MRP is tax-inclusive, so total = MRP * quantity (no additional tax)
+                total: item.price * item.quantity
+            })),
+            sub_total: parseFloat(document.getElementById('summarySubTotal').innerText),
+            tax_amount: parseFloat(document.getElementById('summaryTax').innerText),
+            discount_amount: parseFloat(document.getElementById('summaryDiscount').value) || 0,
+            round_off: parseFloat(document.getElementById('summaryRoundOff').innerText) || 0,
+            total_amount: parseFloat(document.getElementById('summaryGrandTotal').innerText),
+            sale_type: !document.getElementById('counterSaleBanner').classList.contains('d-none') ? 'Counter' : 'Prescription'
+        };
+
+        try {
+            if (!navigator.onLine && typeof OfflineSync !== 'undefined') {
+                // Save offline
+                const fakeInvoiceId = 'OFFLINE_' + Date.now();
+                await OfflineSync.queueRequest(OfflineSync.salesStore, '/pos/', data, 'Sale saved offline!');
+                
+                // Show offline success modal
+                document.getElementById('successInvoiceNum').textContent = "Pending Sync";
+                document.getElementById('btnSuccessPrint').style.display = 'none'; // Cannot print dot matrix offline without server
+                
+                document.getElementById('btnSuccessWhatsApp').onclick = () => {
+                    let phone = data.patient_phone;
+                    if (!phone || phone.length < 10) {
+                        phone = prompt("Enter patient's 10-digit WhatsApp number:", "");
+                        if (!phone) return;
+                    }
+                    if(phone.length === 10) phone = '91' + phone;
+                    let msg = `*EASY PHARMA - INVOICE (Offline)*\n`;
+                    msg += `Patient: ${data.patient_name || 'Cash Customer'}\n\n`;
+                    msg += `*ITEMS:*\n`;
+                    cart.forEach(item => {
+                        msg += `- ${item.name} (x${item.quantity}) = ₹${(item.price * item.quantity).toFixed(2)}\n`;
+                    });
+                    msg += `\n*Total Amount: ₹${data.total_amount.toFixed(2)}*\n\n`;
+                    msg += `Thank you for your visit!\n`;
+                    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+                };
+                document.getElementById('btnSuccessNewSale').onclick = () => {
+                    // For offline, we don't know the true next invoice number from server, 
+                    // so we just append a star to indicate offline mode or leave it as pending.
+                    resetPOS("Pending Sync*");
+                };
+
+                const successModalEl = document.getElementById('checkoutSuccessModal');
+                const successModal = new bootstrap.Modal(successModalEl);
+                successModal.show();
+                
+                successModalEl.addEventListener('shown.bs.modal', function () {
+                    const modalButtons = [
+                        document.getElementById('btnSuccessPrint'),
+                        document.getElementById('btnSuccessWhatsApp'),
+                        document.getElementById('btnSuccessNewSale')
+                    ].filter(b => b && window.getComputedStyle(b).display !== 'none');
+                    
+                    if (modalButtons.length > 0) {
+                        let activeBtnIndex = 0;
+                        modalButtons[0].focus();
+                        
+                        successModalEl.onkeydown = (e) => {
+                            if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+                                e.preventDefault();
+                                activeBtnIndex = (activeBtnIndex + 1) % modalButtons.length;
+                                modalButtons[activeBtnIndex].focus();
+                            } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                                e.preventDefault();
+                                activeBtnIndex = (activeBtnIndex - 1 + modalButtons.length) % modalButtons.length;
+                                modalButtons[activeBtnIndex].focus();
+                            }
+                        };
+                    }
+                }, { once: true });
+
+            } else {
+                const response = await fetch('/pos/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' }, body: JSON.stringify(data) });
+                const result = await response.json();
+                if (result.success) {
+                    // Show Success Modal instead of reloading
+                    document.getElementById('successInvoiceNum').textContent = result.invoice_number;
+                    
+                    document.getElementById('btnSuccessPrint').style.display = 'inline-block';
+                    document.getElementById('btnSuccessPrint').onclick = () => {
+                        window.open(`/pos/print/${result.invoice_id}/`, '_blank');
+                        setTimeout(() => resetPOS(result.next_invoice_number), 500);
+                    };
+                    
+                    document.getElementById('btnSuccessNewSale').onclick = () => {
+                        resetPOS(result.next_invoice_number);
+                    };
+                    
+                    document.getElementById('btnSuccessWhatsApp').onclick = () => {
+                        let phone = data.patient_phone;
+                        if (!phone || phone.length < 10) {
+                            phone = prompt("Enter patient's 10-digit WhatsApp number:", "");
+                            if (!phone) return;
+                        }
+                        if(phone.length === 10) phone = '91' + phone;
+                        
+                        let msg = `*EASY PHARMA - INVOICE*\n`;
+                        msg += `Invoice No: ${result.invoice_number}\n`;
+                        msg += `Patient: ${data.patient_name || 'Cash Customer'}\n\n`;
+                        
+                        msg += `*ITEMS:*\n`;
+                        cart.forEach(item => {
+                            msg += `- ${item.name} (x${item.quantity}) = ₹${(item.price * item.quantity).toFixed(2)}\n`;
+                        });
+                        msg += `\n*Total Amount: ₹${data.total_amount.toFixed(2)}*\n\n`;
+                        msg += `Thank you for your visit!\n`;
+                        
+                        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+                    };
+
+                    const successModalEl = document.getElementById('checkoutSuccessModal');
+                    const successModal = new bootstrap.Modal(successModalEl);
+                    successModal.show();
+                    
+                    // Keyboard navigation for success modal
+                    successModalEl.addEventListener('shown.bs.modal', function () {
+                        const modalButtons = [
+                            document.getElementById('btnSuccessPrint'),
+                            document.getElementById('btnSuccessWhatsApp'),
+                            document.getElementById('btnSuccessNewSale')
+                        ].filter(b => b && window.getComputedStyle(b).display !== 'none');
+                        
+                        if (modalButtons.length > 0) {
+                            let activeBtnIndex = 0;
+                            modalButtons[0].focus();
+                            
+                            successModalEl.onkeydown = (e) => {
+                                if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+                                    e.preventDefault();
+                                    activeBtnIndex = (activeBtnIndex + 1) % modalButtons.length;
+                                    modalButtons[activeBtnIndex].focus();
+                                } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                                    e.preventDefault();
+                                    activeBtnIndex = (activeBtnIndex - 1 + modalButtons.length) % modalButtons.length;
+                                    modalButtons[activeBtnIndex].focus();
+                                }
+                            };
+                        }
+                    }, { once: true });
+                } else {
+                    alert('Error whatsapp: ' + result.error);
+                }
+            }
+        } catch (err) {
+            alert('Error loader: ' + err.message);
+        } finally {
+            hideLoader();
+            if (checkoutBtn) { checkoutBtn.disabled = false; }
+        }
+    }
+
+    // Multi-Bill State Management
+let bills = [{
+    id: Date.now(),
+    cart: [],
+    patient: { name: '', address: '', phone: '', doctor: '' },
+    active: true
+}];
+let activeBillIndex = 0;
+
+function updateBillTabsUI() {
+    const container = document.getElementById('billTabsContainer');
+    container.innerHTML = '';
+    
+    bills.forEach((bill, index) => {
+        const isActive = index === activeBillIndex;
+        const tab = document.createElement('button');
+        tab.className = `btn ${isActive ? 'btn-primary' : 'btn-outline-secondary'} btn-sm d-flex align-items-center`;
+        tab.style.minWidth = "120px";
+        tab.innerHTML = `
+            <span onclick="switchBill(${index})" class="flex-grow-1 text-truncate">Bill ${index + 1} ${bill.patient.name ? '- ' + bill.patient.name : ''}</span>
+            ${bills.length > 1 ? `<i class="fas fa-times ms-2 text-danger" onclick="closeBill(${index}, event)"></i>` : ''}
+        `;
+        container.appendChild(tab);
+    });
+
+    // Add "New Bill" button
+    const addBtn = document.createElement('button');
+    addBtn.className = "btn btn-success btn-sm";
+    addBtn.innerHTML = '<i class="fas fa-plus"></i> New (F1)';
+    addBtn.onclick = addNewBill;
+    container.appendChild(addBtn);
+}
+
+function addNewBill() {
+    // Current bill ko save karein pehle
+    saveCurrentState();
+    
+    // Naya bill object banayein
+    const newBill = {
+        id: Date.now(),
+        cart: [],
+        patient: { name: '', address: '', phone: '', doctor: '' },
+        active: true
+    };
+    bills.push(newBill);
+    activeBillIndex = bills.length - 1;
+    
+    loadBillState(activeBillIndex);
+    updateBillTabsUI();
+}
+
+    function saveCurrentState() {
+        bills[activeBillIndex].cart = [...cart]; // 'cart' aapka existing array hai
+        bills[activeBillIndex].patient = {
+            name: document.getElementById('patientName').value,
+            address: document.getElementById('patientAddress').value,
+            phone: document.getElementById('patientPhone').value,
+            doctor: document.getElementById('doctorName').value
+        };
+    }
+
+    function loadBillState(index) {
+        const bill = bills[index];
+        cart = [...bill.cart]; // UI update karne ke liye
+        document.getElementById('patientName').value = bill.patient.name;
+        document.getElementById('patientAddress').value = bill.patient.address;
+        document.getElementById('patientPhone').value = bill.patient.phone;
+        document.getElementById('doctorName').value = bill.patient.doctor || '';
+        
+        renderCart(); 
+    }
+
+    function switchBill(index) {
+        saveCurrentState();
+        activeBillIndex = index;
+        loadBillState(index);
+        updateBillTabsUI();
+    }
+
+    function closeBill(index, event) {
+        event.stopPropagation();
+        if (confirm("Close this bill? Data will be lost.")) {
+            bills.splice(index, 1);
+            if (activeBillIndex >= bills.length) activeBillIndex = bills.length - 1;
+            loadBillState(activeBillIndex);
+            updateBillTabsUI();
+        }
+    }
+
+    // F1 Key Listener
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'F1') {
+            e.preventDefault();
+            addNewBill();
+        }
+    });
+
+    // Initialize
+    window.addEventListener('load', updateBillTabsUI);
+
+    function resetPOS(nextInvNum) {
+        if (typeof editData !== 'undefined' && editData) {
+            window.location.href = '/pos/';
+            return;
+        }
+
+        const successModalEl = document.getElementById('checkoutSuccessModal');
+        const modal = bootstrap.Modal.getInstance(successModalEl);
+        if(modal) modal.hide();
+
+        cart = [];
+        renderCart();
+        
+        document.getElementById('patientName').value = '';
+        document.getElementById('patientAddress').value = '';
+        document.getElementById('patientPhone').value = '';
+        document.getElementById('doctorName').value = '';
+        document.getElementById('summaryDiscount').value = '0';
+        document.getElementById('summaryDiscountPerc').value = '0';
+        document.getElementById('patientName').classList.remove('is-invalid');
+        document.getElementById('patientPhone').classList.remove('is-invalid');
+        
+        if (nextInvNum) {
+            document.getElementById('runningBillNumber').textContent = nextInvNum;
+        }
+
+        setTimeout(() => document.getElementById('productSearch').focus(), 300);
+    }
+
+</script>
+
+<style>
+    .x-small {
+        font-size: 0.65rem;
+    }
+
+    /* Validation styles */
+    .form-control.is-invalid {
+        border: 1.5px solid #dc3545 !important;
+        background-color: #fff5f5 !important;
+        animation: fieldShake 0.3s ease;
+    }
+    .form-control.is-invalid + .invalid-feedback {
+        display: block;
+        font-size: 0.75rem;
+        color: #dc3545;
+        margin-top: 4px;
+    }
+    @keyframes fieldShake {
+        0%, 100% { transform: translateX(0); }
+        25%       { transform: translateX(-4px); }
+        75%       { transform: translateX(4px); }
+    }
+
+    /* Payment mode buttons */
+    .payment-btn {
+        border: 2px solid #dee2e6;
+        background: #f8f9fa;
+        color: #495057;
+        transition: all 0.2s ease;
+    }
+    .payment-btn:hover {
+        border-color: #28a745;
+        background: #f0fdf4;
+        color: #28a745;
+    }
+    .payment-btn-active {
+        border-color: #28a745 !important;
+        background: #e8f5e9 !important;
+        color: #28a745 !important;
+        font-weight: 600;
+        box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+    }
+
+    /* Modal Button Focus Highlight */
+    #checkoutSuccessModal .btn:focus {
+        outline: none;
+        box-shadow: 0 0 0 5px rgba(245, 158, 11, 0.5) !important;
+        border-color: #f59e0b !important;
+        transform: scale(1.02);
+        transition: all 0.15s ease-in-out;
+    }
+
+    .toast-container {
+        z-index: 1056;
+    }
+
+    .w-60 {
+        width: 60%;
+    }
+
+    .bg-success-soft {
+        background-color: rgba(25, 135, 84, 0.1);
+    }
+
+    .bg-primary-soft {
+        background-color: rgba(13, 110, 253, 0.1);
+    }
+
+    .bg-info-soft {
+        background-color: rgba(13, 202, 240, 0.1);
+    }
+
+    #searchResults {
+        border-radius: 15px;
+        border: 1px solid #dee2e6;
+        overflow: hidden;
+        margin-top: 8px;
+        background: white;
+    }
+
+    /* ── Product dropdown batch-item highlight ── */
+    .batch-item {
+        cursor: pointer;
+        transition: background 0.12s ease, border-left-color 0.12s ease, transform 0.1s ease !important;
+    }
+    .batch-item:hover {
+        background: linear-gradient(90deg, #e8f0fe 0%, #f3f6ff 100%) !important;
+        border-left-color: #4361ee !important;
+        transform: translateX(3px) !important;
+    }
+    .batch-item.selected-batch {
+        background: linear-gradient(90deg, #d0e4ff 0%, #e8f1ff 100%) !important;
+        border-left-color: #2563eb !important;
+        border-left-width: 4px !important;
+        box-shadow: inset 0 0 0 1px rgba(37,99,235,0.18) !important;
+        transform: translateX(4px) !important;
+    }
+    .batch-item.selected-batch .fw-bold.text-primary {
+        color: #1d4ed8 !important;
+    }
+    .batch-item.selected-batch .add-btn {
+        background: #1d4ed8 !important;
+        border-color: #1d4ed8 !important;
+        box-shadow: 0 2px 8px rgba(29,78,216,0.35);
+    }
+
+    /* ── Patient Details section pulse on Tab-in ── */
+    @keyframes patientPulse {
+        0%   { box-shadow: 0 0 0 0 rgba(34,197,94,0.0); background: transparent; }
+        30%  { box-shadow: 0 0 0 6px rgba(34,197,94,0.25); background: rgba(34,197,94,0.07); }
+        70%  { box-shadow: 0 0 0 10px rgba(34,197,94,0.10); background: rgba(34,197,94,0.04); }
+        100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.0); background: transparent; }
+    }
+    .patient-section-pulse {
+        animation: patientPulse 1.2s ease forwards;
+        border-radius: 10px;
+        padding: 8px !important;
+        margin: -8px !important;
+    }
+
+    .batch-list {
+        max-height: 200px;
+        overflow-y: auto;
+    }
+
+    .selected-batch {
+        background-color: #e9ecef !important;
+        border-color: #0d6efd !important;
+        box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
+    }
+
+    .universal-loader {
+        position: fixed;
+        inset: 0;
+        z-index: 2000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.88);
+        backdrop-filter: blur(2px);
+    }
+
+    .universal-loader.d-none {
+        display: none !important;
+    }
+
+    .loader-spinner {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1rem 1.25rem;
+        background: #ffffff;
+        border-radius: 0.75rem;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.12);
+    }
+
+    .loader-text {
+        font-weight: 600;
+        color: #212529;
+    }
+
+    /* Enhanced POS Cart Styling */
+    .cart-row {
+        transition: all 0.2s ease;
+        border-left: 3px solid transparent;
+    }
+
+    .cart-row:hover {
+        background-color: #f8f9fa;
+        border-left-color: #28a745;
+    }
+
+    .qty-input {
+        font-weight: 600;
+        transition: all 0.2s;
+    }
+
+    .qty-input:focus {
+        background-color: #fff !important;
+        border-color: #0d6efd !important;
+        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    }
+
+    #productSearch:focus {
+        background-color: #ffffff !important;
+        border: 2px solid #28a745 !important;
+        box-shadow: 0 0 0 0.3rem rgba(40, 167, 69, 0.15);
+        padding-left: 3rem;
+    }
+
+    .batch-item {
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .batch-item:hover {
+        background-color: #f1f3f5 !important;
+        transform: translateX(5px);
+    }
+
+    kbd {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 3px;
+        padding: 2px 6px;
+        font-size: 0.75rem;
+        font-family: monospace;
+        display: inline-block;
+        box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
+    }
+
+    .alert-info {
+        border-radius: 12px;
+    }
+</style>
+{% endblock %}

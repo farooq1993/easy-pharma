@@ -1,0 +1,219 @@
+{% extends 'includes/base.html' %}
+{% load static %}
+{% load custom_filters %}
+
+{% block title %}Activity Logs — {{ tenant.pharmacy_name }}{% endblock %}
+
+{% block content %}
+<style>
+:root{--pm-card:#1e293b;--pm-border:#334155;--pm-accent:#6366f1;--pm-accent2:#8b5cf6;}
+.pm-card{background:var(--pm-card);border:1px solid var(--pm-border);border-radius:1rem;}
+.pm-header{background:linear-gradient(135deg,var(--pm-accent),var(--pm-accent2));border-radius:1rem;padding:2rem;margin-bottom:2rem;}
+.filter-bar{background:rgba(255,255,255,.03);border:1px solid var(--pm-border);border-radius:.75rem;padding:1rem 1.25rem;margin-bottom:1.5rem;}
+.form-control,.form-select{background:#0f172a!important;border:1px solid var(--pm-border);color:#e2e8f0!important;border-radius:.5rem;}
+.form-control:focus,.form-select:focus{border-color:var(--pm-accent);box-shadow:0 0 0 3px rgba(99,102,241,.2);}
+.log-table thead th{background:rgba(99,102,241,.12);color:#94a3b8;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;border:none;padding:.7rem 1rem;}
+.log-table tbody tr{border-bottom:1px solid rgba(51,65,85,.6);transition:background .15s;}
+.log-table tbody tr:hover{background:rgba(99,102,241,.06);}
+.log-table tbody td{color:#e2e8f0;padding:.65rem 1rem;border:none;vertical-align:middle;font-size:.875rem;}
+.action-badge{display:inline-flex;align-items:center;gap:.3rem;padding:.2rem .6rem;border-radius:.4rem;font-size:.68rem;font-weight:700;letter-spacing:.03em;}
+.act-LOGIN   {background:rgba(16,185,129,.15);color:#6ee7b7;}
+.act-LOGOUT  {background:rgba(100,116,139,.15);color:#94a3b8;}
+.act-CREATE  {background:rgba(99,102,241,.15);color:#a5b4fc;}
+.act-UPDATE  {background:rgba(245,158,11,.15);color:#fcd34d;}
+.act-DELETE  {background:rgba(239,68,68,.15);color:#fca5a5;}
+.act-VIEW    {background:rgba(56,189,248,.15);color:#7dd3fc;}
+.act-EXPORT  {background:rgba(16,185,129,.1);color:#86efac;}
+.act-PERM    {background:rgba(168,85,247,.15);color:#d8b4fe;}
+.act-OTHER   {background:rgba(100,116,139,.12);color:#94a3b8;}
+.mod-label{display:inline-flex;align-items:center;gap:.25rem;font-size:.72rem;color:#94a3b8;background:rgba(255,255,255,.04);border-radius:.35rem;padding:.15rem .5rem;}
+.ip-text{font-family:monospace;font-size:.75rem;color:#64748b;}
+.time-text{font-size:.75rem;color:#64748b;white-space:nowrap;}
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.75rem;margin-bottom:1.5rem;}
+.stat-card{background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.2);border-radius:.75rem;padding:.9rem 1.1rem;text-align:center;}
+.stat-num{font-size:1.5rem;font-weight:800;color:#a5b4fc;}
+.stat-lbl{font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:.06em;}
+.page-btn{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:.5rem;border:1px solid var(--pm-border);color:#94a3b8;background:var(--pm-card);text-decoration:none;font-size:.85rem;transition:all .15s;}
+.page-btn:hover,.page-btn.active{border-color:var(--pm-accent);color:#a5b4fc;background:rgba(99,102,241,.15);}
+</style>
+
+<div class="container-fluid py-4" style="color:#e2e8f0;">
+
+  <!-- Header -->
+  <div class="pm-header d-flex align-items-center justify-content-between flex-wrap gap-3">
+    <div>
+      <h1 class="h3 fw-bold text-white mb-1"><i class="bi bi-clock-history me-2"></i>Activity Logs</h1>
+      <p class="mb-0 text-white opacity-75">Audit trail for <strong>{{ tenant.pharmacy_name }}</strong></p>
+    </div>
+    <a href="{% url 'user_management' %}" class="btn btn-outline-light px-3">
+      <i class="bi bi-arrow-left me-1"></i>Back to Users
+    </a>
+  </div>
+
+  <!-- Quick Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-num">{{ page_obj.paginator.count }}</div>
+      <div class="stat-lbl">Total Events</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">{{ days_filter }}d</div>
+      <div class="stat-lbl">Date Range</div>
+    </div>
+    {% if module_filter %}
+    <div class="stat-card">
+      <div class="stat-num text-sm">{{ module_filter|capfirst }}</div>
+      <div class="stat-lbl">Module Filter</div>
+    </div>
+    {% endif %}
+    {% if action_filter %}
+    <div class="stat-card">
+      <div class="stat-num text-sm">{{ action_filter }}</div>
+      <div class="stat-lbl">Action Filter</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Filters -->
+  <form method="GET" class="filter-bar">
+    <div class="row g-2 align-items-end">
+      <div class="col-sm-6 col-md-3">
+        <label class="form-label" style="color:#94a3b8;font-size:.75rem;font-weight:600;text-transform:uppercase;">Period</label>
+        <select name="days" class="form-select form-select-sm" id="filter-days">
+          {% for d in "7 14 30 60 90"|split:" " %}
+          <option value="{{ d }}" {% if days_filter|stringformat:"s" == d %}selected{% endif %}>Last {{ d }} days</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-sm-6 col-md-3">
+        <label class="form-label" style="color:#94a3b8;font-size:.75rem;font-weight:600;text-transform:uppercase;">Module</label>
+        <select name="module" class="form-select form-select-sm">
+          <option value="">All Modules</option>
+          {% for val,label in module_choices %}
+          <option value="{{ val }}" {% if module_filter == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-sm-6 col-md-2">
+        <label class="form-label" style="color:#94a3b8;font-size:.75rem;font-weight:600;text-transform:uppercase;">Action</label>
+        <select name="action" class="form-select form-select-sm">
+          <option value="">All Actions</option>
+          {% for val,label in action_choices %}
+          <option value="{{ val }}" {% if action_filter == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-sm-6 col-md-3">
+        <label class="form-label" style="color:#94a3b8;font-size:.75rem;font-weight:600;text-transform:uppercase;">User</label>
+        <input type="text" name="user" class="form-control form-control-sm" placeholder="Search username…" value="{{ user_filter }}">
+      </div>
+      <div class="col-md-1 d-flex gap-2">
+        <button type="submit" class="btn btn-sm" style="background:var(--pm-accent);color:#fff;border-radius:.5rem;padding:.4rem .8rem;">
+          <i class="bi bi-funnel-fill"></i>
+        </button>
+        <a href="{% url 'activity_logs' %}" class="btn btn-sm btn-outline-secondary" title="Clear filters" style="border-radius:.5rem;padding:.4rem .8rem;">
+          <i class="bi bi-x"></i>
+        </a>
+      </div>
+    </div>
+  </form>
+
+  <!-- Table -->
+  <div class="pm-card overflow-hidden">
+    {% if page_obj.object_list %}
+    <div class="table-responsive">
+      <table class="table log-table mb-0">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>User</th>
+            <th>Action</th>
+            <th>Module</th>
+            <th>Description</th>
+            <th>IP Address</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in page_obj %}
+          <tr>
+            <td>
+              <div class="time-text">{{ log.timestamp|date:"d M Y" }}</div>
+              <div class="time-text">{{ log.timestamp|date:"H:i:s" }}</div>
+            </td>
+            <td>
+              {% if log.user %}
+              <div class="d-flex align-items-center gap-2">
+                <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white"
+                     style="width:26px;height:26px;font-size:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6);flex-shrink:0;">
+                  {{ log.user.username|slice:":1"|upper }}
+                </div>
+                <span>{{ log.user.username }}</span>
+              </div>
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td>
+              <span class="action-badge act-{{ log.action_type }}">
+                {% if log.action_type == 'LOGIN' %}<i class="bi bi-box-arrow-in-right"></i>
+                {% elif log.action_type == 'LOGOUT' %}<i class="bi bi-box-arrow-right"></i>
+                {% elif log.action_type == 'CREATE' %}<i class="bi bi-plus-circle-fill"></i>
+                {% elif log.action_type == 'UPDATE' %}<i class="bi bi-pencil-fill"></i>
+                {% elif log.action_type == 'DELETE' %}<i class="bi bi-trash3-fill"></i>
+                {% elif log.action_type == 'VIEW' %}<i class="bi bi-eye-fill"></i>
+                {% elif log.action_type == 'EXPORT' %}<i class="bi bi-download"></i>
+                {% elif log.action_type == 'PERM' %}<i class="bi bi-shield-lock-fill"></i>
+                {% else %}<i class="bi bi-three-dots"></i>{% endif %}
+                {{ log.get_action_type_display }}
+              </span>
+            </td>
+            <td><span class="mod-label">{{ log.get_module_display }}</span></td>
+            <td style="max-width:300px;">
+              <span title="{{ log.description }}">{{ log.description|truncatechars:80 }}</span>
+            </td>
+            <td><span class="ip-text">{{ log.ip_address|default:"—" }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="d-flex align-items-center justify-content-between px-4 py-3" style="border-top:1px solid var(--pm-border);">
+      <div class="text-muted small">
+        Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }} events
+      </div>
+      <div class="d-flex gap-1">
+        {% if page_obj.has_previous %}
+        <a href="?{% url_replace page=page_obj.previous_page_number %}" class="page-btn"><i class="bi bi-chevron-left"></i></a>
+        {% endif %}
+        {% for num in page_obj.paginator.page_range %}
+          {% if num == page_obj.number %}
+          <span class="page-btn active">{{ num }}</span>
+          {% elif num|add:"0" >= page_obj.number|add:"-3" and num|add:"0" <= page_obj.number|add:"3" %}
+          <a href="?{% url_replace page=num %}" class="page-btn">{{ num }}</a>
+          {% endif %}
+        {% endfor %}
+        {% if page_obj.has_next %}
+        <a href="?{% url_replace page=page_obj.next_page_number %}" class="page-btn"><i class="bi bi-chevron-right"></i></a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="text-center py-5" style="color:#64748b;">
+      <i class="bi bi-inbox fs-1 d-block mb-3 opacity-25"></i>
+      <p class="fw-semibold mb-1">No activity logs found</p>
+      <p class="small opacity-75">
+        {% if module_filter or action_filter or user_filter %}
+          Try clearing filters to see more results.
+        {% else %}
+          Activity will appear here as users perform actions.
+        {% endif %}
+      </p>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

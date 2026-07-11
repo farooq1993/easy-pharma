@@ -242,14 +242,32 @@
 
                 <!-- Row 2: Packing + Conversion -->
                 <div class="row g-3 mb-3">
-                    <div class="col-md-6">
+                    <div class="col-md-3">
                         <label class="ep-label">Packing</label>
                         <input type="text" id="quickPacking" class="ep-input" placeholder="e.g. 10 tablets / strip">
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-3">
                         <label class="ep-label">Conversion Factor</label>
                         <input type="number" id="quickConv" class="ep-input" value="1" min="1"
                                title="Units per pack (e.g. 10 for a strip of 10 tablets)">
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="ep-label">Product Type</label>
+                        <select id="quickType" style="display:none;">
+                            {% for ptype in product_type %}
+                            <option value="{{ ptype.id }}">{{ ptype.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="qs-wrap" id="qs-wrap-quickType">
+                            <div class="qs-input-row">
+                                <input type="text" class="ep-input qs-input" id="qs-input-quickType" 
+                                    placeholder="Search type (Tablet, Capsule, Syrup...)">
+                                <button type="button" class="qs-clear-btn" id="qs-clear-quickType" 
+                                        onclick="qsClear('quickType')" style="display:none;">✕</button>
+                            </div>
+                            <div class="qs-dropdown" id="qs-drop-quickType" style="display:none;"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -479,6 +497,8 @@
 .qs-input:focus { border-color: #6366f1 !important; box-shadow: 0 0 0 3px rgba(99,102,241,0.15) !important; }
 </style>
 
+<script src="{% static 'js/localforage.min.js' %}"></script>
+
 <script>
 // ══════════════════════════════════════════════════
 //  Quick-Select: reusable searchable <select> widget
@@ -705,6 +725,7 @@
 
     // Init all 5 selects when DOM ready
     document.addEventListener('DOMContentLoaded', function() {
+<<<<<<< HEAD
         ['quickType', 'quickTax', 'quickSchedule', 'quickContent', 'quickCompany'].forEach(initQuickSelect);
 
         masterAddModal = new bootstrap.Modal(document.getElementById('masterAddModal'));
@@ -712,6 +733,13 @@
         // Re-sync inputs when modal is shown (edit/CSV flow pre-sets select values)
         document.getElementById('quickAddModal').addEventListener('show.bs.modal', function() {
             ['quickType', 'quickTax', 'quickSchedule', 'quickContent', 'quickCompany'].forEach(function(id) {
+=======
+        ['quickType','quickTax', 'quickSchedule', 'quickContent', 'quickCompany'].forEach(initQuickSelect);
+
+        // Re-sync inputs when modal is shown (edit/CSV flow pre-sets select values)
+        document.getElementById('quickAddModal').addEventListener('show.bs.modal', function() {
+            ['quickType','quickTax', 'quickSchedule', 'quickContent', 'quickCompany'].forEach(function(id) {
+>>>>>>> 645265cf7b3a7f25d6137cf83e3bf8e35bdb4a31
                 const sel   = document.getElementById(id);
                 const input = document.getElementById('qs-input-' + id);
                 const btn   = document.getElementById('qs-clear-' + id);
@@ -966,6 +994,7 @@
             document.getElementById('quickName').value = productName;
             document.getElementById('quickPacking').value = '';
             document.getElementById('quickConv').value = 1;
+            document.getElementById('quickType').value = '';
             document.getElementById('quickTax').value = '';
             document.getElementById('quickSchedule').value = '';
             document.getElementById('quickCompany').value = '';
@@ -1292,12 +1321,7 @@
                 }
             });
 
-            // product search
-        searchInput.addEventListener('input', async (e) => {
-            const query = e.target.value.trim();
-            if (query.length < 1) { searchResultsDiv.classList.remove('open'); searchResultsDiv.style.display = 'none'; return; }
-            const resp = await fetch(`/api/products/master-search/?q=${encodeURIComponent(query)}`);
-            const data = await resp.json();
+        function renderPurchaseSearchResults(data) {
             searchResultsDiv.innerHTML = '';
             searchSelectedIndex = -1;
             if (data.length === 0) {
@@ -1325,6 +1349,7 @@
                         document.getElementById('productInfo').style.display = 'block';
                         updateUnitPreview();
                         searchResultsDiv.style.display = 'none';
+                        searchResultsDiv.classList.remove('open');
                         // Clear previous batch suggestions & fetch fresh batch history for this product
                         suggestionsDiv.innerHTML = '';
                         suggestionsDiv.classList.remove('show');
@@ -1337,7 +1362,84 @@
                     searchResultsDiv.appendChild(btn);
                 });
             }
+            searchResultsDiv.classList.add('open');
             searchResultsDiv.style.display = 'block';
+        }
+
+        async function showDefaultProductsPurchase() {
+            try {
+                let products = [];
+                if (navigator.onLine) {
+                    const response = await fetch('/api/products/master-search/?limit=50');
+                    if (response.ok) {
+                        products = await response.json();
+                    }
+                }
+                if (!products || products.length === 0) {
+                    if (typeof OfflineSync !== 'undefined') {
+                        const store = localforage.createInstance({ name: 'ep_product_cache' });
+                        products = await store.getItem('master_products') || [];
+                    }
+                }
+                
+                if (products && products.length > 0) {
+                    renderPurchaseSearchResults(products);
+                } else {
+                    searchResultsDiv.innerHTML = `<div class="search-item p-2 text-muted">No products cached</div>`;
+                    searchResultsDiv.classList.add('open');
+                    searchResultsDiv.style.display = 'block';
+                }
+            } catch (err) {
+                console.error('Failed to load default purchase products', err);
+            }
+        }
+
+        // product search
+        searchInput.addEventListener('input', async (e) => {
+            const query = e.target.value.trim();
+            if (query.length < 1) { 
+                showDefaultProductsPurchase(); 
+                return; 
+            }
+            try {
+                const resp = await fetch(`/api/products/master-search/?q=${encodeURIComponent(query)}`);
+                if (!resp.ok) {
+                    throw new Error('Offline');
+                }
+                const data = await resp.json();
+                
+                // Cache for offline
+                const productsToCache = data?.results || data?.products || data || [];
+                if (Array.isArray(productsToCache) && productsToCache.length > 0 && typeof OfflineSync !== 'undefined') {
+                    OfflineSync.cacheProducts(productsToCache);
+                }
+
+                renderPurchaseSearchResults(data);
+            } catch (err) {
+                console.log('[Purchase] Offline product search activated');
+                if (typeof OfflineSync !== 'undefined') {
+                    const offlineResults = await OfflineSync.searchOfflineProducts(query, 'master');
+                    renderPurchaseSearchResults(offlineResults);
+                }
+            }
+        });
+
+        searchInput.addEventListener('focus', () => {
+            if (searchInput.value.trim().length === 0) {
+                showDefaultProductsPurchase();
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!searchInput.contains(e.target) && !searchResultsDiv.contains(e.target)) {
+                searchResultsDiv.style.display = 'none';
+                searchResultsDiv.classList.remove('open');
+            }
+        });
+
+        // Load default products on load
+        window.addEventListener('load', () => {
+            showDefaultProductsPurchase();
         });
 
         // Keydown listener on searchInput for keyboard dropdown navigation
@@ -1471,6 +1573,51 @@
                 dateEl.focus();
             }
         });
+
+         // ── Live duplicate invoice-number check (as soon as user types) ──
+        (function() {
+            const invEl = document.getElementById('invoiceNumber');
+            const supplierEl = document.getElementById('supplierSelect');
+            let debounceTimer = null;
+
+            async function checkInvoiceDuplicate() {
+                const invNo = invEl.value.trim();
+                const supplierId = supplierEl.value;
+
+                if (!invNo || !supplierId) {
+                    invEl.classList.remove('is-invalid');
+                    return;
+                }
+
+                const params = new URLSearchParams({
+                    supplier_id: supplierId,
+                    invoice_number: invNo
+                });
+                if (typeof editInvoiceId !== 'undefined' && editInvoiceId) {
+                    params.append('invoice_id', editInvoiceId);
+                }
+
+                try {
+                    const res = await fetch('/purchase/check-invoice-number/?' + params.toString());
+                    const data = await res.json();
+                    if (data.exists) {
+                        showToast(`Invoice number "${invNo}" already exists for this supplier`, 'error');
+                        invEl.classList.add('is-invalid');
+                    } else {
+                        invEl.classList.remove('is-invalid');
+                    }
+                } catch (e) {
+                    console.error('Invoice check failed', e);
+                }
+            }
+
+            invEl.addEventListener('input', function() {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(checkInvoiceDuplicate, 500);
+            });
+
+            invEl.addEventListener('blur', checkInvoiceDuplicate);
+        })();
 
         // Date → Medicine search on Enter
         document.getElementById('purchaseDate').addEventListener('keydown', function(e) {
@@ -1923,20 +2070,25 @@
     async function savePurchase() {
         const supplier = document.getElementById('supplierSelect').value;
         const invNo = document.getElementById('invoiceNumber').value.trim();
-        if(!supplier) return showToast('Select supplier','error');
-        if(!invNo) return showToast('Enter invoice number','error');
-        if(items.length===0) return showToast('Add at least one item','error');
+
+        if (!supplier) return showToast('Select supplier', 'error');
+        if (!invNo) return showToast('Enter invoice number', 'error');
+        if (items.length === 0) return showToast('Add at least one item', 'error');
 
         const saveBtn = document.querySelector('.btn-complete');
-        if(saveBtn) { saveBtn.disabled = true; saveBtn.classList.add('disabled'); }
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.classList.add('disabled');
+        }
         showLoader('Saving purchase...');
 
+        // Credit notes
         const applied_returns = [];
         document.querySelectorAll('.cn-checkbox').forEach((chk) => {
-            if(chk.checked) {
+            if (chk.checked) {
                 const idx = chk.dataset.idx;
                 const amt = parseFloat(document.getElementById(`cn-amt-${idx}`).value) || 0;
-                if(amt > 0) {
+                if (amt > 0) {
                     applied_returns.push({
                         return_id: availableCreditNotes[idx].id,
                         amount: amt
@@ -1946,40 +2098,72 @@
         });
 
         const data = {
-            supplier_id: supplier,
+            supplier_id: parseInt(supplier),
             invoice_number: invNo,
             purchase_date: document.getElementById('purchaseDate').value,
             items: items,
-            sub_total: parseFloat(document.getElementById('summarySubTotal').innerText.replace('₹','')),
-            tax_amount: parseFloat(document.getElementById('summaryTax').innerText.replace('₹','')),
+            sub_total: parseFloat(document.getElementById('summarySubTotal').innerText.replace(/[^0-9.-]+/g, '')) || 0,
+            tax_amount: parseFloat(document.getElementById('summaryTax').innerText.replace(/[^0-9.-]+/g, '')) || 0,
             discount_percentage: parseFloat(document.getElementById('summaryDiscountPerc').value) || 0,
             discount_amount: parseFloat(document.getElementById('summaryDiscount').value) || 0,
-            payment_mode: document.getElementById('summaryPaymentMode').value,
-            total_amount: parseFloat(document.getElementById('summaryGrandTotal').innerText.replace('₹','')),
-            round_off: parseFloat(document.getElementById('summaryRoundOff').innerText.replace('₹','').replace('+','').replace('−','-')) || 0,
+            payment_mode: document.getElementById('summaryPaymentMode').value || 'Cash',
+            total_amount: parseFloat(document.getElementById('summaryGrandTotal').innerText.replace(/[^0-9.-]+/g, '')) || 0,
+            round_off: parseFloat(document.getElementById('summaryRoundOff').innerText.replace(/[^0-9.-]+/g, '')) || 0,
             applied_returns: applied_returns
         };
-        const endpoint = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
+
+        const endpoint = window.location.pathname.endsWith('/') 
+            ? window.location.pathname 
+            : window.location.pathname + '/';
 
         try {
             if (!navigator.onLine && typeof OfflineSync !== 'undefined') {
-                const fakeId = 'OFF_PUR_' + Date.now();
-                await OfflineSync.queueRequest(OfflineSync.purchaseStore, endpoint, data, 'Purchase saved offline!');
-                showPurchaseConfirm({ success: true, invoice_id: fakeId });
+                console.log('[Purchase] Queuing offline...', endpoint);
+                await OfflineSync.queueRequest(
+                    OfflineSync.purchaseStore, 
+                    endpoint, 
+                    data, 
+                    'Purchase saved offline! Will sync when online.'
+                );
+                showPurchaseConfirm({ success: true, purchase_number: 'OFF-' + Date.now() });
             } else {
-                const response = await fetch(endpoint, { method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken}, body:JSON.stringify(data) });
-                const result = await response.json();
-                if(result.success) {
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json().catch(() => ({}));
+
+                if (response.ok && (result.success || result.status === 'success')) {
+                    if (typeof OfflineSync !== 'undefined') {
+                        OfflineSync.preloadProductCache();
+                    }
                     showPurchaseConfirm(result);
+                } else if (result.queued) {
+                    showPurchaseConfirm({ success: true, purchase_number: 'SW-OFF-' + Date.now() });
                 } else {
-                    showToast('Error: '+ (result.error||'server'),'error');
+                    showToast(result.error || 'Server error occurred', 'error');
                 }
             }
         } catch (err) {
-            showToast('Error: ' + err.message, 'error');
+            console.error('[Purchase Save Error]', err);
+            if (typeof OfflineSync !== 'undefined') {
+                await OfflineSync.queueRequest(OfflineSync.purchaseStore, endpoint, data, 'Purchase saved offline!');
+                showPurchaseConfirm({ success: true, purchase_number: 'OFF-' + Date.now() });
+            } else {
+                showToast('Network error: ' + err.message, 'error');
+            }
         } finally {
             hideLoader();
-            if(saveBtn) { saveBtn.disabled = false; saveBtn.classList.remove('disabled'); }
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.classList.remove('disabled');
+            }
         }
     }
 
@@ -2867,31 +3051,46 @@ async function saveEditProduct() {
 </div>
 {% include 'includes/purchase_import.html' %}
 <script>
-function showPurchaseConfirm(result) {
-    // Fill purchase number (backend may send as purchase_number, voucher_number, or id)
-    const pvNum = result.purchase_number || result.voucher_number || result.purchase_id
-                  ? (result.purchase_number || result.voucher_number || ('PV-' + result.purchase_id))
-                  : '—';
-    document.getElementById('confirmPurchaseNumber').textContent = pvNum;
+    function showPurchaseConfirm(result) {
+        // Purchase Voucher Number
+        let pvNum = 'OFF-' + Date.now();
+        if (result && (result.purchase_number || result.voucher_number || result.id)) {
+            pvNum = result.purchase_number || result.voucher_number || ('PV-' + result.id);
+        }
+        document.getElementById('confirmPurchaseNumber').textContent = pvNum;
 
-    // Fill summary from current form state
-    const suppSel = document.getElementById('supplierSelect');
-    const suppName = suppSel.options[suppSel.selectedIndex]
-                     ? suppSel.options[suppSel.selectedIndex].text.split(' | ')[0]
-                     : '—';
-    document.getElementById('confirmSupplier').textContent = suppName;
-    document.getElementById('confirmInvoice').textContent  =
-        document.getElementById('invoiceNumber').value || '—';
-    document.getElementById('confirmItems').textContent    =
-        items.length + ' item' + (items.length !== 1 ? 's' : '');
-    document.getElementById('confirmTotal').textContent    =
-        document.getElementById('summaryGrandTotal').innerText;
+        // Supplier Name - Safe way
+        let suppName = '—';
+        const suppSel = document.getElementById('supplierSelect');
+        if (suppSel && suppSel.options && suppSel.selectedIndex >= 0) {
+            const optionText = suppSel.options[suppSel.selectedIndex].textContent || '';
+            suppName = optionText.split('|')[0].trim();
+        }
+        document.getElementById('confirmSupplier').textContent = suppName;
 
-    hideLoader();
-    bootstrap.Modal.getOrCreateInstance(
-        document.getElementById('purchaseConfirmModal')
-    ).show();
-}
+        // Other fields
+        document.getElementById('confirmInvoice').textContent = 
+            document.getElementById('invoiceNumber').value || '—';
+
+        document.getElementById('confirmItems').textContent = 
+            (items ? items.length : 0) + ' item' + ((items && items.length !== 1) ? 's' : '');
+
+        document.getElementById('confirmTotal').textContent = 
+            document.getElementById('summaryGrandTotal').innerText || '₹0.00';
+
+        hideLoader();
+
+        // Show modal
+        const modalElement = document.getElementById('purchaseConfirmModal');
+        if (modalElement) {
+            const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+            modal.show();
+        } else {
+            console.warn('[Purchase] Confirm modal not found');
+            showToast('Purchase saved offline successfully!', 'success');
+        }
+    }
+
 </script>
 <script src="{% static 'js/purchase/purchase.js' %}"></script>
 {% endblock %}
