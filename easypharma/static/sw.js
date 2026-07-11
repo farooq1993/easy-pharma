@@ -9,7 +9,7 @@
  * Failed POST transactions are stored locally and retried when connectivity returns.
  */
 
-const SW_VERSION = 'v1.5.7';   // 
+const SW_VERSION = 'v1.5.8';   // 
 const CACHE_STATIC = `ep-static-${SW_VERSION}`;
 const CACHE_PAGES  = `ep-pages-${SW_VERSION}`;
 const CACHE_API    = `ep-api-${SW_VERSION}`;
@@ -155,9 +155,9 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 4. Stale-While-Revalidate for HTML pages
+  // 4. Network-First for HTML pages (ensures real-time updates when online, falls back to cache offline)
   if (request.headers.get('Accept') && request.headers.get('Accept').includes('text/html')) {
-    event.respondWith(staleWhileRevalidate(request, CACHE_PAGES));
+    event.respondWith(networkFirstHTML(request, CACHE_PAGES));
     return;
   }
 
@@ -350,6 +350,33 @@ async function staleWhileRevalidate(request, cacheName) {
   return offline || new Response('<h1>You are offline</h1>', {
     headers: { 'Content-Type': 'text/html' }
   });
+}
+
+async function networkFirstHTML(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  try {
+    // Try to fetch from network with a short timeout
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2500);
+
+    const response = await fetch(request, { signal: controller.signal });
+    clearTimeout(timer);
+
+    if (response.ok) {
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch (err) {
+    // Fetch failed (offline) — return cached copy if available
+    const cached = await caches.match(request);
+    if (cached) return cached;
+
+    // Show offline fallback page
+    const offline = await caches.match('/offline/');
+    return offline || new Response('<h1>You are offline</h1>', {
+      headers: { 'Content-Type': 'text/html' }
+    });
+  }
 }
 
 async function networkFirstWithTimeout(request, cacheName, timeout) {
