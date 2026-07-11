@@ -1,0 +1,219 @@
+{% extends 'includes/base.html' %}
+{% load static %}
+
+{% block title %}Edit Permissions — {{ target_user.username }}{% endblock %}
+
+{% block content %}
+<style>
+:root{--pm-card:#1e293b;--pm-border:#334155;--pm-accent:#6366f1;--pm-accent2:#8b5cf6;}
+.pm-card{background:var(--pm-card);border:1px solid var(--pm-border);border-radius:1rem;}
+.pm-header{background:linear-gradient(135deg,var(--pm-accent),var(--pm-accent2));border-radius:1rem;padding:2rem;margin-bottom:2rem;}
+.toggle-card{background:rgba(255,255,255,.03);border:1px solid var(--pm-border);border-radius:.8rem;padding:1.1rem 1.3rem;display:flex;align-items:center;justify-content:space-between;transition:background .18s,border-color .18s;}
+.toggle-card:hover{background:rgba(99,102,241,.07);border-color:rgba(99,102,241,.3);}
+.toggle-card label{color:#e2e8f0;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:.75rem;margin:0;flex:1;}
+.mod-icon{width:36px;height:36px;border-radius:.6rem;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;}
+.form-check-input[type=checkbox]{width:2.5rem;height:1.35rem;cursor:pointer;background-color:#1e293b;border-color:#475569;flex-shrink:0;}
+.form-check-input[type=checkbox]:checked{background-color:var(--pm-accent);border-color:var(--pm-accent);}
+.btn-save{background:linear-gradient(135deg,var(--pm-accent),var(--pm-accent2));border:none;color:#fff;padding:.7rem 2rem;border-radius:.7rem;font-weight:700;transition:transform .15s,box-shadow .15s;}
+.btn-save:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(99,102,241,.35);color:#fff;}
+.user-meta{background:rgba(255,255,255,.04);border-radius:.75rem;padding:1.25rem;}
+.section-label{color:#6366f1;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:.5rem 0 .5rem;border-bottom:1px solid rgba(99,102,241,.2);margin-bottom:1rem;}
+.changed-badge{display:none;background:#f59e0b;color:#000;font-size:.65rem;font-weight:700;padding:.15rem .5rem;border-radius:.4rem;vertical-align:middle;margin-left:.5rem;}
+</style>
+
+<div class="container-fluid py-4" style="color:#e2e8f0;">
+
+  <!-- Header -->
+  <div class="pm-header d-flex align-items-center justify-content-between flex-wrap gap-3">
+    <div>
+      <h1 class="h3 fw-bold text-white mb-1">
+        <i class="bi bi-sliders2 me-2"></i>Edit Permissions
+        <span class="changed-badge" id="changed-badge">UNSAVED</span>
+      </h1>
+      <p class="mb-0 text-white opacity-75">Configuring access for <strong>{{ target_user.username }}</strong> in <strong>{{ tenant.pharmacy_name }}</strong></p>
+    </div>
+    <a href="{% url 'user_management' %}" class="btn btn-outline-light px-3">
+      <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-{{ message.tags }} alert-dismissible fade show rounded-3 mb-3">
+        {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <form method="POST">
+    {% csrf_token %}
+    <div class="row g-4">
+
+      <!-- Left: User Card -->
+      <div class="col-lg-4">
+        <div class="pm-card p-4">
+          <div class="section-label">User Info</div>
+          <div class="user-meta text-center mb-3">
+            <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white mx-auto mb-3"
+                 style="width:56px;height:56px;font-size:22px;background:linear-gradient(135deg,#6366f1,#8b5cf6);">
+              {{ target_user.username|slice:":1"|upper }}
+            </div>
+            <div class="fw-bold fs-5">{{ target_user.username }}</div>
+            <div class="text-muted small">{{ target_user.get_user_type_display }}</div>
+            <div class="mt-2">
+              {% if target_user.is_active %}
+                <span class="badge rounded-pill" style="background:rgba(16,185,129,.2);color:#6ee7b7;">● Active</span>
+              {% else %}
+                <span class="badge rounded-pill" style="background:rgba(239,68,68,.2);color:#fca5a5;">● Inactive</span>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="section-label mt-3">Last Updated</div>
+          <p class="text-muted small">{{ perm.updated_at|date:"d M Y, H:i" }}</p>
+
+          <div class="section-label mt-2">Quick Preset</div>
+          <div class="d-flex flex-column gap-2">
+            <button type="button" class="btn btn-sm btn-outline-success" onclick="applyPreset('pharmacist')">
+              <i class="bi bi-capsule me-1"></i>Pharmacist Defaults
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-warning" onclick="applyPreset('employee')">
+              <i class="bi bi-person-badge me-1"></i>Employee Defaults
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="applyPreset('none')">
+              <i class="bi bi-slash-circle me-1"></i>Revoke All
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Permissions -->
+      <div class="col-lg-8">
+        <div class="pm-card p-4">
+          <div class="section-label">Module Access</div>
+
+          <div class="d-flex flex-column gap-2 mb-4" id="perm-list">
+
+            <div class="toggle-card">
+              <label for="ep_sales">
+                <div class="mod-icon bg-success bg-opacity-10 text-success"><i class="bi bi-cart-fill"></i></div>
+                <div><div class="fw-semibold">Sales</div><div class="small text-muted">POS billing, invoices, returns, patient history</div></div>
+              </label>
+              <input class="form-check-input perm-toggle" type="checkbox" name="can_access_sales" id="ep_sales"
+                     {% if perm.can_access_sales %}checked{% endif %}>
+            </div>
+
+            <div class="toggle-card">
+              <label for="ep_purchase">
+                <div class="mod-icon bg-primary bg-opacity-10 text-primary"><i class="bi bi-bag-check-fill"></i></div>
+                <div><div class="fw-semibold">Purchase</div><div class="small text-muted">Purchase entry, history, supplier reports, expiry returns</div></div>
+              </label>
+              <input class="form-check-input perm-toggle" type="checkbox" name="can_access_purchase" id="ep_purchase"
+                     {% if perm.can_access_purchase %}checked{% endif %}>
+            </div>
+
+            <div class="toggle-card">
+              <label for="ep_master">
+                <div class="mod-icon bg-info bg-opacity-10 text-info"><i class="bi bi-box2-fill"></i></div>
+                <div><div class="fw-semibold">Master / Inventory</div><div class="small text-muted">Products, types, schedules, suppliers, companies, doctors</div></div>
+              </label>
+              <input class="form-check-input perm-toggle" type="checkbox" name="can_access_master" id="ep_master"
+                     {% if perm.can_access_master %}checked{% endif %}>
+            </div>
+
+            <div class="toggle-card">
+              <label for="ep_reports">
+                <div class="mod-icon bg-warning bg-opacity-10 text-warning"><i class="bi bi-bar-chart-fill"></i></div>
+                <div><div class="fw-semibold">Reports</div><div class="small text-muted">Daily sales, profit, stock, GST, purchase analysis</div></div>
+              </label>
+              <input class="form-check-input perm-toggle" type="checkbox" name="can_access_reports" id="ep_reports"
+                     {% if perm.can_access_reports %}checked{% endif %}>
+            </div>
+
+            <div class="toggle-card">
+              <label for="ep_gst">
+                <div class="mod-icon" style="background:rgba(16,185,129,.1);color:#10b981;"><i class="bi bi-file-earmark-check-fill"></i></div>
+                <div><div class="fw-semibold">GST Compliance</div><div class="small text-muted">GST dashboard, configuration, filings, GSTR reports</div></div>
+              </label>
+              <input class="form-check-input perm-toggle" type="checkbox" name="can_access_gst" id="ep_gst"
+                     {% if perm.can_access_gst %}checked{% endif %}>
+            </div>
+
+            <div class="toggle-card">
+              <label for="ep_accounting">
+                <div class="mod-icon" style="background:rgba(245,158,11,.1);color:#f59e0b;"><i class="bi bi-wallet2"></i></div>
+                <div><div class="fw-semibold">Accounting</div><div class="small text-muted">Supplier payments, ledger</div></div>
+              </label>
+              <input class="form-check-input perm-toggle" type="checkbox" name="can_access_accounting" id="ep_accounting"
+                     {% if perm.can_access_accounting %}checked{% endif %}>
+            </div>
+
+            <div class="toggle-card">
+              <label for="ep_utility">
+                <div class="mod-icon" style="background:rgba(139,92,246,.1);color:#8b5cf6;"><i class="bi bi-tools"></i></div>
+                <div><div class="fw-semibold">Utility / Settings</div><div class="small text-muted">General settings, printing setup, database backup</div></div>
+              </label>
+              <input class="form-check-input perm-toggle" type="checkbox" name="can_access_utility" id="ep_utility"
+                     {% if perm.can_access_utility %}checked{% endif %}>
+            </div>
+
+            <div class="toggle-card">
+              <label for="ep_firm">
+                <div class="mod-icon" style="background:rgba(99,102,241,.1);color:#6366f1;"><i class="bi bi-building"></i></div>
+                <div><div class="fw-semibold">Firm Details</div><div class="small text-muted">Pharmacy profile management</div></div>
+              </label>
+              <input class="form-check-input perm-toggle" type="checkbox" name="can_access_firm_details" id="ep_firm"
+                     {% if perm.can_access_firm_details %}checked{% endif %}>
+            </div>
+
+            <div class="toggle-card" style="border-color:rgba(239,68,68,.3);">
+              <label for="ep_users">
+                <div class="mod-icon" style="background:rgba(239,68,68,.1);color:#ef4444;"><i class="bi bi-people-fill"></i></div>
+                <div>
+                  <div class="fw-semibold">User Management <span class="badge bg-danger bg-opacity-25 text-danger" style="font-size:.65rem;">Sensitive</span></div>
+                  <div class="small text-muted">Can add, edit, and delete other users</div>
+                </div>
+              </label>
+              <input class="form-check-input perm-toggle" type="checkbox" name="can_manage_users" id="ep_users"
+                     {% if perm.can_manage_users %}checked{% endif %}>
+            </div>
+
+          </div>
+
+          <div class="d-flex gap-3">
+            <button type="submit" class="btn-save flex-grow-1">
+              <i class="bi bi-check2-circle me-1"></i>Save Permissions
+            </button>
+            <a href="{% url 'user_management' %}" class="btn btn-outline-secondary px-4">Cancel</a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </form>
+</div>
+
+<script>
+// Presets
+const PRESETS = {
+  pharmacist: { ep_sales:true,  ep_purchase:true,  ep_master:true,  ep_reports:false, ep_gst:false, ep_accounting:false, ep_utility:false, ep_firm:false, ep_users:false },
+  employee:   { ep_sales:true,  ep_purchase:false, ep_master:true,  ep_reports:false, ep_gst:false, ep_accounting:false, ep_utility:false, ep_firm:false, ep_users:false },
+  none:       { ep_sales:false, ep_purchase:false, ep_master:false, ep_reports:false, ep_gst:false, ep_accounting:false, ep_utility:false, ep_firm:false, ep_users:false },
+};
+function applyPreset(name){
+  const p = PRESETS[name];
+  for(const [id, val] of Object.entries(p)){
+    const el = document.getElementById(id);
+    if(el) el.checked = val;
+  }
+  markChanged();
+}
+// Unsaved indicator
+function markChanged(){
+  document.getElementById('changed-badge').style.display='inline';
+}
+document.querySelectorAll('.perm-toggle').forEach(cb=>{
+  cb.addEventListener('change', markChanged);
+});
+</script>
+{% endblock %}

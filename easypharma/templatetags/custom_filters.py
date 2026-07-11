@@ -47,3 +47,11 @@ def ljust(value, width):
 @register.filter
 def rjust(value, width):
     return str(value).rjust(int(width))
+
+
+@register.filter
+def split(value, delimiter=','):
+    """Split a string by delimiter and return list. Usage: '1,2,3'|split:',' """
+    if not value:
+        return []
+    return str(value).split(delimiter)
