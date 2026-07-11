@@ -9,7 +9,7 @@
  * Failed POST transactions are stored locally and retried when connectivity returns.
  */
 
-const SW_VERSION = 'v1.5.8';   // 
+const SW_VERSION = 'v1.5.9';   // 
 const CACHE_STATIC = `ep-static-${SW_VERSION}`;
 const CACHE_PAGES  = `ep-pages-${SW_VERSION}`;
 const CACHE_API    = `ep-api-${SW_VERSION}`;
@@ -26,7 +26,7 @@ const PRECACHE_ASSETS = [
   '/static/img/pwa-icon-512.png',
   '/offline/',
   '/pos/',
-  '/purchase/',
+  '/entry/',
 ];
 
 // URLs whose responses should always come from the network (write/auth pages)
@@ -355,13 +355,7 @@ async function staleWhileRevalidate(request, cacheName) {
 async function networkFirstHTML(request, cacheName) {
   const cache = await caches.open(cacheName);
   try {
-    // Try to fetch from network with a short timeout
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 2500);
-
-    const response = await fetch(request, { signal: controller.signal });
-    clearTimeout(timer);
-
+    const response = await fetch(request);
     if (response.ok) {
       cache.put(request, response.clone());
     }
