@@ -1972,6 +1972,9 @@
                 const result = await response.json().catch(() => ({}));
 
                 if (response.ok && (result.success || result.status === 'success')) {
+                    if (typeof OfflineSync !== 'undefined') {
+                        OfflineSync.preloadProductCache();
+                    }
                     showPurchaseConfirm(result);
                 } else if (result.queued) {
                     showPurchaseConfirm({ success: true, purchase_number: 'SW-OFF-' + Date.now() });
