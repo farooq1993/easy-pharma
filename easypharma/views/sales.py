@@ -580,7 +580,8 @@ class ProductSearchAPI(LoginRequiredMixin,View):
     def _cache_key(tenant_id, query):
         # Include version so invalidate_pos_cache() busts all search entries at once
         version = _pos_search_version(tenant_id)
-        return f'pos_search:{tenant_id}:v{version}:{query.lower().strip()}'
+        clean_query = query.lower().strip().replace(' ', '_')
+        return f'pos_search:{tenant_id}:v{version}:{clean_query}'
 
     def get(self, request):
         query = request.GET.get('q', '').strip()

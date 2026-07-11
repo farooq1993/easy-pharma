@@ -1236,6 +1236,13 @@
             try {
                 const resp = await fetch(`/api/products/master-search/?q=${encodeURIComponent(query)}`);
                 const data = await resp.json();
+                
+                // Cache for offline
+                const productsToCache = data?.results || data?.products || data || [];
+                if (Array.isArray(productsToCache) && productsToCache.length > 0 && typeof OfflineSync !== 'undefined') {
+                    OfflineSync.cacheProducts(productsToCache);
+                }
+
                 renderPurchaseSearchResults(data);
             } catch (err) {
                 console.log('[Purchase] Offline product search activated');

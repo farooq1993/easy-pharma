@@ -1110,8 +1110,9 @@
             const data = await response.json();
 
             // Cache for offline
-            if (data.results && data.results.length > 0) {
-                OfflineSync.cacheProducts(data.results);
+            const productsToCache = data?.results || data?.products || data || [];
+            if (Array.isArray(productsToCache) && productsToCache.length > 0) {
+                OfflineSync.cacheProducts(productsToCache);
             }
 
             renderSearchResults(data);
