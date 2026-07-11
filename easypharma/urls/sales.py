@@ -2,7 +2,7 @@ from django.urls import path
 from easypharma.views.sales import(POSView, ProductSearchAPI, 
                         SaleListView, PrintInvoiceView, 
                         SalesReturnView, SubstituteSearchAPI,PatientWiseSales,PatientWiseSalesAPI,PrescriptionReminderView,
-                        get_customer_invoices,PrescriptionReminderDeleteView)
+                        get_customer_invoices,PrescriptionReminderDeleteView, PrescriptionScanAPI)
 
 urlpatterns = [
     path('pos/', POSView.as_view(), name='pos'),
@@ -12,6 +12,7 @@ urlpatterns = [
     path('pos/print/<int:invoice_id>/', PrintInvoiceView.as_view(), name='pos_print'),
     path('pos/returns', SalesReturnView.as_view(), name='pos_returns'),
     #path('pos/returns', SalesReturnView.as_view(), name='pos_returns_no_slash'),
+    path('api/pos/scan-prescription/', PrescriptionScanAPI.as_view(), name='scan_prescription_api'),
     path('api/products/search/', ProductSearchAPI.as_view(), name='product_search_api'),
     path('api/products/substitute/', SubstituteSearchAPI.as_view(), name='substitute_search_api'),
     path('sales/patient-wise/', PatientWiseSales.as_view(), name='patient_wise_sales'),

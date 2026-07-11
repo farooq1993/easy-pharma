@@ -14,6 +14,7 @@ from easypharma.models.print_setup import PrintSetup
 from easypharma.models.sales import (SaleInvoice, SaleItem,
                                     Customer, SalesReturn, SalesReturnItem,PrescriptionReminder)
 import json
+import re
 from datetime import datetime
 from urllib.parse import quote_plus
 
@@ -1132,3 +1133,158 @@ def get_customer_invoices(request):
     return JsonResponse({
         'products': data
     })
+
+
+from easypharma.models.prescription_scan_log import PrescriptionScanLog
+from easypharma.utility.prescription_service import extract_prescription_data
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+
+@method_decorator(csrf_exempt, name='dispatch')
+class PrescriptionScanAPI(LoginRequiredMixin, View):
+    def post(self, request):
+        if not request.tenant:
+            return JsonResponse({'success': False, 'error': 'No Pharmacy detected!'})
+            
+        # 1. Check daily limit
+        today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        scans_today = PrescriptionScanLog.objects.filter(
+            tenant=request.tenant,
+            created_at__gte=today_start
+        ).count()
+        
+        limit = request.tenant.max_daily_scans
+        if scans_today >= limit:
+            return JsonResponse({
+                'success': False, 
+                'error': f'Daily prescription scan limit of {limit} reached! Please upgrade your subscription plan.'
+            })
+            
+        # 2. Get uploaded file
+        prescription_file = request.FILES.get('prescription_image')
+        if not prescription_file:
+            return JsonResponse({'success': False, 'error': 'No prescription image file uploaded.'})
+            
+        # 3. Call service to parse image
+        try:
+            parsed_data = extract_prescription_data(prescription_file)
+        except ValueError as ve:
+            return JsonResponse({'success': False, 'error': str(ve)})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': f'AI Scanning failed: {str(e)}'})
+            
+        # 4. Success: Log the scan
+        PrescriptionScanLog.objects.create(
+            tenant=request.tenant,
+            user=request.user
+        )
+        
+        # 5. Match extracted medicines with database Products and Stock batches
+        extracted_items = parsed_data.get('medicines', [])
+        matched_results = []
+        
+        for item in extracted_items:
+            name = (item.get('name') or '').strip()
+            dosage = (item.get('dosage') or '').strip()
+            try:
+                qty = int(item.get('qty') or 10)
+            except (ValueError, TypeError):
+                qty = 10
+                
+            # Smart token-based database matching
+            clean_search = re.sub(r'(\d+)', r' \1 ', name.lower())
+            clean_search = re.sub(r'[-/(),]', ' ', clean_search)
+            tokens = [t.strip() for t in clean_search.split() if t.strip()]
+            
+            matched_products = []
+            if tokens:
+                brand_token = tokens[0]
+                candidates = Products.objects.filter(
+                    tenant=request.tenant
+                ).filter(
+                    Q(product_name__istartswith=brand_token) | Q(product_name__icontains=name)
+                ).select_related('product_tax', 'product_content', 'compny_name')[:50]
+                
+                candidate_scores = []
+                for p in candidates:
+                    p_name_lower = p.product_name.lower()
+                    score = 0
+                    
+                    # 1. Prefix matches brand name (e.g. starts with "pan")
+                    if p_name_lower.startswith(brand_token):
+                        score += 100
+                        
+                    # 2. Contains the clean extracted name as a whole substring
+                    if name.lower() in p_name_lower:
+                        score += 50
+                        
+                    # 3. Individual token matching overlap count
+                    for token in tokens:
+                        if token in p_name_lower:
+                            score += 10
+                            
+                    # 4. Length penalty (prefer closer matches over bloated names)
+                    score -= len(p.product_name) * 0.1
+                    
+                    candidate_scores.append((score, p))
+                
+                # Sort by score descending
+                candidate_scores.sort(key=lambda x: x[0], reverse=True)
+                matched_products = [x[1] for x in candidate_scores[:5]]
+            
+            if not matched_products and name:
+                # Try generic salt matching if brand name doesn't match
+                matched_products = list(Products.objects.filter(
+                    tenant=request.tenant,
+                    product_content__content_name__icontains=name
+                ).select_related('product_tax', 'product_content', 'compny_name')[:5])
+                
+            product_matches = []
+            for p in matched_products:
+                # Get active batches (FEFO)
+                batches = p.batches.filter(current_quantity__gt=0).order_by('expiry_date')
+                
+                batch_list = []
+                for batch in batches:
+                    unit_price = float(batch.sale_price) if batch.sale_price else 0.0
+                    if p.conversion_factor > 1 and batch.mrp:
+                        unit_price = float(batch.mrp) / p.conversion_factor
+                    elif unit_price == 0 and batch.mrp:
+                        unit_price = float(batch.mrp)
+                        
+                    batch_list.append({
+                        'batch_id': batch.id,
+                        'batch_no': batch.batch_number,
+                        'expiry': batch.expiry_date.strftime('%m/%y') if batch.expiry_date else '',
+                        'stock': batch.current_quantity,
+                        'price': unit_price,
+                        'mrp_pack': float(batch.mrp) if batch.mrp else 0.0
+                    })
+                    
+                product_matches.append({
+                    'id': p.id,
+                    'name': p.product_name,
+                    'packing': p.product_packing,
+                    'content': p.product_content.content_name if p.product_content else None,
+                    'company': p.compny_name.company_name if p.compny_name else None,
+                    'tax_rate': p.product_tax.tax_rate if p.product_tax else 0,
+                    'conversion_factor': p.conversion_factor,
+                    'batches': batch_list
+                })
+                
+            matched_results.append({
+                'scanned_name': f"{name} {dosage}".strip(),
+                'scanned_qty': qty,
+                'matches': product_matches,
+                'best_match': product_matches[0] if product_matches else None
+            })
+            
+        return JsonResponse({
+            'success': True,
+            'patient_name': parsed_data.get('patient_name'),
+            'patient_phone': parsed_data.get('patient_phone'),
+            'doctor_name': parsed_data.get('doctor_name'),
+            'results': matched_results,
+            'scans_today': scans_today + 1,
+            'max_scans': limit
+        })

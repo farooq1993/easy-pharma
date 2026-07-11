@@ -6,3 +6,5 @@ from .stock import StockBatch
 from .gst import GSTScheme, GSTConfiguration, GSTFiling, GSTReturn, GSTCompositionReturn, GSTReminder
 from .accounting import SupplierLedger, SupplierPayment, ExpiryReturn, ExpiryReturnItem
 from .print_setup import PrintSetup
+from .prescription_scan_log import PrescriptionScanLog
+
