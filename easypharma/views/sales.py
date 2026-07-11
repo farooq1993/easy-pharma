@@ -169,6 +169,8 @@ class POSView(LoginRequiredMixin,View):
                             batch.current_quantity += old_item.quantity
                             batch.save()
                     invoice.items.all().delete()
+                    from easypharma.models.accounting import CustomerLedger
+                    CustomerLedger.objects.filter(tenant=request.tenant, reference_number=invoice.invoice_number).delete()
                 else:
                     invoice = SaleInvoice(
                         tenant=request.tenant,
@@ -187,9 +189,43 @@ class POSView(LoginRequiredMixin,View):
                 invoice.total_amount = data['total_amount']
                 invoice.payment_mode = data['payment_mode']
                 invoice.sale_type = data.get('sale_type', 'Prescription')
+                if invoice.payment_mode != 'Credit':
+                    invoice.paid_amount = data['total_amount']
+                else:
+                    invoice.paid_amount = 0.00
                 if data.get('invoice_number'):
                     invoice.invoice_number = data['invoice_number']
                 invoice.save()
+
+                # If payment mode is Credit, link/create customer account and post to CustomerLedger
+                if invoice.payment_mode == 'Credit' and invoice.patient_name:
+                    from easypharma.models.sales import Customer
+                    customer, created = Customer.objects.get_or_create(
+                        tenant=request.tenant,
+                        name=invoice.patient_name.strip(),
+                        defaults={
+                            'phone': invoice.patient_phone or '',
+                            'address': invoice.patient_address or '',
+                        }
+                    )
+                    if not created and invoice.patient_phone and not customer.phone:
+                        customer.phone = invoice.patient_phone
+                        customer.save()
+                    
+                    invoice.customer = customer
+                    invoice.save(update_fields=['customer'])
+                    
+                    from easypharma.models.accounting import CustomerLedger
+                    CustomerLedger.objects.create(
+                        tenant=request.tenant,
+                        customer=customer,
+                        date=invoice.created_at.date() if invoice.created_at else now().date(),
+                        transaction_type='Sale',
+                        reference_number=invoice.invoice_number,
+                        debit=invoice.total_amount,
+                        credit=0.00,
+                        remarks=f"Sale Invoice #{invoice.invoice_number}"
+                    )
                 
                 # Create Sale Items & Deduct Stock
                 for item in data.get('items', []):

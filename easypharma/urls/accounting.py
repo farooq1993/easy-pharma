@@ -3,7 +3,8 @@ from easypharma.views.accounting import (
     SupplierLedgerView, SupplierPaymentView, ExpiryReturnView, 
     StockBatchAutocomplete, SupplierCreditBillsView,
     DeleteSupplierPaymentView, DeleteExpiryReturnView,
-    SupplierUnadjustedReturnsView
+    SupplierUnadjustedReturnsView,
+    CustomerPaymentView, DeleteCustomerPaymentView, CustomerCreditBillsView
 )
 
 urlpatterns = [
@@ -15,4 +16,9 @@ urlpatterns = [
     path('api/stock-batches/', StockBatchAutocomplete.as_view(), name='stock_batch_autocomplete'),
     path('api/supplier-credit-bills/', SupplierCreditBillsView.as_view(), name='supplier_credit_bills'),
     path('api/supplier-unadjusted-returns/', SupplierUnadjustedReturnsView.as_view(), name='supplier_unadjusted_returns'),
+    
+    # Customer Credit Accounting
+    path('accounting/customer-payment/', CustomerPaymentView.as_view(), name='customer_payment'),
+    path('accounting/customer-payment/<int:pk>/delete/', DeleteCustomerPaymentView.as_view(), name='delete_customer_payment'),
+    path('api/customer-credit-bills/', CustomerCreditBillsView.as_view(), name='customer_credit_bills'),
 ]
