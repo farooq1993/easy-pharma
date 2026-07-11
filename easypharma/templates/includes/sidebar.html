@@ -161,6 +161,7 @@
                 <li><a href="{% url 'gst_report' %}" class="nav-link small">GST Report</a></li>
                 <li><a href="{% url 'stock_report' %}" class="nav-link small">Stock Report</a></li>
                 <li><a href="{% url 'product_history' %}" class="nav-link small">Product History</a></li>
+                <li><a href="{% url 'schedule_h1_purchase_report' %}" class="nav-link small">H1 Purchase Report</a></li>
                 <li><a href="{% url 'purchase_analysis' %}" class="nav-link small"><i class="bi bi-graph-up-arrow me-1 text-warning"></i>Purchase Analysis</a></li>
             </ul>
         </li>
@@ -202,7 +203,8 @@
             </a>
             <ul class="collapse nav flex-column ms-3" id="accountingMenu">
                 <li><a href="{% url 'supplier_payment' %}" class="nav-link small">Supplier Payment</a></li>
-                <li><a href="{% url 'supplier_ledger' %}" class="nav-link small">Supplier Ledger</a></li>
+                <li><a href="{% url 'customer_payment' %}" class="nav-link small">Customer Payment (In)</a></li>
+                <li><a href="{% url 'supplier_ledger' %}" class="nav-link small">Ledger</a></li>
             </ul>
         </li>
         {% endif %}

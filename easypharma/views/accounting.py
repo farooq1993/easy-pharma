@@ -1,4 +1,5 @@
 from django.views import View
+from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.db import transaction
@@ -6,85 +7,211 @@ from django.utils.timezone import now
 import json
 
 from easypharma.models.purchase_invoice import Supplier, PurchaseInvoice
-from easypharma.models.accounting import SupplierLedger, SupplierPayment, ExpiryReturn, ExpiryReturnItem
+from easypharma.models.sales import Customer
+from easypharma.models.accounting import SupplierLedger, SupplierPayment, ExpiryReturn, ExpiryReturnItem, CustomerLedger, CustomerPayment
 from easypharma.models.stock import StockBatch
 
 class SupplierLedgerView(View):
-    template_name = 'accounting/supplier_ledger.html'
+    template_name = 'accounting/ledger.html'
 
     def get(self, request):
-        suppliers = Supplier.objects.filter(tenant=request.tenant)
-        supplier_id = request.GET.get('supplier_id')
+        suppliers = Supplier.objects.filter(tenant=request.tenant).order_by('name')
+        customers = Customer.objects.filter(tenant=request.tenant).order_by('name')
+        
+        account_id = request.GET.get('account_id')
         start_date = request.GET.get('start_date')
         end_date = request.GET.get('end_date')
         
+        # Fallback to direct query parameters
+        if not account_id:
+            raw_supplier_id = request.GET.get('supplier_id')
+            raw_customer_id = request.GET.get('customer_id')
+            if raw_customer_id:
+                account_id = f"customer_{raw_customer_id}"
+            elif raw_supplier_id:
+                account_id = f"supplier_{raw_supplier_id}"
+
         ledger_entries = []
         running_balance = 0
-        selected_supplier = None
+        selected_account = None
+        account_type = None
 
-        if supplier_id:
-            selected_supplier = get_object_or_404(Supplier, id=supplier_id, tenant=request.tenant)
+        if account_id:
+            account_id_lower = str(account_id).lower().strip()
             
-            # First, calculate opening balance before start_date if provided
-            opening_balance = 0
-            if start_date:
-                prior_entries = SupplierLedger.objects.filter(
-                    tenant=request.tenant,
-                    supplier=selected_supplier,
-                    date__lt=start_date
-                )
-                for entry in prior_entries:
-                    opening_balance += entry.credit - entry.debit
-            
-            running_balance = opening_balance
-
-            # Now fetch entries within the date range
-            entries = SupplierLedger.objects.filter(
-                tenant=request.tenant, 
-                supplier=selected_supplier
-            )
-            
-            if start_date:
-                entries = entries.filter(date__gte=start_date)
-            if end_date:
-                entries = entries.filter(date__lte=end_date)
+            if account_id_lower.startswith('customer_') or account_id_lower.startswith('customer:') or account_id_lower.startswith('customer-'):
+                account_type = 'customer'
+                customer_id = account_id_lower.replace('customer_', '').replace('customer:', '').replace('customer-', '')
+                selected_account = get_object_or_404(Customer, id=customer_id, tenant=request.tenant)
                 
-            entries = entries.order_by('date', 'id')
-            
-            if start_date and opening_balance != 0:
-                ledger_entries.append({
-                    'date': start_date,
-                    'transaction_type': 'Opening Balance',
-                    'reference_number': '-',
-                    'debit': 0,
-                    'credit': 0,
-                    'balance': opening_balance,
-                    'remarks': 'Brought Forward'
-                })
+                # Opening balance for customer (debit - credit)
+                opening_balance = 0
+                if start_date:
+                    prior_entries = CustomerLedger.objects.filter(
+                        tenant=request.tenant,
+                        customer=selected_account,
+                        date__lt=start_date
+                    )
+                    for entry in prior_entries:
+                        opening_balance += entry.debit - entry.credit
+                
+                running_balance = opening_balance
 
-            for entry in entries:
-                running_balance += entry.credit - entry.debit
-                ledger_entries.append({
-                    'date': entry.date,
-                    'transaction_type': entry.transaction_type,
-                    'reference_number': entry.reference_number,
-                    'debit': entry.debit,
-                    'credit': entry.credit,
-                    'balance': running_balance,
-                    'remarks': entry.remarks,
-                    'is_adjusted': entry.is_adjusted
-                })
+                # Fetch entries within range
+                entries = CustomerLedger.objects.filter(
+                    tenant=request.tenant,
+                    customer=selected_account
+                )
+                if start_date:
+                    entries = entries.filter(date__gte=start_date)
+                if end_date:
+                    entries = entries.filter(date__lte=end_date)
+                entries = entries.order_by('date', 'id')
+
+                if start_date and opening_balance != 0:
+                    ledger_entries.append({
+                        'date': start_date,
+                        'transaction_type': 'Opening Balance',
+                        'reference_number': '-',
+                        'debit': 0,
+                        'credit': 0,
+                        'balance': opening_balance,
+                        'remarks': 'Brought Forward'
+                    })
+
+                for entry in entries:
+                    running_balance += entry.debit - entry.credit
+                    ledger_entries.append({
+                        'date': entry.date,
+                        'transaction_type': entry.transaction_type,
+                        'reference_number': entry.reference_number,
+                        'debit': entry.debit,
+                        'credit': entry.credit,
+                        'balance': running_balance,
+                        'remarks': entry.remarks,
+                    })
+
+            elif account_id_lower.startswith('supplier_') or account_id_lower.startswith('supplier:') or account_id_lower.startswith('supplier-'):
+                account_type = 'supplier'
+                supplier_id = account_id_lower.replace('supplier_', '').replace('supplier:', '').replace('supplier-', '')
+                selected_account = get_object_or_404(Supplier, id=supplier_id, tenant=request.tenant)
+                
+                # Opening balance for supplier (credit - debit)
+                opening_balance = 0
+                if start_date:
+                    prior_entries = SupplierLedger.objects.filter(
+                        tenant=request.tenant,
+                        supplier=selected_account,
+                        date__lt=start_date
+                    )
+                    for entry in prior_entries:
+                        opening_balance += entry.credit - entry.debit
+                
+                running_balance = opening_balance
+
+                # Fetch entries within range
+                entries = SupplierLedger.objects.filter(
+                    tenant=request.tenant,
+                    supplier=selected_account
+                )
+                if start_date:
+                    entries = entries.filter(date__gte=start_date)
+                if end_date:
+                    entries = entries.filter(date__lte=end_date)
+                entries = entries.order_by('date', 'id')
+
+                if start_date and opening_balance != 0:
+                    ledger_entries.append({
+                        'date': start_date,
+                        'transaction_type': 'Opening Balance',
+                        'reference_number': '-',
+                        'debit': 0,
+                        'credit': 0,
+                        'balance': opening_balance,
+                        'remarks': 'Brought Forward'
+                    })
+
+                for entry in entries:
+                    running_balance += entry.credit - entry.debit
+                    ledger_entries.append({
+                        'date': entry.date,
+                        'transaction_type': entry.transaction_type,
+                        'reference_number': entry.reference_number,
+                        'debit': entry.debit,
+                        'credit': entry.credit,
+                        'balance': running_balance,
+                        'remarks': entry.remarks,
+                        'is_adjusted': getattr(entry, 'is_adjusted', False)
+                    })
 
         return render(request, self.template_name, {
+            'account_id': account_id,
+            'account_type': account_type,
             'suppliers': suppliers,
-            'selected_supplier': selected_supplier,
+            'customers': customers,
+            'selected_account': selected_account,
             'ledger_entries': ledger_entries,
             'closing_balance': running_balance,
             'start_date': start_date,
             'end_date': end_date,
-            'total_credit': sum(float(e['credit']) for e in ledger_entries if e['transaction_type'] != 'Opening Balance'),
             'total_debit': sum(float(e['debit']) for e in ledger_entries if e['transaction_type'] != 'Opening Balance'),
+            'total_credit': sum(float(e['credit']) for e in ledger_entries if e['transaction_type'] != 'Opening Balance'),
         })
+
+    def post(self, request):
+        account_id = request.POST.get('account_id')
+        entry_date = request.POST.get('date')
+        entry_type = request.POST.get('entry_type')
+        amount = request.POST.get('amount')
+        reference_number = request.POST.get('reference_number')
+        remarks = request.POST.get('remarks')
+
+        if not account_id or not entry_date or not amount or not entry_type:
+            messages.error(request, "Missing required fields for JV entry.")
+            return redirect('supplier_ledger')
+
+        try:
+            debit_val = 0.00
+            credit_val = 0.00
+            if entry_type == 'Debit':
+                debit_val = float(amount)
+            else:
+                credit_val = float(amount)
+
+            account_id_lower = str(account_id).lower().strip()
+
+            if account_id_lower.startswith('customer_') or account_id_lower.startswith('customer:') or account_id_lower.startswith('customer-'):
+                customer_id = account_id_lower.replace('customer_', '').replace('customer:', '').replace('customer-', '')
+                customer = get_object_or_404(Customer, id=customer_id, tenant=request.tenant)
+                CustomerLedger.objects.create(
+                    tenant=request.tenant,
+                    customer=customer,
+                    date=entry_date,
+                    transaction_type='JV',
+                    reference_number=reference_number or '',
+                    debit=debit_val,
+                    credit=credit_val,
+                    remarks=remarks or ''
+                )
+                messages.success(request, f"Journal Voucher (JV) entry of Rs. {amount} added successfully for customer {customer.name}!")
+            elif account_id_lower.startswith('supplier_') or account_id_lower.startswith('supplier:') or account_id_lower.startswith('supplier-'):
+                supplier_id = account_id_lower.replace('supplier_', '').replace('supplier:', '').replace('supplier-', '')
+                supplier = get_object_or_404(Supplier, id=supplier_id, tenant=request.tenant)
+                SupplierLedger.objects.create(
+                    tenant=request.tenant,
+                    supplier=supplier,
+                    date=entry_date,
+                    transaction_type='JV',
+                    reference_number=reference_number or '',
+                    debit=debit_val,
+                    credit=credit_val,
+                    remarks=remarks or ''
+                )
+                messages.success(request, f"Journal Voucher (JV) entry of Rs. {amount} added successfully for supplier {supplier.name}!")
+        except Exception as e:
+            messages.error(request, f"Failed to save JV entry: {str(e)}")
+            
+        return redirect(f'/accounting/supplier-ledger/?account_id={account_id}')
 
 class SupplierPaymentView(View):
     template_name = 'accounting/supplier_payment.html'
@@ -430,3 +557,157 @@ class DeleteExpiryReturnView(View):
                 return JsonResponse({'success': True})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
+
+
+class CustomerPaymentView(View):
+    template_name = 'accounting/customer_payment.html'
+
+    def get(self, request):
+        customers = Customer.objects.filter(tenant=request.tenant).order_by('name')
+        payments = CustomerPayment.objects.filter(tenant=request.tenant).order_by('-payment_date')
+        
+        # Calculate current receivable balance for each customer
+        for c in customers:
+            ledger = CustomerLedger.objects.filter(tenant=request.tenant, customer=c)
+            total_debit = sum(item.debit for item in ledger)
+            total_credit = sum(item.credit for item in ledger)
+            c.current_balance = float(total_debit - total_credit)
+
+        return render(request, self.template_name, {
+            'customers': customers,
+            'payments': payments,
+        })
+
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+            with transaction.atomic():
+                customer = get_object_or_404(Customer, id=data['customer_id'], tenant=request.tenant)
+                payment_id = data.get('payment_id')
+                
+                payment = None
+                if payment_id:
+                    payment = get_object_or_404(CustomerPayment, id=payment_id, tenant=request.tenant)
+                    # Revert previous adjustments
+                    if payment.payment_details and 'adjusted_invoices' in payment.payment_details:
+                        for adj in payment.payment_details['adjusted_invoices']:
+                            try:
+                                inv = SaleInvoice.objects.get(id=adj['id'], tenant=request.tenant)
+                                inv.paid_amount = float(inv.paid_amount) - float(adj['amount'])
+                                inv.save()
+                            except SaleInvoice.DoesNotExist:
+                                pass
+                    # Delete old ledger
+                    ref = payment.reference_number or f"PAY-{payment.id}"
+                    CustomerLedger.objects.filter(
+                        tenant=request.tenant, customer=customer, transaction_type='Payment', reference_number=ref
+                    ).delete()
+                
+                adjusted_invoices = data.get('adjusted_invoices', [])
+                payment_details = data.get('payment_details', {})
+                payment_details['adjusted_invoices'] = adjusted_invoices
+
+                if payment:
+                    payment.payment_date = data['payment_date']
+                    payment.amount = data['amount']
+                    payment.payment_mode = data['payment_mode']
+                    payment.reference_number = data.get('reference_number', '')
+                    payment.payment_details = payment_details
+                    payment.remarks = data.get('remarks', '')
+                    payment.save()
+                else:
+                    payment = CustomerPayment.objects.create(
+                        tenant=request.tenant,
+                        customer=customer,
+                        payment_date=data['payment_date'],
+                        amount=data['amount'],
+                        payment_mode=data['payment_mode'],
+                        reference_number=data.get('reference_number', ''),
+                        payment_details=payment_details,
+                        remarks=data.get('remarks', '')
+                    )
+
+                # Process adjustments
+                from easypharma.models.sales import SaleInvoice
+                for adj in adjusted_invoices:
+                    inv = SaleInvoice.objects.get(id=adj['id'], tenant=request.tenant)
+                    adj_amt = float(adj['amount'])
+                    inv.paid_amount = float(inv.paid_amount) + adj_amt
+                    inv.save()
+
+                CustomerLedger.objects.create(
+                    tenant=request.tenant,
+                    customer=customer,
+                    date=data['payment_date'],
+                    transaction_type='Payment',
+                    reference_number=payment.reference_number or f"PAY-{payment.id}",
+                    debit=0,
+                    credit=data['amount'],
+                    remarks=data.get('remarks', f"Payment received via {data['payment_mode']}")
+                )
+
+            return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
+
+class DeleteCustomerPaymentView(View):
+    def post(self, request, pk):
+        payment = get_object_or_404(CustomerPayment, id=pk, tenant=request.tenant)
+        try:
+            with transaction.atomic():
+                from easypharma.models.sales import SaleInvoice
+                # Revert adjustments
+                if payment.payment_details and 'adjusted_invoices' in payment.payment_details:
+                    for adj in payment.payment_details['adjusted_invoices']:
+                        try:
+                            inv = SaleInvoice.objects.get(id=adj['id'], tenant=request.tenant)
+                            inv.paid_amount = float(inv.paid_amount) - float(adj['amount'])
+                            inv.save()
+                        except SaleInvoice.DoesNotExist:
+                            pass
+                
+                # Delete corresponding CustomerLedger entries
+                ref_num = payment.reference_number or f"PAY-{payment.id}"
+                CustomerLedger.objects.filter(
+                    tenant=request.tenant,
+                    customer=payment.customer,
+                    transaction_type='Payment',
+                    reference_number=ref_num
+                ).delete()
+
+                # Delete the payment itself
+                payment.delete()
+            return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
+
+class CustomerCreditBillsView(View):
+    def get(self, request):
+        customer_id = request.GET.get('customer_id')
+        if not customer_id:
+            return JsonResponse([], safe=False)
+            
+        # Get all invoices for this customer where paid_amount < total_amount and payment_mode is Credit
+        from django.db.models import F
+        from easypharma.models.sales import SaleInvoice
+        invoices = SaleInvoice.objects.filter(
+            tenant=request.tenant,
+            customer_id=customer_id,
+            payment_mode='Credit',
+            total_amount__gt=F('paid_amount')
+        ).order_by('created_at')
+        
+        data = []
+        for inv in invoices:
+            data.append({
+                'id': inv.id,
+                'invoice_number': inv.invoice_number,
+                'created_at': inv.created_at.strftime('%Y-%m-%d') if inv.created_at else '',
+                'total_amount': float(inv.total_amount),
+                'paid_amount': float(inv.paid_amount),
+                'balance': float(inv.total_amount - inv.paid_amount)
+            })
+            
+        return JsonResponse(data, safe=False)

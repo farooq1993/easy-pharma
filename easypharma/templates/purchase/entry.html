@@ -1235,7 +1235,17 @@
             }
             try {
                 const resp = await fetch(`/api/products/master-search/?q=${encodeURIComponent(query)}`);
+                if (!resp.ok) {
+                    throw new Error('Offline');
+                }
                 const data = await resp.json();
+                
+                // Cache for offline
+                const productsToCache = data?.results || data?.products || data || [];
+                if (Array.isArray(productsToCache) && productsToCache.length > 0 && typeof OfflineSync !== 'undefined') {
+                    OfflineSync.cacheProducts(productsToCache);
+                }
+
                 renderPurchaseSearchResults(data);
             } catch (err) {
                 console.log('[Purchase] Offline product search activated');
@@ -1962,6 +1972,9 @@
                 const result = await response.json().catch(() => ({}));
 
                 if (response.ok && (result.success || result.status === 'success')) {
+                    if (typeof OfflineSync !== 'undefined') {
+                        OfflineSync.preloadProductCache();
+                    }
                     showPurchaseConfirm(result);
                 } else if (result.queued) {
                     showPurchaseConfirm({ success: true, purchase_number: 'SW-OFF-' + Date.now() });

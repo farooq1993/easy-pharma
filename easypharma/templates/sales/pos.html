@@ -197,16 +197,22 @@
 
                         <div class="payment-modes mb-4">
                             <div class="row g-2">
-                                <div class="col-6">
+                                <div class="col-4">
                                     <input type="radio" class="btn-check" name="paymentMethod" id="payCash" value="Cash" checked>
-                                    <label class="btn payment-btn payment-btn-active w-100 py-2 rounded-3 fw-bold" for="payCash">
-                                        <i class="fas fa-money-bill-wave me-1"></i> Cash
+                                    <label class="btn payment-btn payment-btn-active w-100 py-2 rounded-3 fw-bold" for="payCash" style="font-size: 0.9rem;">
+                                        <i class="fas fa-money-bill-wave"></i> Cash
                                     </label>
                                 </div>
-                                <div class="col-6">
+                                <div class="col-4">
                                     <input type="radio" class="btn-check" name="paymentMethod" id="payCard" value="UPI">
-                                    <label class="btn payment-btn w-100 py-2 rounded-3 fw-bold" for="payCard">
-                                        <i class="fas fa-credit-card me-1"></i> UPI
+                                    <label class="btn payment-btn w-100 py-2 rounded-3 fw-bold" for="payCard" style="font-size: 0.9rem;">
+                                        <i class="fas fa-mobile-alt"></i> UPI
+                                    </label>
+                                </div>
+                                <div class="col-4">
+                                    <input type="radio" class="btn-check" name="paymentMethod" id="payCredit" value="Credit">
+                                    <label class="btn payment-btn w-100 py-2 rounded-3 fw-bold" for="payCredit" style="font-size: 0.9rem;">
+                                        <i class="fas fa-user-tag"></i> Credit
                                     </label>
                                 </div>
                             </div>
@@ -1101,11 +1107,15 @@
     _posDebounceTimer = setTimeout(async () => {
         try {
             const response = await fetch(`/api/products/search/?q=${encodeURIComponent(query)}`);
+            if (!response.ok) {
+                throw new Error('Offline');
+            }
             const data = await response.json();
 
             // Cache for offline
-            if (data.results && data.results.length > 0) {
-                OfflineSync.cacheProducts(data.results);
+            const productsToCache = data?.results || data?.products || data || [];
+            if (Array.isArray(productsToCache) && productsToCache.length > 0) {
+                OfflineSync.cacheProducts(productsToCache);
             }
 
             renderSearchResults(data);
@@ -1497,6 +1507,9 @@
             });
             const result = await response.json();
             if (result.success) {
+                if (typeof OfflineSync !== 'undefined') {
+                    OfflineSync.preloadProductCache();
+                }
                 bootstrap.Modal.getInstance(document.getElementById('quickAddModal')).hide();
                 document.getElementById('productSearch').value = result.name;
                 document.getElementById('productSearch').dispatchEvent(new Event('input'));
@@ -1617,21 +1630,22 @@
         });
     });
 
-    // ── Patient details validation ──
     function validatePatientDetails() {
         const isCounterMode = !document.getElementById('counterSaleBanner').classList.contains('d-none');
-        if (isCounterMode) return true;
+        const paymentMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
+        
+        if (isCounterMode && paymentMethod !== 'Credit') return true;
 
         const fields = [
-            { id: 'patientName',    value: document.getElementById('patientName').value.trim() },
-            { id: 'patientAddress', value: document.getElementById('patientAddress').value.trim() },
-            { id: 'doctorName',     value: document.getElementById('doctorName').value.trim() },
+            { id: 'patientName',    value: document.getElementById('patientName').value.trim(), required: true },
+            { id: 'patientAddress', value: document.getElementById('patientAddress').value.trim(), required: !isCounterMode },
+            { id: 'doctorName',     value: document.getElementById('doctorName').value.trim(), required: !isCounterMode },
         ];
 
         let valid = true;
         fields.forEach(f => {
             const el = document.getElementById(f.id);
-            if (!f.value) {
+            if (f.required && !f.value) {
                 el.classList.add('is-invalid');
                 el.addEventListener('input', () => el.classList.remove('is-invalid'), { once: true });
                 valid = false;

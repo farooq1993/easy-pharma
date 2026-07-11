@@ -9,7 +9,7 @@
  * Failed POST transactions are stored locally and retried when connectivity returns.
  */
 
-const SW_VERSION = 'v1.5.6';   // 
+const SW_VERSION = 'v1.6.0';   // 
 const CACHE_STATIC = `ep-static-${SW_VERSION}`;
 const CACHE_PAGES  = `ep-pages-${SW_VERSION}`;
 const CACHE_API    = `ep-api-${SW_VERSION}`;
@@ -26,7 +26,7 @@ const PRECACHE_ASSETS = [
   '/static/img/pwa-icon-512.png',
   '/offline/',
   '/pos/',
-  '/purchase/',
+  '/entry/',
 ];
 
 // URLs whose responses should always come from the network (write/auth pages)
@@ -137,12 +137,11 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       fetch(request).catch(() => 
         new Response(JSON.stringify({ 
-          results: [],
           error: 'offline',
           message: 'Product search requires internet.' 
         }), {
           headers: { 'Content-Type': 'application/json' },
-          status: 200   // ← 503 ki jagah 200 kar do taaki frontend crash na kare
+          status: 503
         })
       )
     );
@@ -155,9 +154,9 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 4. Stale-While-Revalidate for HTML pages
+  // 4. Network-First for HTML pages (ensures real-time updates when online, falls back to cache offline)
   if (request.headers.get('Accept') && request.headers.get('Accept').includes('text/html')) {
-    event.respondWith(staleWhileRevalidate(request, CACHE_PAGES));
+    event.respondWith(networkFirstHTML(request, CACHE_PAGES));
     return;
   }
 
@@ -324,7 +323,7 @@ async function cacheFirst(request, cacheName) {
 
 async function staleWhileRevalidate(request, cacheName) {
   const cache = await caches.open(cacheName);
-  const cached = await cache.match(request);
+  const cached = await caches.match(request);
 
   const fetchPromise = fetch(request)
     .then(response => {
@@ -350,6 +349,27 @@ async function staleWhileRevalidate(request, cacheName) {
   return offline || new Response('<h1>You are offline</h1>', {
     headers: { 'Content-Type': 'text/html' }
   });
+}
+
+async function networkFirstHTML(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch (err) {
+    // Fetch failed (offline) — return cached copy if available
+    const cached = await caches.match(request);
+    if (cached) return cached;
+
+    // Show offline fallback page
+    const offline = await caches.match('/offline/');
+    return offline || new Response('<h1>You are offline</h1>', {
+      headers: { 'Content-Type': 'text/html' }
+    });
+  }
 }
 
 async function networkFirstWithTimeout(request, cacheName, timeout) {

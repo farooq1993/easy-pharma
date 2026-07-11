@@ -1,0 +1,299 @@
+{% extends 'includes/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12 d-flex justify-content-between align-items-center">
+            <h2 class="mb-0 text-dark">Account Ledger</h2>
+            <button type="button" class="btn btn-warning fw-bold text-dark shadow-sm" data-bs-toggle="modal" data-bs-target="#addJvModal">
+                <i class="fas fa-plus-circle me-1"></i> Add JV Entry
+            </button>
+        </div>
+    </div>
+
+    {% include 'includes/messages.html' %}
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-body">
+            <form id="ledgerFilterForm" method="GET" class="row g-3 align-items-end">
+                <div class="col-md-5">
+                    <label class="form-label text-dark fw-bold">Search Customer or Supplier Name</label>
+                    <input type="text" id="accountSearchInput" list="accountsList" class="form-control" placeholder="Type to search name..." autocomplete="off" required>
+                    <input type="hidden" id="accountIdHidden" name="account_id">
+                    
+                    <datalist id="accountsList">
+                        {% for c in customers %}
+                        <option data-id="customer_{{ c.id }}" value="[Customer] {{ c.name }}{% if c.phone %} - {{ c.phone }}{% endif %}"></option>
+                        {% endfor %}
+                        {% for s in suppliers %}
+                        <option data-id="supplier_{{ s.id }}" value="[Supplier] {{ s.name }}"></option>
+                        {% endfor %}
+                    </datalist>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label text-dark fw-bold">From Date</label>
+                    <input type="date" name="start_date" class="form-control" value="{{ start_date }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label text-dark fw-bold">To Date</label>
+                    <input type="date" name="end_date" class="form-control" value="{{ end_date }}">
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary w-100"><i class="fas fa-search me-1"></i> View Ledger</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if selected_account %}
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center py-3">
+            <h5 class="mb-0 text-dark fw-bold">
+                Ledger Statement: {{ selected_account.name }} 
+                <span class="badge bg-light text-secondary border ms-2 text-capitalize">{{ account_type }}</span>
+            </h5>
+            <span class="badge {% if closing_balance > 0 %}{% if account_type == 'supplier' %}bg-warning text-dark{% else %}bg-danger{% endif %}{% else %}bg-success{% endif %} fs-6 px-3 py-2">
+                {% if account_type == 'supplier' %}Net Payable (We Owe):{% else %}Net Receivable (Owed to Us):{% endif %} ₹{{ closing_balance|floatformat:2 }}
+            </span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-3">Date</th>
+                            <th>Transaction Type</th>
+                            <th>Ref Number</th>
+                            <th>Remarks</th>
+                            {% if account_type == 'supplier' %}
+                            <th class="text-end text-danger">Credit (Purchase)</th>
+                            <th class="text-end text-success">Debit (Payment/Return)</th>
+                            {% else %}
+                            <th class="text-end text-danger">Debit (Sales/Debit JV)</th>
+                            <th class="text-end text-success">Credit (Payment/Credit JV)</th>
+                            {% endif %}
+                            <th class="text-end pe-3">Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in ledger_entries %}
+                        <tr class="{% if entry.is_adjusted %}table-active{% endif %}">
+                            <td class="ps-3">{{ entry.date|date:"Y-m-d" }}</td>
+                            <td>
+                                {% if entry.transaction_type == 'Purchase' or entry.transaction_type == 'Sale' %}
+                                <span class="badge bg-danger">
+                                    {% if account_type == 'supplier' %}Purchase{% else %}Sale{% endif %}
+                                </span>
+                                {% elif entry.transaction_type == 'Payment' %}
+                                <span class="badge bg-success">Payment</span>
+                                {% if entry.is_adjusted %}<small class="ms-1 text-info fw-bold">(Adjusted)</small>{% endif %}
+                                {% elif entry.transaction_type == 'JV' %}
+                                <span class="badge bg-info text-white">JV (Adjustment)</span>
+                                {% else %}
+                                <span class="badge bg-warning text-dark">Return</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ entry.reference_number|default:"-" }}</td>
+                            <td>{{ entry.remarks|default:"-" }}</td>
+                            
+                            {% if account_type == 'supplier' %}
+                            <td class="text-end text-danger">+ ₹{{ entry.credit|floatformat:2 }}</td>
+                            <td class="text-end text-success">- ₹{{ entry.debit|floatformat:2 }}</td>
+                            {% else %}
+                            <td class="text-end text-danger">+ ₹{{ entry.debit|floatformat:2 }}</td>
+                            <td class="text-end text-success">- ₹{{ entry.credit|floatformat:2 }}</td>
+                            {% endif %}
+                            
+                            <td class="text-end fw-bold pe-3">₹{{ entry.balance|floatformat:2 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">No transactions found for this account in the selected date range.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="table-light border-top">
+                        <tr>
+                            <th colspan="4" class="text-end ps-3">Total for Date Range:</th>
+                            {% if account_type == 'supplier' %}
+                            <th class="text-end text-danger">₹{{ total_credit|default:0.00|floatformat:2 }}</th>
+                            <th class="text-end text-success">₹{{ total_debit|default:0.00|floatformat:2 }}</th>
+                            {% else %}
+                            <th class="text-end text-danger">₹{{ total_debit|default:0.00|floatformat:2 }}</th>
+                            <th class="text-end text-success">₹{{ total_credit|default:0.00|floatformat:2 }}</th>
+                            {% endif %}
+                            <th class="text-end pe-3">₹{{ closing_balance|floatformat:2 }}</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Add JV Modal -->
+    <div class="modal fade" id="addJvModal" tabindex="-1" aria-labelledby="addJvModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 1rem; overflow: hidden;">
+                <form id="jvForm" method="POST" action="{% url 'supplier_ledger' %}">
+                    {% csrf_token %}
+                    <!-- Premium Header -->
+                    <div class="modal-header text-dark border-0 py-3" style="background: linear-gradient(135deg, #ffc107 0%, #ffb300 100%);">
+                        <h5 class="modal-title fw-bold" id="addJvModalLabel">
+                            <i class="fas fa-plus-circle me-2"></i>Add Journal Voucher (JV) Entry
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-4 bg-light">
+                        <div class="mb-3">
+                            <label for="jvAccountSearch" class="form-label fw-bold">Select Account</label>
+                            <input type="text" id="jvAccountSearch" list="jvAccountsList" class="form-control" placeholder="Type to search name..." autocomplete="off" required>
+                            <input type="hidden" id="jvAccountIdHidden" name="account_id">
+                            
+                            <datalist id="jvAccountsList">
+                                {% for c in customers %}
+                                <option data-id="customer_{{ c.id }}" value="[Customer] {{ c.name }}{% if c.phone %} - {{ c.phone }}{% endif %}"></option>
+                                {% endfor %}
+                                {% for s in suppliers %}
+                                <option data-id="supplier_{{ s.id }}" value="[Supplier] {{ s.name }}"></option>
+                                {% endfor %}
+                            </datalist>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="jvDate" class="form-label fw-bold">Date</label>
+                            <input type="date" id="jvDate" name="date" class="form-control" value="{% now 'Y-m-d' %}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="jvEntryType" class="form-label fw-bold">Entry Type</label>
+                            <select id="jvEntryType" name="entry_type" class="form-select" required>
+                                <option id="jvDebitOption" value="Debit">Debit</option>
+                                <option id="jvCreditOption" value="Credit">Credit</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="jvAmount" class="form-label fw-bold">Amount (Rs.)</label>
+                            <input type="number" id="jvAmount" name="amount" class="form-control text-end fw-bold" step="0.01" min="0.01" placeholder="0.00" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="jvRef" class="form-label fw-bold">Reference Number</label>
+                            <input type="text" id="jvRef" name="reference_number" class="form-control" placeholder="Optional e.g. JV-101">
+                        </div>
+                        <div class="mb-3">
+                            <label for="jvRemarks" class="form-label fw-bold">Remarks / Description</label>
+                            <textarea id="jvRemarks" name="remarks" class="form-control" rows="3" placeholder="Describe adjustment reason..." required></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-0 bg-white">
+                        <button type="button" class="btn btn-secondary px-4 py-2" data-bs-dismiss="modal" style="border-radius: 0.5rem;">Cancel</button>
+                        <button type="submit" class="btn btn-warning px-4 py-2 fw-bold text-dark" style="border-radius: 0.5rem; background: linear-gradient(135deg, #ffc107 0%, #ffb300 100%); border: none;">Save Entry</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // ── Filter Form Script ──
+    const searchInput = document.getElementById('accountSearchInput');
+    const hiddenInput = document.getElementById('accountIdHidden');
+    const datalist = document.getElementById('accountsList');
+    const filterForm = document.getElementById('ledgerFilterForm');
+    
+    // Set initial value for input if selected_account is active
+    {% if selected_account %}
+        {% if account_type == 'customer' %}
+        searchInput.value = "[Customer] {{ selected_account.name }}{% if selected_account.phone %} - {{ selected_account.phone }}{% endif %}";
+        hiddenInput.value = "customer_{{ selected_account.id }}";
+        {% else %}
+        searchInput.value = "[Supplier] {{ selected_account.name }}";
+        hiddenInput.value = "supplier_{{ selected_account.id }}";
+        {% endif %}
+    {% endif %}
+    
+    searchInput.addEventListener('input', function() {
+        const val = this.value;
+        const options = datalist.options;
+        let found = false;
+        for (let i = 0; i < options.length; i++) {
+            if (options[i].value === val) {
+                hiddenInput.value = options[i].dataset.id;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            hiddenInput.value = '';
+        }
+    });
+    
+    filterForm.addEventListener('submit', function(e) {
+        if (!hiddenInput.value) {
+            e.preventDefault();
+            alert('Please select a valid account name from the suggestions.');
+        }
+    });
+
+    // ── JV Form Script ──
+    const jvSearchInput = document.getElementById('jvAccountSearch');
+    const jvHiddenInput = document.getElementById('jvAccountIdHidden');
+    const jvDatalist = document.getElementById('jvAccountsList');
+    const jvForm = document.getElementById('jvForm');
+    
+    const labelDebit = document.getElementById('jvDebitOption');
+    const labelCredit = document.getElementById('jvCreditOption');
+
+    jvSearchInput.addEventListener('input', function() {
+        const val = this.value;
+        const options = jvDatalist.options;
+        let found = false;
+        for (let i = 0; i < options.length; i++) {
+            if (options[i].value === val) {
+                const accId = options[i].dataset.id;
+                jvHiddenInput.value = accId;
+                found = true;
+                
+                // Update labels dynamically
+                if (accId.startsWith('customer_')) {
+                    labelDebit.textContent = "Debit (Increases Owed Balance - e.g., Charge / Unbilled Sale)";
+                    labelCredit.textContent = "Credit (Decreases Owed Balance - e.g., Payment / Return / Discount)";
+                } else if (accId.startsWith('supplier_')) {
+                    labelDebit.textContent = "Debit (Decreases Owed Balance - e.g., Payment / Return / Discount)";
+                    labelCredit.textContent = "Credit (Increases Owed Balance - e.g., Charge / Unbilled Purchase)";
+                }
+                break;
+            }
+        }
+        if (!found) {
+            jvHiddenInput.value = '';
+            labelDebit.textContent = "Debit";
+            labelCredit.textContent = "Credit";
+        }
+    });
+
+    jvForm.addEventListener('submit', function(e) {
+        if (!jvHiddenInput.value) {
+            e.preventDefault();
+            alert('Please select a valid account name from the suggestions in the JV entry form.');
+        }
+    });
+
+    // Set initial value for JV Modal if selected_account is active
+    {% if selected_account %}
+        {% if account_type == 'customer' %}
+        jvSearchInput.value = "[Customer] {{ selected_account.name }}{% if selected_account.phone %} - {{ selected_account.phone }}{% endif %}";
+        jvHiddenInput.value = "customer_{{ selected_account.id }}";
+        {% else %}
+        jvSearchInput.value = "[Supplier] {{ selected_account.name }}";
+        jvHiddenInput.value = "supplier_{{ selected_account.id }}";
+        {% endif %}
+        // trigger label update
+        jvSearchInput.dispatchEvent(new Event('input'));
+    {% endif %}
+});
+</script>
+{% endblock %}
