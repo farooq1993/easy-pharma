@@ -53,18 +53,19 @@ const OfflineSync = {
         try {
             console.log('[OfflineSync] Preloading product cache...');
             // Fetch products for POS (with batches)
-            const posResponse = await fetch('/api/products/search/?limit=500');
+            const posResponse = await fetch('/api/products/search/?limit=2000');
             if (posResponse.ok) {
                 const products = await posResponse.json();
                 if (Array.isArray(products) && products.length > 0) {
                     const store = localforage.createInstance({ name: 'ep_product_cache' });
                     await store.setItem('pos_products', products);
+                    await store.setItem('all_products', products);
                     console.log(`[OfflineSync] Cached ${products.length} products for POS offline use.`);
                 }
             }
             
             // Fetch products for Purchase Entry (without batches)
-            const masterResponse = await fetch('/api/products/master-search/?limit=500');
+            const masterResponse = await fetch('/api/products/master-search/?limit=2000');
             if (masterResponse.ok) {
                 const products = await masterResponse.json();
                 if (Array.isArray(products) && products.length > 0) {

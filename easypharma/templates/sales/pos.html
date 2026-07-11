@@ -1507,6 +1507,9 @@
             });
             const result = await response.json();
             if (result.success) {
+                if (typeof OfflineSync !== 'undefined') {
+                    OfflineSync.preloadProductCache();
+                }
                 bootstrap.Modal.getInstance(document.getElementById('quickAddModal')).hide();
                 document.getElementById('productSearch').value = result.name;
                 document.getElementById('productSearch').dispatchEvent(new Event('input'));
