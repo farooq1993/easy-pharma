@@ -22,15 +22,26 @@ class SupplierLedgerView(View):
         start_date = request.GET.get('start_date')
         end_date = request.GET.get('end_date')
         
+        # Fallback to direct query parameters
+        if not account_id:
+            raw_supplier_id = request.GET.get('supplier_id')
+            raw_customer_id = request.GET.get('customer_id')
+            if raw_customer_id:
+                account_id = f"customer_{raw_customer_id}"
+            elif raw_supplier_id:
+                account_id = f"supplier_{raw_supplier_id}"
+
         ledger_entries = []
         running_balance = 0
         selected_account = None
         account_type = None
 
         if account_id:
-            if account_id.startswith('customer_'):
+            account_id_lower = str(account_id).lower().strip()
+            
+            if account_id_lower.startswith('customer_') or account_id_lower.startswith('customer:') or account_id_lower.startswith('customer-'):
                 account_type = 'customer'
-                customer_id = account_id.split('_')[1]
+                customer_id = account_id_lower.replace('customer_', '').replace('customer:', '').replace('customer-', '')
                 selected_account = get_object_or_404(Customer, id=customer_id, tenant=request.tenant)
                 
                 # Opening balance for customer (debit - credit)
@@ -80,9 +91,9 @@ class SupplierLedgerView(View):
                         'remarks': entry.remarks,
                     })
 
-            elif account_id.startswith('supplier_'):
+            elif account_id_lower.startswith('supplier_') or account_id_lower.startswith('supplier:') or account_id_lower.startswith('supplier-'):
                 account_type = 'supplier'
-                supplier_id = account_id.split('_')[1]
+                supplier_id = account_id_lower.replace('supplier_', '').replace('supplier:', '').replace('supplier-', '')
                 selected_account = get_object_or_404(Supplier, id=supplier_id, tenant=request.tenant)
                 
                 # Opening balance for supplier (credit - debit)
@@ -167,8 +178,10 @@ class SupplierLedgerView(View):
             else:
                 credit_val = float(amount)
 
-            if account_id.startswith('customer_'):
-                customer_id = account_id.split('_')[1]
+            account_id_lower = str(account_id).lower().strip()
+
+            if account_id_lower.startswith('customer_') or account_id_lower.startswith('customer:') or account_id_lower.startswith('customer-'):
+                customer_id = account_id_lower.replace('customer_', '').replace('customer:', '').replace('customer-', '')
                 customer = get_object_or_404(Customer, id=customer_id, tenant=request.tenant)
                 CustomerLedger.objects.create(
                     tenant=request.tenant,
@@ -181,8 +194,8 @@ class SupplierLedgerView(View):
                     remarks=remarks or ''
                 )
                 messages.success(request, f"Journal Voucher (JV) entry of Rs. {amount} added successfully for customer {customer.name}!")
-            elif account_id.startswith('supplier_'):
-                supplier_id = account_id.split('_')[1]
+            elif account_id_lower.startswith('supplier_') or account_id_lower.startswith('supplier:') or account_id_lower.startswith('supplier-'):
+                supplier_id = account_id_lower.replace('supplier_', '').replace('supplier:', '').replace('supplier-', '')
                 supplier = get_object_or_404(Supplier, id=supplier_id, tenant=request.tenant)
                 SupplierLedger.objects.create(
                     tenant=request.tenant,
