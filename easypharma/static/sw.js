@@ -9,7 +9,7 @@
  * Failed POST transactions are stored locally and retried when connectivity returns.
  */
 
-const SW_VERSION = 'v1.5.9';   // 
+const SW_VERSION = 'v1.6.0';   // 
 const CACHE_STATIC = `ep-static-${SW_VERSION}`;
 const CACHE_PAGES  = `ep-pages-${SW_VERSION}`;
 const CACHE_API    = `ep-api-${SW_VERSION}`;
@@ -137,12 +137,11 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       fetch(request).catch(() => 
         new Response(JSON.stringify({ 
-          results: [],
           error: 'offline',
           message: 'Product search requires internet.' 
         }), {
           headers: { 'Content-Type': 'application/json' },
-          status: 200   // ← 503 ki jagah 200 kar do taaki frontend crash na kare
+          status: 503
         })
       )
     );

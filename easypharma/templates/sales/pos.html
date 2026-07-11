@@ -1107,6 +1107,9 @@
     _posDebounceTimer = setTimeout(async () => {
         try {
             const response = await fetch(`/api/products/search/?q=${encodeURIComponent(query)}`);
+            if (!response.ok) {
+                throw new Error('Offline');
+            }
             const data = await response.json();
 
             // Cache for offline

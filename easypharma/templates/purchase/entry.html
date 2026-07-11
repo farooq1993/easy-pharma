@@ -1235,6 +1235,9 @@
             }
             try {
                 const resp = await fetch(`/api/products/master-search/?q=${encodeURIComponent(query)}`);
+                if (!resp.ok) {
+                    throw new Error('Offline');
+                }
                 const data = await resp.json();
                 
                 // Cache for offline
