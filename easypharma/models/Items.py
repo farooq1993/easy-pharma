@@ -39,7 +39,7 @@ class ProductContent(TenantAwareModel):  # ✅ CHANGED: Inherit from TenantAware
         return self.content_name
 
 class Products(TenantAwareModel):  # ✅ CHANGED: Inherit from TenantAwareModel
-    product_name = models.CharField(max_length=200)
+    product_name = models.CharField(max_length=200, db_index=True)
     product_packing = models.CharField(max_length=200, null=True, blank=True)
     product_type = models.ForeignKey(ProductType, on_delete=models.CASCADE, null=True, blank=True)
     product_schedule = models.ForeignKey(ProductSchedule, on_delete=models.CASCADE, null=True, blank=True)

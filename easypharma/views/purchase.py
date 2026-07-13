@@ -903,7 +903,7 @@ class OpeningStockEntryView(LoginRequiredMixin, View):
     template_name = 'purchase/opening_entry.html'
 
     def get(self, request, stock_id=None):
-        products = Products.objects.filter(tenant=request.tenant).order_by('product_name')
+        products = []
         product_taxes = ProductTax.objects.filter(tenant=request.tenant)
         product_schedules = ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True))
         drug_companies = DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True))
@@ -1034,7 +1034,7 @@ class OpeningStockEditView(LoginRequiredMixin, View):
         except OpeningStock.DoesNotExist:
             return redirect('opening_stock_list')
 
-        products = Products.objects.filter(tenant=request.tenant).order_by('product_name')
+        products = []
         product_taxes = ProductTax.objects.filter(tenant=request.tenant)
         product_type = ProductType.objects.filter(tenant=request.tenant).order_by('name')
         
@@ -1152,3 +1152,28 @@ class OpeningStockEditView(LoginRequiredMixin, View):
             traceback.print_exc()
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
         return OpeningStockEntryView().post(request, stock_id=stock_id)
+
+
+class OpeningStockDeleteView(LoginRequiredMixin, View):
+    def delete(self, request, stock_id):
+        try:
+            with transaction.atomic():
+                stock = OpeningStock.objects.get(id=stock_id, tenant=request.tenant)
+                # Revert stock quantities from batches before deleting
+                for item in stock.items.all():
+                    batch = StockBatch.objects.filter(
+                        tenant=request.tenant, 
+                        product=item.product, 
+                        batch_number=item.batch_number
+                    ).first()
+                    if batch:
+                        batch.current_quantity -= item.quantity * item.product.conversion_factor
+                        if batch.current_quantity < 0:
+                            batch.current_quantity = 0
+                        batch.save()
+                stock.delete()
+                return JsonResponse({'success': True})
+        except OpeningStock.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Opening Stock record not found'}, status=404)
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)

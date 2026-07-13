@@ -9,13 +9,13 @@
  * Failed POST transactions are stored locally and retried when connectivity returns.
  */
 
-const SW_VERSION = 'v1.6.0';   // 
+const SW_VERSION = 'v1.6.1';   // 
 const CACHE_STATIC = `ep-static-${SW_VERSION}`;
 const CACHE_PAGES  = `ep-pages-${SW_VERSION}`;
 const CACHE_API    = `ep-api-${SW_VERSION}`;
 
 const DB_NAME = 'ep-offline-requests';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const DB_STORE = 'requests';
 
 // Static assets to pre-cache on install

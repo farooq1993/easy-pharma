@@ -5,7 +5,7 @@ from easypharma.views.purchase import (PurchaseEntryView, PurchaseListView,
                                         PurchaseExportPDFView, PurchaseImportCSVView,
                                         QuickCreateProductView, ProductBatchHistoryView,SmartPurchaseSuggestPageView,
                                         SmartPurchaseSuggestAPIView,PurchaseEntryView,
-                                        OpeningStockListView,OpeningStockEntryView,OpeningStockEditView,CheckInvoiceNumberView)
+                                        OpeningStockListView,OpeningStockEntryView,OpeningStockEditView,CheckInvoiceNumberView,OpeningStockDeleteView)
 
 urlpatterns = [
     path('entry/', PurchaseEntryView.as_view(), name='purchase_entry'),
@@ -16,6 +16,7 @@ urlpatterns = [
     path('opening/stock/list', OpeningStockListView.as_view(), name='opening_stock'),
     path('opening/stock/entry/', OpeningStockEntryView.as_view(), name='opening_stock_entry'),
     path('opening/stock/edit/<int:stock_id>/', OpeningStockEditView.as_view(), name='opening_stock_edit'),
+    path('opening-stock/delete/<int:stock_id>/', OpeningStockDeleteView.as_view(), name='opening_stock_delete'),
 
     
     path('api/suppliers/search/', SupplierAutocomplete.as_view(), name='supplier_search_api'),

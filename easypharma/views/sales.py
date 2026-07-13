@@ -602,7 +602,7 @@ class ProductSearchAPI(LoginRequiredMixin,View):
             return JsonResponse(cached, safe=False)
 
         from easypharma.models.stock import StockBatch
-        from django.db.models import Exists, OuterRef
+        from django.db.models import Exists, OuterRef, Prefetch
         
         active_batches = StockBatch.objects.filter(
             tenant=request.tenant,
@@ -617,7 +617,18 @@ class ProductSearchAPI(LoginRequiredMixin,View):
             has_stock=Exists(active_batches)
         ).order_by('-has_stock', 'product_name').select_related(
             'product_tax', 'product_content', 'compny_name', 'product_schedule'
-        ).prefetch_related('batches')[:limit]
+        ).prefetch_related(
+            Prefetch(
+                'batches',
+                queryset=StockBatch.objects.filter(current_quantity__gt=0).only(
+                    'id', 'product_id', 'batch_number', 'expiry_date', 'current_quantity', 'sale_price', 'mrp'
+                ).order_by('expiry_date')
+            )
+        ).only(
+            'id', 'product_name', 'product_packing', 'conversion_factor',
+            'product_content__content_name', 'product_schedule__schedule_name',
+            'compny_name__company_name', 'product_tax__tax_rate'
+        )[:limit]
         data = []
         for p in products:
             batches = p.batches.filter(current_quantity__gt=0).order_by('expiry_date')

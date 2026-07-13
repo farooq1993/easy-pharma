@@ -249,7 +249,10 @@
                     </div>
 
                     <div class="col-md-4">
-                        <label class="ep-label">Product Type</label>
+                        <label class="ep-label d-flex justify-content-between align-items-center">
+                            <span>Product Type</span>
+                            <a href="#" class="text-success text-decoration-none text-lowercase" onclick="openMasterAddModal('product-type', 'quickType', 'Product Type', 'name'); return false;">Add New</a>
+                        </label>
                         <select id="quickType" style="display:none;">
                             {% for ptype in product_type %}
                             <option value="{{ ptype.id }}">{{ ptype.name }}</option>
@@ -269,25 +272,6 @@
 
                 <!-- Row 3: Type + Tax + Drug Schedule -->
                 <div class="row g-3 mb-3">
-                    <div class="col-md-4">
-                        <label class="ep-label d-flex justify-content-between align-items-center">
-                            <span>Productd farooq Type</span>
-                            <a href="#" class="text-success text-decoration-none text-lowercase" onclick="openMasterAddModal('product-type', 'quickType', 'Product Type', 'name'); return false;">Add New</a>
-                        </label>
-                        <select id="quickType" style="display:none;">
-                            <option value="">— Select Type —</option>
-                            {% for ptype in product_types %}
-                            <option value="{{ ptype.id }}">{{ ptype.name }}</option>
-                            {% endfor %}
-                        </select>
-                        <div class="qs-wrap" id="qs-wrap-quickType">
-                            <div class="qs-input-row">
-                                <input type="text" class="ep-input qs-input" id="qs-input-quickType" placeholder="Search type..." autocomplete="off">
-                                <button type="button" class="qs-clear-btn" id="qs-clear-quickType" onclick="qsClear('quickType')" style="display:none;" title="Clear">&#x2715;</button>
-                            </div>
-                            <div class="qs-dropdown" id="qs-drop-quickType" style="display:none;"></div>
-                        </div>
-                    </div>
                     <div class="col-md-4">
                         <label class="ep-label d-flex justify-content-between align-items-center">
                             <span>Tax Rate</span>
@@ -696,8 +680,13 @@
                 throw new Error(data.error || 'Unable to save');
             }
 
-            const selectEl = document.getElementById(selectId);
+            let selectEl = document.getElementById(selectId);
+            if (!selectEl && selectId) {
+                const selectIdLower = selectId.toLowerCase();
+                selectEl = Array.from(document.querySelectorAll('select')).find(el => el.id.toLowerCase() === selectIdLower);
+            }
             if (selectEl) {
+                const actualSelectId = selectEl.id;
                 if (selectEl.tomselect) {
                     selectEl.tomselect.addOption({ value: String(data.id), text: data.name });
                     selectEl.tomselect.refreshOptions(false);
@@ -706,6 +695,16 @@
                     const option = new Option(data.name, data.id, true, true);
                     selectEl.add(option);
                     selectEl.value = String(data.id);
+                    
+                    // Update visual QuickSelect input and clear button using the correct case-sensitive ID
+                    const visualInput = document.getElementById('qs-input-' + actualSelectId);
+                    if (visualInput) {
+                        visualInput.value = data.name;
+                    }
+                    const clearBtn = document.getElementById('qs-clear-' + actualSelectId);
+                    if (clearBtn) {
+                        clearBtn.style.display = 'inline-block';
+                    }
                 }
             }
 
@@ -719,23 +718,39 @@
         }
     }
 
+    window.openMasterAddModal = openMasterAddModal;
+    window.submitMasterAdd = submitMasterAdd;
+
     // Init all 5 selects when DOM ready
     document.addEventListener('DOMContentLoaded', function() {
-<<<<<<< HEAD
         ['quickType', 'quickTax', 'quickSchedule', 'quickContent', 'quickCompany'].forEach(initQuickSelect);
 
         masterAddModal = new bootstrap.Modal(document.getElementById('masterAddModal'));
 
-        // Re-sync inputs when modal is shown (edit/CSV flow pre-sets select values)
-        document.getElementById('quickAddModal').addEventListener('show.bs.modal', function() {
-            ['quickType', 'quickTax', 'quickSchedule', 'quickContent', 'quickCompany'].forEach(function(id) {
-=======
-        ['quickType','quickTax', 'quickSchedule', 'quickContent', 'quickCompany'].forEach(initQuickSelect);
+        // Handle nested z-index for masterAddModal
+        document.getElementById('masterAddModal').addEventListener('show.bs.modal', function () {
+            const modalEl = document.getElementById('masterAddModal');
+            modalEl.style.zIndex = '1070';
+            setTimeout(() => {
+                const backdrops = document.querySelectorAll('.modal-backdrop');
+                if (backdrops.length > 1) {
+                    backdrops[backdrops.length - 1].style.zIndex = '1065';
+                }
+            }, 10);
+        });
+
+        document.getElementById('masterAddModal').addEventListener('hidden.bs.modal', function () {
+            // Restore overflow on body if quickAddModal is still open
+            if (document.getElementById('quickAddModal').classList.contains('show')) {
+                setTimeout(() => {
+                    document.body.classList.add('modal-open');
+                }, 10);
+            }
+        });
 
         // Re-sync inputs when modal is shown (edit/CSV flow pre-sets select values)
         document.getElementById('quickAddModal').addEventListener('show.bs.modal', function() {
-            ['quickType','quickTax', 'quickSchedule', 'quickContent', 'quickCompany'].forEach(function(id) {
->>>>>>> 645265cf7b3a7f25d6137cf83e3bf8e35bdb4a31
+            ['quickType', 'quickTax', 'quickSchedule', 'quickContent', 'quickCompany'].forEach(function(id) {
                 const sel   = document.getElementById(id);
                 const input = document.getElementById('qs-input-' + id);
                 const btn   = document.getElementById('qs-clear-' + id);
