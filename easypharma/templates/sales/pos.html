@@ -507,6 +507,9 @@
                             <div class="mb-3 p-2 bg-light rounded">
                                 <div><kbd>Tab</kbd> → Jump to Patient Details (from last item)</div>
                             </div>
+                            <div class="mb-3 p-2 bg-light rounded">
+                                <div><kbd>Ctrl+M</kbd> → Toggle MRP Edit Mode (Modify pricing)</div>
+                            </div>
                             <div class="p-2 bg-light rounded">
                                 <div><kbd>F12</kbd> → Complete billing</div>
                             </div>
@@ -795,6 +798,7 @@
     }
     
     let cart = [];
+    let mrpEditMode = false;
     let shouldFocusLastQty = false;
     let searchSelectedIndex = -1;
     const editData = {{ edit_data|default:'null'|safe }};
@@ -952,6 +956,12 @@
         }
 
         if (e.key === 'F12') { e.preventDefault(); completeOrder(); }
+        
+        // Ctrl+M: Toggle MRP edit mode
+        if (e.ctrlKey && e.key.toLowerCase() === 'm') {
+            e.preventDefault();
+            toggleMrpEditMode();
+        }
     });
 
     function populateEditData(data) {
@@ -1588,7 +1598,20 @@
                         </div>
                     </td>
 
-                    <td class="small">₹${item.price.toFixed(2)}</td>
+                    <td class="small">
+                        <div class="d-flex align-items-center" style="width: 95px;">
+                            <span class="small me-1">₹</span>
+                            <input type="number" step="0.01"
+                                class="form-control form-control-sm mrp-input fw-bold"
+                                value="${item.price.toFixed(2)}"
+                                data-index="${index}"
+                                min="0"
+                                oninput="updateMrp(${index}, this.value)"
+                                onkeydown="handleMrpKeydown(event, ${index})"
+                                style="width: 80px; text-align: left; padding: 2px 4px; border: ${mrpEditMode ? '1px solid var(--brand) !important' : 'none !important'}; background: ${mrpEditMode ? '#fff !important' : 'transparent !important'}; cursor: ${mrpEditMode ? 'text' : 'default'};"
+                                ${mrpEditMode ? '' : 'readonly'}>
+                        </div>
+                    </td>
 
                     <td>
                         <input type="number"
@@ -1665,6 +1688,70 @@
                 focusPatientDetails();
             }
             // If not last, let Tab naturally move to next qty input (browser default)
+        }
+    }
+
+    function updateMrp(index, val) {
+        const item = cart[index];
+        const newPrice = parseFloat(val) || 0;
+        item.price = newPrice;
+        
+        // Update only the total and tax cells of this row (avoids losing focus)
+        const rows = document.querySelectorAll('#posTable tbody tr');
+        if (rows[index]) {
+            const total = item.price * item.quantity;
+            const basePrice = item.price / (1 + item.tax_rate / 100);
+            const taxAmount = (item.price - basePrice) * item.quantity;
+            
+            // Total column is 6th td (index 5)
+            const totalCell = rows[index].querySelectorAll('td')[5];
+            if (totalCell) totalCell.innerHTML = `₹${total.toFixed(2)}`;
+            
+            // GST/Tax column is 5th td (index 4)
+            const taxCell = rows[index].querySelectorAll('td')[4];
+            if (taxCell) taxCell.innerHTML = `₹${taxAmount.toFixed(2)} <span class="text-muted x-small">(${item.tax_rate}% incl.)</span>`;
+        }
+        calculateGrandTotal();
+    }
+
+    function handleMrpKeydown(event, index) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            // Clear search and focus on it for next item
+            document.getElementById('productSearch').value = '';
+            document.getElementById('productSearch').focus();
+            document.getElementById('searchResults').classList.add('d-none');
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            document.getElementById('productSearch').focus();
+        } else if (event.key === 'Tab') {
+            const isLast = index === cart.length - 1;
+            if (isLast && !event.shiftKey) {
+                event.preventDefault();
+                focusPatientDetails();
+            }
+        }
+    }
+
+    function toggleMrpEditMode() {
+        mrpEditMode = !mrpEditMode;
+        
+        // Re-render the cart so inputs make editability state visible
+        renderCart();
+        
+        // If edit mode is enabled, focus the MRP input of the last item in the cart
+        if (mrpEditMode && cart.length > 0) {
+            setTimeout(() => {
+                const mrpInputs = document.querySelectorAll('.mrp-input');
+                const lastMrpInput = mrpInputs[mrpInputs.length - 1];
+                if (lastMrpInput) {
+                    lastMrpInput.focus();
+                    lastMrpInput.select();
+                }
+            }, 50);
+            showToast("POS modify mode: MRP inputs are now editable!", "success");
+        } else {
+            showToast("POS modify mode disabled.", "info");
         }
     }
 
@@ -2202,6 +2289,7 @@ function addNewBill() {
         if(modal) modal.hide();
 
         cart = [];
+        mrpEditMode = false;
         renderCart();
         
         document.getElementById('patientName').value = '';
