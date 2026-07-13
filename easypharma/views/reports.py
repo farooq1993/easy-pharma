@@ -1765,3 +1765,83 @@ class SaleBillWiseProfit(LoginRequiredMixin,View):
         }
 
         return render(request, self.template_name, context)
+
+
+class SalesReturnReportView(LoginRequiredMixin, View):
+    template_name = 'reports/sales_return_report.html'
+    pdf_template = 'reports/sales_return_report_pdf.html'
+
+    def get(self, request):
+        start_date_str = request.GET.get('start_date')
+        end_date_str = request.GET.get('end_date')
+        pdf_export = request.GET.get('pdf') == '1'
+        csv_export = request.GET.get('csv') == '1'
+        
+        # Default to current date (today) if not provided
+        today = now().date()
+        
+        if start_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                start_date = today
+        else:
+            start_date = today
+
+        if end_date_str:
+            try:
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                end_date = today
+        else:
+            end_date = today
+
+        if start_date > end_date:
+            start_date, end_date = end_date, start_date
+
+        returns = SalesReturn.objects.filter(
+            tenant=request.tenant,
+            return_at__date__gte=start_date,
+            return_at__date__lte=end_date
+        ).select_related('sale_invoice').order_by('-return_at')
+
+        # Summary statistics
+        total_return_amount = returns.aggregate(Sum('return_amount'))['return_amount__sum'] or Decimal('0.00')
+        total_returns_count = returns.count()
+        total_items_returned = returns.aggregate(Sum('return_qty'))['return_qty__sum'] or 0
+
+        context = {
+            'returns': returns,
+            'start_date': start_date,
+            'end_date': end_date,
+            'total_return_amount': total_return_amount,
+            'total_returns_count': total_returns_count,
+            'total_items_returned': total_items_returned,
+        }
+
+        if pdf_export:
+            # Handle PDF generation
+            filename = f"sales_return_report_{start_date}_to_{end_date}.pdf"
+            return render_to_pdf(request, self.pdf_template, context, filename=filename)
+
+        if csv_export:
+            # Handle CSV generation
+            import csv
+            from django.http import HttpResponse
+            response = HttpResponse(content_type='text/csv')
+            response['Content-Disposition'] = f'attachment; filename="sales_return_report_{start_date}_to_{end_date}.csv"'
+            writer = csv.writer(response)
+            writer.writerow(['Return No.', 'Sale Invoice', 'Customer', 'Returned Qty', 'Returned Amount', 'Date'])
+            for ret in returns:
+                cust_name = ret.sale_invoice.customer.name if ret.sale_invoice.customer else (ret.sale_invoice.patient_name or 'Walk-in')
+                writer.writerow([
+                    ret.return_inv_no,
+                    ret.sale_invoice.invoice_number,
+                    cust_name,
+                    ret.return_qty,
+                    ret.return_amount,
+                    ret.return_at.strftime('%Y-%m-%d %H:%M')
+                ])
+            return response
+
+        return render(request, self.template_name, context)

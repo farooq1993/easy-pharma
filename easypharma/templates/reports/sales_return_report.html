@@ -1,0 +1,218 @@
+{% extends 'includes/base.html' %}
+{% load static %}
+
+{% block title %}Sales Return Report | Easy Pharma{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4 animate-fade-in">
+    <!-- Header -->
+    <div class="row mb-4 align-items-center">
+        <div class="col-md-7">
+            <h1 class="h2 fw-bold text-dark mb-1">
+                <i class="bi bi-arrow-counterclockwise text-danger me-2"></i>Sales Return Report
+            </h1>
+            <p class="text-muted mb-0">Track and analyze customer product returns between selected dates.</p>
+        </div>
+        <div class="col-md-5">
+            <form method="GET" class="d-flex gap-2 justify-content-md-end mt-3 mt-md-0">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-calendar3"></i></span>
+                    <input type="date" name="start_date" class="form-control border-start-0" value="{{ start_date|date:'Y-m-d' }}" required>
+                </div>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-calendar3"></i></span>
+                    <input type="date" name="end_date" class="form-control border-start-0" value="{{ end_date|date:'Y-m-d' }}" required>
+                </div>
+                <button type="submit" class="btn btn-sm btn-primary px-3 shadow-sm">
+                    <i class="bi bi-funnel-fill"></i> Filter
+                </button>
+                <a href="?start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}&pdf=1" target="_blank" class="btn btn-sm btn-outline-danger shadow-sm">
+                    <i class="bi bi-file-pdf"></i> PDF
+                </a>
+                <a href="?start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}&csv=1" class="btn btn-sm btn-outline-success shadow-sm">
+                    <i class="bi bi-file-earmark-spreadsheet"></i> CSV
+                </a>
+            </form>
+        </div>
+    </div>
+
+    <!-- Metrics Row -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 position-relative overflow-hidden" style="background: linear-gradient(135deg, #ffffff 0%, #fff5f5 100%); border-left: 5px solid #dc3545 !important;">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <h6 class="text-danger fw-bold text-uppercase small mb-2">Total Returned Amount</h6>
+                            <h2 class="fw-bold mb-0 text-dark">₹{{ total_return_amount|floatformat:2 }}</h2>
+                        </div>
+                        <div class="rounded-circle bg-danger-subtle text-danger p-3 d-flex align-items-center justify-content-center" style="width: 54px; height: 54px;">
+                            <i class="bi bi-currency-rupee fs-3"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 position-relative overflow-hidden" style="background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%); border-left: 5px solid #198754 !important;">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <h6 class="text-success fw-bold text-uppercase small mb-2">Total Items Returned</h6>
+                            <h2 class="fw-bold mb-0 text-dark">{{ total_items_returned }} units</h2>
+                        </div>
+                        <div class="rounded-circle bg-success-subtle text-success p-3 d-flex align-items-center justify-content-center" style="width: 54px; height: 54px;">
+                            <i class="bi bi-box-seam fs-3"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm rounded-4 position-relative overflow-hidden" style="background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%); border-left: 5px solid #0d6efd !important;">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <h6 class="text-primary fw-bold text-uppercase small mb-2">Total Return Invoices</h6>
+                            <h2 class="fw-bold mb-0 text-dark">{{ total_returns_count }} bills</h2>
+                        </div>
+                        <div class="rounded-circle bg-primary-subtle text-primary p-3 d-flex align-items-center justify-content-center" style="width: 54px; height: 54px;">
+                            <i class="bi bi-receipt fs-3"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Returns List -->
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-header bg-white border-bottom py-3">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <h5 class="mb-0 fw-bold"><i class="bi bi-clock-history me-2 text-primary"></i>Returns List ({{ start_date|date:"d M Y" }} - {{ end_date|date:"d M Y" }})</h5>
+                <input type="text" id="reportSearch" class="form-control form-control-sm w-auto" placeholder="Quick Search returns...">
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="returnsReportTable">
+                    <thead class="table-light text-muted small text-uppercase fw-bold">
+                        <tr>
+                            <th class="ps-4">Return Inv No.</th>
+                            <th>Original Invoice</th>
+                            <th>Customer Name</th>
+                            <th>Returned Qty</th>
+                            <th>Refund Amount</th>
+                            <th>Return Date</th>
+                            <th class="pe-4 text-end">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ret in returns %}
+                        <tr class="return-row">
+                            <td class="ps-4">
+                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle rounded-pill px-3 fw-bold">
+                                    {{ ret.return_inv_no }}
+                                </span>
+                            </td>
+                            <td>
+                                <a href="{% url 'pos_print' ret.sale_invoice.id %}" target="_blank" class="fw-semibold text-decoration-none text-primary">
+                                    #{{ ret.sale_invoice.invoice_number }}
+                                </a>
+                            </td>
+                            <td class="fw-semibold">
+                                {{ ret.sale_invoice.customer.name|default:ret.sale_invoice.patient_name|default:"Walk-in Customer" }}
+                                {% if ret.sale_invoice.patient_phone %}
+                                    <br><small class="text-muted text-xs">{{ ret.sale_invoice.patient_phone }}</small>
+                                {% endif %}
+                            </td>
+                            <td><span class="badge bg-secondary-subtle text-secondary rounded-pill px-3">{{ ret.return_qty }} items</span></td>
+                            <td class="fw-bold text-danger">₹{{ ret.return_amount|floatformat:2 }}</td>
+                            <td class="text-muted small">{{ ret.return_at|date:"M d, Y h:i A" }}</td>
+                            <td class="pe-4 text-end">
+                                <button class="btn btn-sm btn-light border" type="button" data-bs-toggle="collapse" data-bs-target="#items-{{ ret.id }}" aria-expanded="false">
+                                    <i class="bi bi-eye me-1"></i> View Items
+                                </button>
+                            </td>
+                        </tr>
+                        <!-- Collapsible detail row for items -->
+                        <tr class="collapse-row">
+                            <td colspan="7" class="p-0 border-0">
+                                <div class="collapse" id="items-{{ ret.id }}">
+                                    <div class="px-5 py-3 bg-light border-top border-bottom">
+                                        <h6 class="fw-bold text-dark mb-2 small"><i class="bi bi-box-seam me-2"></i>Returned Products Detail:</h6>
+                                        <div class="table-responsive rounded border bg-white shadow-sm">
+                                            <table class="table table-sm table-borderless align-middle mb-0 text-xs">
+                                                <thead class="bg-light border-bottom text-muted small">
+                                                    <tr>
+                                                        <th class="ps-3">Product Name</th>
+                                                        <th>Batch No.</th>
+                                                        <th>Sold Qty</th>
+                                                        <th>Returned Qty</th>
+                                                        <th>Unit Price</th>
+                                                        <th>Refund Total</th>
+                                                        <th>Return Reason</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for item in ret.return_items.all %}
+                                                    <tr>
+                                                        <td class="ps-3 fw-bold">{{ item.sale_item.product.product_name }}</td>
+                                                        <td><span class="badge bg-secondary-subtle text-secondary">{{ item.sale_item.batch_number }}</span></td>
+                                                        <td>{{ item.sale_item.quantity }}</td>
+                                                        <td class="text-danger fw-bold">{{ item.returned_quantity }}</td>
+                                                        <td>₹{{ item.sale_item.unit_price }}</td>
+                                                        <td class="fw-bold text-danger">₹{% widthratio item.returned_quantity 1 item.sale_item.unit_price %}</td>
+                                                        <td class="text-muted italic">{{ item.return_reason|default:"—" }}</td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">
+                                <i class="bi bi-arrow-counterclockwise fs-1 d-block mb-3 text-secondary"></i>
+                                No sales return records found for this date range.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Quick search logic
+    const searchInput = document.getElementById('reportSearch');
+    const tableRows = document.querySelectorAll('.return-row');
+    
+    searchInput?.addEventListener('input', function(e) {
+        const query = e.target.value.toLowerCase().trim();
+        tableRows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            const nextCollapseRow = row.nextElementSibling;
+            if (text.includes(query)) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+                // collapse if open
+                if (nextCollapseRow && nextCollapseRow.classList.contains('collapse-row')) {
+                    const collapseDiv = nextCollapseRow.querySelector('.collapse');
+                    if (collapseDiv && collapseDiv.classList.contains('show')) {
+                        bootstrap.Collapse.getInstance(collapseDiv).hide();
+                    }
+                }
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

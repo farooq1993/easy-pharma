@@ -602,11 +602,22 @@ class ProductSearchAPI(LoginRequiredMixin,View):
             return JsonResponse(cached, safe=False)
 
         from easypharma.models.stock import StockBatch
+        from django.db.models import Exists, OuterRef
+        
+        active_batches = StockBatch.objects.filter(
+            tenant=request.tenant,
+            product=OuterRef('pk'),
+            current_quantity__gt=0
+        )
         
         products = Products.objects.filter(
             tenant=request.tenant,
             product_name__istartswith=query
-        ).select_related('product_tax', 'product_content', 'compny_name', 'product_schedule').prefetch_related('batches')[:limit]
+        ).annotate(
+            has_stock=Exists(active_batches)
+        ).order_by('-has_stock', 'product_name').select_related(
+            'product_tax', 'product_content', 'compny_name', 'product_schedule'
+        ).prefetch_related('batches')[:limit]
         data = []
         for p in products:
             batches = p.batches.filter(current_quantity__gt=0).order_by('expiry_date')
@@ -628,7 +639,7 @@ class ProductSearchAPI(LoginRequiredMixin,View):
                 
             batch_list = []
             for batch in batches:
-                unit_price = float(batch.sale_price)
+                unit_price = float(batch.sale_price) if batch.sale_price is not None else 0.0
                 if p.conversion_factor > 1:
                     unit_price = float(batch.mrp) / p.conversion_factor
                 elif unit_price == 0 and batch.mrp:
@@ -694,7 +705,7 @@ class SubstituteSearchAPI(LoginRequiredMixin,View):
                 continue
             batch_list = []
             for batch in batches:
-                unit_price = float(batch.sale_price)
+                unit_price = float(batch.sale_price) if batch.sale_price is not None else 0.0
                 if p.conversion_factor > 1:
                     unit_price = float(batch.mrp) / p.conversion_factor
                 elif unit_price == 0 and batch.mrp:
@@ -731,6 +742,35 @@ class SalesReturnView(LoginRequiredMixin,View):
         return_id = request.GET.get('return_id')
         selected_return = None
         selected_return_items = []
+
+        # Filter returns
+        returns_qs = SalesReturn.objects.filter(tenant=request.tenant)
+        
+        # Search filter
+        search_query = request.GET.get('search', '').strip()
+        if search_query:
+            returns_qs = returns_qs.filter(
+                Q(return_inv_no__icontains=search_query) |
+                Q(sale_invoice__patient_name__icontains=search_query) |
+                Q(sale_invoice__patient_phone__icontains=search_query) |
+                Q(sale_invoice__invoice_number__icontains=search_query)
+            )
+            
+        # Date filters
+        start_date = request.GET.get('start_date')
+        end_date = request.GET.get('end_date')
+        if start_date:
+            returns_qs = returns_qs.filter(return_at__date__gte=start_date)
+        if end_date:
+            returns_qs = returns_qs.filter(return_at__date__lte=end_date)
+            
+        returns_qs = returns_qs.order_by('-return_at')
+        
+        # Pagination
+        from django.core.paginator import Paginator
+        paginator = Paginator(returns_qs, 10)
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
         
         context = {
             'customers': customers,
@@ -739,9 +779,13 @@ class SalesReturnView(LoginRequiredMixin,View):
             'invoices': [],
             'selected_invoice': None,
             'sale_items': [],
-            'returns': SalesReturn.objects.filter(tenant=request.tenant).order_by('-return_at')[:10],
+            'returns': page_obj,
+            'page_obj': page_obj,
             'selected_return': None,
             'selected_return_items': [],
+            'search_query': search_query,
+            'start_date': start_date,
+            'end_date': end_date,
         }
         
         if customer_id:

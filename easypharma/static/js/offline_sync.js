@@ -53,7 +53,7 @@ const OfflineSync = {
         try {
             console.log('[OfflineSync] Preloading product cache...');
             // Fetch products for POS (with batches)
-            const posResponse = await fetch('/api/products/search/?limit=2000');
+            const posResponse = await fetch('/api/products/search/?limit=5000');
             if (posResponse.ok) {
                 const products = await posResponse.json();
                 if (Array.isArray(products) && products.length > 0) {
@@ -65,7 +65,7 @@ const OfflineSync = {
             }
             
             // Fetch products for Purchase Entry (without batches)
-            const masterResponse = await fetch('/api/products/master-search/?limit=2000');
+            const masterResponse = await fetch('/api/products/master-search/?limit=5000');
             if (masterResponse.ok) {
                 const products = await masterResponse.json();
                 if (Array.isArray(products) && products.length > 0) {
@@ -164,7 +164,7 @@ const OfflineSync = {
                     existing.push(p);
                 }
             });
-            await store.setItem('all_products', existing.slice(0, 1000)); // limit total cache size
+            await store.setItem('all_products', existing.slice(0, 5000)); // limit total cache size
             console.log('[OfflineSync] Products cached for offline search');
         } catch (e) {
             console.warn('[OfflineSync] Failed to cache products', e);

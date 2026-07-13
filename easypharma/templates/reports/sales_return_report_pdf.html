@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+{% load static %}
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Sales Return Report</title>
+    <style>
+        /* ── Page setup ── */
+        @page {
+            size: A4 landscape;
+            margin: 1.2cm 1.5cm;
+            @top-center {
+                content: "Sales Return Report";
+                font-size: 9pt;
+                color: #666;
+            }
+            @bottom-right {
+                content: "Page " counter(page) " of " counter(pages);
+                font-size: 8pt;
+                color: #666;
+            }
+        }
+
+        /* ── Base ── */
+        body {
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 9pt;
+            color: #222;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* ── Report Header ── */
+        .report-header {
+            border-bottom: 2.5pt solid #dc3545;
+            padding-bottom: 6pt;
+            margin-bottom: 12pt;
+        }
+        .report-header h1 {
+            font-size: 16pt;
+            color: #dc3545;
+            margin: 0 0 2pt 0;
+        }
+        .report-header p {
+            font-size: 9pt;
+            color: #555;
+            margin: 0;
+        }
+        .report-meta {
+            float: right;
+            text-align: right;
+            font-size: 8pt;
+            color: #666;
+        }
+        .clearfix { clear: both; }
+
+        /* ── Metric boxes ── */
+        .metrics-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 12pt;
+        }
+        .metrics-table td {
+            width: 33.33%;
+            padding: 8pt 6pt;
+            text-align: center;
+            border: 0.75pt solid #dce3ec;
+            background-color: #fafbfc;
+        }
+        .metric-label {
+            font-size: 7.5pt;
+            color: #666;
+            display: block;
+            margin-bottom: 3pt;
+            text-uppercase: true;
+            font-weight: bold;
+        }
+        .metric-value {
+            font-size: 14pt;
+            font-weight: bold;
+        }
+        .metric-red { color: #dc3545; }
+        .metric-green { color: #198754; }
+        .metric-blue { color: #0d6efd; }
+
+        /* ── Data tables ── */
+        table.data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 8pt;
+            margin-top: 10pt;
+        }
+        table.data-table thead tr {
+            background-color: #fce8e6;
+        }
+        table.data-table th {
+            padding: 5pt 6pt;
+            text-align: left;
+            border: 0.5pt solid #f1b2b2;
+            font-weight: bold;
+            color: #8c1d1d;
+            font-size: 8.5pt;
+        }
+        table.data-table th.r,
+        table.data-table td.r {
+            text-align: right;
+        }
+        table.data-table td {
+            padding: 5pt 6pt;
+            border: 0.5pt solid #dce3ec;
+        }
+        .text-bold { font-weight: bold; }
+        .detail-header {
+            background-color: #f8f9fa;
+            font-weight: bold;
+            font-size: 7.5pt;
+            color: #555;
+        }
+        .detail-row {
+            background-color: #fdfdfe;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="report-header">
+        <div class="report-meta">
+            <strong>Pharmacy:</strong> {{ request.tenant.pharmacy_name|default:"Easy Pharma" }}<br>
+            <strong>Generated on:</strong> {% now "d M Y H:i A" %}
+        </div>
+        <h1>Sales Return Report</h1>
+        <p><strong>Date Range:</strong> {{ start_date|date:"d M Y" }} to {{ end_date|date:"d M Y" }}</p>
+        <div class="clearfix"></div>
+    </div>
+
+    <!-- Summary Metrics -->
+    <table class="metrics-table">
+        <tr>
+            <td>
+                <span class="metric-label">Total Returned Amount</span>
+                <span class="metric-value metric-red">₹{{ total_return_amount|floatformat:2 }}</span>
+            </td>
+            <td>
+                <span class="metric-label">Total Items Returned</span>
+                <span class="metric-value metric-green">{{ total_items_returned }} units</span>
+            </td>
+            <td>
+                <span class="metric-label">Total Return Invoices</span>
+                <span class="metric-value metric-blue">{{ total_returns_count }} bills</span>
+            </td>
+        </tr>
+    </table>
+
+    <!-- Return Details Table -->
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th style="width: 15%;">Return Inv No.</th>
+                <th style="width: 15%;">Original Invoice</th>
+                <th style="width: 25%;">Customer Name</th>
+                <th style="width: 15%;">Return Date</th>
+                <th class="r" style="width: 15%;">Returned Qty</th>
+                <th class="r" style="width: 15%;">Refund Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for ret in returns %}
+            <tr class="text-bold" style="background-color: #fafafa;">
+                <td>{{ ret.return_inv_no }}</td>
+                <td>#{{ ret.sale_invoice.invoice_number }}</td>
+                <td>{{ ret.sale_invoice.customer.name|default:ret.sale_invoice.patient_name|default:"Walk-in Customer" }}</td>
+                <td>{{ ret.return_at|date:"d M Y H:i" }}</td>
+                <td class="r">{{ ret.return_qty }}</td>
+                <td class="r text-bold metric-red">₹{{ ret.return_amount|floatformat:2 }}</td>
+            </tr>
+            <!-- Item Breakdowns for this Return -->
+            <tr class="detail-row">
+                <td colspan="6" style="padding-left: 20pt; padding-right: 20pt; background-color: #f9f9f9; border-top: 0;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 7.5pt; margin: 3pt 0;">
+                        <tr class="detail-header">
+                            <th style="border-bottom: 1px solid #ddd; padding: 2px 4px; text-align: left;">Product Name</th>
+                            <th style="border-bottom: 1px solid #ddd; padding: 2px 4px; text-align: left;">Batch</th>
+                            <th style="border-bottom: 1px solid #ddd; padding: 2px 4px; text-align: right;">Sold Qty</th>
+                            <th style="border-bottom: 1px solid #ddd; padding: 2px 4px; text-align: right;">Returned Qty</th>
+                            <th style="border-bottom: 1px solid #ddd; padding: 2px 4px; text-align: right;">Unit Price</th>
+                            <th style="border-bottom: 1px solid #ddd; padding: 2px 4px; text-align: right;">Subtotal</th>
+                            <th style="border-bottom: 1px solid #ddd; padding: 2px 4px; text-align: left;">Reason</th>
+                        </tr>
+                        {% for item in ret.return_items.all %}
+                        <tr>
+                            <td style="padding: 2px 4px;">{{ item.sale_item.product.product_name }}</td>
+                            <td style="padding: 2px 4px;">{{ item.sale_item.batch_number }}</td>
+                            <td style="padding: 2px 4px; text-align: right;">{{ item.sale_item.quantity }}</td>
+                            <td style="padding: 2px 4px; text-align: right; font-weight: bold; color: #dc3545;">{{ item.returned_quantity }}</td>
+                            <td style="padding: 2px 4px; text-align: right;">₹{{ item.sale_item.unit_price }}</td>
+                            <td style="padding: 2px 4px; text-align: right; font-weight: bold; color: #dc3545;">₹{% widthratio item.returned_quantity 1 item.sale_item.unit_price %}</td>
+                            <td style="padding: 2px 4px; color: #555;">{{ item.return_reason|default:"—" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" style="text-align: center; padding: 20pt; color: #888;">
+                    No sales return records found for this date range.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+</body>
+</html>
