@@ -13,6 +13,7 @@ from easypharma.views.reports import (
     GSTR1ReportView,
     PurchaseAnalysisView,
     SaleBillWiseProfit,
+    SalesReturnReportView,
 )
 
 urlpatterns = [
@@ -25,6 +26,7 @@ urlpatterns = [
     path('bill-wise-profit/', SaleBillWiseProfit.as_view(), name='bill_wise_profit_report'),
     path('gst/', GSTReportView.as_view(), name='gst_report'),
     path('product-history/', ProductHistoryView.as_view(), name='product_history'),
+    path('sales-return/', SalesReturnReportView.as_view(), name='sales_return_report'),
 
     # Drug Register Reports
     path('schedule-h/', ScheduleHReportView.as_view(), name='schedule_h_report'),

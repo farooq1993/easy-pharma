@@ -39,7 +39,8 @@ class PurchaseEntryView(LoginRequiredMixin,View):
         product_schedules = ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('schedule_name')
         drug_companies = DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('company_name')
         product_contents = ProductContent.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('content_name')
-
+        product_types = ProductType.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('name')
+        
         edit_data = None
         if invoice_id:
             try:
@@ -78,6 +79,7 @@ class PurchaseEntryView(LoginRequiredMixin,View):
         return render(request, self.template_name, {
             'suppliers': suppliers,
             'products': products,
+            'product_types': product_types,
             'product_taxes': product_taxes,
             'product_type':product_type,
             'product_schedules': product_schedules,
@@ -402,36 +404,53 @@ class SupplierWisePurchaseReportView(LoginRequiredMixin,View):
 
 class SupplierReportDataView(LoginRequiredMixin,View):
     def get(self, request, supplier_id):
+        # Support supplier_id == 0 => all suppliers
         try:
-            supplier = Supplier.objects.get(id=supplier_id, tenant=request.tenant)
-            purchases = PurchaseInvoice.objects.filter(supplier=supplier)  # adjust model name if different
+            if int(supplier_id) == 0:
+                purchases = PurchaseInvoice.objects.filter(tenant=request.tenant)
+            else:
+                supplier = Supplier.objects.get(id=supplier_id, tenant=request.tenant)
+                purchases = PurchaseInvoice.objects.filter(supplier=supplier, tenant=request.tenant)
+
+            # Optional payment mode filter and date range filters
+            payment_mode = request.GET.get('payment_mode', '').strip()
+            if payment_mode in ('Cash', 'Credit'):
+                purchases = purchases.filter(payment_mode=payment_mode)
+
+            date_from = request.GET.get('date_from', '').strip()
+            date_to = request.GET.get('date_to', '').strip()
+            if date_from:
+                purchases = purchases.filter(purchase_date__gte=date_from)
+            if date_to:
+                purchases = purchases.filter(purchase_date__lte=date_to)
 
             data = {
-                    'purchases': [
-                        {
-                            'id': p.id,
-                            'invoice_number': p.invoice_number,
-                            'date': str(p.purchase_date),
-                            'total_amount': str(p.total_amount),
-                            'items': [
-                                {
-                                    'product_name': item.product.product_name,
-                                    'quantity': str(item.quantity),
-                                    'unit_price': str(item.purchase_price), 
-                                    'mrp': str(item.mrp),
-                                    'batch_number': item.batch_number,
-                                    'expiry_date': str(item.expiry_date),
-                                    'tax_percentage': str(item.tax_percentage),
-                                    'total_amount': str(item.total_amount),
-                                }
-                                for item in p.items.all()
-                            ]                          
-                        }                              
-                        for p in purchases
-                    ]                                 
-                }
+                'purchases': [
+                    {
+                        'id': p.id,
+                        'invoice_number': p.invoice_number,
+                        'supplier_name': p.supplier.name if p.supplier else '',
+                        'payment_mode': p.payment_mode,
+                        'date': str(p.purchase_date),
+                        'total_amount': str(p.total_amount),
+                        'items': [
+                            {
+                                'product_name': item.product.product_name,
+                                'quantity': str(item.quantity),
+                                'unit_price': str(item.purchase_price),
+                                'mrp': str(item.mrp),
+                                'batch_number': item.batch_number,
+                                'expiry_date': str(item.expiry_date),
+                                'tax_percentage': str(item.tax_percentage),
+                                'total_amount': str(item.total_amount),
+                            }
+                            for item in p.items.all()
+                        ]
+                    }
+                    for p in purchases
+                ]
+            }
             return JsonResponse(data)
-
         except Supplier.DoesNotExist:
             return JsonResponse({'purchases': []}, status=404)
 
@@ -884,7 +903,7 @@ class OpeningStockEntryView(LoginRequiredMixin, View):
     template_name = 'purchase/opening_entry.html'
 
     def get(self, request, stock_id=None):
-        products = Products.objects.filter(tenant=request.tenant).order_by('product_name')
+        products = []
         product_taxes = ProductTax.objects.filter(tenant=request.tenant)
         product_schedules = ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True))
         drug_companies = DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True))
@@ -1015,7 +1034,7 @@ class OpeningStockEditView(LoginRequiredMixin, View):
         except OpeningStock.DoesNotExist:
             return redirect('opening_stock_list')
 
-        products = Products.objects.filter(tenant=request.tenant).order_by('product_name')
+        products = []
         product_taxes = ProductTax.objects.filter(tenant=request.tenant)
         product_type = ProductType.objects.filter(tenant=request.tenant).order_by('name')
         
@@ -1133,3 +1152,28 @@ class OpeningStockEditView(LoginRequiredMixin, View):
             traceback.print_exc()
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
         return OpeningStockEntryView().post(request, stock_id=stock_id)
+
+
+class OpeningStockDeleteView(LoginRequiredMixin, View):
+    def delete(self, request, stock_id):
+        try:
+            with transaction.atomic():
+                stock = OpeningStock.objects.get(id=stock_id, tenant=request.tenant)
+                # Revert stock quantities from batches before deleting
+                for item in stock.items.all():
+                    batch = StockBatch.objects.filter(
+                        tenant=request.tenant, 
+                        product=item.product, 
+                        batch_number=item.batch_number
+                    ).first()
+                    if batch:
+                        batch.current_quantity -= item.quantity * item.product.conversion_factor
+                        if batch.current_quantity < 0:
+                            batch.current_quantity = 0
+                        batch.save()
+                stock.delete()
+                return JsonResponse({'success': True})
+        except OpeningStock.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Opening Stock record not found'}, status=404)
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)

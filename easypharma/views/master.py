@@ -104,7 +104,8 @@ class MasterCRUDView(LoginRequiredMixin,View):
         if not model:
             return JsonResponse({'error': 'Invalid master type'}, status=400)
         
-        data = {field['name']: request.POST.get(field['name']) for field in self.get_context_data(master_type)['fields']}
+        post_data_lower = {k.lower(): request.POST.get(k) for k in request.POST.keys()}
+        data = {field['name']: post_data_lower.get(field['name'].lower()) for field in self.get_context_data(master_type)['fields']}
         try:
             instance = model.objects.create(tenant=request.tenant, **data)
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
@@ -280,7 +281,9 @@ class ProductMasterSearchAPI(LoginRequiredMixin,View):
         products = Products.objects.filter(
             tenant=request.tenant,
             product_name__istartswith=query
-        ).select_related('product_tax')[:limit]
+        ).select_related('product_tax').only(
+            'id', 'product_name', 'product_packing', 'conversion_factor', 'product_tax__tax_rate'
+        )[:limit]
         
         data = []
         for p in products:

@@ -1,4 +1,4 @@
-﻿{% extends "includes/base.html" %}
+{% extends "includes/base.html" %}
 {% load static %}
 
 {% block content %}
@@ -175,8 +175,18 @@
     <div class="row mt-4">
         <div class="col-12">
             <div class="card border-0 shadow-sm rounded-4">
-                <div class="card-header bg-white border-bottom">
+                <div class="card-header bg-white border-bottom d-flex flex-wrap align-items-center justify-content-between gap-3">
                     <h5 class="mb-0">Recent Return History</h5>
+                    <form method="get" class="d-flex align-items-center flex-wrap gap-2 no-loader">
+                        <input type="text" name="search" class="form-control form-control-sm" style="width: 180px;" placeholder="Search Return/Inv/Cust..." value="{{ search_query|default:'' }}">
+                        <input type="date" name="start_date" class="form-control form-control-sm" style="width: 130px;" value="{{ start_date|default:'' }}">
+                        <span class="small text-muted">to</span>
+                        <input type="date" name="end_date" class="form-control form-control-sm" style="width: 130px;" value="{{ end_date|default:'' }}">
+                        <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-filter me-1"></i>Filter</button>
+                        {% if search_query or start_date or end_date %}
+                            <a href="{% url 'pos_returns' %}" class="btn btn-sm btn-outline-secondary">Clear</a>
+                        {% endif %}
+                    </form>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
@@ -207,13 +217,45 @@
                                 </tr>
                                 {% empty %}
                                 <tr>
-                                    <td colspan="5" class="text-center py-4 text-muted">No return records found.</td>
+                                    <td colspan="7" class="text-center py-4 text-muted">No return records found.</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                     </div>
                 </div>
+                {% if page_obj.has_other_pages %}
+                <div class="card-footer bg-white border-top d-flex align-items-center justify-content-between">
+                    <span class="small text-muted">Showing page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+                    <nav aria-label="Page navigation">
+                        <ul class="pagination pagination-sm mb-0">
+                            {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" aria-label="Previous">
+                                    <span aria-hidden="true">&laquo;</span>
+                                </a>
+                            </li>
+                            {% endif %}
+                            
+                            {% for num in page_obj.paginator.page_range %}
+                                {% if page_obj.number == num %}
+                                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                <li class="page-item"><a class="page-link" href="?page={{ num }}{% if search_query %}&search={{ search_query }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">{{ num }}</a></li>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" aria-label="Next">
+                                    <span aria-hidden="true">&raquo;</span>
+                                </a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
