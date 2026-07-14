@@ -47,9 +47,9 @@ def invalidate_pos_cache(tenant_id):
     cache.delete(f'pos_next_inv:{tenant_id}')
     # Bust ALL per-query search cache entries at once via version bump
     try:
-        cache.incr(_search_version_key(tenant_id))
+        cache.incr(f'pos_search_v:{tenant_id}')
     except ValueError:
-        cache.set(_search_version_key(tenant_id), 1, timeout=None)
+        cache.set(f'pos_search_v:{tenant_id}', 1, timeout=None)
 
 class POSView(LoginRequiredMixin,View):
     template_name = 'sales/pos.html'

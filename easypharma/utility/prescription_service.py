@@ -66,7 +66,7 @@ def extract_prescription_data(image_file):
         "Return ONLY the raw JSON block. Do not include markdown code fence formatting (like ```json ... ```) or any other text."
     )
 
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-3.5-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-3.1-flash-lite:generateContent?key={api_key}"
     headers = {'Content-Type': 'application/json'}
     payload = {
         "contents": [

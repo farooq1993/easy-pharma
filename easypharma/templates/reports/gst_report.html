@@ -36,6 +36,25 @@
         Ensure GST registration: <strong>{{ pharmacy_gst }}</strong>
     </div>
 
+    <!-- GST Compliance Navigation Tabs -->
+    <ul class="nav nav-tabs mb-4">
+        <li class="nav-item">
+            <a class="nav-link active fw-bold" href="{% url 'gst_report' %}?month={{ month }}&year={{ year }}">
+                <i class="bi bi-file-earmark-text me-1"></i> GST Summary
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="{% url 'gstr1_report' %}?month={{ month }}&year={{ year }}">
+                <i class="bi bi-file-earmark-spreadsheet me-1"></i> GSTR-1 (Sales)
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" href="{% url 'gstr3b_report' %}?month={{ month }}&year={{ year }}">
+                <i class="bi bi-file-earmark-bar-graph me-1"></i> GSTR-3B (Summary)
+            </a>
+        </li>
+    </ul>
+
     <!-- Period Info -->
     <div class="card mb-4 bg-light">
         <div class="card-body">

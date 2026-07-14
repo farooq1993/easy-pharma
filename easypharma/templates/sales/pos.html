@@ -2020,7 +2020,8 @@
                         if (!phone) return;
                     }
                     if(phone.length === 10) phone = '91' + phone;
-                    let msg = `*EASY PHARMA - INVOICE (Offline)*\n`;
+                    const firmName = (pharmacyInfo.name || 'EASY PHARMA').toUpperCase();
+                    let msg = `*${firmName} - INVOICE (Offline)*\n`;
                     msg += `Patient: ${data.patient_name || 'Cash Customer'}\n\n`;
                     msg += `*ITEMS:*\n`;
                     cart.forEach(item => {
@@ -2069,6 +2070,9 @@
                 const response = await fetch('/pos/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') }, body: JSON.stringify(data) });
                 const result = await response.json();
                 if (result.success) {
+                    if (typeof OfflineSync !== 'undefined') {
+                        OfflineSync.preloadProductCache();
+                    }
                     // Show Success Modal instead of reloading
                     document.getElementById('successInvoiceNum').textContent = result.invoice_number;
                     
@@ -2090,9 +2094,10 @@
                         }
                         if(phone.length === 10) phone = '91' + phone;
                         
-                        let msg = `*EASY PHARMA - INVOICE*\n`;
+                        const firmName = (pharmacyInfo.name || 'EASY PHARMA').toUpperCase();
+                        let msg = `*${firmName} - INVOICE*\n`;
                         msg += `Invoice No: ${result.invoice_number}\n`;
-                        msg += `Patient: ${data.patient_name || 'Cash Customer'}\n\n`;
+                        msg += `Name: ${data.patient_name || 'Cash Customer'}\n\n`;
                         
                         msg += `*ITEMS:*\n`;
                         cart.forEach(item => {
@@ -2149,8 +2154,9 @@
                             if (!phone) return;
                         }
                         if(phone.length === 10) phone = '91' + phone;
-                        let msg = `*EASY PHARMA - INVOICE (Offline)*\n`;
-                        msg += `Patient: ${data.patient_name || 'Cash Customer'}\n\n`;
+                        const firmName = (pharmacyInfo.name || 'EASY PHARMA').toUpperCase();
+                        let msg = `*${firmName} - INVOICE (Offline)*\n`;
+                        msg += `Name: ${data.patient_name || 'Cash Customer'}\n\n`;
                         msg += `*ITEMS:*\n`;
                         cart.forEach(item => {
                             msg += `- ${item.name} (x${item.quantity}) = ₹${(item.price * item.quantity).toFixed(2)}\n`;
