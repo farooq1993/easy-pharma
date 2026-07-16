@@ -170,28 +170,41 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024      # 10 MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 
 # Redis Cache configuration with dynamic fallback
-REDIS_URL = config("REDIS_URL", default="redis://127.0.0.1:6379/1")
-try:
-    import django_redis
+REDIS_URL = config("REDIS_URL", default="")
+
+if REDIS_URL:
+    try:
+        import django_redis
+        CACHES = {
+            "default": {
+                "BACKEND": "django_redis.cache.RedisCache",
+                "LOCATION": REDIS_URL,
+                "OPTIONS": {
+                    "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                    "IGNORE_EXCEPTIONS": True,  # Don't crash the application if cache is down
+                    "SOCKET_CONNECT_TIMEOUT": 5,
+                    "SOCKET_TIMEOUT": 5,
+                    "CONNECTION_POOL_KWARGS": {
+                        "ssl_cert_reqs": None  # Support SSL URLs (rediss://) like Upstash
+                    }
+                }
+            }
+        }
+        print("REDIS CACHE CONFIGURED")
+    except ImportError:
+        print("django-redis not installed. Falling back to LocMemCache.")
+        CACHES = {
+            "default": {
+                "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+                "LOCATION": "easy-pharma-fallback-cache",
+            }
+        }
+else:
+    print("No REDIS_URL detected. Using LocMemCache.")
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
             "LOCATION": "easy-pharma-local-cache",
-            "OPTIONS": {
-                "CLIENT_CLASS": "django_redis.client.DefaultClient",
-                "IGNORE_EXCEPTIONS": False,
-                "SOCKET_CONNECT_TIMEOUT": 5,
-                "SOCKET_TIMEOUT": 5,
-            }
-        }
-    }
-    print("REDIS CACHE CONFIGURED")
-except ImportError:
-    print("django-redis not installed. Falling back to LocMemCache.")
-    CACHES = {
-        "default": {
-            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-            "LOCATION": "easy-pharma-fallback-cache",
         }
     }
 

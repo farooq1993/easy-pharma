@@ -631,9 +631,9 @@ class ProductSearchAPI(LoginRequiredMixin,View):
         )[:limit]
         data = []
         for p in products:
-            batches = p.batches.filter(current_quantity__gt=0).order_by('expiry_date')
+            batches = list(p.batches.all())
             
-            if not batches.exists():
+            if not batches:
                 # Still return the product but flag as out of stock so UI can show substitute button
                 data.append({
                     'id': p.id,
@@ -701,18 +701,25 @@ class SubstituteSearchAPI(LoginRequiredMixin,View):
         if not source.product_content:
             return JsonResponse([], safe=False)
         
+        from django.db.models import Prefetch
+        
         # Find other products with same content that have stock
         subs = Products.objects.filter(
             tenant=request.tenant,
             product_content=source.product_content,
         ).exclude(id=source.id).select_related(
             'product_tax', 'product_content', 'compny_name'
-        ).prefetch_related('batches')[:15]
+        ).prefetch_related(
+            Prefetch(
+                'batches',
+                queryset=StockBatch.objects.filter(current_quantity__gt=0).order_by('expiry_date')
+            )
+        )[:15]
         
         data = []
         for p in subs:
-            batches = p.batches.filter(current_quantity__gt=0).order_by('expiry_date')
-            if not batches.exists():
+            batches = list(p.batches.all())
+            if not batches:
                 continue
             batch_list = []
             for batch in batches:
@@ -1294,10 +1301,20 @@ class PrescriptionScanAPI(LoginRequiredMixin, View):
                     product_content__content_name__icontains=name
                 ).select_related('product_tax', 'product_content', 'compny_name')[:5])
                 
+            if matched_products:
+                from django.db.models import prefetch_related_objects, Prefetch
+                prefetch_related_objects(
+                    matched_products,
+                    Prefetch(
+                        'batches',
+                        queryset=StockBatch.objects.filter(current_quantity__gt=0).order_by('expiry_date')
+                    )
+                )
+                
             product_matches = []
             for p in matched_products:
                 # Get active batches (FEFO)
-                batches = p.batches.filter(current_quantity__gt=0).order_by('expiry_date')
+                batches = list(p.batches.all())
                 
                 batch_list = []
                 for batch in batches:
