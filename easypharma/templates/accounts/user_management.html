@@ -41,6 +41,8 @@
 .btn-icon-toggle:hover { background: rgba(245,158,11,.25); border-color: #fbbf24; }
 .btn-icon-del    { border-color: rgba(239,68,68,.4); color: #f87171; background: rgba(239,68,68,.1); }
 .btn-icon-del:hover { background: rgba(239,68,68,.25); border-color: #f87171; }
+.btn-icon-key    { border-color: rgba(59,130,246,.4); color: #60a5fa; background: rgba(59,130,246,.1); }
+.btn-icon-key:hover { background: rgba(59,130,246,.25); border-color: #60a5fa; }
 .empty-state { text-align:center; padding: 4rem 2rem; color: var(--pm-muted); }
 .add-btn { background: linear-gradient(135deg, var(--pm-accent), var(--pm-accent2)); border: none; color: #fff; padding: .6rem 1.4rem; border-radius: .6rem; font-weight: 600; transition: transform .15s, box-shadow .15s; text-decoration: none; display: inline-flex; align-items: center; gap: .4rem; }
 .add-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(99,102,241,.35); color: #fff; }
@@ -138,18 +140,30 @@
             </td>
             <td>
               <div class="d-flex gap-2">
-                {% if u.user_type not in 'admin,tenant_owner' %}
+                <!-- Change Password -->
+                <a href="{% url 'change_user_password' u.id %}" class="btn-icon btn-icon-key" title="Change Password">
+                  <i class="bi bi-key-fill" style="font-size:.85rem;"></i>
+                </a>
+
+                <!-- Edit Permissions (Only for other employee/pharmacist users) -->
+                {% if u.user_type not in 'admin,tenant_owner' and u.id != request.user.id %}
                 <a href="{% url 'edit_user_permissions' u.id %}" class="btn-icon btn-icon-edit" title="Edit Permissions">
                   <i class="bi bi-sliders2" style="font-size:.85rem;"></i>
                 </a>
                 {% endif %}
+
+                <!-- Toggle Active (Cannot deactivate self) -->
+                {% if u.id != request.user.id %}
                 <form method="POST" action="{% url 'toggle_user_active' u.id %}" style="margin:0;">
                   {% csrf_token %}
                   <button type="submit" class="btn-icon btn-icon-toggle" title="{% if u.is_active %}Deactivate{% else %}Activate{% endif %}">
                     <i class="bi bi-{% if u.is_active %}pause-fill{% else %}play-fill{% endif %}" style="font-size:.85rem;"></i>
                   </button>
                 </form>
-                {% if u.user_type not in 'admin,tenant_owner' %}
+                {% endif %}
+
+                <!-- Delete User (Only for other employee/pharmacist users) -->
+                {% if u.user_type not in 'admin,tenant_owner' and u.id != request.user.id %}
                 <form method="POST" action="{% url 'delete_tenant_user' u.id %}" style="margin:0;"
                       onsubmit="return confirm('Delete user \'{{ u.username }}\'? This cannot be undone.')">
                   {% csrf_token %}
