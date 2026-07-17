@@ -162,7 +162,7 @@
                         </div>
                         <div class="mb-2">
                             <input type="text" id="patientAddress" class="form-control border-0 bg-light py-2"
-                                placeholder="Patient Address *" autocomplete="off">
+                                placeholder="Patient Address *" autocomplete="off" value="{{ request.tenant.city|default:'' }}">
                             <div class="invalid-feedback">Patient address is required.</div>
                         </div>
                         <div class="row g-2 mb-2">
@@ -764,6 +764,7 @@
         foodLic: "{{ request.tenant.food_lic|escapejs }}",
         gstin: "{{ request.tenant.gst_number|escapejs }}",
     };
+    const tenantCity = "{{ request.tenant.city|escapejs }}";
 
     const printSetup = {
         paperSize: "{{ ps.paper_size|escapejs }}",
@@ -846,6 +847,9 @@
         if (urlParams.get('mode') === 'counter') {
             enableCounterMode();
         } else {
+            if (!editData) {
+                document.getElementById('patientAddress').value = tenantCity;
+            }
             // Auto focus search box on load for normal mode too
             const searchInput = document.getElementById('productSearch');
             if (searchInput) searchInput.focus();
@@ -895,7 +899,7 @@
 
         // Reset fields
         document.getElementById('patientName').value = "";
-        document.getElementById('patientAddress').value = "";
+        document.getElementById('patientAddress').value = tenantCity;
         document.getElementById('patientPhone').value = "";
         document.getElementById('doctorName').value = "{% if default_doctor %}{{ default_doctor.name }}{% endif %}";
 
@@ -2299,7 +2303,8 @@ function addNewBill() {
         renderCart();
         
         document.getElementById('patientName').value = '';
-        document.getElementById('patientAddress').value = '';
+        const isCounterMode = !document.getElementById('counterSaleBanner').classList.contains('d-none');
+        document.getElementById('patientAddress').value = isCounterMode ? 'COUNTER' : tenantCity;
         document.getElementById('patientPhone').value = '';
         document.getElementById('doctorName').value = '';
         document.getElementById('summaryDiscount').value = '0';

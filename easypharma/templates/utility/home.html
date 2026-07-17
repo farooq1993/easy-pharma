@@ -1,53 +1,309 @@
 {% extends "includes/base.html" %}
+{% block title %}General Settings - Easy Pharma{% endblock %}
+
 {% block content %}
+<style>
+    /* ── Tabbed Settings Cards ── */
+    .settings-card {
+        background: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+        border: 1px solid #eef0f6;
+        overflow: hidden;
+        margin-bottom: 30px;
+    }
+    
+    .nav-tabs-custom {
+        border-bottom: 2px solid #f3f4f6;
+        padding: 0 24px;
+        background: #fafbfe;
+    }
+    
+    .nav-tabs-custom .nav-link {
+        border: none;
+        color: #6b7280;
+        font-weight: 600;
+        font-size: 14px;
+        padding: 16px 20px;
+        position: relative;
+        background: transparent;
+        transition: color 0.2s;
+    }
+    
+    .nav-tabs-custom .nav-link:hover {
+        color: #9052b9;
+    }
+    
+    .nav-tabs-custom .nav-link.active {
+        color: #9052b9;
+        background: transparent;
+    }
+    
+    .nav-tabs-custom .nav-link.active::after {
+        content: '';
+        position: absolute;
+        bottom: -2px;
+        left: 0;
+        width: 100%;
+        height: 2px;
+        background-color: #9052b9;
+    }
+
+    .settings-body {
+        padding: 30px 24px;
+    }
+
+    /* ── Form Controls ── */
+    .setting-group {
+        border-bottom: 1px solid #f3f4f6;
+        padding-bottom: 24px;
+        margin-bottom: 24px;
+    }
+    .setting-group:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+        margin-bottom: 0;
+    }
+
+    .setting-title {
+        font-weight: 700;
+        font-size: 15px;
+        color: #1f2937;
+        margin-bottom: 6px;
+    }
+
+    .setting-desc {
+        font-size: 13px;
+        color: #6b7280;
+        margin-bottom: 12px;
+        max-width: 600px;
+    }
+
+    .custom-select {
+        max-width: 320px;
+        height: 45px;
+        border-radius: 10px;
+        border: 1.5px solid #e5e7eb;
+        padding: 0 16px;
+        font-size: 14px;
+        outline: none;
+        transition: border-color 0.2s;
+    }
+    .custom-select:focus {
+        border-color: #9052b9;
+        box-shadow: 0 0 0 3px rgba(144, 82, 185, 0.15);
+    }
+
+    .custom-input {
+        max-width: 320px;
+        height: 45px;
+        border-radius: 10px;
+        border: 1.5px solid #e5e7eb;
+        padding: 0 16px;
+        font-size: 14px;
+        outline: none;
+        transition: border-color 0.2s;
+    }
+    .custom-input:focus {
+        border-color: #9052b9;
+        box-shadow: 0 0 0 3px rgba(144, 82, 185, 0.15);
+    }
+
+    /* ── Toggle Switch ── */
+    .switch-wrap {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .form-switch .form-check-input {
+        width: 46px;
+        height: 24px;
+        cursor: pointer;
+    }
+    .form-switch .form-check-input:checked {
+        background-color: #9052b9;
+        border-color: #9052b9;
+    }
+
+    .save-btn {
+        background: #9052b9;
+        color: #ffffff;
+        border: none;
+        border-radius: 10px;
+        padding: 12px 28px;
+        font-weight: 600;
+        font-size: 14px;
+        transition: opacity 0.2s;
+    }
+    .save-btn:hover {
+        opacity: 0.9;
+        color: #ffffff;
+    }
+</style>
+
 <div class="container-fluid py-4">
-    <div class="row g-4">
-        <div class="col-md-8">
-            <div class="card border-0 shadow-sm rounded-4">
-                <div class="card-header bg-white border-0 py-3">
-                    <h5 class="fw-bold mb-0 text-primary">Master Expiry Report (Next 6 Months)</h5>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
-                            <thead class="bg-light text-muted small">
-                                <tr>
-                                    <th class="ps-4">Medicine Name</th>
-                                    <th>Batch No</th>
-                                    <th>Expiry Date</th>
-                                    <th>Stock</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for batch in expiring_batches %}
-                                <tr>
-                                    <td class="ps-4 fw-bold">{{ batch.product.product_name }}</td>
-                                    <td><span class="badge bg-light text-dark border">{{ batch.batch_number }}</span></td>
-                                    <td class="text-danger fw-bold">{{ batch.expiry_date|date:"M Y" }}</td>
-                                    <td>{{ batch.current_quantity }} Units</td>
-                                    <td>
-                                        <button class="btn btn-sm btn-outline-primary">Return Stock</button>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark">General Settings</h4>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item"><a href="{% url 'home' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'utility_home' %}">Utility</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">General Settings</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Messages -->
+    {% if messages %}
+    <div class="mb-4">
+        {% for message in messages %}
+        <div class="alert {% if message.tags == 'error' %}alert-danger{% else %}alert-{{ message.tags }}{% endif %} alert-dismissible fade show border-0 rounded-3 shadow-sm d-flex align-items-center" role="alert">
+            <i class="bi {% if message.tags == 'success' %}bi-check-circle-fill text-success{% elif message.tags == 'error' %}bi-exclamation-triangle-fill text-danger{% else %}bi-info-circle-fill text-info{% endif %} me-3 fs-5"></i>
+            <div>{{ message }}</div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Settings Card -->
+    <div class="settings-card">
+        <form method="POST" action="{% url 'utility_home' %}">
+            {% csrf_token %}
+            
+            <!-- Custom Tabs Navigation -->
+            <ul class="nav nav-tabs nav-tabs-custom" id="settingsTab" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="sale-tab" data-bs-toggle="tab" data-bs-target="#sale" type="button" role="tab" aria-controls="sale" aria-selected="true">
+                        <i class="bi bi-cart-dash me-2"></i>Sale Setup
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="purchase-tab" data-bs-toggle="tab" data-bs-target="#purchase" type="button" role="tab" aria-controls="purchase" aria-selected="false">
+                        <i class="bi bi-bag-plus me-2"></i>Purchase Setup
+                    </button>
+                </li>
+            </ul>
+            
+            <!-- Tab Contents -->
+            <div class="tab-content settings-body" id="settingsTabContent">
+                
+                <!-- SALE SETUP TAB -->
+                <div class="tab-pane fade show active" id="sale" role="tabpanel" aria-labelledby="sale-tab">
+                    
+                    <!-- Default Payment Mode -->
+                    <div class="setting-group">
+                        <div class="row align-items-start">
+                            <div class="col-md-7">
+                                <div class="setting-title">Default Payment Mode</div>
+                                <div class="setting-desc">Choose the default payment option highlighted during new sales checkout.</div>
+                            </div>
+                            <div class="col-md-5">
+                                <select class="form-select custom-select" name="default_payment_mode">
+                                    <option value="cash" {% if setup.default_payment_mode == 'cash' %}selected{% endif %}>Cash</option>
+                                    <option value="card" {% if setup.default_payment_mode == 'card' %}selected{% endif %}>Card</option>
+                                    <option value="upi" {% if setup.default_payment_mode == 'upi' %}selected{% endif %}>UPI / QR Code</option>
+                                    <option value="credit" {% if setup.default_payment_mode == 'credit' %}selected{% endif %}>Credit</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
+                    
+                    <!-- Require Customer Phone -->
+                    <div class="setting-group">
+                        <div class="row align-items-start">
+                            <div class="col-md-7">
+                                <div class="setting-title">Require Customer Phone Number</div>
+                                <div class="setting-desc">When enabled, the POS billing system will prompt for the customer's phone number before generating invoices.</div>
+                            </div>
+                            <div class="col-md-5">
+                                <div class="form-check form-switch switch-wrap">
+                                    <input class="form-check-input" type="checkbox" id="require_customer_phone" name="require_customer_phone" {% if setup.require_customer_phone %}checked{% endif %}>
+                                    <label class="form-check-label text-muted small" for="require_customer_phone">Mandatory</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Print Invoice After Save -->
+                    <div class="setting-group">
+                        <div class="row align-items-start">
+                            <div class="col-md-7">
+                                <div class="setting-title">Auto Print Invoice</div>
+                                <div class="setting-desc">Open the print configuration/dialog pop-up automatically right after a sales invoice is successfully saved.</div>
+                            </div>
+                            <div class="col-md-5">
+                                <div class="form-check form-switch switch-wrap">
+                                    <input class="form-check-input" type="checkbox" id="print_invoice_after_save" name="print_invoice_after_save" {% if setup.print_invoice_after_save %}checked{% endif %}>
+                                    <label class="form-check-label text-muted small" for="print_invoice_after_save">Enabled</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+                
+                <!-- PURCHASE SETUP TAB -->
+                <div class="tab-pane fade" id="purchase" role="tabpanel" aria-labelledby="purchase-tab">
+                    
+                    <!-- Expiry Date Input Format -->
+                    <div class="setting-group">
+                        <div class="row align-items-start">
+                            <div class="col-md-7">
+                                <div class="setting-title">Product Expiry Date Input Format</div>
+                                <div class="setting-desc">Select how the product expiry date is entered during purchase entries. Choose between quick text input (e.g. MM/YY) or convenient Month/Year dropdown selections.</div>
+                            </div>
+                            <div class="col-md-5">
+                                <select class="form-select custom-select" name="expiry_date_format">
+                                    <option value="text" {% if setup.expiry_date_format == 'text' %}selected{% endif %}>Text Input (MM-YY or MM/YY)</option>
+                                    <option value="dropdown" {% if setup.expiry_date_format == 'dropdown' %}selected{% endif %}>Months/Years Dropdown</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Default Tax Rate -->
+                    <div class="setting-group">
+                        <div class="row align-items-start">
+                            <div class="col-md-7">
+                                <div class="setting-title">Default Tax Rate (%)</div>
+                                <div class="setting-desc">Define the default GST rate applied to new products registered during purchase invoicing.</div>
+                            </div>
+                            <div class="col-md-5">
+                                <input type="number" class="form-control custom-input" name="default_tax_rate" step="0.1" value="{{ setup.default_tax_rate|default:'18.0' }}">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Auto Update Selling Price -->
+                    <div class="setting-group">
+                        <div class="row align-items-start">
+                            <div class="col-md-7">
+                                <div class="setting-title">Auto-Update Selling Price</div>
+                                <div class="setting-desc">Automatically update the product's base retail price in the master inventory when a change in purchase rate is detected.</div>
+                            </div>
+                            <div class="col-md-5">
+                                <div class="form-check form-switch switch-wrap">
+                                    <input class="form-check-input" type="checkbox" id="auto_update_selling_price" name="auto_update_selling_price" {% if setup.auto_update_selling_price %}checked{% endif %}>
+                                    <label class="form-check-label text-muted small" for="auto_update_selling_price">Enabled</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
                 </div>
             </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card border-0 shadow-sm rounded-4 mb-4">
-                <div class="card-body">
-                    <h6 class="fw-bold text-muted mb-3">Utility Stats</h6>
-                    <div class="d-flex justify-content-between mb-2">
-                        <span>Near Expiry Items</span>
-                        <span class="badge bg-danger rounded-pill">{{ expiring_batches|length }}</span>
-                    </div>
-                </div>
+            
+            <!-- Footer Form Action -->
+            <div class="bg-light px-4 py-3 border-top d-flex justify-content-end">
+                <button type="submit" class="btn save-btn">
+                    <i class="bi bi-check2-all me-2"></i>Save Setup Settings
+                </button>
             </div>
-        </div>
+        </form>
     </div>
 </div>
 {% endblock %}

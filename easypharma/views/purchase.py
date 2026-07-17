@@ -22,6 +22,7 @@ import json
 import io
 import re
 from decimal import Decimal
+from easypharma.models.general_setup import GeneralSetup
 
 # Import from your utility file
 from easypharma.utility.purchase_import import process_csv_file
@@ -76,6 +77,8 @@ class PurchaseEntryView(LoginRequiredMixin,View):
                 return redirect('purchase_list')
         edit_data = json.dumps(edit_data) if edit_data else None
         
+        general_setup, _ = GeneralSetup.objects.get_or_create(tenant=request.tenant)
+        
         return render(request, self.template_name, {
             'suppliers': suppliers,
             'products': products,
@@ -86,7 +89,8 @@ class PurchaseEntryView(LoginRequiredMixin,View):
             'drug_companies': drug_companies,
             'product_contents': product_contents,
             'edit_data': edit_data,
-            'today': now().date()
+            'today': now().date(),
+            'general_setup': general_setup
         })
 
     def post(self, request, invoice_id=None):

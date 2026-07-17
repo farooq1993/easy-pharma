@@ -219,45 +219,6 @@
     </div>
     {% endif %}
 
-    <!-- Database Info Ribbon -->
-    <div class="db-status-bar">
-        <div class="row g-4 align-items-center text-center text-md-start">
-            <div class="col-md-3">
-                <div class="status-item">
-                    <span class="status-label">Database Engine</span>
-                    <span class="status-value">
-                        <i class="bi bi-database me-2 text-warning"></i>
-                        {% if is_sqlite %}SQLITE3{% else %}POSTGRESQL{% endif %}
-                    </span>
-                </div>
-            </div>
-            <div class="col-md-5">
-                <div class="status-item">
-                    <span class="status-label">Connection / File Path</span>
-                    <span class="status-value text-truncate" title="{{ db_path }}" style="max-width: 100%;">{{ db_path }}</span>
-                </div>
-            </div>
-            <div class="col-md-2">
-                <div class="status-item">
-                    <span class="status-label">Database Size</span>
-                    <span class="status-value">{{ db_size_mb }}</span>
-                </div>
-            </div>
-            <div class="col-md-2 text-md-end">
-                <div class="status-item">
-                    <span class="status-label">Status</span>
-                    <span class="status-value">
-                        {% if db_exists %}
-                        <span class="badge bg-success px-3 py-2 rounded-pill"><i class="bi bi-check-circle-fill me-1"></i>Active</span>
-                        {% else %}
-                        <span class="badge bg-danger px-3 py-2 rounded-pill"><i class="bi bi-x-circle-fill me-1"></i>Missing</span>
-                        {% endif %}
-                    </span>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Main Content Row -->
     <div class="backup-page">
         <!-- Settings Column -->
