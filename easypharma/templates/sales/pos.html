@@ -2789,11 +2789,6 @@ function addNewBill() {
                 });
             });
             
-            if (itemsToAdd.length === 0) {
-                alert('No valid items selected to add to cart.');
-                return;
-            }
-            
             // Add items to POS cart
             itemsToAdd.forEach(item => {
                 const existing = cart.find(
@@ -2844,7 +2839,12 @@ function addNewBill() {
             if (bootstrapModal) {
                 bootstrapModal.hide();
             }
-            showToast('AI prescription items and patient details loaded into bill.', 'success');
+            
+            if (itemsToAdd.length > 0) {
+                showToast('AI prescription items and patient details loaded into bill.', 'success');
+            } else {
+                showToast('Patient & doctor details loaded. (No items matched stock to add to cart)', 'info');
+            }
         });
     }
 
