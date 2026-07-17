@@ -33,8 +33,11 @@ class UtilityHomeView(View):
 
     def get(self, request):
         setup, _ = GeneralSetup.objects.get_or_create(tenant=request.tenant)
+        from easypharma.models.email_config import EmailConfig
+        email_config = EmailConfig.objects.filter(tenant=request.tenant).first()
         return render(request, self.template_name, {
             'setup': setup,
+            'email_config': email_config,
         })
 
     def post(self, request):
@@ -54,6 +57,27 @@ class UtilityHomeView(View):
         setup.auto_update_selling_price = request.POST.get('auto_update_selling_price') == 'on'
         
         setup.save()
+
+        # Gmail Sync Setup
+        from easypharma.models.email_config import EmailConfig
+        gmail_address = request.POST.get('gmail_address', '').strip()
+        gmail_app_password = request.POST.get('gmail_app_password', '').strip()
+        gmail_sync_active = request.POST.get('gmail_sync_active') == 'on'
+
+        if gmail_address:
+            config, created = EmailConfig.objects.get_or_create(
+                tenant=request.tenant,
+                defaults={'email_address': gmail_address, 'app_password': gmail_app_password, 'is_active': gmail_sync_active}
+            )
+            if not created:
+                config.email_address = gmail_address
+                if gmail_app_password and gmail_app_password != '********':
+                    config.app_password = gmail_app_password
+                config.is_active = gmail_sync_active
+                config.save()
+        else:
+            EmailConfig.objects.filter(tenant=request.tenant).update(is_active=False)
+
         messages.success(request, "General settings updated successfully!")
         return redirect('utility_home')
 

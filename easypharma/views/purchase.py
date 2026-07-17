@@ -1181,3 +1181,205 @@ class OpeningStockDeleteView(LoginRequiredMixin, View):
             return JsonResponse({'success': False, 'error': 'Opening Stock record not found'}, status=404)
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+
+# ==========================================
+# GMAIL AUTOMATION / DRAFT PURCHASES VIEWS
+# ==========================================
+from django.shortcuts import get_object_or_404
+from django.contrib import messages
+from datetime import datetime
+from easypharma.models.email_config import EmailConfig
+from easypharma.models.draft_purchase import DraftPurchaseInvoice, DraftPurchaseItem
+from easypharma.utility.email_fetcher import fetch_and_process_emails
+
+class GmailSyncConfigView(LoginRequiredMixin, View):
+    template_name = 'purchase/gmail_config.html'
+
+    def get(self, request):
+        config = EmailConfig.objects.filter(tenant=request.tenant).first()
+        return render(request, self.template_name, {'config': config})
+
+    def post(self, request):
+        email_address = request.POST.get('email_address', '').strip()
+        app_password = request.POST.get('app_password', '').strip()
+        is_active = request.POST.get('is_active') == 'on'
+
+        if not email_address or not app_password:
+            messages.error(request, "Email and App Password are required.")
+            return redirect('gmail_sync_config')
+
+        config, created = EmailConfig.objects.get_or_create(
+            tenant=request.tenant,
+            defaults={'email_address': email_address, 'app_password': app_password, 'is_active': is_active}
+        )
+        if not created:
+            config.email_address = email_address
+            if app_password != '********':
+                config.app_password = app_password
+            config.is_active = is_active
+            config.save()
+
+        messages.success(request, "Gmail sync configuration saved successfully.")
+        return redirect('draft_purchase_list')
+
+
+class DraftPurchaseListView(LoginRequiredMixin, View):
+    template_name = 'purchase/draft_list.html'
+    ITEMS_PER_PAGE = 20
+
+    def get(self, request):
+        qs = DraftPurchaseInvoice.objects.filter(tenant=request.tenant).order_by('-created_at')
+        
+        # Search
+        search_query = request.GET.get('q', '').strip()
+        if search_query:
+            qs = qs.filter(
+                Q(invoice_number__icontains=search_query) |
+                Q(supplier_name__icontains=search_query)
+            )
+
+        status_filter = request.GET.get('status', 'Pending').strip()
+        if status_filter in ['Pending', 'Applied', 'Rejected']:
+            qs = qs.filter(status=status_filter)
+
+        paginator = Paginator(qs, self.ITEMS_PER_PAGE)
+        page_number = request.GET.get('page', 1)
+        page_obj = paginator.get_page(page_number)
+
+        config = EmailConfig.objects.filter(tenant=request.tenant).first()
+
+        return render(request, self.template_name, {
+            'page_obj': page_obj,
+            'drafts': page_obj,
+            'search_query': search_query,
+            'status_filter': status_filter,
+            'config': config
+        })
+
+
+class DraftPurchaseSyncAPI(LoginRequiredMixin, View):
+    def post(self, request):
+        config = EmailConfig.objects.filter(tenant=request.tenant).first()
+        if not config or not config.is_active:
+            return JsonResponse({'success': False, 'error': 'Gmail sync is not configured or is inactive.'})
+
+        try:
+            from easypharma.utility.email_fetcher import sync_all_tenant_emails
+            # Trigger sync specifically for this config
+            count = fetch_and_process_emails(config)
+            return JsonResponse({'success': True, 'count': count})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
+
+class DraftPurchaseVerifyView(LoginRequiredMixin, View):
+    template_name = 'purchase/draft_verify.html'
+
+    def get(self, request, draft_id):
+        draft_invoice = get_object_or_404(DraftPurchaseInvoice, id=draft_id, tenant=request.tenant)
+        items = draft_invoice.items.all().select_related('matched_product')
+        return render(request, self.template_name, {
+            'draft': draft_invoice,
+            'items': items
+        })
+
+    def post(self, request, draft_id):
+        draft_invoice = get_object_or_404(DraftPurchaseInvoice, id=draft_id, tenant=request.tenant)
+        try:
+            data = json.loads(request.body)
+            supplier_name = data.get('supplier_name', '').strip()
+            supplier_gstin = data.get('supplier_gstin', '').strip() or None
+            invoice_number = data.get('invoice_number', '').strip()
+            purchase_date_str = data.get('purchase_date', '').strip()
+            payment_mode = data.get('payment_mode', 'Credit')
+
+            if not supplier_name or not invoice_number:
+                return JsonResponse({'success': False, 'error': 'Supplier Name and Invoice Number are required.'})
+
+            try:
+                purchase_date = datetime.strptime(purchase_date_str, '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                purchase_date = timezone.now().date()
+
+            with transaction.atomic():
+                # 1. Get or Create Supplier
+                if supplier_gstin:
+                    supplier, _ = Supplier.objects.get_or_create(
+                        tenant=request.tenant,
+                        gst_number=supplier_gstin,
+                        defaults={'name': supplier_name, 'phone': '0000000000'}
+                    )
+                else:
+                    supplier = Supplier.objects.filter(tenant=request.tenant, name__iexact=supplier_name).first()
+                    if not supplier:
+                        supplier = Supplier.objects.create(
+                            tenant=request.tenant,
+                            name=supplier_name,
+                            phone='0000000000'
+                        )
+
+                # 2. Check if invoice number is duplicate
+                is_duplicate = PurchaseInvoice.objects.filter(
+                    tenant=request.tenant,
+                    invoice_number=invoice_number,
+                    supplier=supplier
+                ).exists()
+                if is_duplicate:
+                    return JsonResponse({'success': False, 'error': f'Invoice #{invoice_number} from this supplier already exists.'})
+
+                # 3. Create Purchase Invoice
+                voucher_no = PurchaseInvoice.generate_voucher_number(request.tenant, purchase_date)
+                invoice = PurchaseInvoice.objects.create(
+                    tenant=request.tenant,
+                    user=request.user,
+                    supplier=supplier,
+                    invoice_number=invoice_number,
+                    purchase_date=purchase_date,
+                    payment_mode=payment_mode,
+                    voucher_number=voucher_no,
+                    sub_total=Decimal(str(data.get('sub_total', 0.00))),
+                    tax_amount=Decimal(str(data.get('tax_amount', 0.00))),
+                    total_amount=Decimal(str(data.get('total_amount', 0.00))),
+                    paid_amount=Decimal(str(data.get('paid_amount', 0.00)))
+                )
+
+                # 4. Create Purchase Items & Update Stock (via save override)
+                for item in data.get('items', []):
+                    product_id = item.get('product_id')
+                    if not product_id:
+                        raise Exception(f"Product not selected or created for raw item: {item.get('raw_product_name')}")
+                    
+                    product = Products.objects.get(id=product_id, tenant=request.tenant)
+                    
+                    PurchaseItem.objects.create(
+                        tenant=request.tenant,
+                        purchase_invoice=invoice,
+                        product=product,
+                        batch_number=item.get('batch_number', 'BATCH').strip(),
+                        expiry_date=item.get('expiry_date'),
+                        quantity=int(item.get('quantity', 0)),
+                        free_quantity=int(item.get('free_quantity', 0)),
+                        purchase_price=Decimal(str(item.get('purchase_price', 0.00))),
+                        mrp=Decimal(str(item.get('mrp', 0.00))),
+                        sale_price=Decimal(str(item.get('sale_price', item.get('mrp', 0.00)))),
+                        tax_percentage=Decimal(str(item.get('tax_percentage', 0.00))),
+                        total_amount=Decimal(str(item.get('total_amount', 0.00)))
+                    )
+
+                # 5. Mark Draft as Applied
+                draft_invoice.status = 'Applied'
+                draft_invoice.save()
+
+            return JsonResponse({'success': True, 'invoice_id': invoice.id})
+
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
+
+class DraftPurchaseDeleteView(LoginRequiredMixin, View):
+    def post(self, request, draft_id):
+        draft_invoice = get_object_or_404(DraftPurchaseInvoice, id=draft_id, tenant=request.tenant)
+        draft_invoice.status = 'Rejected'
+        draft_invoice.save()
+        return JsonResponse({'success': True})

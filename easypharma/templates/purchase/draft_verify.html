@@ -1,0 +1,505 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid py-3">
+
+    <!-- Page Header -->
+    <div class="row align-items-center mb-3">
+        <div class="col">
+            <h2 class="fw-bold mb-0"><i class="fas fa-clipboard-check text-success me-2"></i>Verify & Import Supplier Invoice</h2>
+            <p class="text-muted small mb-0">Review extracted invoice data, match products with database, and update stock.</p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'draft_purchase_list' %}" class="btn btn-outline-secondary px-4 rounded-pill shadow-sm">
+                <i class="fas fa-arrow-left me-2"></i> Cancel
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <!-- LEFT COLUMN: Invoice Attachment Viewer (PDF/Image) -->
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-sm rounded-4 h-100 overflow-hidden">
+                <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-file-alt text-primary me-2"></i>Original Invoice Document</h6>
+                    {% if draft.attachment_path %}
+                    <a href="/media/{{ draft.attachment_path }}" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill px-3">
+                        <i class="fas fa-external-link-alt me-1"></i> Open Full Screen
+                    </a>
+                    {% endif %}
+                </div>
+                <div class="card-body p-0 bg-light" style="height: calc(100vh - 180px); min-height: 600px;">
+                    {% if draft.attachment_path %}
+                        {% if ".pdf" in draft.attachment_path|lower %}
+                            <iframe src="/media/{{ draft.attachment_path }}#toolbar=1" width="100%" height="100%" style="border: none;"></iframe>
+                        {% else %}
+                            <div class="w-100 h-100 d-flex align-items-center justify-content-center bg-light overflow-auto p-3">
+                                <img src="/media/{{ draft.attachment_path }}" class="img-fluid rounded shadow" style="max-height: 100%; object-fit: contain;">
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <div class="w-100 h-100 d-flex flex-column align-items-center justify-content-center text-muted">
+                            <i class="fas fa-file-excel fa-4x mb-3 text-light-gray"></i>
+                            <div class="fw-bold">No document attachment available</div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN: Verification & Match Form -->
+        <div class="col-lg-7">
+            <div class="card border-0 shadow-sm rounded-4 h-100 d-flex flex-column">
+                <div class="card-header bg-white border-0 py-3">
+                    <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-edit text-success me-2"></i>Extracted Bill & Match Details</h6>
+                </div>
+                
+                <div class="card-body p-3 overflow-auto" style="height: calc(100vh - 250px); min-height: 500px;">
+                    <!-- Invoice Metadata Form -->
+                    <div class="row g-3 mb-4 p-3 bg-light rounded-4">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted text-uppercase mb-1">Supplier Name</label>
+                            <input type="text" id="supplierName" class="form-control border-0" value="{{ draft.supplier_name }}" placeholder="e.g. Vikas Medical">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted text-uppercase mb-1">Supplier GSTIN</label>
+                            <input type="text" id="supplierGst" class="form-control border-0 text-uppercase" value="{{ draft.supplier_gstin|default:'' }}" placeholder="e.g. 07AAAAA1111A1Z5">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-muted text-uppercase mb-1">Invoice Number</label>
+                            <input type="text" id="invoiceNumber" class="form-control border-0 font-monospace" value="{{ draft.invoice_number }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-muted text-uppercase mb-1">Invoice Date</label>
+                            <input type="date" id="invoiceDate" class="form-control border-0" value="{{ draft.invoice_date|date:'Y-m-d' }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-muted text-uppercase mb-1">Payment Mode</label>
+                            <select id="paymentMode" class="form-select border-0">
+                                <option value="Credit">Credit (Udhari)</option>
+                                <option value="Cash">Cash (Nagar)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Items Verification Header -->
+                    <h6 class="fw-bold mb-3 text-dark border-bottom pb-2">Line Items ({{ items|length }})</h6>
+
+                    <!-- Draft Items List -->
+                    <div id="draftItemsContainer">
+                        {% for item in items %}
+                        <div class="draft-item-card card border p-3 rounded-4 mb-3 position-relative" data-draft-item-id="{{ item.id }}">
+                            <div class="row g-2">
+                                <!-- Raw AI Item Name vs Matched Product Search -->
+                                <div class="col-md-6">
+                                    <div class="small text-muted fw-bold mb-1">AI READ NAME: <span class="text-primary">"{{ item.raw_product_name }}"</span></div>
+                                    
+                                    <!-- Matched Product Selector (Vanilla JS Autocomplete wrapper) -->
+                                    <div class="position-relative product-search-wrap">
+                                        <input type="text" class="form-control product-search-input" 
+                                            placeholder="🔍 Search and match product..." 
+                                            value="{% if item.matched_product %}{{ item.matched_product.product_name }}{% endif %}"
+                                            data-product-id="{% if item.matched_product %}{{ item.matched_product.id }}{% endif %}"
+                                            data-tax-rate="{% if item.matched_product %}{{ item.matched_product.product_tax.tax_rate }}{% else %}12{% endif %}"
+                                            autocomplete="off">
+                                        <button type="button" class="btn btn-sm btn-outline-primary position-absolute end-0 top-0 mt-1 me-1 quick-add-btn" 
+                                            onclick="openQuickAddModal('{{ item.raw_product_name|escapejs }}', this)" title="Quick Add Product">
+                                            <i class="fas fa-plus"></i> Quick Add
+                                        </button>
+                                        <div class="product-results-dropdown dropdown-menu w-100 shadow border-0 mt-1 py-1" style="display: none; max-height: 250px; overflow-y: auto; z-index: 1000;"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Batch and Expiry -->
+                                <div class="col-md-3">
+                                    <label class="form-label small text-muted mb-0">Batch</label>
+                                    <input type="text" class="form-control item-batch text-uppercase" value="{{ item.batch_number|default:'BATCH' }}">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small text-muted mb-0">Expiry Date</label>
+                                    <input type="date" class="form-control item-expiry" value="{{ item.expiry_date|date:'Y-m-d' }}">
+                                </div>
+
+                                <!-- Quantity and Free Quantity -->
+                                <div class="col-md-2 col-6">
+                                    <label class="form-label small text-muted mb-0">Qty</label>
+                                    <input type="number" class="form-control item-qty math-trigger" value="{{ item.quantity }}" min="1">
+                                </div>
+                                <div class="col-md-2 col-6">
+                                    <label class="form-label small text-muted mb-0">Free Qty</label>
+                                    <input type="number" class="form-control item-free-qty math-trigger" value="{{ item.free_quantity }}" min="0">
+                                </div>
+
+                                <!-- Purchase Price, GST%, and MRP -->
+                                <div class="col-md-2 col-4">
+                                    <label class="form-label small text-muted mb-0">Rate (excl. GST)</label>
+                                    <input type="number" step="0.01" class="form-control item-purchase-price math-trigger" value="{{ item.purchase_price|floatformat:2 }}">
+                                </div>
+                                <div class="col-md-2 col-4">
+                                    <label class="form-label small text-muted mb-0">GST%</label>
+                                    <input type="number" step="0.1" class="form-control item-tax-percentage math-trigger" value="{{ item.tax_percentage|floatformat:1 }}">
+                                </div>
+                                <div class="col-md-2 col-4">
+                                    <label class="form-label small text-muted mb-0">MRP</label>
+                                    <input type="number" step="0.01" class="form-control item-mrp math-trigger" value="{{ item.mrp|floatformat:2 }}">
+                                </div>
+                                
+                                <!-- Computed Line Total -->
+                                <div class="col-md-2">
+                                    <label class="form-label small text-muted mb-0">Line Total</label>
+                                    <input type="number" step="0.01" class="form-control item-line-total bg-light" value="{{ item.total_amount|floatformat:2 }}" readonly>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Footer Summary and Action Buttons -->
+                <div class="card-footer bg-white border-0 p-3 pt-0 mt-auto border-top">
+                    <div class="row g-2 align-items-center mb-3">
+                        <div class="col-md-4 text-center text-md-start">
+                            <span class="text-muted small">Tax: </span><strong class="text-dark">₹<span id="billTax">0.00</span></strong>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <span class="text-muted small">Subtotal: </span><strong class="text-dark">₹<span id="billSubtotal">0.00</span></strong>
+                        </div>
+                        <div class="col-md-4 text-center text-md-end">
+                            <span class="fs-5 text-muted">Grand Total: </span><strong class="fs-5 text-success">₹<span id="billTotal">0.00</span></strong>
+                        </div>
+                    </div>
+                    
+                    <div class="row g-2">
+                        <div class="col">
+                            <button id="importToStockBtn" class="btn btn-success btn-lg py-3 rounded-pill fw-bold w-100 shadow-sm">
+                                <i class="fas fa-check-double me-2"></i> Verify & Add to Stock
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- QUICK ADD PRODUCT MODAL -->
+<div class="modal fade" id="quickAddProductModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-0 bg-light rounded-top-4">
+                <h5 class="modal-title fw-bold text-dark"><i class="fas fa-plus-circle me-2 text-primary"></i>Quick Add New Product</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="quickAddProductForm">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Product Name</label>
+                        <input type="text" id="quickProdName" class="form-control border-0 bg-light" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Packing (e.g. 10 Tabs, 15 Caps, 1 Bottle)</label>
+                        <input type="text" id="quickProdPacking" class="form-control border-0 bg-light" placeholder="e.g. 10 Tabs">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">HSN Code</label>
+                        <input type="text" id="quickProdHsn" class="form-control border-0 bg-light" placeholder="e.g. 3004">
+                    </div>
+                    <div class="d-grid mt-4">
+                        <button type="submit" class="btn btn-primary py-2 rounded-pill fw-bold">
+                            Save Product & Match
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentQuickAddTriggerBtn = null;
+
+function openQuickAddModal(rawName, btn) {
+    currentQuickAddTriggerBtn = btn;
+    document.getElementById('quickProdName').value = rawName;
+    document.getElementById('quickProdPacking').value = '';
+    document.getElementById('quickProdHsn').value = '';
+    
+    const modal = new bootstrap.Modal(document.getElementById('quickAddProductModal'));
+    modal.show();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. Calculations logic
+    function recalculateTotals() {
+        let grandSubtotal = 0;
+        let grandTax = 0;
+        let grandTotal = 0;
+
+        document.querySelectorAll('.draft-item-card').forEach(card => {
+            const qty = parseInt(card.querySelector('.item-qty').value) || 0;
+            const price = parseFloat(card.querySelector('.item-purchase-price').value) || 0;
+            const taxPct = parseFloat(card.querySelector('.item-tax-percentage').value) || 0;
+
+            const lineSubtotal = qty * price;
+            const lineTax = lineSubtotal * (taxPct / 100);
+            const lineTotal = lineSubtotal + lineTax;
+
+            card.querySelector('.item-line-total').value = lineTotal.toFixed(2);
+
+            grandSubtotal += lineSubtotal;
+            grandTax += lineTax;
+            grandTotal += lineTotal;
+        });
+
+        document.getElementById('billSubtotal').textContent = grandSubtotal.toFixed(2);
+        document.getElementById('billTax').textContent = grandTax.toFixed(2);
+        document.getElementById('billTotal').textContent = grandTotal.toFixed(2);
+    }
+
+    // Attach trigger listeners
+    document.querySelectorAll('.math-trigger').forEach(input => {
+        input.addEventListener('input', recalculateTotals);
+    });
+
+    recalculateTotals(); // Initial calc
+
+    // 2. Custom Vanilla JS Autocomplete for Product matching
+    document.querySelectorAll('.product-search-input').forEach(input => {
+        setupProductSearch(input);
+    });
+
+    function setupProductSearch(input) {
+        const wrap = input.closest('.product-search-wrap');
+        const dropdown = wrap.querySelector('.product-results-dropdown');
+        
+        let debounceTimer = null;
+
+        input.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            const query = input.value.trim();
+            if (query.length < 2) {
+                dropdown.innerHTML = '';
+                dropdown.style.display = 'none';
+                return;
+            }
+
+            debounceTimer = setTimeout(async () => {
+                try {
+                    const response = await fetch(`/api/products/master-search/?q=${encodeURIComponent(query)}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        renderDropdown(data);
+                    }
+                } catch (e) {
+                    console.error("Autocomplete failed", e);
+                }
+            }, 250);
+        });
+
+        function renderDropdown(products) {
+            dropdown.innerHTML = '';
+            if (products.length === 0) {
+                dropdown.innerHTML = `<div class="dropdown-item text-muted small py-2">No matched products found.</div>`;
+            } else {
+                products.forEach(p => {
+                    const item = document.createElement('a');
+                    item.className = 'dropdown-item small py-2 d-flex justify-content-between align-items-center';
+                    item.href = '#';
+                    item.innerHTML = `
+                        <div>
+                            <div class="fw-bold text-dark">${p.name}</div>
+                            <div class="text-muted fs-8">${p.company || 'Unknown Company'} | Pack: ${p.packing || 'N/A'}</div>
+                        </div>
+                        <span class="badge bg-light text-secondary border fs-8">GST ${p.tax_rate}%</span>
+                    `;
+                    item.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        selectProduct(p);
+                    });
+                    dropdown.appendChild(item);
+                });
+            }
+            dropdown.style.display = 'block';
+        }
+
+        function selectProduct(p) {
+            input.value = p.name;
+            input.dataset.productId = p.id;
+            input.dataset.taxRate = p.tax_rate;
+            
+            // Auto update the GST % field in the row
+            const card = input.closest('.draft-item-card');
+            if (card) {
+                const taxInput = card.querySelector('.item-tax-percentage');
+                if (taxInput) {
+                    taxInput.value = p.tax_rate;
+                    taxInput.dispatchEvent(new Event('input')); // Recalculate
+                }
+            }
+            dropdown.style.display = 'none';
+        }
+
+        document.addEventListener('click', (e) => {
+            if (!wrap.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+    }
+
+    // 3. Quick Add Product submit handler
+    const quickAddForm = document.getElementById('quickAddProductForm');
+    quickAddForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const product_name = document.getElementById('quickProdName').value.trim();
+        const packing = document.getElementById('quickProdPacking').value.trim();
+        const hsn = document.getElementById('quickProdHsn').value.trim();
+
+        try {
+            const response = await fetch('{% url "quick_create_product" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ product_name, packing, hsn })
+            });
+            const result = await response.json();
+            if (result.success && result.product) {
+                // Pre-fill the input fields where quick add was clicked
+                if (currentQuickAddTriggerBtn) {
+                    const wrap = currentQuickAddTriggerBtn.closest('.product-search-wrap');
+                    const input = wrap.querySelector('.product-search-input');
+                    input.value = result.product.name;
+                    input.dataset.productId = result.product.id;
+                    
+                    // Trigger calc recalculations
+                    const card = input.closest('.draft-item-card');
+                    if (card) {
+                        const taxInput = card.querySelector('.item-tax-percentage');
+                        if (taxInput) {
+                            taxInput.value = 12; // default fallback
+                            taxInput.dispatchEvent(new Event('input'));
+                        }
+                    }
+                }
+                
+                // Hide modal
+                const modalEl = document.getElementById('quickAddProductModal');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) modal.hide();
+                showToast("Product registered and matched!", "success");
+            } else {
+                alert(`Failed: ${result.error}`);
+            }
+        } catch (err) {
+            alert("Error registering new product.");
+        }
+    });
+
+    // 4. Save Invoice Form submit
+    const saveBtn = document.getElementById('importToStockBtn');
+    saveBtn.addEventListener('click', async () => {
+        const supplier_name = document.getElementById('supplierName').value.trim();
+        const supplier_gstin = document.getElementById('supplierGst').value.trim();
+        const invoice_number = document.getElementById('invoiceNumber').value.trim();
+        const purchase_date = document.getElementById('invoiceDate').value;
+        const payment_mode = document.getElementById('paymentMode').value;
+
+        if (!supplier_name || !invoice_number || !purchase_date) {
+            alert("Please complete the header details (Supplier, Invoice No, and Date).");
+            return;
+        }
+
+        const items = [];
+        let missingMatches = false;
+
+        document.querySelectorAll('.draft-item-card').forEach(card => {
+            const raw_product_name = card.querySelector('.product-search-input').value.trim();
+            const product_id = card.querySelector('.product-search-input').dataset.productId;
+            const batch_number = card.querySelector('.item-batch').value.trim();
+            const expiry_date = card.querySelector('.item-expiry').value;
+            const quantity = parseInt(card.querySelector('.item-qty').value) || 0;
+            const free_quantity = parseInt(card.querySelector('.item-free-qty').value) || 0;
+            const purchase_price = parseFloat(card.querySelector('.item-purchase-price').value) || 0.0;
+            const mrp = parseFloat(card.querySelector('.item-mrp').value) || 0.0;
+            const sale_price = mrp;
+            const tax_percentage = parseFloat(card.querySelector('.item-tax-percentage').value) || 0.0;
+            const total_amount = parseFloat(card.querySelector('.item-line-total').value) || 0.0;
+
+            if (!product_id) {
+                missingMatches = true;
+                card.classList.add('border-danger');
+            } else {
+                card.classList.remove('border-danger');
+            }
+
+            items.push({
+                raw_product_name,
+                product_id: parseInt(product_id),
+                batch_number,
+                expiry_date,
+                quantity,
+                free_quantity,
+                purchase_price,
+                mrp,
+                sale_price,
+                tax_percentage,
+                total_amount
+            });
+        });
+
+        if (missingMatches) {
+            alert("Please search/match or Quick Add products for all red-bordered rows.");
+            return;
+        }
+
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = `<i class="fas fa-spinner fa-spin me-2"></i> Registering Purchase...`;
+
+        const sub_total = parseFloat(document.getElementById('billSubtotal').textContent);
+        const tax_amount = parseFloat(document.getElementById('billTax').textContent);
+        const total_amount = parseFloat(document.getElementById('billTotal').textContent);
+
+        const payload = {
+            supplier_name,
+            supplier_gstin,
+            invoice_number,
+            purchase_date,
+            payment_mode,
+            sub_total,
+            tax_amount,
+            total_amount,
+            paid_amount: payment_mode === 'Cash' ? total_amount : 0.00,
+            items
+        };
+
+        try {
+            const response = await fetch('{% url "draft_purchase_verify" draft.id %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+            if (result.success) {
+                alert("Purchase entry saved and stock updated successfully!");
+                window.location.href = '{% url "purchase_list" %}';
+            } else {
+                alert(`Error saving purchase: ${result.error}`);
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = `<i class="fas fa-check-double me-2"></i> Verify & Add to Stock`;
+            }
+        } catch (err) {
+            alert("Network error. Failed to save purchase bill.");
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = `<i class="fas fa-check-double me-2"></i> Verify & Add to Stock`;
+        }
+    });
+});
+</script>
+{% endblock %}

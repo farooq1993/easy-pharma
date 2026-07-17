@@ -23,6 +23,20 @@
         </div>
     </div>
 
+    <!-- Tabs Navigation -->
+    <ul class="nav nav-tabs border-bottom mb-3">
+        <li class="nav-item">
+            <a class="nav-item nav-link active" href="{% url 'purchase_list' %}">
+                <i class="fas fa-file-invoice me-2"></i> Saved Purchases
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-item nav-link" href="{% url 'draft_purchase_list' %}">
+                <i class="fas fa-envelope-open-text me-2"></i> Gmail Drafts
+            </a>
+        </li>
+    </ul>
+
     <!-- ── Search + filters ────────────────────────────────────────────── -->
     <div class="card border-0 shadow-sm rounded-4 mb-3">
         <div class="card-body py-3">

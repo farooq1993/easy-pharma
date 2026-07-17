@@ -186,6 +186,11 @@
                         <i class="bi bi-bag-plus me-2"></i>Purchase Setup
                     </button>
                 </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="gmail-tab" data-bs-toggle="tab" data-bs-target="#gmail" type="button" role="tab" aria-controls="gmail" aria-selected="false">
+                        <i class="bi bi-envelope-at me-2"></i>Gmail Sync Setup
+                    </button>
+                </li>
             </ul>
             
             <!-- Tab Contents -->
@@ -295,6 +300,65 @@
                     </div>
                     
                 </div>
+
+                <!-- GMAIL SYNC TAB -->
+                <div class="tab-pane fade" id="gmail" role="tabpanel" aria-labelledby="gmail-tab">
+                    
+                    <!-- Gmail Address -->
+                    <div class="setting-group">
+                        <div class="row align-items-start">
+                            <div class="col-md-7">
+                                <div class="setting-title">Gmail Address</div>
+                                <div class="setting-desc">The Gmail account where you receive supplier invoices. (e.g. yourstore@gmail.com)</div>
+                            </div>
+                            <div class="col-md-5">
+                                <input type="email" class="form-control custom-input" name="gmail_address" value="{{ email_config.email_address|default:'' }}" placeholder="yourstore@gmail.com">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Gmail App Password -->
+                    <div class="setting-group">
+                        <div class="row align-items-start">
+                            <div class="col-md-7">
+                                <div class="setting-title">Gmail App Password (16-digit)</div>
+                                <div class="setting-desc">Enter the 16-character app password generated in your Google Account security settings. <span class="text-danger fw-bold">(Note: Normal Gmail password will not work!)</span></div>
+                            </div>
+                            <div class="col-md-5">
+                                <input type="password" class="form-control custom-input" name="gmail_app_password" value="{% if email_config.app_password %}********{% endif %}" placeholder="••••••••••••••••">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Gmail Sync Active Toggle -->
+                    <div class="setting-group">
+                        <div class="row align-items-start">
+                            <div class="col-md-7">
+                                <div class="setting-title">Enable Automatic Gmail Fetching</div>
+                                <div class="setting-desc">When enabled, the application background worker will search your inbox for new purchase bills periodically.</div>
+                            </div>
+                            <div class="col-md-5">
+                                <div class="form-check form-switch switch-wrap">
+                                    <input class="form-check-input" type="checkbox" id="gmail_sync_active" name="gmail_sync_active" {% if email_config.is_active or email_config is None %}checked{% endif %}>
+                                    <label class="form-check-label text-muted small" for="gmail_sync_active">Sync Active</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Setup Guide -->
+                    <div class="mt-4 p-3 bg-light rounded-3">
+                        <h6 class="fw-bold text-primary mb-2"><i class="bi bi-info-circle me-2"></i>How to generate Gmail App Password?</h6>
+                        <ol class="small text-muted mb-0 ps-3">
+                            <li class="mb-1">Go to your <strong>Google Account</strong> (myaccount.google.com) and navigate to the <strong>Security</strong> tab.</li>
+                            <li class="mb-1">Ensure <strong>2-Step Verification</strong> is turned ON under "How you sign in to Google".</li>
+                            <li class="mb-1">Search for <strong>"App Passwords"</strong> in the top search bar of your Google Account dashboard.</li>
+                            <li class="mb-1">Select App as <strong>"Other (Custom name)"</strong>, name it <strong>"Easy Pharma"</strong>, and click <strong>Generate</strong>.</li>
+                            <li>Copy the <strong>16-letter code</strong> and paste it in the field above (without spaces).</li>
+                        </ol>
+                    </div>
+
+                </div>
             </div>
             
             <!-- Footer Form Action -->
@@ -306,4 +370,18 @@
         </form>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Auto-select tab based on URL hash (e.g., #gmail)
+    const hash = window.location.hash;
+    if (hash) {
+        const tabEl = document.querySelector(`button[data-bs-target="${hash}"]`);
+        if (tabEl) {
+            const tab = new bootstrap.Tab(tabEl);
+            tab.show();
+        }
+    }
+});
+</script>
 {% endblock %}

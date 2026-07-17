@@ -1,0 +1,138 @@
+{% extends "includes/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    <!-- Page Header -->
+    <div class="row align-items-center mb-4">
+        <div class="col">
+            <h2 class="fw-bold mb-0"><i class="fas fa-envelope-open-text text-primary me-2"></i>Gmail Invoice Sync Settings</h2>
+            <p class="text-muted small mb-0">Configure Gmail automation to import distributor purchase invoices automatically.</p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'draft_purchase_list' %}" class="btn btn-outline-secondary px-4 rounded-pill">
+                <i class="fas fa-arrow-left me-2"></i> Back to Drafts
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <!-- Configuration Form Card -->
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white border-0 pt-4 pb-0">
+                    <h5 class="fw-bold text-dark"><i class="fas fa-cog me-2 text-secondary"></i>Sync Configuration</h5>
+                </div>
+                <div class="card-body">
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show rounded-3" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <form method="post" action="{% url 'gmail_sync_config' %}" class="needs-validation" novalidate>
+                        {% csrf_token %}
+                        
+                        <div class="mb-4">
+                            <label for="email_address" class="form-label small fw-bold text-muted text-uppercase mb-1">Gmail Address</label>
+                            <div class="input-group">
+                                <span class="input-group-text border-0 bg-light"><i class="fas fa-envelope text-muted"></i></span>
+                                <input type="email" name="email_address" id="email_address" 
+                                    class="form-control border-0 bg-light" 
+                                    placeholder="yourstore@gmail.com" 
+                                    value="{{ config.email_address|default:'' }}" required>
+                            </div>
+                            <div class="form-text text-muted small mt-1">This should be the Gmail account where you receive supplier invoices.</div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="app_password" class="form-label small fw-bold text-muted text-uppercase mb-1">Gmail App Password (16-digit)</label>
+                            <div class="input-group">
+                                <span class="input-group-text border-0 bg-light"><i class="fas fa-key text-muted"></i></span>
+                                <input type="password" name="app_password" id="app_password" 
+                                    class="form-control border-0 bg-light" 
+                                    placeholder="••••••••••••••••" 
+                                    value="{% if config.app_password %}********{% endif %}" required>
+                            </div>
+                            <div class="form-text text-muted small mt-1">Enter the 16-character app password generated in Google Account settings.</div>
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="is_active" id="is_active" 
+                                    {% if config.is_active or config is None %}checked{% endif %}>
+                                <label class="form-check-label fw-bold text-dark" for="is_active">Enable Automatic Fetching</label>
+                            </div>
+                            <div class="form-text text-muted small mt-1">When enabled, the server will periodically check your inbox for new bills.</div>
+                        </div>
+
+                        {% if config.last_sync %}
+                        <div class="mb-4 p-3 bg-light rounded-3 d-flex align-items-center">
+                            <i class="fas fa-history text-muted me-3 fs-5"></i>
+                            <div>
+                                <div class="small fw-bold text-secondary">Last Email Sync Run</div>
+                                <div class="text-muted small">{{ config.last_sync|date:"d M Y, h:i A" }}</div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <div class="d-grid mt-4">
+                            <button type="submit" class="btn btn-primary py-2 rounded-pill fw-bold">
+                                <i class="fas fa-save me-2"></i> Save Settings & Connect
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Google Setup Guide Card -->
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4 bg-gradient-light h-100" style="background: linear-gradient(135deg, #f8f9fa, #e9ecef);">
+                <div class="card-header bg-transparent border-0 pt-4 pb-0">
+                    <h5 class="fw-bold text-primary"><i class="fab fa-google me-2"></i>How to generate App Password?</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small">Google requires a separate 16-digit <strong>App Password</strong> to let external applications connect securely via IMAP. Follow these steps:</p>
+                    
+                    <ol class="list-group list-group-numbered border-0 rounded-3 mb-3 bg-transparent">
+                        <li class="list-group-item d-flex justify-content-between align-items-start border-0 bg-transparent py-2">
+                            <div class="ms-2 me-auto">
+                                <div class="fw-bold small text-dark">Turn on 2-Step Verification</div>
+                                <span class="small text-muted">Go to your <a href="https://myaccount.google.com/" target="_blank" class="text-primary fw-bold text-decoration-none">Google Account</a> -> <strong>Security</strong>. Ensure "2-Step Verification" is ON.</span>
+                            </div>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-start border-0 bg-transparent py-2">
+                            <div class="ms-2 me-auto">
+                                <div class="fw-bold small text-dark">Open App Passwords Settings</div>
+                                <span class="small text-muted">Search for <strong>"App Passwords"</strong> in the top search bar of your Google Account page, or find it at the bottom of the "2-Step Verification" page.</span>
+                            </div>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-start border-0 bg-transparent py-2">
+                            <div class="ms-2 me-auto">
+                                <div class="fw-bold small text-dark">Create "Easy Pharma" password</div>
+                                <span class="small text-muted">Select App as <strong>"Other (Custom name)"</strong>, type <strong>"Easy Pharma"</strong>, and click <strong>Generate</strong>.</span>
+                            </div>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-start border-0 bg-transparent py-2">
+                            <div class="ms-2 me-auto">
+                                <div class="fw-bold small text-dark">Copy the Code</div>
+                                <span class="small text-muted">Google will display a yellow box containing a <strong>16-letter code</strong> (e.g., `abcd efgh ijkl mnop`). Copy it (without spaces) and paste it into the field on the left.</span>
+                            </div>
+                        </li>
+                    </ol>
+
+                    <div class="alert alert-info border-0 rounded-3 small mb-0">
+                        <i class="fas fa-lock me-2 text-info"></i>
+                        <strong>Privacy & Security Note:</strong> We only read email messages containing attachments with invoice keywords. Your credentials are encrypted and never shared.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
