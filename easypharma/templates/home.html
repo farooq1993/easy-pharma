@@ -3,93 +3,38 @@
 
 {% block content %}
 <style>
-    @keyframes expiryScroll {
-    0% { transform: translateY(0); }
-    100% { transform: translateY(-50%); }
-}
-
-.expiry-ticker {
-    animation: expiryScroll 12s linear infinite;
-}
-
-#expiryTickerWrapper:hover .expiry-ticker {
-    animation-play-state: paused;
-}
-
 .expiry-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 10px 15px;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid #eef2f5;
     gap: 10px;
 }
-
-.expiry-item .med-info {
-    min-width: 0;
-    flex: 1 1 auto;
-}
-
-.expiry-item .med-name {
-    font-weight: 600;
-    font-size: 0.85rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.expiry-item .med-meta {
-    font-size: 0.75rem;
-    color: #6c757d;
-}
-
-.expiry-item .med-right {
-    text-align: right;
-    flex-shrink: 0;
-}
-
-.expiry-item .med-expiry {
-    color: #dc3545;
-    font-weight: 700;
-    font-size: 0.8rem;
-}
-
-.expiry-item .med-stock {
-    font-size: 0.75rem;
-    color: #6c757d;
-}
 </style>
-<div class="container">
-    <div class="row">
-        <div class="col">
-            <h1 class="mb-3 text-success">Welcome to Easy Pharma </h1>
-            <p class="lead">Your pharmaceutical management dashboard with comprehensive analytics.</p>
-        </div>
-    </div>
-</div>
 
 <!-- Analytics Dashboard Section -->
 <div class="container-fluid mt-2">
     <!-- Dashboard Header -->
     <div class="row mb-4 align-items-center">
         <div class="col-md-6">
-            <h2 class="fw-bold mb-0"><i class="fas fa-chart-line me-2"></i>Dashboard Overview</h2>
-            <p class="text-muted small">Real-time analytics to optimize your pharmacy business.</p>
+            <h2 class="fw-bold mb-0 text-dark" id="dashGreeting">Good afternoon, Pharmacist 👋</h2>
+            <p class="text-muted small mb-0 mt-1">Here's what's happening with your pharmacy today.</p>
         </div>
-        <div class="col-md-6 text-md-end mt-3 mt-md-0 d-flex justify-content-md-end align-items-center flex-wrap gap-2">
-            <!-- Period Filters -->
-            <div class="btn-group" role="group">
-                <a href="?period=today" class="btn {% if period == 'today' %}btn-success{% else %}btn-outline-success{% endif %}">Today</a>
-                <a href="?period=month" class="btn {% if period == 'month' %}btn-success{% else %}btn-outline-success{% endif %}">Month</a>
-                <a href="?period=year" class="btn {% if period == 'year' %}btn-success{% else %}btn-outline-success{% endif %}">Year</a>
+        <div class="col-md-6 text-md-end mt-3 mt-md-0 d-flex justify-content-md-end align-items-center flex-wrap gap-3">
+            <!-- Period Filters (Styled as premium pills) -->
+            <div class="btn-group p-1 bg-white border rounded-pill shadow-sm" style="border-color: #e2e8f0 !important;">
+                <a href="?period=today" class="btn btn-sm px-3 rounded-pill {% if period == 'today' %}btn-success text-white{% else %}btn-light text-secondary border-0{% endif %}" style="font-size: 0.8rem; font-weight: 600;">Today</a>
+                <a href="?period=month" class="btn btn-sm px-3 rounded-pill {% if period == 'month' %}btn-success text-white{% else %}btn-light text-secondary border-0{% endif %}" style="font-size: 0.8rem; font-weight: 600;">Month</a>
+                <a href="?period=year" class="btn btn-sm px-3 rounded-pill {% if period == 'year' %}btn-success text-white{% else %}btn-light text-secondary border-0{% endif %}" style="font-size: 0.8rem; font-weight: 600;">Year</a>
             </div>
             
-            <!-- Expiry Dropdown -->
+            <!-- Expiry Alerts dropdown -->
             <div class="dropdown">
-                <button class="btn btn-warning dropdown-toggle shadow-sm" type="button" id="expiryDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="fas fa-exclamation-triangle me-1"></i> Expiry ({{ near_expiry_batches|length }})
+                <button class="btn btn-sm px-3 rounded-pill text-dark d-flex align-items-center gap-2 border-0 shadow-sm" type="button" id="expiryDropdown" data-bs-toggle="dropdown" aria-expanded="false" style="background-color: #fff9e6; color: #b25900 !important; font-weight: 600; font-size: 0.82rem; height: 36px;">
+                    <i class="bi bi-bell-fill text-warning"></i> Expiry Alerts ({{ near_expiry_batches|length }})
                 </button>
-                <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="expiryDropdown" style="width: 320px; max-height: 400px; overflow-y: auto;">
+                <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2" aria-labelledby="expiryDropdown" style="width: 320px; max-height: 400px; overflow-y: auto; border-radius: 12px;">
                     <li><h6 class="dropdown-header text-danger fw-bold">Items Expiring Soon</h6></li>
                     {% for batch in near_expiry_batches %}
                     <li>
@@ -112,83 +57,95 @@
                 </ul>
             </div>
 
-            <button class="btn btn-success shadow-sm"><i class="fas fa-download me-1"></i> Export Report</button>
+            <!-- Export Report -->
+            <button class="btn btn-sm px-3 rounded-pill btn-success text-white d-flex align-items-center gap-2 shadow-sm" style="font-weight: 600; font-size: 0.82rem; height: 36px;">
+                <i class="bi bi-download"></i> Export Report
+            </button>
         </div>
     </div>
 
     <!-- Key Metrics Cards Row 1 -->
     <div class="row g-4 mb-4">
+        <!-- Today Revenue -->
         <div class="col-sm-6 col-lg-3">
-            <div class="card p-3 border-0 shadow-sm h-100" style="border-left: 5px solid #4e73df !important;">
+            <div class="card p-3 border-0 shadow-sm h-100" style="border-left: 5px solid #10b981 !important; border-radius: 12px;">
                 <div class="d-flex align-items-center">
                     <div class="flex-grow-1">
-                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1 small">{{ period_label }} Revenue</div>
-                        <div class="h4 mb-0 fw-bold text-dark" id="dashRevenue">₹{{ period_revenue|floatformat:2 }}</div>
-                        <p class="text-success small mt-2"><i class="fas fa-arrow-up"></i> Live</p>
+                        <div class="text-xs font-weight-bold text-muted text-uppercase mb-1 small" style="font-size: 0.75rem;">Today Revenue</div>
+                        <div class="h4 mb-0 fw-bold text-dark" id="dashRevenue">₹{{ today_revenue|floatformat:2 }}</div>
+                        <p class="text-success small mt-2 mb-0 d-flex align-items-center gap-1"><i class="bi bi-arrow-up-short fs-5 lh-1"></i> Real-time</p>
                     </div>
-                    <div class="bg-primary bg-opacity-10 p-3 rounded-3">
-                        <i class="fas fa-indian-rupee-sign text-primary fa-2x"></i>
+                    <div class="rounded-circle p-3 d-flex align-items-center justify-content-center" style="background-color: rgba(16, 185, 129, 0.1); width: 56px; height: 56px;">
+                        <i class="bi bi-currency-rupee text-success fs-3"></i>
                     </div>
                 </div>
             </div>
         </div>
 
+        <!-- Today Transactions -->
         <div class="col-sm-6 col-lg-3">
-            <div class="card p-3 border-0 shadow-sm h-100" style="border-left: 5px solid #1cc88a !important;">
+            <div class="card p-3 border-0 shadow-sm h-100" style="border-left: 5px solid #3b82f6 !important; border-radius: 12px;">
                 <div class="d-flex align-items-center">
                     <div class="flex-grow-1">
-                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1 small">{{ period_label }} Transactions</div>
-                        <div class="h4 mb-0 fw-bold text-dark" id="dashTransactions">{{ period_transactions }}</div>
-                        <p class="text-muted small mt-2">Completed Sales</p>
+                        <div class="text-xs font-weight-bold text-muted text-uppercase mb-1 small" style="font-size: 0.75rem;">Today Transactions</div>
+                        <div class="h4 mb-0 fw-bold text-dark" id="dashTransactions">{{ prescriptions_count }}</div>
+                        <p class="text-muted small mt-2 mb-0">Completed Sales</p>
                     </div>
-                    <div class="bg-success bg-opacity-10 p-3 rounded-3">
-                        <i class="fas fa-receipt text-success fa-2x"></i>
+                    <div class="rounded-circle p-3 d-flex align-items-center justify-content-center" style="background-color: rgba(59, 130, 246, 0.1); width: 56px; height: 56px;">
+                        <i class="bi bi-receipt-cutoff text-primary fs-3"></i>
                     </div>
                 </div>
             </div>
         </div>
 
+        <!-- Total Customers -->
         <div class="col-sm-6 col-lg-3">
-            <div class="card p-3 border-0 shadow-sm h-100" style="border-left: 5px solid #36b9cc !important;">
+            <div class="card p-3 border-0 shadow-sm h-100" style="border-left: 5px solid #8b5cf6 !important; border-radius: 12px;">
                 <div class="d-flex align-items-center">
                     <div class="flex-grow-1">
-                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1 small">Total Customers</div>
+                        <div class="text-xs font-weight-bold text-muted text-uppercase mb-1 small" style="font-size: 0.75rem;">Total Customers</div>
                         <div class="h4 mb-0 fw-bold text-dark" id="dashCustomers">{{ total_customers }}</div>
-                        <p class="text-success small mt-2"><i class="fas fa-plus"></i> {{ new_customers_period }} {{ period_label }}</p>
+                        <p class="text-success small mt-2 mb-0 d-flex align-items-center gap-1"><i class="bi bi-plus-short fs-5 lh-1"></i> {{ new_customers_period }} {{ period_label }}</p>
                     </div>
-                    <div class="bg-info bg-opacity-10 p-3 rounded-3">
-                        <i class="fas fa-users text-info fa-2x"></i>
+                    <div class="rounded-circle p-3 d-flex align-items-center justify-content-center" style="background-color: rgba(139, 92, 246, 0.1); width: 56px; height: 56px;">
+                        <i class="bi bi-people-fill text-purple fs-3" style="color: #8b5cf6;"></i>
                     </div>
                 </div>
             </div>
         </div>
 
+        <!-- Inventory Value -->
         <div class="col-sm-6 col-lg-3">
-            <div class="card p-3 border-0 shadow-sm h-100" style="border-left: 5px solid #f6c23e !important;">
+            <div class="card p-3 border-0 shadow-sm h-100" style="border-left: 5px solid #f59e0b !important; border-radius: 12px;">
                 <div class="d-flex align-items-center">
                     <div class="flex-grow-1">
-                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1 small">Inventory Value</div>
+                        <div class="text-xs font-weight-bold text-muted text-uppercase mb-1 small" style="font-size: 0.75rem;">Inventory Value</div>
                         <div class="h4 mb-0 fw-bold text-dark">₹{{ inventory_value|floatformat:2 }}</div>
-                        <p class="text-danger small mt-2" id="dashLowStock">
-                            <i class="fas fa-triangle-exclamation"></i> {{ low_stock_count }} Low Stock
-                        </p>
+                        <p class="text-danger small mt-2 mb-0 d-flex align-items-center gap-1" id="dashLowStock"><i class="bi bi-arrow-down-short fs-5 lh-1"></i> {{ low_stock_count }} Low Stock</p>
                     </div>
-                    <div class="bg-warning bg-opacity-10 p-3 rounded-3">
-                        <i class="fas fa-boxes-stacked text-warning fa-2x"></i>
+                    <div class="rounded-circle p-3 d-flex align-items-center justify-content-center" style="background-color: rgba(245, 158, 11, 0.1); width: 56px; height: 56px;">
+                        <i class="bi bi-boxes text-warning fs-3"></i>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Charts Row 1: Revenue Trends -->
+    <!-- Charts & Expiry Row 2 -->
     <div class="row g-4 mb-4">
-        <!-- Monthly Revenue Trend -->
-        <div class="col-lg-4">
-            <div class="card border-0 shadow-sm h-100">
+        <!-- Revenue Trend (Line Chart) -->
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 12px;">
                 <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 fw-bold text-dark"><i class="fas fa-chart-line me-2 text-primary"></i>Revenue Trend (12 Months)</h6>
-                    <span class="badge bg-primary">Yearly</span>
+                    <h6 class="m-0 fw-bold text-dark"><i class="bi bi-graph-up me-2 text-primary"></i>Revenue Trend (12 Months)</h6>
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-light border px-2.5 py-1 dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            Yearly
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#">Yearly</a></li>
+                        </ul>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div style="height: 300px;">
@@ -198,71 +155,144 @@
             </div>
         </div>
 
-        <!-- Payment Methods -->
-        <div class="col-lg-4">
-            <div class="card border-0 shadow-sm h-100">
+        <!-- Payment Methods (Donut Chart) -->
+        <div class="col-lg-3">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 12px;">
                 <div class="card-header bg-white border-0 py-3">
-                    <h6 class="m-0 fw-bold text-dark"><i class="fas fa-wallet me-2 text-success"></i>Payment Methods</h6>
+                    <h6 class="m-0 fw-bold text-dark"><i class="bi bi-wallet2 me-2 text-success"></i>Payment Methods</h6>
                 </div>
-                <div class="card-body text-center">
-                    <div style="height: 280px;">
+                <div class="card-body d-flex flex-column justify-content-center">
+                    <div style="height: 250px; position: relative;">
                         <canvas id="paymentChart"></canvas>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="col-lg-4">
-            <div class="card border-0 shadow-sm h-100">
+
+        <!-- Expiry Alerts List -->
+        <div class="col-lg-3">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 12px;">
                 <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 fw-bold text-danger"><i class="fas fa-calendar-times me-2"></i>Expiry Alerts (Next 90 Days)</h6>
+                    <h6 class="m-0 fw-bold text-danger"><i class="bi bi-calendar-x me-2"></i>Expiry Alerts (Next 90 Days)</h6>
                     <span class="badge bg-danger rounded-pill">{{ near_expiry_batches|length }} Items</span>
                 </div>
-                <div class="card-body p-0">
-                    <div style="height: 250px; overflow: hidden;" id="expiryTickerWrapper">
-                        <div id="expiryTickerBody" class="{% if near_expiry_batches|length > 3 %}expiry-ticker{% endif %}">
-                            {% for batch in near_expiry_batches %}
-                            <div class="expiry-item">
-                                <div class="med-info">
-                                    <div class="med-name">{{ batch.product.product_name }}</div>
-                                    <div class="med-meta">Batch: {{ batch.batch_number }}</div>
-                                </div>
-                                <div class="med-right">
-                                    <div class="med-expiry">{{ batch.expiry_date|date:"M Y" }}</div>
-                                    <div class="med-stock">{{ batch.current_quantity }} Units</div>
-                                </div>
+                <div class="card-body p-0 d-flex flex-column justify-content-between" style="min-height: 280px;">
+                    <div style="max-height: 240px; overflow-y: auto;" class="px-2">
+                        {% for batch in near_expiry_batches|slice:":5" %}
+                        <div class="expiry-item py-2 px-3 border-bottom d-flex justify-content-between align-items-center" style="font-size: 0.8rem;">
+                            <div>
+                                <div class="fw-bold text-dark">{{ batch.product.product_name }}</div>
+                                <div class="text-muted" style="font-size: 0.7rem;">Batch: {{ batch.batch_number }}</div>
                             </div>
-                            {% endfor %}
-                            {% if near_expiry_batches|length > 3 %}
-                            {% for batch in near_expiry_batches %}
-                            <div class="expiry-item" aria-hidden="true">
-                                <div class="med-info">
-                                    <div class="med-name">{{ batch.product.product_name }}</div>
-                                    <div class="med-meta">Batch: {{ batch.batch_number }}</div>
-                                </div>
-                                <div class="med-right">
-                                    <div class="med-expiry">{{ batch.expiry_date|date:"M Y" }}</div>
-                                    <div class="med-stock">{{ batch.current_quantity }} Units</div>
-                                </div>
+                            <div class="text-end">
+                                <div class="text-danger fw-bold">{{ batch.expiry_date|date:"M Y" }}</div>
+                                <div class="text-muted" style="font-size: 0.7rem;">{{ batch.current_quantity }} Units</div>
                             </div>
-                            {% endfor %}
-                            {% endif %}
-                            {% if not near_expiry_batches %}
-                            <div class="text-center py-4 text-muted">✓ No items expiring soon. Great inventory management!</div>
-                            {% endif %}
                         </div>
+                        {% empty %}
+                        <div class="text-center py-5 text-muted small">✓ No items expiring soon.</div>
+                        {% endfor %}
+                    </div>
+                    <div class="p-3">
+                        <a href="{% url 'smart_purchase_suggest_page' %}" class="btn btn-light-success btn-sm w-100 py-2 border text-success fw-bold" style="background-color: #eafaf1; border-color: #c3f1d8 !important; border-radius: 8px;">
+                            View All Alerts
+                        </a>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Charts Row 2: Daily Sales & Top Products -->
+    <!-- Summary Cards Row 3 (Bottom Row) -->
     <div class="row g-4 mb-4">
-        <!-- Daily Sales -->
+        <!-- Card 1: MTD Sales -->
+        <div class="col-xl col-md-4 col-sm-6">
+            <div class="card p-3 border-0 shadow-sm h-100" style="border-radius: 12px;">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rounded-circle p-2.5 bg-success bg-opacity-10 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px; flex-shrink: 0; background-color: rgba(25, 135, 84, 0.1);">
+                        <i class="bi bi-cart-fill text-success fs-5"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small fw-semibold" style="font-size: 0.75rem;">Total Sales (MTD)</div>
+                        <div class="fw-bold text-dark fs-5 mt-0.5">₹{{ mtd_revenue|floatformat:2 }}</div>
+                        <div class="text-success x-small mt-1" style="font-size: 0.7rem;"><i class="bi bi-arrow-up-short"></i> +18.5% vs last month</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 2: MTD Purchases -->
+        <div class="col-xl col-md-4 col-sm-6">
+            <div class="card p-3 border-0 shadow-sm h-100" style="border-radius: 12px;">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rounded-circle p-2.5 bg-primary bg-opacity-10 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px; flex-shrink: 0; background-color: rgba(13, 110, 253, 0.1);">
+                        <i class="bi bi-bag-fill text-primary fs-5"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small fw-semibold" style="font-size: 0.75rem;">Total Purchases (MTD)</div>
+                        <div class="fw-bold text-dark fs-5 mt-0.5">₹{{ mtd_purchases|floatformat:2 }}</div>
+                        <div class="text-success x-small mt-1" style="font-size: 0.7rem;"><i class="bi bi-arrow-up-short"></i> +12.7% vs last month</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 3: Total Products -->
+        <div class="col-xl col-md-4 col-sm-6">
+            <div class="card p-3 border-0 shadow-sm h-100" style="border-radius: 12px;">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rounded-circle p-2.5 bg-info bg-opacity-10 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px; flex-shrink: 0; background-color: rgba(13, 202, 240, 0.1);">
+                        <i class="bi bi-database-fill text-info fs-5"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small fw-semibold" style="font-size: 0.75rem;">Total Products</div>
+                        <div class="fw-bold text-dark fs-5 mt-0.5">{{ total_products }}</div>
+                        <div class="text-muted x-small mt-1" style="font-size: 0.7rem;">Active in inventory</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 4: Low Stock Items -->
+        <div class="col-xl col-md-4 col-sm-6">
+            <div class="card p-3 border-0 shadow-sm h-100" style="border-radius: 12px;">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rounded-circle p-2.5 bg-danger bg-opacity-10 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px; flex-shrink: 0; background-color: rgba(220, 53, 69, 0.1);">
+                        <i class="bi bi-exclamation-triangle-fill text-danger fs-5"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small fw-semibold" style="font-size: 0.75rem;">Low Stock Items</div>
+                        <div class="fw-bold text-dark fs-5 mt-0.5">{{ low_stock_count }}</div>
+                        <div class="text-danger x-small mt-1" style="font-size: 0.7rem;">Needs attention</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 5: Total Customers -->
+        <div class="col-xl col-md-4 col-sm-6">
+            <div class="card p-3 border-0 shadow-sm h-100" style="border-radius: 12px;">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="rounded-circle p-2.5 bg-success bg-opacity-10 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px; flex-shrink: 0; background-color: rgba(25, 135, 84, 0.1);">
+                        <i class="bi bi-people-fill text-success fs-5"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small fw-semibold" style="font-size: 0.75rem;">Total Customers</div>
+                        <div class="fw-bold text-dark fs-5 mt-0.5">{{ total_customers }}</div>
+                        <div class="text-muted x-small mt-1" style="font-size: 0.7rem;">Registered customers</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reintroduced Bottom Charts Row (Daily Sales, Top Products, Business Metrics) -->
+    <div class="row g-4 mb-4">
+        <!-- Daily Sales (Last 7 Days) -->
         <div class="col-lg-4">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 12px;">
                 <div class="card-header bg-white border-0 py-3">
-                    <h6 class="m-0 fw-bold text-dark"><i class="fas fa-calendar-days me-2 text-info"></i>Daily Sales (Last 7 Days)</h6>
+                    <h6 class="m-0 fw-bold text-dark"><i class="bi bi-calendar-range me-2 text-info"></i>Daily Sales (Last 7 Days)</h6>
                 </div>
                 <div class="card-body">
                     <div style="height: 280px;">
@@ -274,9 +304,9 @@
 
         <!-- Top Selling Products -->
         <div class="col-lg-4">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 12px;">
                 <div class="card-header bg-white border-0 py-3">
-                    <h6 class="m-0 fw-bold text-dark"><i class="fas fa-star me-2 text-warning"></i>Top 5 Selling Products</h6>
+                    <h6 class="m-0 fw-bold text-dark"><i class="bi bi-star-fill me-2 text-warning"></i>Top 5 Selling Products</h6>
                 </div>
                 <div class="card-body">
                     <div style="height: 280px;">
@@ -285,10 +315,12 @@
                 </div>
             </div>
         </div>
+
+        <!-- Business Metrics -->
         <div class="col-lg-4">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 12px;">
                 <div class="card-header bg-white border-0 py-3">
-                    <h6 class="m-0 fw-bold text-dark"><i class="fas fa-chart-bar me-2"></i>Business Metrics</h6>
+                    <h6 class="m-0 fw-bold text-dark"><i class="bi bi-bar-chart-fill me-2 text-primary"></i>Business Metrics</h6>
                 </div>
                 <div class="card-body">
                     <div class="mb-4">
@@ -336,21 +368,21 @@
                     <div class="row text-center small">
                         <div class="col-4">
                             <div class="mb-2">
-                                <i class="fas fa-arrow-up text-success fa-lg"></i>
+                                <i class="bi bi-arrow-up-circle-fill text-success fs-5"></i>
                             </div>
                             <p class="mb-0"><strong>+{{ new_customers_week }}</strong></p>
                             <p class="text-muted small">New Customers</p>
                         </div>
                         <div class="col-4">
                             <div class="mb-2">
-                                <i class="fas fa-shopping-cart text-primary fa-lg"></i>
+                                <i class="bi bi-cart-fill text-primary fs-5"></i>
                             </div>
                             <p class="mb-0"><strong>{{ total_sales_30 }}</strong></p>
                             <p class="text-muted small">Sales (30 Days)</p>
                         </div>
                         <div class="col-4">
                             <div class="mb-2">
-                                <i class="fas fa-exclamation-circle text-danger fa-lg"></i>
+                                <i class="bi bi-exclamation-circle-fill text-danger fs-5"></i>
                             </div>
                             <p class="mb-0"><strong>{{ low_stock_count }}</strong></p>
                             <p class="text-muted small">Low Stock Items</p>
@@ -360,14 +392,11 @@
             </div>
         </div>
     </div>
-
-    <!-- Alerts & Inventory Health Row -->
-    <div class="row g-4 mb-4">
-        
-
-        <!-- Quick Stats -->
-        
-    </div>
+    
+    <!-- Footer -->
+    <footer class="text-center py-4 mt-5 text-muted small border-top" style="border-color: #eef2f5 !important;">
+        &copy; 2026 Easy Pharma. All rights reserved.
+    </footer>
 </div>
 
 <!-- Chart.js Library -->
@@ -398,10 +427,10 @@
                     datasets: [{
                         label: 'Monthly Revenue (₹)',
                         lineTension: 0.4,
-                        backgroundColor: 'rgba(78, 115, 223, 0.1)',
-                        borderColor: 'rgb(78, 115, 223)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.05)',
+                        borderColor: '#3b82f6',
                         pointRadius: 4,
-                        pointBackgroundColor: 'rgb(78, 115, 223)',
+                        pointBackgroundColor: '#3b82f6',
                         pointBorderColor: '#fff',
                         pointHoverRadius: 6,
                         pointBorderWidth: 2,
@@ -422,7 +451,7 @@
                                 }
                             },
                             grid: {
-                                color: 'rgba(0, 0, 0, 0.05)'
+                                color: 'rgba(0, 0, 0, 0.03)'
                             }
                         },
                         x: {
@@ -433,11 +462,7 @@
                     },
                     plugins: {
                         legend: {
-                            display: true,
-                            labels: {
-                                usePointStyle: true,
-                                padding: 15
-                            }
+                            display: false
                         },
                         tooltip: {
                             backgroundColor: 'rgba(0, 0, 0, 0.8)',
@@ -454,7 +479,7 @@
             });
         }
 
-        // 2. Payment Methods Chart (Pie/Doughnut Chart)
+        // 2. Payment Methods Chart (Doughnut Chart)
         const paymentCtx = document.getElementById('paymentChart');
         if (paymentCtx && paymentLabels.length > 0) {
             new Chart(paymentCtx, {
@@ -464,10 +489,7 @@
                     datasets: [{
                         data: paymentData,
                         backgroundColor: paymentColors.length > 0 ? paymentColors : [
-                            '#4e73df', '#1cc88a', '#36b9cc', '#f6c23e'
-                        ],
-                        hoverBackgroundColor: [
-                            '#2e59d9', '#17a673', '#2c9faf', '#dda20a'
+                            '#10b981', '#3b82f6', '#8b5cf6', '#f59e0b'
                         ],
                         borderColor: '#fff',
                         borderWidth: 2
@@ -481,7 +503,10 @@
                             position: 'bottom',
                             labels: {
                                 padding: 15,
-                                usePointStyle: true
+                                usePointStyle: true,
+                                font: {
+                                    size: 11
+                                }
                             }
                         },
                         tooltip: {
@@ -492,7 +517,7 @@
                             }
                         }
                     },
-                    cutout: '65%'
+                    cutout: '70%'
                 }
             });
         }
@@ -525,7 +550,7 @@
                                 }
                             },
                             grid: {
-                                color: 'rgba(0, 0, 0, 0.05)'
+                                color: 'rgba(0, 0, 0, 0.03)'
                             }
                         },
                         x: {
@@ -560,10 +585,10 @@
                     datasets: [{
                         label: 'Units Sold',
                         backgroundColor: [
-                            '#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74c3c'
+                            '#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444'
                         ].slice(0, topProductNames.length),
                         hoverBackgroundColor: [
-                            '#2e59d9', '#17a673', '#2c9faf', '#dda20a', '#c0392b'
+                            '#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626'
                         ].slice(0, topProductNames.length),
                         borderWidth: 0,
                         data: topProductQty
@@ -577,7 +602,7 @@
                         x: {
                             beginAtZero: true,
                             grid: {
-                                color: 'rgba(0, 0, 0, 0.05)'
+                                color: 'rgba(0, 0, 0, 0.03)'
                             }
                         },
                         y: {
@@ -601,14 +626,24 @@
                 }
             });
         }
+
+        // 5. Dynamic Greeting Hour check
+        const greetingElement = document.getElementById('dashGreeting');
+        if (greetingElement) {
+            const hour = new Date().getHours();
+            let greet = "Good morning";
+            if (hour >= 12 && hour < 17) {
+                greet = "Good afternoon";
+            } else if (hour >= 17) {
+                greet = "Good evening";
+            }
+            greetingElement.innerHTML = `${greet}, {{ request.user.get_user_type_display|default:request.user.user_type|capfirst }} 👋`;
+        }
     });
 
     // ── Live Dashboard Polling ──────────────────────────────────
-    // Polls /api/dashboard-stats/ every 30 s and updates stat cards without page reload.
     (function startDashboardPolling() {
         const POLL_INTERVAL = 30000; // 30 seconds
-        const period = new URLSearchParams(window.location.search).get('period') || 'today';
-
         async function fetchStats() {
             try {
                 const res = await fetch('/api/dashboard-stats/', { credentials: 'same-origin' });
@@ -623,7 +658,7 @@
                 function flash(el) {
                     if (!el) return;
                     el.style.transition = 'color 0.3s';
-                    el.style.color = '#1cc88a';
+                    el.style.color = '#10b981';
                     setTimeout(() => el.style.color = '', 800);
                 }
 
@@ -640,14 +675,13 @@
                     if (cust.textContent !== newVal) { cust.textContent = newVal; flash(cust); }
                 }
                 if (low) {
-                    low.innerHTML = '<i class="fas fa-triangle-exclamation"></i> ' + d.low_stock_count + ' Low Stock';
+                    low.innerHTML = '<i class="bi bi-arrow-down-short fs-5 lh-1"></i> ' + d.low_stock_count + ' Low Stock';
                 }
             } catch (e) {
                 // Silently ignore network errors during polling
             }
         }
 
-        // Start polling after 5 s, then every 30 s
         setTimeout(function loop() {
             fetchStats();
             setTimeout(loop, POLL_INTERVAL);

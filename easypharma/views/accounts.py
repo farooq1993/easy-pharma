@@ -941,6 +941,17 @@ def home_view(request):
         created_at__date__lte=today
     ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     
+    # Month to Date Purchases
+    from easypharma.models.purchase_invoice import PurchaseInvoice
+    mtd_purchases = PurchaseInvoice.objects.filter(
+        tenant=request.tenant,
+        purchase_date__gte=month_start,
+        purchase_date__lte=today
+    ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+
+    # Total Products in inventory
+    total_products = Products.objects.filter(tenant=request.tenant).count()
+
     context = {
         'period': period,
         'period_label': period_label,
@@ -970,6 +981,8 @@ def home_view(request):
         'new_customers_week': new_customers_week,
         'total_sales_30': total_sales_30,
         'mtd_revenue': mtd_revenue,
+        'mtd_purchases': mtd_purchases,
+        'total_products': total_products,
     }
     return render(request, "home.html", context)
 

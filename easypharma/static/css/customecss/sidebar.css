@@ -1,7 +1,7 @@
 :root {
     --sidebar-bg: #9052b9; /* Purple background */
     --sidebar-hover: #68d12b; /* Green for hover */
-    --sidebar-active: #0d6efd; /* Blue for active */
+    --sidebar-active: rgba(255, 255, 255, 0.15); /* Semi-transparent white for active */
     --sidebar-text: #e7e1cb; /* Cream text */
     --sidebar-width: 280px;
     --sidebar-collapsed-width: 70px; /* Hide on toggle for full focus */
@@ -47,8 +47,11 @@ body {
     top: 0;
     left: 0;
     z-index: 1000;
-    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+    box-shadow: 2px 0 15px rgba(0, 0, 0, 0.04);
     overflow-y: auto;
+    padding: 0 !important; /* Brand full-width banner rules */
+    display: flex;
+    flex-direction: column;
 }
 
 .sidebar.collapsed {
@@ -70,17 +73,19 @@ body {
     align-items: center;
     padding: 12px 20px;
     text-decoration: none;
+    font-weight: 500;
 }
 
 .sidebar .nav-link:hover {
     background-color: var(--sidebar-hover);
-    color: #fff;
+    color: #ffffff;
 }
 
 .sidebar .nav-link.active {
-    background-color: rgba(255, 255, 255, 0.15);
+    background-color: var(--sidebar-active);
     border-left: 4px solid var(--sidebar-hover);
-    color: white;
+    color: #ffffff !important;
+    font-weight: 600;
 }
 
 .sidebar .nav-link i {
@@ -234,3 +239,89 @@ body {
 .sidebar.collapsed h6.sidebar-text {
     display: none;
 }
+
+/* Sidebar Custom Brand Wrapper */
+.sidebar-brand-wrapper {
+    background-color: #ffffff;
+    border-bottom: 1px solid #eef2f5;
+    padding: 1.25rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 80px;
+    margin-bottom: 1rem;
+    transition: all 0.3s ease;
+}
+
+.sidebar.collapsed:not(:hover) .sidebar-brand-wrapper {
+    padding: 1.25rem 0.5rem;
+}
+
+/* Sidebar Navigation Scroll Container */
+.sidebar-nav-container {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 0 1rem 1rem 1rem;
+}
+
+.sidebar.collapsed:not(:hover) .sidebar-nav-container {
+    padding: 0 0.5rem;
+}
+
+/* Sidebar Bottom Help Card */
+.sidebar-help-card {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 1rem;
+    margin: 1.5rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    transition: all 0.3s ease;
+}
+
+.sidebar.collapsed:not(:hover) .sidebar-help-card {
+    display: none; /* Hide when collapsed */
+}
+
+.sidebar-help-card i {
+    font-size: 1.35rem;
+    color: #e7e1cb;
+    background: rgba(255, 255, 255, 0.15);
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.sidebar-help-card .help-title {
+    font-weight: 600;
+    color: #ffffff;
+    font-size: 0.82rem;
+    margin-bottom: 1px;
+}
+
+.sidebar-help-card .help-subtitle {
+    font-size: 0.72rem;
+    color: #e7e1cb;
+    opacity: 0.85;
+    margin-bottom: 0;
+}
+
+.sidebar-help-card a {
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.sidebar.collapsed:not(:hover) .sidebar-brand-wrapper img {
+    width: 38px;
+    height: 38px;
+    object-position: left center;
+    object-fit: cover;
+}
