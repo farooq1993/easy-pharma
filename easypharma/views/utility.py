@@ -19,7 +19,11 @@ from easypharma.backup_utils import (
     take_backup,
     take_safety_backup,
     restore_backup,
-    list_backups
+    list_backups,
+    take_compressed_backup,
+    restore_compressed_backup,
+    take_tenant_compressed_backup,
+    restore_tenant_compressed_backup
 )
 
 
@@ -151,8 +155,16 @@ class DatabaseBackupView(AdminRequiredMixin, View):
                 
         elif action == 'take_backup':
             try:
-                filename = take_backup()
-                messages.success(request, f"Database backup '{filename}' created successfully!")
+                zip_filename = take_tenant_compressed_backup(request.tenant)
+                backup_dir = get_backup_directory()
+                file_path = os.path.join(backup_dir, zip_filename)
+                
+                if os.path.exists(file_path):
+                    response = FileResponse(open(file_path, 'rb'), content_type='application/zip')
+                    response['Content-Disposition'] = f'attachment; filename="{zip_filename}"'
+                    return response
+                else:
+                    messages.error(request, "Failed to locate the generated backup file.")
             except Exception as e:
                 messages.error(request, f"Failed to take backup: {str(e)}")
                 
@@ -227,8 +239,8 @@ class UploadRestoreBackupView(AdminRequiredMixin, View):
             return redirect('database_backup')
             
         ext = os.path.splitext(uploaded_file.name)[1].lower()
-        if ext not in ['.sqlite3', '.dump', '.json']:
-            messages.error(request, "Invalid file format. Please upload a valid .sqlite3, .dump, or .json file.")
+        if ext not in ['.sqlite3', '.dump', '.json', '.zip']:
+            messages.error(request, "Invalid file format. Please upload a valid .zip, .sqlite3, .dump, or .json file.")
             return redirect('database_backup')
             
         backup_dir = get_backup_directory()
@@ -258,7 +270,12 @@ class UploadRestoreBackupView(AdminRequiredMixin, View):
             return redirect('database_backup')
             
         try:
-            restore_backup(filename)
+            if ext == '.zip':
+                restore_tenant_compressed_backup(request.tenant, filename, request.user.id)
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+            else:
+                restore_backup(filename)
             messages.success(
                 request, 
                 f"Database uploaded and restored successfully! "
@@ -266,6 +283,9 @@ class UploadRestoreBackupView(AdminRequiredMixin, View):
             )
         except Exception as e:
             messages.error(request, f"Failed to restore from uploaded file: {str(e)}")
+            if os.path.exists(file_path):
+                try: os.remove(file_path)
+                except: pass
             
         return redirect('database_backup')
 

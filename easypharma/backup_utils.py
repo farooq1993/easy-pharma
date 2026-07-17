@@ -302,7 +302,7 @@ def list_backups():
         
     backups = []
     try:
-        valid_extensions = ('.sqlite3', '.dump', '.json')
+        valid_extensions = ('.sqlite3', '.dump', '.json', '.zip')
         for f in os.listdir(backup_dir):
             if f.startswith('easypharma_') and f.endswith(valid_extensions):
                 path = os.path.join(backup_dir, f)
@@ -316,6 +316,8 @@ def list_backups():
                     btype = 'Uploaded'
                 elif 'auto_backup' in f:
                     btype = 'Auto'
+                elif 'compressed_backup' in f:
+                    btype = 'Compressed'
                 else:
                     btype = 'Manual'
                     
@@ -332,3 +334,218 @@ def list_backups():
         logger.error(f"Error listing backups: {e}")
         
     return backups
+
+import zipfile
+
+def take_compressed_backup():
+    """
+    Creates a database backup, compresses it into a ZIP file,
+    and deletes the raw uncompressed backup file.
+    """
+    # 1. Take a standard database backup
+    filename = take_backup()
+    backup_dir = get_backup_directory()
+    file_path = os.path.join(backup_dir, filename)
+    
+    # 2. Define zip filename and path
+    now = datetime.datetime.now()
+    timestamp = now.strftime('%Y%m%d_%H%M%S')
+    zip_filename = f"easypharma_compressed_backup_{timestamp}.zip"
+    zip_path = os.path.join(backup_dir, zip_filename)
+    
+    try:
+        # Create ZIP archive
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.write(file_path, arcname=filename)
+        
+        # 3. Clean up the uncompressed file from the server
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            
+        return zip_filename
+    except Exception as e:
+        if os.path.exists(zip_path):
+            try: os.remove(zip_path)
+            except: pass
+        raise e
+
+def restore_compressed_backup(zip_filename):
+    """
+    Extracts the database file from a ZIP backup and restores it.
+    Cleans up the extracted file afterwards.
+    """
+    backup_dir = get_backup_directory()
+    zip_path = os.path.join(backup_dir, zip_filename)
+    
+    if not os.path.exists(zip_path):
+        raise FileNotFoundError(f"Backup zip file {zip_filename} not found.")
+        
+    extracted_filename = None
+    try:
+        # Extract the ZIP contents
+        with zipfile.ZipFile(zip_path, 'r') as zip_file:
+            namelist = zip_file.namelist()
+            if not namelist:
+                raise ValueError("The uploaded ZIP file is empty.")
+            
+            # Find a valid database file in the zip
+            db_files = [f for f in namelist if f.endswith(('.sqlite3', '.dump', '.json'))]
+            if not db_files:
+                raise ValueError("No valid database file found in the ZIP archive (.sqlite3, .dump, or .json).")
+            
+            extracted_filename = db_files[0]
+            zip_file.extract(extracted_filename, backup_dir)
+            
+        # Restore from the extracted uncompressed file
+        restore_backup(extracted_filename)
+    finally:
+        # Clean up the extracted uncompressed file
+        if extracted_filename:
+            extracted_path = os.path.join(backup_dir, extracted_filename)
+            if os.path.exists(extracted_path):
+                try: os.remove(extracted_path)
+                except: pass
+
+import json
+from django.apps import apps
+from django.core import serializers
+from django.db import transaction, connection
+from easypharma.models.accounts import User
+
+def export_tenant_data_json(tenant):
+    """
+    Serializes all database records belonging to a specific tenant.
+    """
+    serialized_data = []
+    # Loop through all models registered in the Django project
+    for model in apps.get_models():
+        # Check if the model has a 'tenant' field/foreign key relation
+        if hasattr(model, 'tenant') or any(field.name == 'tenant' for field in model._meta.fields):
+            queryset = model.objects.filter(tenant=tenant)
+            data_list = serializers.serialize('python', queryset)
+            serialized_data.extend(data_list)
+    return json.dumps(serialized_data, default=str)
+
+def restore_tenant_data_json(tenant, json_data, current_user_id):
+    """
+    Deletes existing tenant-specific data and restores from serialized JSON objects.
+    """
+    objects = json.loads(json_data)
+    
+    db_engine = settings.DATABASES['default']['ENGINE']
+    is_sqlite = 'sqlite3' in db_engine
+    
+    with transaction.atomic():
+        if is_sqlite:
+            with connection.cursor() as cursor:
+                cursor.execute("PRAGMA foreign_keys = OFF;")
+                
+        try:
+            # 1. Delete all existing records for this tenant across all models
+            # We exclude the currently logged-in user to prevent auth session crash
+            for model in apps.get_models():
+                if hasattr(model, 'tenant') or any(field.name == 'tenant' for field in model._meta.fields):
+                    if model == User:
+                        model.objects.filter(tenant=tenant).exclude(id=current_user_id).delete()
+                    else:
+                        model.objects.filter(tenant=tenant).delete()
+                        
+            # 2. Deserialize and save imported records
+            deserialized_objects = serializers.deserialize('python', objects)
+            for obj in deserialized_objects:
+                # Security: verify object belongs to the current tenant
+                if hasattr(obj.object, 'tenant') and obj.object.tenant_id != tenant.id:
+                    continue
+                # Save object (does update_or_create behavior for the logged-in user PK)
+                obj.save()
+                
+        finally:
+            if is_sqlite:
+                with connection.cursor() as cursor:
+                    cursor.execute("PRAGMA foreign_keys = ON;")
+
+def take_tenant_compressed_backup(tenant):
+    """
+    Generates a tenant-specific data dump, compresses it to ZIP, and cleans up JSON.
+    """
+    backup_dir = get_backup_directory()
+    os.makedirs(backup_dir, exist_ok=True)
+    
+    now = datetime.datetime.now()
+    timestamp = now.strftime('%Y%m%d_%H%M%S')
+    
+    # 1. Serialize tenant data to JSON string
+    json_data = export_tenant_data_json(tenant)
+    
+    # 2. Define file paths
+    json_filename = f"easypharma_tenant_data_{tenant.subdomain}_{timestamp}.json"
+    json_path = os.path.join(backup_dir, json_filename)
+    
+    zip_filename = f"easypharma_tenant_backup_{tenant.subdomain}_{timestamp}.zip"
+    zip_path = os.path.join(backup_dir, zip_filename)
+    
+    try:
+        # Write uncompressed JSON
+        with open(json_path, 'w', encoding='utf-8') as f:
+            f.write(json_data)
+            
+        # Compress to ZIP
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.write(json_path, arcname=json_filename)
+            
+        # Clean up JSON from server
+        if os.path.exists(json_path):
+            os.remove(json_path)
+            
+        return zip_filename
+    except Exception as e:
+        if os.path.exists(json_path):
+            try: os.remove(json_path)
+            except: pass
+        if os.path.exists(zip_path):
+            try: os.remove(zip_path)
+            except: pass
+        raise e
+
+def restore_tenant_compressed_backup(tenant, zip_filename, current_user_id):
+    """
+    Extracts the JSON payload from a ZIP file and restores the tenant's database records.
+    """
+    backup_dir = get_backup_directory()
+    zip_path = os.path.join(backup_dir, zip_filename)
+    
+    if not os.path.exists(zip_path):
+        raise FileNotFoundError(f"Backup zip file {zip_filename} not found.")
+        
+    extracted_filename = None
+    try:
+        # Extract the ZIP contents
+        with zipfile.ZipFile(zip_path, 'r') as zip_file:
+            namelist = zip_file.namelist()
+            if not namelist:
+                raise ValueError("The uploaded ZIP file is empty.")
+            
+            # Find a valid JSON file in the ZIP
+            json_files = [f for f in namelist if f.endswith('.json')]
+            if not json_files:
+                raise ValueError("No valid JSON database file found in the ZIP archive.")
+            
+            extracted_filename = json_files[0]
+            zip_file.extract(extracted_filename, backup_dir)
+            
+        # Read the JSON database data
+        extracted_path = os.path.join(backup_dir, extracted_filename)
+        with open(extracted_path, 'r', encoding='utf-8') as f:
+            json_data = f.read()
+            
+        # Restore tenant-specific objects
+        restore_tenant_data_json(tenant, json_data, current_user_id)
+        
+    finally:
+        # Clean up the extracted uncompressed JSON file
+        if extracted_filename:
+            extracted_path = os.path.join(backup_dir, extracted_filename)
+            if os.path.exists(extracted_path):
+                try: os.remove(extracted_path)
+                except: pass
+

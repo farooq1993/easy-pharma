@@ -55,9 +55,44 @@
         {% include 'includes/sidebar.html' %}
 
         <!-- Page Content -->
-        <div id="content">
-            <!-- Main Content Block -->
-            {% block content %}{% endblock %}
+        <div id="content" style="padding: 0 !important; background-color: #f8f9fa;">
+            <!-- Top Bar -->
+            <header class="topbar d-flex align-items-center justify-content-between px-4">
+                <!-- Search bar -->
+                <div class="search-wrapper">
+                    <i class="bi bi-search"></i>
+                    <input type="text" class="search-input no-uppercase" placeholder="Search anything...">
+                    <span class="search-badge">Ctrl /</span>
+                </div>
+                
+                <!-- Notifications & Profile -->
+                <div class="d-flex align-items-center gap-4">
+                    <!-- Notifications -->
+                    <div class="position-relative notification-bell">
+                        <i class="bi bi-bell text-secondary fs-5"></i>
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.6rem; padding: 0.25em 0.4em;">
+                            10
+                        </span>
+                    </div>
+                    
+                    <!-- User Profile -->
+                    <div class="d-flex align-items-center gap-2 border-start ps-3 profile-section" style="border-color: #e2e8f0 !important;">
+                        <div class="avatar-circle">
+                            {{ request.user.username|slice:":1"|upper }}
+                        </div>
+                        <div class="d-none d-sm-block">
+                            <div class="fw-bold text-dark leading-none" style="font-size: 0.85rem;">{{ request.user.username|capfirst }}</div>
+                            <div class="text-muted leading-none mt-1" style="font-size: 0.72rem;">{{ request.user.get_user_type_display|default:request.user.user_type|capfirst }}</div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Inner Page Content Container -->
+            <div class="p-4" style="min-height: calc(100vh - 80px);">
+                <!-- Main Content Block -->
+                {% block content %}{% endblock %}
+            </div>
         </div>
     </div>
 

@@ -301,7 +301,7 @@
                 </div>
                 <div class="premium-card-body">
                     <p class="text-muted small mb-4">
-                        Generate a snapshot of your system data instantly. The backup file will be saved directly into your selected backup path.
+                        Generate a snapshot of your pharmacy data instantly. Only data belonging to your logged-in pharmacy (firm) will be backed up. The backup file will be compressed as a ZIP archive and downloaded directly to your computer.
                     </p>
                     
                     <form method="POST" action="{% url 'database_backup' %}">
@@ -322,7 +322,7 @@
                 </div>
                 <div class="premium-card-body">
                     <p class="text-muted small mb-3">
-                        Restore data from a backup file (.sqlite3, .dump, or .json) stored elsewhere on your computer.
+                        Restore data from a compressed tenant backup file (.zip) stored on your computer. Uploading a ZIP file will restore data only for your logged-in pharmacy.
                     </p>
                     <form method="POST" action="{% url 'upload_restore_backup' %}" enctype="multipart/form-data" id="uploadForm">
                         {% csrf_token %}
@@ -330,8 +330,8 @@
                         <div class="upload-drop-zone mb-3" onclick="document.getElementById('backup_file').click()">
                             <i class="bi bi-file-earmark-arrow-up"></i>
                             <p class="fw-semibold mb-1">Click to select backup file</p>
-                            <p class="text-muted x-small">Only .sqlite3, .dump, or .json files</p>
-                            <input type="file" id="backup_file" name="backup_file" accept=".sqlite3,.dump,.json" style="display: none;" onchange="updateUploadLabel(this)">
+                            <p class="text-muted x-small">Only .zip files containing tenant JSON data</p>
+                            <input type="file" id="backup_file" name="backup_file" accept=".zip" style="display: none;" onchange="updateUploadLabel(this)">
                         </div>
                         
                         <div id="fileSelectedLabel" class="text-center text-primary small mb-3 fw-bold d-none"></div>
