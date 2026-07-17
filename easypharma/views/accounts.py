@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods, require_POST
 from easypharma.models import User, UserPermission, ActivityLog
@@ -478,9 +478,7 @@ def user_management(request):
         messages.error(request, "No pharmacy context found.")
         return redirect('home')
 
-    users = User.objects.filter(tenant=tenant).exclude(
-        id=request.user.id
-    ).select_related('permission_record').order_by('user_type', 'username')
+    users = User.objects.filter(tenant=tenant).select_related('permission_record').order_by('user_type', 'username')
 
     context = {
         'users': users,
@@ -675,6 +673,66 @@ def delete_tenant_user(request, user_id):
     )
     messages.success(request, f"User '{username}' has been deleted.")
     return redirect('user_management')
+
+
+@login_required(login_url='login')
+@require_http_methods(["GET", "POST"])
+def change_user_password(request, user_id):
+    """Change password for a tenant user or self."""
+    if not _can_manage_users(request.user) and request.user.id != user_id:
+        messages.error(request, "Access denied.")
+        return redirect('home')
+
+    tenant = request.tenant
+    if request.user.user_type == 'admin':
+        target_user = get_object_or_404(User, id=user_id)
+    else:
+        target_user = get_object_or_404(User, id=user_id, tenant=tenant)
+
+    # Security: A tenant_owner or manager cannot change an admin's password or another tenant_owner's password unless it is their own
+    if target_user.user_type in ('admin', 'tenant_owner') and target_user.id != request.user.id:
+        if request.user.user_type != 'admin':
+            messages.error(request, "Access denied. You cannot change this user's password.")
+            return redirect('user_management')
+
+    if request.method == 'POST':
+        password = request.POST.get('password', '')
+        confirm_password = request.POST.get('confirm_password', '')
+
+        if not password or not confirm_password:
+            messages.error(request, "Both password fields are required.")
+            return render(request, 'accounts/change_password.html', {'target_user': target_user, 'tenant': tenant})
+
+        if password != confirm_password:
+            messages.error(request, "Passwords do not match.")
+            return render(request, 'accounts/change_password.html', {'target_user': target_user, 'tenant': tenant})
+
+        if len(password) < 6:
+            messages.error(request, "Password must be at least 6 characters.")
+            return render(request, 'accounts/change_password.html', {'target_user': target_user, 'tenant': tenant})
+
+        try:
+            target_user.set_password(password)
+            target_user.save()
+
+            if target_user.id == request.user.id:
+                update_session_auth_hash(request, target_user)
+
+            ActivityLog.log(
+                request, 'UPDATE', 'users',
+                f'Changed password for user "{target_user.username}" (ID: {target_user.id}).',
+            )
+            messages.success(request, f"Password for '{target_user.username}' updated successfully!")
+            return redirect('user_management')
+
+        except Exception as e:
+            messages.error(request, f"Error updating password: {str(e)}")
+
+    context = {
+        'target_user': target_user,
+        'tenant': tenant,
+    }
+    return render(request, 'accounts/change_password.html', context)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

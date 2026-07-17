@@ -16,6 +16,7 @@ from easypharma.views.accounts import (
     edit_user_permissions,
     toggle_user_active,
     delete_tenant_user,
+    change_user_password,
     # Activity logs
     activity_logs,
 )
@@ -46,6 +47,7 @@ urlpatterns = [
     path('users/<int:user_id>/permissions/', edit_user_permissions, name='edit_user_permissions'),
     path('users/<int:user_id>/toggle-active/', toggle_user_active, name='toggle_user_active'),
     path('users/<int:user_id>/delete/', delete_tenant_user, name='delete_tenant_user'),
+    path('users/<int:user_id>/change-password/', change_user_password, name='change_user_password'),
 
     # ── Activity Logs ──────────────────────────────────────────────────────
     path('activity-logs/', activity_logs, name='activity_logs'),
