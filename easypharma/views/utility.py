@@ -10,6 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 from easypharma.models.stock import StockBatch
 from easypharma.models.print_setup import PrintSetup
+from easypharma.models.general_setup import GeneralSetup
 from datetime import date, timedelta
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
@@ -31,17 +32,30 @@ class UtilityHomeView(View):
     template_name = 'utility/home.html'
 
     def get(self, request):
-        today = date.today()
-        expiry_6_months = today + timedelta(days=180)
-        expiring_batches = StockBatch.objects.filter(
-            tenant=request.tenant,
-            expiry_date__lte=expiry_6_months,
-            current_quantity__gt=0
-        ).select_related('product').order_by('expiry_date')
-
+        setup, _ = GeneralSetup.objects.get_or_create(tenant=request.tenant)
         return render(request, self.template_name, {
-            'expiring_batches': expiring_batches,
+            'setup': setup,
         })
+
+    def post(self, request):
+        setup, _ = GeneralSetup.objects.get_or_create(tenant=request.tenant)
+        
+        # Sale Setup
+        setup.default_payment_mode = request.POST.get('default_payment_mode', 'cash')
+        setup.require_customer_phone = request.POST.get('require_customer_phone') == 'on'
+        setup.print_invoice_after_save = request.POST.get('print_invoice_after_save') == 'on'
+        
+        # Purchase Setup
+        setup.expiry_date_format = request.POST.get('expiry_date_format', 'text')
+        try:
+            setup.default_tax_rate = float(request.POST.get('default_tax_rate', 18.0))
+        except ValueError:
+            setup.default_tax_rate = 18.0
+        setup.auto_update_selling_price = request.POST.get('auto_update_selling_price') == 'on'
+        
+        setup.save()
+        messages.success(request, "General settings updated successfully!")
+        return redirect('utility_home')
 
 
 class PrintingSetupView(View):

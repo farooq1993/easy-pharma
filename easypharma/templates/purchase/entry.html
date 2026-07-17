@@ -99,10 +99,33 @@
                         <div>
                             <label class="ep-label">Expiry</label>
                             <div class="expiry-split-wrap" id="expiryWrapper">
+                                {% if general_setup.expiry_date_format == 'dropdown' %}
+                                <div class="d-flex gap-2">
+                                    <select id="itemExpiryMonth" class="form-select ep-input py-1 px-2" style="width: 100px; height: 38px;">
+                                        <option value="">Month</option>
+                                        <option value="01">01 - Jan</option>
+                                        <option value="02">02 - Feb</option>
+                                        <option value="03">03 - Mar</option>
+                                        <option value="04">04 - Apr</option>
+                                        <option value="05">05 - May</option>
+                                        <option value="06">06 - Jun</option>
+                                        <option value="07">07 - Jul</option>
+                                        <option value="08">08 - Aug</option>
+                                        <option value="09">09 - Sep</option>
+                                        <option value="10">10 - Oct</option>
+                                        <option value="11">11 - Nov</option>
+                                        <option value="12">12 - Dec</option>
+                                    </select>
+                                    <select id="itemExpiryYear" class="form-select ep-input py-1 px-2" style="width: 100px; height: 38px;">
+                                        <option value="">Year</option>
+                                    </select>
+                                </div>
+                                {% else %}
                                 <input type="text" id="itemExpiryInput" class="ep-input"
                                     placeholder="e.g. 01-27 or 2027-01"
                                     maxlength="10" autocomplete="off"
                                     inputmode="numeric">
+                                {% endif %}
                             </div>
                             <input type="hidden" id="itemExpiry"> <!-- YYYY-MM format for backend -->
                             <div id="expiryHint" class="expiry-hint-text small text-muted mt-1"></div>
@@ -977,9 +1000,14 @@
                     let exp = batch.expiry_date.substring(0,7); // YYYY-MM
                     const parts = exp.split('-');
                     if (parts.length === 2) {
-                        const year = parseInt(parts[0], 10);
-                        const month = parseInt(parts[1], 10);
-                        document.getElementById('itemExpiryInput').value = formatExpiryDisplay(month, year);
+                        const year = parts[0];
+                        const month = parts[1];
+                        if (typeof expiryFormat !== 'undefined' && expiryFormat === 'dropdown') {
+                            document.getElementById('itemExpiryMonth').value = month;
+                            document.getElementById('itemExpiryYear').value = year;
+                        } else {
+                            document.getElementById('itemExpiryInput').value = formatExpiryDisplay(parseInt(month, 10), parseInt(year, 10));
+                        }
                         document.getElementById('itemExpiry').value = exp;
                         syncExpiryHidden();
                     }
@@ -1513,61 +1541,123 @@
             if (!batchInput.contains(e.target) && !suggestionsDiv.contains(e.target)) suggestionsDiv.classList.remove('show');
         });
 
-        // Sync free-typed expiry input → hidden itemExpiry (YYYY-MM) whenever it changes
-        function syncExpiryHidden() {
-            const input = document.getElementById('itemExpiryInput');
-            const hint = document.getElementById('expiryHint');
-            const parsed = parseExpiryInput(input.value);
+        const expiryFormat = "{{ general_setup.expiry_date_format|default:'text' }}";
 
-            if (parsed) {
-                const { month, year } = parsed;
-                const val = `${year}-${String(month).padStart(2, '0')}`;
-                document.getElementById('itemExpiry').value = val;
-                input.classList.remove('is-invalid');
-
-                // Warn if expiry is in the past / expiring soon
-                const expDate = new Date(year, month - 1, 1);
-                const today = new Date(); today.setDate(1); today.setHours(0, 0, 0, 0);
-                if (expDate < today) {
-                    hint.style.color = '#dc3545';
-                    hint.textContent = '⚠ Expiry is in the past!';
-                    hint.style.display = 'block';
-                } else if ((expDate - today) / (1000 * 60 * 60 * 24 * 30) < 3) {
-                    hint.style.color = '#fd7e14';
-                    hint.textContent = '⚠ Expires within 3 months';
-                    hint.style.display = 'block';
-                } else {
-                    hint.style.display = 'none';
+        // Dynamically populate year select options if dropdown is active
+        if (expiryFormat === 'dropdown') {
+            const yearSelect = document.getElementById('itemExpiryYear');
+            if (yearSelect) {
+                const currentYear = new Date().getFullYear();
+                for (let i = 0; i <= 15; i++) {
+                    const yr = currentYear + i;
+                    const opt = document.createElement('option');
+                    opt.value = yr;
+                    opt.textContent = yr;
+                    yearSelect.appendChild(opt);
                 }
-                return true;
-            } else {
-                document.getElementById('itemExpiry').value = '';
-                if (input.value.trim()) {
-                    // something typed but not yet a valid/complete date
-                    hint.style.color = '#dc3545';
-                    hint.textContent = 'Format: MM-YY or YYYY-MM (e.g. 01-27 or 2027-01)';
-                    hint.style.display = 'block';
-                    input.classList.add('is-invalid');
-                } else {
-                    hint.style.display = 'none';
-                    input.classList.remove('is-invalid');
-                }
-                return false;
             }
         }
 
-        document.getElementById('itemExpiryInput').addEventListener('input', () => {
-            syncExpiryHidden();
-        });
+        // Sync free-typed or selected expiry input → hidden itemExpiry (YYYY-MM) whenever it changes
+        function syncExpiryHidden() {
+            const hint = document.getElementById('expiryHint');
+            
+            if (expiryFormat === 'dropdown') {
+                const mSelect = document.getElementById('itemExpiryMonth');
+                const ySelect = document.getElementById('itemExpiryYear');
+                const month = mSelect.value;
+                const year = ySelect.value;
+                
+                if (month && year) {
+                    const val = `${year}-${month}`;
+                    document.getElementById('itemExpiry').value = val;
+                    mSelect.classList.remove('is-invalid');
+                    ySelect.classList.remove('is-invalid');
+                    
+                    const expDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+                    const today = new Date(); today.setDate(1); today.setHours(0, 0, 0, 0);
+                    
+                    if (expDate < today) {
+                        hint.style.color = '#dc3545';
+                        hint.textContent = '⚠ Expiry is in the past!';
+                        hint.style.display = 'block';
+                    } else if ((expDate - today) / (1000 * 60 * 60 * 24 * 30) < 3) {
+                        hint.style.color = '#fd7e14';
+                        hint.textContent = '⚠ Expires within 3 months';
+                        hint.style.display = 'block';
+                    } else {
+                        hint.style.display = 'none';
+                    }
+                    return true;
+                } else {
+                    document.getElementById('itemExpiry').value = '';
+                    hint.style.display = 'none';
+                    return false;
+                }
+            } else {
+                const input = document.getElementById('itemExpiryInput');
+                if (!input) return false;
+                const parsed = parseExpiryInput(input.value);
 
-        document.getElementById('itemExpiryInput').addEventListener('blur', () => {
-            // normalize the visible text to MM-YY once a valid date is recognized
-            const parsed = parseExpiryInput(document.getElementById('itemExpiryInput').value);
-            if (parsed) {
-                document.getElementById('itemExpiryInput').value = formatExpiryDisplay(parsed.month, parsed.year);
+                if (parsed) {
+                    const { month, year } = parsed;
+                    const val = `${year}-${String(month).padStart(2, '0')}`;
+                    document.getElementById('itemExpiry').value = val;
+                    input.classList.remove('is-invalid');
+
+                    // Warn if expiry is in the past / expiring soon
+                    const expDate = new Date(year, month - 1, 1);
+                    const today = new Date(); today.setDate(1); today.setHours(0, 0, 0, 0);
+                    if (expDate < today) {
+                        hint.style.color = '#dc3545';
+                        hint.textContent = '⚠ Expiry is in the past!';
+                        hint.style.display = 'block';
+                    } else if ((expDate - today) / (1000 * 60 * 60 * 24 * 30) < 3) {
+                        hint.style.color = '#fd7e14';
+                        hint.textContent = '⚠ Expires within 3 months';
+                        hint.style.display = 'block';
+                    } else {
+                        hint.style.display = 'none';
+                    }
+                    return true;
+                } else {
+                    document.getElementById('itemExpiry').value = '';
+                    if (input.value.trim()) {
+                        hint.style.color = '#dc3545';
+                        hint.textContent = 'Format: MM-YY or YYYY-MM (e.g. 01-27 or 2027-01)';
+                        hint.style.display = 'block';
+                        input.classList.add('is-invalid');
+                    } else {
+                        hint.style.display = 'none';
+                        input.classList.remove('is-invalid');
+                    }
+                    return false;
+                }
             }
-            syncExpiryHidden();
-        });
+        }
+
+        if (expiryFormat === 'dropdown') {
+            document.getElementById('itemExpiryMonth').addEventListener('change', () => {
+                syncExpiryHidden();
+            });
+            document.getElementById('itemExpiryYear').addEventListener('change', () => {
+                syncExpiryHidden();
+            });
+        } else {
+            const expInput = document.getElementById('itemExpiryInput');
+            if (expInput) {
+                expInput.addEventListener('input', () => {
+                    syncExpiryHidden();
+                });
+                expInput.addEventListener('blur', () => {
+                    const parsed = parseExpiryInput(expInput.value);
+                    if (parsed) {
+                        expInput.value = formatExpiryDisplay(parsed.month, parsed.year);
+                    }
+                    syncExpiryHidden();
+                });
+            }
+        }
 
         // ══════════════════════════════════════════════════════════
         // GLOBAL ENTER-KEY NAVIGATION — Supplier → Invoice → Date
@@ -1639,7 +1729,10 @@
         });
 
         // ── Product form: Enter moves to next enabled field ──
-        const formInputs = [
+        const formInputs = (expiryFormat === 'dropdown') ? [
+            'productSearch', 'itemBatch', 'itemExpiryMonth', 'itemExpiryYear',
+            'itemQty', 'itemFreeQty', 'itemPrice', 'itemTax', 'itemMrp'
+        ] : [
             'productSearch', 'itemBatch', 'itemExpiryInput',
             'itemQty', 'itemFreeQty', 'itemPrice', 'itemTax', 'itemMrp'
         ];
@@ -1674,12 +1767,36 @@
                         return; // let existing keydown handler select it
                     }
                     e.preventDefault();
-                    const expEl = document.getElementById('itemExpiryInput');
-                    expEl.focus(); expEl.select();
+                    if (expiryFormat === 'dropdown') {
+                        document.getElementById('itemExpiryMonth').focus();
+                    } else {
+                        const expEl = document.getElementById('itemExpiryInput');
+                        expEl.focus(); expEl.select();
+                    }
                     return;
                 }
 
-                // Expiry: on Enter, validate & normalize, then move to Qty
+                // Expiry Month dropdown
+                if (id === 'itemExpiryMonth') {
+                    e.preventDefault();
+                    document.getElementById('itemExpiryYear').focus();
+                    return;
+                }
+
+                // Expiry Year dropdown
+                if (id === 'itemExpiryYear') {
+                    e.preventDefault();
+                    const valid = syncExpiryHidden();
+                    if (!valid) {
+                        showToast('Select expiry month and year', 'error');
+                        return;
+                    }
+                    const qtyEl = document.getElementById('itemQty');
+                    qtyEl.focus(); qtyEl.select();
+                    return;
+                }
+
+                // Expiry Text input: on Enter, validate & normalize, then move to Qty
                 if (id === 'itemExpiryInput') {
                     e.preventDefault();
                     const valid = syncExpiryHidden();
@@ -1875,8 +1992,18 @@
     function resetAddForm() {
         document.getElementById('itemBatch').value = '';
         document.getElementById('itemExpiry').value = '';
-        document.getElementById('itemExpiryInput').value = '';
-        document.getElementById('itemExpiryInput').classList.remove('is-invalid');
+        if (typeof expiryFormat !== 'undefined' && expiryFormat === 'dropdown') {
+            document.getElementById('itemExpiryMonth').value = '';
+            document.getElementById('itemExpiryYear').value = '';
+            document.getElementById('itemExpiryMonth').classList.remove('is-invalid');
+            document.getElementById('itemExpiryYear').classList.remove('is-invalid');
+        } else {
+            const expInput = document.getElementById('itemExpiryInput');
+            if (expInput) {
+                expInput.value = '';
+                expInput.classList.remove('is-invalid');
+            }
+        }
         document.getElementById('expiryHint').style.display = 'none';
         document.getElementById('itemQty').value = '1';
         document.getElementById('itemFreeQty').value = '0';

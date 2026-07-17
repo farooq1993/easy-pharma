@@ -7,4 +7,5 @@ from .gst import GSTScheme, GSTConfiguration, GSTFiling, GSTReturn, GSTCompositi
 from .accounting import SupplierLedger, SupplierPayment, ExpiryReturn, ExpiryReturnItem
 from .print_setup import PrintSetup
 from .prescription_scan_log import PrescriptionScanLog
+from .general_setup import GeneralSetup
 
