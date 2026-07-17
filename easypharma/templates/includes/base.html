@@ -185,7 +185,9 @@
                     set: function(val) {
                         let finalVal = val;
                         const type = this.getAttribute('type');
-                        const isExcluded = type && ['password', 'email', 'number', 'checkbox', 'radio', 'file', 'date'].includes(type.toLowerCase());
+                        const isExcluded = (type && ['password', 'email', 'number', 'checkbox', 'radio', 'file', 'date'].includes(type.toLowerCase()))
+                                           || this.classList.contains('no-uppercase')
+                                           || this.hasAttribute('data-no-uppercase');
                         if (!isExcluded && typeof val === 'string') {
                             finalVal = val.toUpperCase();
                         }
@@ -201,7 +203,8 @@
                     },
                     set: function(val) {
                         let finalVal = val;
-                        if (typeof val === 'string') {
+                        const isExcluded = this.classList.contains('no-uppercase') || this.hasAttribute('data-no-uppercase');
+                        if (!isExcluded && typeof val === 'string') {
                             finalVal = val.toUpperCase();
                         }
                         originalTextareaDescriptor.set.call(this, finalVal);
@@ -214,7 +217,10 @@
         document.addEventListener('input', function(e) {
             if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
                 const type = e.target.getAttribute('type');
-                if (type === 'password' || type === 'email' || type === 'number' || type === 'checkbox' || type === 'radio' || type === 'file' || type === 'date') return;
+                const isExcluded = type === 'password' || type === 'email' || type === 'number' || type === 'checkbox' || type === 'radio' || type === 'file' || type === 'date'
+                                   || e.target.classList.contains('no-uppercase')
+                                   || e.target.hasAttribute('data-no-uppercase');
+                if (isExcluded) return;
                 
                 const start = e.target.selectionStart;
                 const end = e.target.selectionEnd;
