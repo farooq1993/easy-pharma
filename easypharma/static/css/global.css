@@ -51,3 +51,7 @@ body {
 input[type="text"], input[type="search"], input:not([type]), textarea {
     text-transform: uppercase;
 }
+
+.no-uppercase, input[type="text"].no-uppercase, input.no-uppercase, textarea.no-uppercase {
+    text-transform: none !important;
+}
