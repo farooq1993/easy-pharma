@@ -61,7 +61,8 @@ class PurchaseEntryView(LoginRequiredMixin,View):
                         'tax_amount': float((item.quantity * item.purchase_price * item.tax_percentage) / 100),
                         'mrp': float(item.mrp),
                         'sale_price': float(item.sale_price),
-                        'total': float(item.total_amount)
+                        'total': float(item.total_amount),
+                        'schedule_name': item.product.product_schedule.schedule_name if item.product.product_schedule else ''
                     })
                 edit_data = {
                     'id': invoice.id,
@@ -528,7 +529,7 @@ class PurchaseExportCSVView(LoginRequiredMixin,View):
                         item.product.product_name,
                         item.product.product_packing or '—',
                         item.batch_number,
-                        item.expiry_date.strftime('%m/%Y') if item.expiry_date else '—',
+                        'N/A' if item.expiry_date and item.expiry_date.year == 2099 else (item.expiry_date.strftime('%m/%Y') if item.expiry_date else '—'),
                         item.quantity,
                         item.free_quantity,
                         float(item.purchase_price),
@@ -575,7 +576,7 @@ class PurchaseExportPDFView(LoginRequiredMixin,View):
                     'product_name': item.product.product_name,
                     'packing': item.product.product_packing or '—',
                     'batch_number': item.batch_number,
-                    'expiry_date': item.expiry_date.strftime('%m/%Y') if item.expiry_date else '—',
+                    'expiry_date': 'N/A' if item.expiry_date and item.expiry_date.year == 2099 else (item.expiry_date.strftime('%m/%Y') if item.expiry_date else '—'),
                     'quantity': item.quantity,
                     'free_quantity': item.free_quantity,
                     'purchase_price': float(item.purchase_price),
@@ -926,7 +927,8 @@ class OpeningStockEntryView(LoginRequiredMixin, View):
                     'purchase_price': float(item.purchase_price),
                     'mrp': float(item.mrp),
                     'tax_percentage': float(item.tax_percentage),
-                    'total': float(item.total_amount)
+                    'total': float(item.total_amount),
+                    'schedule_name': item.product.product_schedule.schedule_name if item.product.product_schedule else ''
                 } for item in stock.items.all()]
 
                 edit_data = {

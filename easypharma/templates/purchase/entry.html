@@ -136,6 +136,8 @@
                         <div><label class="ep-label" style="color:var(--green)">Free</label><input type="number" id="itemFreeQty" class="ep-input" value="0" min="0"></div>
                         <!-- Cost per pack -->
                         <div><label class="ep-label">Pur rate (₹)</label><input type="number" id="itemPrice" class="ep-input" step="0.01"></div>
+                        <!-- Amount (readonly, auto-calculated) -->
+                        <div><label class="ep-label">Amount (₹)</label><input type="text" id="itemAmount" class="ep-input" readonly style="background:#f8f9fa;" value="0.00"></div>
                         <!-- GST (readonly but shows) -->
                         <div><label class="ep-label">GST %</label><input type="text" id="itemTax" class="ep-input" readonly></div>
                         <!-- Item Total (readonly, auto-calculated) -->
@@ -190,8 +192,8 @@
                 <div class="ep-card-body p-0">
                     <div class="items-table-wrap">
                         <table class="items-table" id="purchaseTable">
-                            <thead><tr><th>Product</th><th>Batch</th><th>Expiry</th><th>Qty</th><th>Free</th><th>Units</th><th>Pur rate</th><th>MRP</th><th>GST</th><th>Total</th><th></th></tr></thead>
-                            <tbody id="itemsTbody"><tr id="emptyRow"><td colspan="10"><div class="empty-state text-center p-4">No items added.</div></td></tr></tbody>
+                            <thead><tr><th>Product</th><th>Batch</th><th>Expiry</th><th>Qty</th><th>Free</th><th>GST %</th><th>Pur rate</th><th>Amount</th><th>MRP</th><th>GST</th><th>Total</th><th></th></tr></thead>
+                            <tbody id="itemsTbody"><tr id="emptyRow"><td colspan="12"><div class="empty-state text-center p-4">No items added.</div></td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -887,9 +889,15 @@
         const qty    = parseFloat(document.getElementById('itemQty').value)   || 0;
         const price  = parseFloat(document.getElementById('itemPrice').value) || 0;
         const taxPct = parseFloat(document.getElementById('itemTax').value)   || 0;
+        const subTotal  = qty * price;
+
+        const amountEl = document.getElementById('itemAmount');
+        if (amountEl) {
+            amountEl.value = subTotal.toFixed(2);
+        }
+
         const el     = document.getElementById('itemTotalDisplay');
         if (!el) return;
-        const subTotal  = qty * price;
         const taxAmt    = (subTotal * taxPct) / 100;
         const total     = subTotal + taxAmt;
         el.textContent  = '\u20b9' + total.toFixed(2);
@@ -1941,7 +1949,7 @@
         }
         
         const batch = document.getElementById('itemBatch').value.trim();
-        const expiry = document.getElementById('itemExpiry').value;
+        let expiry = document.getElementById('itemExpiry').value;
         const qty = parseFloat(document.getElementById('itemQty').value) || 0;
         const freeQty = parseFloat(document.getElementById('itemFreeQty').value) || 0;
         const price = parseFloat(document.getElementById('itemPrice').value);
@@ -1949,7 +1957,16 @@
         let mrp = parseFloat(document.getElementById('itemMrp').value);
 
         if (!batch) { showToast('Batch number required', 'error'); return; }
-        if (!expiry) { showToast('Expiry required', 'error'); return; }
+
+        const isAyurvedic = selectedProduct && selectedProduct.schedule_name && selectedProduct.schedule_name.toUpperCase().trim() === 'AYURVEDIC';
+        if (!expiry) {
+            if (isAyurvedic) {
+                expiry = '2099-12';
+            } else {
+                showToast('Expiry required', 'error');
+                return;
+            }
+        }
 
         // ✅ Free only items allowed
         if (qty <= 0 && freeQty <= 0) {
@@ -1971,6 +1988,7 @@
             product_id: selectedProduct.id, 
             name: selectedProduct.name, 
             packing: selectedProduct.packing || '',
+            schedule_name: selectedProduct.schedule_name || '',
             batch_number: batch, 
             expiry_date: expiry + "-01", 
             quantity: qty, 
@@ -2008,6 +2026,7 @@
         document.getElementById('itemQty').value = '1';
         document.getElementById('itemFreeQty').value = '0';
         document.getElementById('itemPrice').value = '';
+        document.getElementById('itemAmount').value = '0.00';
         document.getElementById('itemMrp').value = '';
         document.getElementById('productInfo').style.display = 'none';
         document.getElementById('unitPreview').innerHTML = '';
@@ -2029,7 +2048,7 @@
         const tbody = document.getElementById('itemsTbody');
         document.getElementById('itemCount').innerText = `${items.length} item${items.length !== 1 ? 's' : ''}`;
         if (items.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state text-center p-4">No items added.</div></td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="12"><div class="empty-state text-center p-4">No items added.</div></td></tr>`;
             calculateSummary();
             return;
         }
@@ -2051,8 +2070,9 @@
                 <td><span class="badge-batch">${item.batch_number || '—'}</span></td>
                 <td>${expiryShort}</td>
                 <td>${item.quantity}</td><td class="text-success">+${item.free_quantity || 0}</td>
-                <td class="fw-mono">${totalUnits}</td>
+                <td>${item.tax_percentage || 0}%</td>
                 <td>₹${(item.purchase_price || 0).toFixed(2)}</td>
+                <td>₹${(item.quantity * item.purchase_price).toFixed(2)}</td>
                 <td>₹${(item.mrp || 0).toFixed(2)}</td>
                 <td>₹${(item.tax_amount || 0).toFixed(2)}</td>
                 <td>₹${(item.total || 0).toFixed(2)}</td>
@@ -2838,8 +2858,13 @@
         // Parse expiry
         const exp = String(item.expiry_date || '');
         if (exp.length >= 7) {
-            document.getElementById('editItemExpiryMonth').value = exp.substring(5, 7);
-            document.getElementById('editItemExpiryYear').value = exp.substring(0, 4);
+            if (exp.substring(0, 7) === '2099-12') {
+                document.getElementById('editItemExpiryMonth').value = '';
+                document.getElementById('editItemExpiryYear').value = '';
+            } else {
+                document.getElementById('editItemExpiryMonth').value = exp.substring(5, 7);
+                document.getElementById('editItemExpiryYear').value = exp.substring(0, 4);
+            }
         } else {
             document.getElementById('editItemExpiryMonth').value = '';
             document.getElementById('editItemExpiryYear').value = '';
@@ -2868,9 +2893,23 @@
         const taxPerc = parseFloat(document.getElementById('editItemTax').value) || 0;
 
         if (!batch) { showToast('Batch number required', 'error'); return; }
-        if (!em || !ey || ey.length < 4) { showToast('Valid expiry required', 'error'); return; }
+        
+        const isAyurvedic = item && item.schedule_name && item.schedule_name.toUpperCase().trim() === 'AYURVEDIC';
+        if ((!em || !ey || ey.length < 4) && !isAyurvedic) { showToast('Valid expiry required', 'error'); return; }
         if (isNaN(qty) || qty <= 0) { showToast('Valid quantity required', 'error'); return; }
         if (isNaN(price) || price <= 0) { showToast('Valid cost price required', 'error'); return; }
+
+        let expiry_date = '';
+        if (!em || !ey) {
+            if (isAyurvedic) {
+                expiry_date = '2099-12-01';
+            } else {
+                showToast('Valid expiry required', 'error');
+                return;
+            }
+        } else {
+            expiry_date = `${ey}-${em}-01`;
+        }
 
         const subTotal = qty * price;
         const taxAmount = (subTotal * taxPerc) / 100;
@@ -2880,7 +2919,7 @@
         items[idx] = {
             ...item,
             batch_number: batch,
-            expiry_date: `${ey}-${em}-01`,
+            expiry_date: expiry_date,
             quantity: qty,
             free_quantity: freeQty,
             total_units: totalUnits,
@@ -3080,7 +3119,14 @@ async function saveEditProduct() {
             selectedProduct.conversion_factor = conv;
             selectedProduct.hsn_code          = hsn;
             if (newTaxRate !== null) selectedProduct.tax_rate = newTaxRate;
-            if (schedId)  selectedProduct.schedule_id = schedId;
+            if (schedId) {
+                selectedProduct.schedule_id = schedId;
+                const schedSel = document.getElementById('editProdSchedule');
+                selectedProduct.schedule_name = schedSel.options[schedSel.selectedIndex]?.text || '';
+            } else {
+                selectedProduct.schedule_id = '';
+                selectedProduct.schedule_name = '';
+            }
             if (compId)   selectedProduct.company_id  = compId;
 
             // ── Sync the GST readonly field in the Add Product form ──
