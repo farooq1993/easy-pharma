@@ -132,7 +132,7 @@ body {
 /* ADD ROW GRID - IMPROVED ALIGNMENT & RESPONSIVE */
 .add-row-grid {
     display: grid;
-    grid-template-columns: minmax(130px, 2.2fr) minmax(85px, 1fr) minmax(120px, 1.2fr) minmax(65px, 0.7fr) minmax(50px, 0.6fr) minmax(80px, 0.9fr) minmax(55px, 0.6fr) minmax(85px, 0.9fr) auto;
+    grid-template-columns: minmax(130px, 2.2fr) minmax(85px, 1fr) minmax(120px, 1.2fr) minmax(65px, 0.7fr) minmax(50px, 0.6fr) minmax(80px, 0.9fr) minmax(75px, 0.8fr) minmax(55px, 0.6fr) minmax(85px, 0.9fr) auto;
     gap: 8px;
     align-items: end;
 }
@@ -155,13 +155,14 @@ body {
     .add-row-grid > div:nth-child(3) {
         grid-column: span 2;
     }
-    /* Row 2 items: Qty, Free, Cost, GST %, MRP, Add button each take 1 col */
+    /* Row 2/3 items: Qty, Free, Cost, Amount, GST %, MRP, Total each take 1 col */
     .add-row-grid > div:nth-child(4),
     .add-row-grid > div:nth-child(5),
     .add-row-grid > div:nth-child(6),
     .add-row-grid > div:nth-child(7),
     .add-row-grid > div:nth-child(8),
-    .add-row-grid > div:nth-child(9) {
+    .add-row-grid > div:nth-child(9),
+    .add-row-grid > div:nth-child(10) {
         grid-column: span 1;
     }
 }

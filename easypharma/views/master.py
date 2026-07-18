@@ -281,8 +281,9 @@ class ProductMasterSearchAPI(LoginRequiredMixin,View):
         products = Products.objects.filter(
             tenant=request.tenant,
             product_name__istartswith=query
-        ).select_related('product_tax').only(
-            'id', 'product_name', 'product_packing', 'conversion_factor', 'product_tax__tax_rate'
+        ).select_related('product_tax', 'product_schedule').only(
+            'id', 'product_name', 'product_packing', 'conversion_factor', 'product_tax__tax_rate',
+            'product_schedule__schedule_name', 'compny_name', 'product_hsn_code'
         )[:limit]
         
         data = []
@@ -292,7 +293,11 @@ class ProductMasterSearchAPI(LoginRequiredMixin,View):
                 'name': p.product_name,
                 'packing': p.product_packing or '',
                 'conversion_factor': p.conversion_factor,
-                'tax_rate': p.product_tax.tax_rate if p.product_tax else 0
+                'tax_rate': p.product_tax.tax_rate if p.product_tax else 0,
+                'schedule_id': p.product_schedule_id or '',
+                'schedule_name': p.product_schedule.schedule_name if p.product_schedule else '',
+                'company_id': p.compny_name_id or '',
+                'hsn_code': p.product_hsn_code or ''
             })
         return JsonResponse(data, safe=False)
 
