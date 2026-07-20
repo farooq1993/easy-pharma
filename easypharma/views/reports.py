@@ -120,9 +120,10 @@ class StockReportView(LoginRequiredMixin,View):
     def get(self, request):
         is_pdf = request.GET.get('pdf') == '1'
         schedule_filter = request.GET.get('schedule_filter', '')
+        filter_param = request.GET.get('filter', '')
         
         base_cache_key = _stock_report_cache_key(request.tenant.id)
-        cache_key = f"{base_cache_key}:{schedule_filter}"
+        cache_key = f"{base_cache_key}:{schedule_filter}:{filter_param}"
 
         # ── Try cache first (skip for PDF to always get fresh data) ──
         if not is_pdf:
@@ -136,7 +137,10 @@ class StockReportView(LoginRequiredMixin,View):
         # Aggregate stock by product
         stocks = StockBatch.objects.filter(tenant=request.tenant, current_quantity__gt=0).select_related('product', 'product__product_schedule')
         
-        if schedule_filter == 'H1':
+        if filter_param == 'near_expiry':
+            expiry_limit = date.today() + timedelta(days=90)
+            stocks = stocks.filter(expiry_date__lte=expiry_limit, expiry_date__gte=date.today()).order_by('expiry_date')
+        elif schedule_filter == 'H1':
             stocks = stocks.filter(product__product_schedule__schedule_name__iexact='Schedule H1')
             
         # Also group by product for a summary
@@ -175,6 +179,7 @@ class StockReportView(LoginRequiredMixin,View):
             'summary': summary_list,
             'total_value': total_value,
             'schedule_filter': schedule_filter,
+            'filter_param': filter_param,
         }
 
         if not is_pdf:

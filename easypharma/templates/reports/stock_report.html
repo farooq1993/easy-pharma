@@ -9,7 +9,11 @@
             <p class="text-muted small">Real-time tracking of medicine batches and quantities.</p>
         </div>
         <div class="col-auto d-flex align-items-center gap-2">
-            <form method="GET" class="d-flex align-items-center">
+            <form method="GET" class="d-flex align-items-center gap-2">
+                <select name="filter" class="form-select" onchange="this.form.submit()">
+                    <option value="">-- All Batches --</option>
+                    <option value="near_expiry" {% if filter_param == 'near_expiry' %}selected{% endif %}>⚠️ Expiring Soon (Next 90 Days)</option>
+                </select>
                 <select name="schedule_filter" class="form-select" onchange="this.form.submit()">
                     <option value="">-- All Schedules --</option>
                     <option value="H1" {% if schedule_filter == 'H1' %}selected{% endif %}>Schedule H1 Only</option>

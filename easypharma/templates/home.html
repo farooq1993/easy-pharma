@@ -18,6 +18,16 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
 }
+@keyframes tickerVerticalSmooth {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(-50%); }
+}
+.ticker-animated-track {
+    animation: tickerVerticalSmooth 30s linear infinite;
+}
+.ticker-animated-track:hover {
+    animation-play-state: paused;
+}
 </style>
 
 <!-- Analytics Dashboard Section -->
@@ -184,24 +194,26 @@
                     <span class="badge bg-danger rounded-pill">{{ near_expiry_batches|length }} Items</span>
                 </div>
                 <div class="card-body p-0 d-flex flex-column justify-content-between" style="min-height: 280px;">
-                    <div id="expiryScrollContainer" style="max-height: 270px; overflow-y: auto;" class="px-2">
-                        {% for batch in near_expiry_batches %}
-                        <div class="expiry-item py-2 px-3 border-bottom d-flex justify-content-between align-items-center" style="font-size: 0.8rem;">
-                            <div>
-                                <div class="fw-bold text-dark">{{ batch.product.product_name }}</div>
-                                <div class="text-muted" style="font-size: 0.7rem;">Batch: {{ batch.batch_number }}</div>
+                    <div id="expiryScrollContainer" style="max-height: 270px; overflow: hidden;" class="px-2 position-relative">
+                        <div id="expiryTickerTrack">
+                            {% for batch in near_expiry_batches %}
+                            <div class="expiry-item py-2 px-3 border-bottom d-flex justify-content-between align-items-center" style="font-size: 0.8rem;">
+                                <div>
+                                    <div class="fw-bold text-dark">{{ batch.product.product_name }}</div>
+                                    <div class="text-muted" style="font-size: 0.7rem;">Batch: {{ batch.batch_number }}</div>
+                                </div>
+                                <div class="text-end">
+                                    <div class="text-danger fw-bold">{{ batch.expiry_date|date:"M Y" }}</div>
+                                    <div class="text-muted" style="font-size: 0.7rem;">{{ batch.current_quantity }} Units</div>
+                                </div>
                             </div>
-                            <div class="text-end">
-                                <div class="text-danger fw-bold">{{ batch.expiry_date|date:"M Y" }}</div>
-                                <div class="text-muted" style="font-size: 0.7rem;">{{ batch.current_quantity }} Units</div>
-                            </div>
+                            {% empty %}
+                            <div class="text-center py-5 text-muted small">✓ No items expiring soon.</div>
+                            {% endfor %}
                         </div>
-                        {% empty %}
-                        <div class="text-center py-5 text-muted small">✓ No items expiring soon.</div>
-                        {% endfor %}
                     </div>
                     <div class="p-3">
-                        <a href="{% url 'smart_purchase_suggest_page' %}" class="btn btn-light-success btn-sm w-100 py-2 border text-success fw-bold" style="background-color: #eafaf1; border-color: #c3f1d8 !important; border-radius: 8px;">
+                        <a href="{% url 'stock_report' %}?filter=near_expiry" class="btn btn-light-success btn-sm w-100 py-2 border text-success fw-bold" style="background-color: #eafaf1; border-color: #c3f1d8 !important; border-radius: 8px;">
                             View All Alerts
                         </a>
                     </div>
@@ -580,39 +592,22 @@
         }, 5000);
     })();
 
-    // ── Auto-Scroll Loop for Expiry Alerts (Seamless Infinite Ticker) ──
-    (function initExpiryAutoScroll() {
+    // ── Auto-Scroll Loop for Expiry Alerts (Seamless Infinite CSS Marquee Ticker) ──
+    (function initExpiryAutoTicker() {
         document.addEventListener('DOMContentLoaded', function() {
-            const container = document.getElementById('expiryScrollContainer');
-            if (!container) return;
+            const track = document.getElementById('expiryTickerTrack');
+            if (!track) return;
 
-            const items = container.querySelectorAll('.expiry-item');
+            const items = track.querySelectorAll('.expiry-item');
             if (items.length < 4) return;
 
-            const originalHeight = container.scrollHeight;
             items.forEach(function(item) {
-                container.appendChild(item.cloneNode(true));
+                track.appendChild(item.cloneNode(true));
             });
 
-            let isPaused = false;
-            let speed = 0.5;
-
-            container.addEventListener('mouseenter', function() { isPaused = true; });
-            container.addEventListener('mouseleave', function() { isPaused = false; });
-            container.addEventListener('touchstart', function() { isPaused = true; }, {passive: true});
-            container.addEventListener('touchend', function() { isPaused = false; }, {passive: true});
-
-            function step() {
-                if (!isPaused) {
-                    container.scrollTop += speed;
-                    if (container.scrollTop >= originalHeight) {
-                        container.scrollTop -= originalHeight;
-                    }
-                }
-                requestAnimationFrame(step);
-            }
-
-            requestAnimationFrame(step);
+            const duration = Math.max(16, items.length * 1.5);
+            track.style.animationDuration = duration + 's';
+            track.classList.add('ticker-animated-track');
         });
     })();
 </script>
