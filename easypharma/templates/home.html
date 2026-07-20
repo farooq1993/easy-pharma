@@ -177,7 +177,7 @@
                     <span class="badge bg-danger rounded-pill">{{ near_expiry_batches|length }} Items</span>
                 </div>
                 <div class="card-body p-0 d-flex flex-column justify-content-between" style="min-height: 280px;">
-                    <div style="max-height: 270px; overflow-y: auto;" class="px-2">
+                    <div id="expiryScrollContainer" style="max-height: 270px; overflow-y: auto; scroll-behavior: smooth;" class="px-2">
                         {% for batch in near_expiry_batches %}
                         <div class="expiry-item py-2 px-3 border-bottom d-flex justify-content-between align-items-center" style="font-size: 0.8rem;">
                             <div>
@@ -571,6 +571,35 @@
             fetchStats();
             setTimeout(loop, POLL_INTERVAL);
         }, 5000);
+    })();
+
+    // ── Auto-Scroll Loop for Expiry Alerts ─────────────────────
+    (function initExpiryAutoScroll() {
+        document.addEventListener('DOMContentLoaded', function() {
+            const container = document.getElementById('expiryScrollContainer');
+            if (!container) return;
+
+            let isPaused = false;
+            let scrollSpeed = 1;
+            let scrollInterval = 40;
+
+            container.addEventListener('mouseenter', function() { isPaused = true; });
+            container.addEventListener('mouseleave', function() { isPaused = false; });
+            container.addEventListener('touchstart', function() { isPaused = true; }, {passive: true});
+            container.addEventListener('touchend', function() { isPaused = false; }, {passive: true});
+
+            setInterval(function() {
+                if (isPaused) return;
+
+                if (container.scrollHeight > container.clientHeight) {
+                    if (container.scrollTop + container.clientHeight >= container.scrollHeight - 2) {
+                        container.scrollTop = 0;
+                    } else {
+                        container.scrollTop += scrollSpeed;
+                    }
+                }
+            }, scrollInterval);
+        });
     })();
 </script>
 {% endblock %}
