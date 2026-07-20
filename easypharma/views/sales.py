@@ -15,7 +15,7 @@ from easypharma.models.sales import (SaleInvoice, SaleItem,
                                     Customer, SalesReturn, SalesReturnItem,PrescriptionReminder)
 import json
 import re
-from datetime import datetime
+from datetime import datetime, date
 from urllib.parse import quote_plus
 
 from easypharma.models.Items import Products, ProductTax
