@@ -97,6 +97,18 @@ class PurchaseEntryView(LoginRequiredMixin,View):
     def post(self, request, invoice_id=None):
         try:
             data = json.loads(request.body)
+            purchase_date_str = data.get('purchase_date')
+            if purchase_date_str:
+                from easypharma.utility.fy_helper import is_date_in_locked_fy
+                try:
+                    p_date = datetime.strptime(str(purchase_date_str).split('T')[0], '%Y-%m-%d').date()
+                    if is_date_in_locked_fy(request.tenant, p_date):
+                        return JsonResponse({
+                            'error': f'Financial Year for purchase date {p_date.strftime("%d-%b-%Y")} is LOCKED (Frozen). No entries allowed.'
+                        }, status=400)
+                except ValueError:
+                    pass
+
             with transaction.atomic():
                 # If editing, revert old stock first
                 if invoice_id:

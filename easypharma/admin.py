@@ -5,8 +5,11 @@ from easypharma.models.purchase_invoice import (PurchaseInvoice, Supplier,
                                                 PurchaseItem,OpeningStock,OpeningStockItem)
 from easypharma.models.sales import SaleInvoice,PrescriptionReminder
 
+from easypharma.models.financial_year import FinancialYear
+
 # Register your models here.
 admin.site.register(User)
+admin.site.register(FinancialYear)
 admin.site.register(DrugCompany)
 admin.site.register(ProductType)
 admin.site.register(ProductSchedule)
