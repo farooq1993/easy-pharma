@@ -679,11 +679,8 @@
         formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
 
         if (masterType === 'product-tax') {
-            if (!extraValue) {
-                showToast('Tax rate is required', 'error');
-                return;
-            }
-            formData.append('tax_rate', extraValue);
+            const taxRateToSend = extraValue || value;
+            formData.append('tax_rate', taxRateToSend);
         }
         if (masterType === 'drug-company') {
             formData.append('sht_name', extraValue);
