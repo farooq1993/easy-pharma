@@ -86,6 +86,16 @@
         </li>
         {% endif %}
 
+        <!-- Financial Year & Freeze Books -->
+        {% if user.user_type == 'admin' or user.user_type == 'tenant_owner' %}
+        <li>
+            <a href="{% url 'financial_year_management' %}" class="nav-link text-warning fw-bold">
+                <i class="bi bi-calendar-check-fill"></i>
+                <span class="sidebar-text">Financial Year & Freeze</span>
+            </a>
+        </li>
+        {% endif %}
+
         <!-- User Management (Owner + Admin + delegated) -->
         {% if user.user_type == 'admin' or user.user_type == 'tenant_owner' or user_perms.can_manage_users %}
         <li>

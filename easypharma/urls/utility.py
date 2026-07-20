@@ -12,8 +12,11 @@ from easypharma.views.utility import (
     ServiceWorkerView,
 )
 
+from easypharma.views.financial_year import FinancialYearView
+
 urlpatterns = [
     path('settings/', UtilityHomeView.as_view(), name='utility_home'),
+    path('financial-years/', FinancialYearView.as_view(), name='financial_year_management'),
     path('printing/', PrintingSetupView.as_view(), name='printing_setup'),
     path('backup/', DatabaseBackupView.as_view(), name='database_backup'),
     path('backup/download/<str:filename>/', DownloadBackupView.as_view(), name='download_backup'),

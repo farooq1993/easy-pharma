@@ -73,13 +73,9 @@ class POSView(LoginRequiredMixin,View):
         # All doctor tenant wise
         doctors = DoctorModel.objects.filter(tenant=request.tenant).order_by('name')
         
-        # ── next invoice number: cache with short TTL ──
-        next_inv_key = f'pos_next_inv:{tenant_id}'
-        next_invoice_number = cache.get(next_inv_key)
-        if next_invoice_number is None:
-            count = SaleInvoice.objects.filter(tenant=request.tenant).count()
-            next_invoice_number = f"INV-{tenant_id}-{count + 1}"
-            cache.set(next_inv_key, next_invoice_number, 30)  # 30s — refreshes often
+        # ── next invoice number: FY-wise reset ──
+        from easypharma.utility.fy_helper import generate_fy_invoice_number, is_date_in_locked_fy
+        next_invoice_number = generate_fy_invoice_number(request.tenant)
 
         # ── NOTE: products & customers removed from context ──
         # Template never looped over them; search is done via /api/products/search/
@@ -148,19 +144,34 @@ class POSView(LoginRequiredMixin,View):
             
             data = json.loads(request.body)
             tenant_id = request.tenant.id
+            from easypharma.utility.fy_helper import generate_fy_invoice_number, is_date_in_locked_fy
             from easypharma.models.stock import StockBatch
+
+            bill_date_str = data.get('date') or data.get('created_at')
+            bill_date = date.today()
+            if bill_date_str:
+                try:
+                    bill_date = datetime.strptime(str(bill_date_str).split('T')[0], '%Y-%m-%d').date()
+                except ValueError:
+                    bill_date = date.today()
+
+            if is_date_in_locked_fy(request.tenant, bill_date):
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Financial Year for date {bill_date.strftime("%d-%b-%Y")} is LOCKED (Frozen). No transactions allowed.'
+                })
             
             with transaction.atomic():
-                # Generate a unique invoice number
-                count = SaleInvoice.objects.filter(tenant=request.tenant).count()
-                invoice_no = f"INV-{tenant_id}-{count + 1}"
-                
                 invoice_id = data.get('invoice_id')
                 if invoice_id:
                     invoice = SaleInvoice.objects.get(id=invoice_id, tenant=request.tenant)
-                    # revert stock from previous items before editing
+                    # Check if original invoice date is in a locked FY
+                    if is_date_in_locked_fy(request.tenant, invoice.created_at.date()):
+                        return JsonResponse({
+                            'success': False,
+                            'error': f'Financial Year for invoice date {invoice.created_at.strftime("%d-%b-%Y")} is LOCKED (Frozen). Edits not allowed.'
+                        })
                     for old_item in invoice.items.all():
-                        from easypharma.models.stock import StockBatch
                         batch = StockBatch.objects.filter(
                             tenant=request.tenant,
                             product=old_item.product,
@@ -172,7 +183,9 @@ class POSView(LoginRequiredMixin,View):
                     invoice.items.all().delete()
                     from easypharma.models.accounting import CustomerLedger
                     CustomerLedger.objects.filter(tenant=request.tenant, reference_number=invoice.invoice_number).delete()
+                    invoice_no = invoice.invoice_number
                 else:
+                    invoice_no = data.get('invoice_number') or generate_fy_invoice_number(request.tenant, invoice_date=bill_date)
                     invoice = SaleInvoice(
                         tenant=request.tenant,
                         user=request.user,
@@ -276,9 +289,8 @@ class POSView(LoginRequiredMixin,View):
                         raise Exception(f"Insufficient stock for {product.product_name}")
                     batch.save()
                 
-                # Calculate next invoice number
-                count = SaleInvoice.objects.filter(tenant=request.tenant).count()
-                next_inv = f"INV-{tenant_id}-{count + 1}"
+                # Calculate next invoice number with FY format
+                next_inv = generate_fy_invoice_number(request.tenant)
 
                 # ── Invalidate caches after successful sale ──
                 try:
