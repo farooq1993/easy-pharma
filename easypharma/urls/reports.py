@@ -14,6 +14,7 @@ from easypharma.views.reports import (
     PurchaseAnalysisView,
     SaleBillWiseProfit,
     SalesReturnReportView,
+    DoctorSaleReportView,
 )
 
 urlpatterns = [
@@ -21,6 +22,7 @@ urlpatterns = [
     
     # New Reports
     path('daily-sales/', DailySaleReportView.as_view(), name='daily_sale_report'),
+    path('doctor-sales/', DoctorSaleReportView.as_view(), name='doctor_sale_report'),
     path('half-yearly-sales/', HalfYearlySaleReportView.as_view(), name='half_yearly_report'),
     path('profit/', ProfitReportView.as_view(), name='profit_report'),
     path('bill-wise-profit/', SaleBillWiseProfit.as_view(), name='bill_wise_profit_report'),

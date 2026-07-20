@@ -177,8 +177,8 @@
                     <span class="badge bg-danger rounded-pill">{{ near_expiry_batches|length }} Items</span>
                 </div>
                 <div class="card-body p-0 d-flex flex-column justify-content-between" style="min-height: 280px;">
-                    <div style="max-height: 240px; overflow-y: auto;" class="px-2">
-                        {% for batch in near_expiry_batches|slice:":5" %}
+                    <div style="max-height: 270px; overflow-y: auto;" class="px-2">
+                        {% for batch in near_expiry_batches %}
                         <div class="expiry-item py-2 px-3 border-bottom d-flex justify-content-between align-items-center" style="font-size: 0.8rem;">
                             <div>
                                 <div class="fw-bold text-dark">{{ batch.product.product_name }}</div>
@@ -197,89 +197,6 @@
                         <a href="{% url 'smart_purchase_suggest_page' %}" class="btn btn-light-success btn-sm w-100 py-2 border text-success fw-bold" style="background-color: #eafaf1; border-color: #c3f1d8 !important; border-radius: 8px;">
                             View All Alerts
                         </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Summary Cards Row 3 (Bottom Row) -->
-    <div class="row g-4 mb-4">
-        <!-- Card 1: MTD Sales -->
-        <div class="col-xl col-md-4 col-sm-6">
-            <div class="card p-3 border-0 shadow-sm h-100" style="border-radius: 12px;">
-                <div class="d-flex align-items-center gap-3">
-                    <div class="rounded-circle p-2.5 bg-success bg-opacity-10 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px; flex-shrink: 0; background-color: rgba(25, 135, 84, 0.1);">
-                        <i class="bi bi-cart-fill text-success fs-5"></i>
-                    </div>
-                    <div>
-                        <div class="text-muted small fw-semibold" style="font-size: 0.75rem;">Total Sales (MTD)</div>
-                        <div class="fw-bold text-dark fs-5 mt-0.5">₹{{ mtd_revenue|floatformat:2 }}</div>
-                        <div class="text-success x-small mt-1" style="font-size: 0.7rem;"><i class="bi bi-arrow-up-short"></i> +18.5% vs last month</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Card 2: MTD Purchases -->
-        <div class="col-xl col-md-4 col-sm-6">
-            <div class="card p-3 border-0 shadow-sm h-100" style="border-radius: 12px;">
-                <div class="d-flex align-items-center gap-3">
-                    <div class="rounded-circle p-2.5 bg-primary bg-opacity-10 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px; flex-shrink: 0; background-color: rgba(13, 110, 253, 0.1);">
-                        <i class="bi bi-bag-fill text-primary fs-5"></i>
-                    </div>
-                    <div>
-                        <div class="text-muted small fw-semibold" style="font-size: 0.75rem;">Total Purchases (MTD)</div>
-                        <div class="fw-bold text-dark fs-5 mt-0.5">₹{{ mtd_purchases|floatformat:2 }}</div>
-                        <div class="text-success x-small mt-1" style="font-size: 0.7rem;"><i class="bi bi-arrow-up-short"></i> +12.7% vs last month</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Card 3: Total Products -->
-        <div class="col-xl col-md-4 col-sm-6">
-            <div class="card p-3 border-0 shadow-sm h-100" style="border-radius: 12px;">
-                <div class="d-flex align-items-center gap-3">
-                    <div class="rounded-circle p-2.5 bg-info bg-opacity-10 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px; flex-shrink: 0; background-color: rgba(13, 202, 240, 0.1);">
-                        <i class="bi bi-database-fill text-info fs-5"></i>
-                    </div>
-                    <div>
-                        <div class="text-muted small fw-semibold" style="font-size: 0.75rem;">Total Products</div>
-                        <div class="fw-bold text-dark fs-5 mt-0.5">{{ total_products }}</div>
-                        <div class="text-muted x-small mt-1" style="font-size: 0.7rem;">Active in inventory</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Card 4: Low Stock Items -->
-        <div class="col-xl col-md-4 col-sm-6">
-            <div class="card p-3 border-0 shadow-sm h-100" style="border-radius: 12px;">
-                <div class="d-flex align-items-center gap-3">
-                    <div class="rounded-circle p-2.5 bg-danger bg-opacity-10 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px; flex-shrink: 0; background-color: rgba(220, 53, 69, 0.1);">
-                        <i class="bi bi-exclamation-triangle-fill text-danger fs-5"></i>
-                    </div>
-                    <div>
-                        <div class="text-muted small fw-semibold" style="font-size: 0.75rem;">Low Stock Items</div>
-                        <div class="fw-bold text-dark fs-5 mt-0.5">{{ low_stock_count }}</div>
-                        <div class="text-danger x-small mt-1" style="font-size: 0.7rem;">Needs attention</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Card 5: Total Customers -->
-        <div class="col-xl col-md-4 col-sm-6">
-            <div class="card p-3 border-0 shadow-sm h-100" style="border-radius: 12px;">
-                <div class="d-flex align-items-center gap-3">
-                    <div class="rounded-circle p-2.5 bg-success bg-opacity-10 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px; flex-shrink: 0; background-color: rgba(25, 135, 84, 0.1);">
-                        <i class="bi bi-people-fill text-success fs-5"></i>
-                    </div>
-                    <div>
-                        <div class="text-muted small fw-semibold" style="font-size: 0.75rem;">Total Customers</div>
-                        <div class="fw-bold text-dark fs-5 mt-0.5">{{ total_customers }}</div>
-                        <div class="text-muted x-small mt-1" style="font-size: 0.7rem;">Registered customers</div>
                     </div>
                 </div>
             </div>
@@ -316,77 +233,45 @@
             </div>
         </div>
 
-        <!-- Business Metrics -->
+        <!-- Top Prescribing Doctors (Last 30 Days) -->
         <div class="col-lg-4">
             <div class="card border-0 shadow-sm h-100" style="border-radius: 12px;">
-                <div class="card-header bg-white border-0 py-3">
-                    <h6 class="m-0 fw-bold text-dark"><i class="bi bi-bar-chart-fill me-2 text-primary"></i>Business Metrics</h6>
+                <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 fw-bold text-dark">
+                        <i class="bi bi-person-badge-fill me-2 text-primary"></i>Top Prescribing Doctors (Last 30 Days)
+                    </h6>
                 </div>
-                <div class="card-body">
-                    <div class="mb-4">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <span class="small fw-bold">Today's Transactions</span>
-                            <span class="badge bg-primary">{{ prescriptions_count }}</span>
-                        </div>
-                        <div class="progress" style="height: 8px;">
-                            <div class="progress-bar bg-primary" style="width: 75%"></div>
-                        </div>
+                <div class="card-body p-0 d-flex flex-column justify-content-between">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="bg-light text-muted small text-uppercase">
+                                <tr>
+                                    <th class="ps-4">Doctor Name</th>
+                                    <th class="text-end pe-4">Total Invoices</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for doc in top_doctors %}
+                                <tr>
+                                    <td class="ps-4 fw-bold text-dark">
+                                        <i class="bi bi-person-heart text-primary me-2"></i>{{ doc.doctor_name }}
+                                    </td>
+                                    <td class="text-end pe-4">
+                                        <span class="badge bg-primary-subtle text-primary border px-3 py-1.5 fs-6">{{ doc.total_bills }} Invoices</span>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="2" class="text-center py-5 text-muted small">No doctor sales recorded yet in last 30 days.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
-                    
-                    <div class="mb-4">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <span class="small fw-bold">Inventory Stock Levels</span>
-                            <span class="badge bg-success">Good</span>
-                        </div>
-                        <div class="progress" style="height: 8px;">
-                            <div class="progress-bar bg-success" style="width: 85%"></div>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-4">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <span class="small fw-bold">Customer Satisfaction</span>
-                            <span class="badge bg-info">Very Good</span>
-                        </div>
-                        <div class="progress" style="height: 8px;">
-                            <div class="progress-bar bg-info" style="width: 92%"></div>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-4">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <span class="small fw-bold">Payment Processing</span>
-                            <span class="badge bg-warning">{{ payment_labels|length }} Methods</span>
-                        </div>
-                        <div class="progress" style="height: 8px;">
-                            <div class="progress-bar bg-warning" style="width: 100%"></div>
-                        </div>
-                    </div>
-
-                    <hr>
-                    
-                    <div class="row text-center small">
-                        <div class="col-4">
-                            <div class="mb-2">
-                                <i class="bi bi-arrow-up-circle-fill text-success fs-5"></i>
-                            </div>
-                            <p class="mb-0"><strong>+{{ new_customers_week }}</strong></p>
-                            <p class="text-muted small">New Customers</p>
-                        </div>
-                        <div class="col-4">
-                            <div class="mb-2">
-                                <i class="bi bi-cart-fill text-primary fs-5"></i>
-                            </div>
-                            <p class="mb-0"><strong>{{ total_sales_30 }}</strong></p>
-                            <p class="text-muted small">Sales (30 Days)</p>
-                        </div>
-                        <div class="col-4">
-                            <div class="mb-2">
-                                <i class="bi bi-exclamation-circle-fill text-danger fs-5"></i>
-                            </div>
-                            <p class="mb-0"><strong>{{ low_stock_count }}</strong></p>
-                            <p class="text-muted small">Low Stock Items</p>
-                        </div>
+                    <div class="p-3 mt-auto">
+                        <a href="{% url 'doctor_sale_report' %}" class="btn btn-light-primary btn-sm w-100 py-2 border text-primary fw-bold" style="background-color: #eff6ff; border-color: #bfdbfe !important; border-radius: 8px;">
+                            View Full Report <i class="bi bi-arrow-right ms-1"></i>
+                        </a>
                     </div>
                 </div>
             </div>

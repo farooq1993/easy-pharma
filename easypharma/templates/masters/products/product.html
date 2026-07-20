@@ -79,7 +79,10 @@
 
                     <!-- Product Tax -->
                     <div class="col-md-4">
-                        <label for="productTax" class="form-label fw-bold small text-uppercase">Product Tax</label>
+                        <label for="productTax" class="form-label fw-bold small text-uppercase w-100 d-flex justify-content-between">
+                            <span>Product Tax</span>
+                            <a href="#" onclick="openQuickAdd('product-tax', 'productTax', 'Tax Rate', 'tax_name'); return false;" class="text-success text-decoration-none text-lowercase" title="Add new product tax"><i class="fas fa-plus"></i> add new</a>
+                        </label>
                         <select class="form-select py-2" id="productTax" name="product_tax">
                             <option value="">Select Product Tax</option>
                             {% for tax in product_taxes %}
@@ -219,6 +222,11 @@
                 <label class="form-label fw-bold small text-uppercase">Short Name</label>
                 <input type="text" class="form-control py-2" id="qaShortNameInput">
             </div>
+
+            <div class="mb-3" id="qaExtraContainer" style="display: none;">
+                <label class="form-label fw-bold small text-uppercase" id="qaExtraLabel">Tax Rate (%)</label>
+                <input type="text" class="form-control py-2" id="qaExtraInput" placeholder="Enter tax rate">
+            </div>
         </form>
       </div>
       <div class="modal-footer border-0 pt-0">
@@ -270,8 +278,15 @@ function openQuickAdd(masterType, selectId, title, fieldName) {
     if (masterType === 'drug-company') {
         document.getElementById('qaShortNameContainer').style.display = 'block';
         document.getElementById('qaShortNameInput').value = '';
+        document.getElementById('qaExtraContainer').style.display = 'none';
+    } else if (masterType === 'product-tax') {
+        document.getElementById('qaShortNameContainer').style.display = 'none';
+        document.getElementById('qaExtraContainer').style.display = 'block';
+        document.getElementById('qaExtraLabel').innerText = 'Tax Rate (%)';
+        document.getElementById('qaExtraInput').value = '';
     } else {
         document.getElementById('qaShortNameContainer').style.display = 'none';
+        document.getElementById('qaExtraContainer').style.display = 'none';
     }
     
     qaModal.show();
@@ -291,6 +306,8 @@ function submitQuickAdd() {
 
     if (masterType === 'drug-company') {
         formData.append('sht_name', document.getElementById('qaShortNameInput').value.trim());
+    } else if (masterType === 'product-tax') {
+        formData.append('tax_rate', document.getElementById('qaExtraInput').value.trim() || nameVal);
     }
 
     const saveBtn = document.getElementById('qaSaveBtn');

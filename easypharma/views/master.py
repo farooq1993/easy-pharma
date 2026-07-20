@@ -106,11 +106,52 @@ class MasterCRUDView(LoginRequiredMixin,View):
         
         post_data_lower = {k.lower(): request.POST.get(k) for k in request.POST.keys()}
         data = {field['name']: post_data_lower.get(field['name'].lower()) for field in self.get_context_data(master_type)['fields']}
+
+        if master_type == 'product-tax':
+            raw_name = (data.get('tax_name') or '').strip()
+            raw_rate = data.get('tax_rate')
+
+            rate_val = None
+            if raw_rate is not None and str(raw_rate).strip() != '':
+                try:
+                    clean_str = str(raw_rate).replace('%', '').strip()
+                    rate_val = int(round(float(clean_str)))
+                except (ValueError, TypeError):
+                    rate_val = None
+
+            # Fallback: extract rate from tax_name if tax_rate wasn't provided or invalid
+            if rate_val is None and raw_name:
+                import re
+                match = re.search(r'(\d+(\.\d+)?)', raw_name)
+                if match:
+                    try:
+                        rate_val = int(round(float(match.group(1))))
+                    except (ValueError, TypeError):
+                        rate_val = None
+
+            if not raw_name and rate_val is not None:
+                raw_name = f"GST {rate_val}%"
+            elif raw_name and raw_name.isdigit() and rate_val is not None:
+                raw_name = f"GST {rate_val}%"
+
+            data['tax_name'] = raw_name
+            data['tax_rate'] = rate_val
+
         try:
             instance = model.objects.create(tenant=request.tenant, **data)
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 first_field = self.get_context_data(master_type)['fields'][0]['name']
-                return JsonResponse({'success': True, 'id': instance.id, 'name': getattr(instance, first_field)})
+                display_name = getattr(instance, first_field)
+                tax_rate_val = getattr(instance, 'tax_rate', None)
+                if master_type == 'product-tax' and tax_rate_val is not None:
+                    if '%' not in str(display_name):
+                        display_name = f"{display_name} ({tax_rate_val}%)"
+                return JsonResponse({
+                    'success': True,
+                    'id': instance.id,
+                    'name': display_name,
+                    'tax_rate': tax_rate_val
+                })
             messages.success(request, f"{master_type.replace('-', ' ').title()} added successfully.")
         except Exception as e:
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
@@ -130,6 +171,29 @@ class MasterCRUDView(LoginRequiredMixin,View):
             else:
                 item = get_object_or_404(model, id=data.get('id'), tenant=request.tenant)
             
+            if master_type == 'product-tax':
+                raw_name = (data.get('tax_name') or item.tax_name or '').strip()
+                raw_rate = data.get('tax_rate')
+                rate_val = None
+                if raw_rate is not None and str(raw_rate).strip() != '':
+                    try:
+                        clean_str = str(raw_rate).replace('%', '').strip()
+                        rate_val = int(round(float(clean_str)))
+                    except (ValueError, TypeError):
+                        rate_val = None
+
+                if rate_val is None and raw_name:
+                    import re
+                    match = re.search(r'(\d+(\.\d+)?)', raw_name)
+                    if match:
+                        try:
+                            rate_val = int(round(float(match.group(1))))
+                        except (ValueError, TypeError):
+                            rate_val = None
+
+                if rate_val is not None:
+                    data['tax_rate'] = rate_val
+
             for field in self.get_context_data(master_type)['fields']:
                 if field['name'] in data:
                     setattr(item, field['name'], data[field['name']])
