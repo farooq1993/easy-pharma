@@ -69,7 +69,16 @@ def home_view(request):
         expiry_date__lte=expiry_limit,
         expiry_date__gte=today,
         current_quantity__gt=0
-    ).select_related('product').order_by('expiry_date')[:10]
+    ).select_related('product').order_by('expiry_date')[:100]
+
+    # Top Doctors by Sales (Last 30 days)
+    top_doctors = SaleInvoice.objects.filter(
+        tenant=request.tenant,
+        created_at__date__gte=today - timedelta(days=30)
+    ).exclude(doctor_name__isnull=True).exclude(doctor_name__exact='').values('doctor_name').annotate(
+        total_bills=Count('id'),
+        total_sales=Sum('total_amount')
+    ).order_by('-total_sales')[:5]
     
     # Low stock logic (products with total stock < 50 units)
     from django.db.models import Sum as DbSum
@@ -175,6 +184,7 @@ def home_view(request):
         'low_stock_count': low_stock_count,
         'prescriptions_count': prescriptions_count,
         'near_expiry_batches': near_expiry_batches,
+        'top_doctors': top_doctors,
         'pharmacy_name': request.tenant.pharmacy_name if request.tenant else "Pharmacy App",
         
         # Chart data
@@ -841,7 +851,16 @@ def home_view(request):
         expiry_date__lte=expiry_limit,
         expiry_date__gte=today,
         current_quantity__gt=0
-    ).select_related('product').order_by('expiry_date')[:10]
+    ).select_related('product').order_by('expiry_date')[:100]
+
+    # Top Doctors by Sales (Last 30 days)
+    top_doctors = SaleInvoice.objects.filter(
+        tenant=request.tenant,
+        created_at__date__gte=today - timedelta(days=30)
+    ).exclude(doctor_name__isnull=True).exclude(doctor_name__exact='').values('doctor_name').annotate(
+        total_bills=Count('id'),
+        total_sales=Sum('total_amount')
+    ).order_by('-total_sales')[:5]
     
     # Low stock logic (products with total stock < 50 units)
     from django.db.models import Sum as DbSum
@@ -963,6 +982,7 @@ def home_view(request):
         'low_stock_count': low_stock_count,
         'prescriptions_count': prescriptions_count,
         'near_expiry_batches': near_expiry_batches,
+        'top_doctors': top_doctors,
         'pharmacy_name': request.tenant.pharmacy_name if request.tenant else "Pharmacy App",
         
         # Chart data

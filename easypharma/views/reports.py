@@ -1845,3 +1845,115 @@ class SalesReturnReportView(LoginRequiredMixin, View):
             return response
 
         return render(request, self.template_name, context)
+
+
+class DoctorSaleReportView(LoginRequiredMixin, View):
+    template_name = 'reports/doctor_sale_report.html'
+
+    def get(self, request):
+        today = date.today()
+        start_date_str = request.GET.get('start_date', '')
+        end_date_str = request.GET.get('end_date', '')
+        selected_doctor = request.GET.get('doctor', '').strip()
+        export_type = request.GET.get('export', '').lower()
+
+        if not start_date_str:
+            start_date = today.replace(day=1)
+        else:
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                start_date = today.replace(day=1)
+
+        if not end_date_str:
+            end_date = today
+        else:
+            try:
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                end_date = today
+
+        if start_date > end_date:
+            start_date, end_date = end_date, start_date
+
+        invoices = SaleInvoice.objects.filter(
+            tenant=request.tenant,
+            created_at__date__gte=start_date,
+            created_at__date__lte=end_date
+        )
+
+        if selected_doctor:
+            invoices = invoices.filter(doctor_name__icontains=selected_doctor)
+
+        available_doctors = SaleInvoice.objects.filter(
+            tenant=request.tenant
+        ).exclude(doctor_name__isnull=True).exclude(doctor_name__exact='').values_list('doctor_name', flat=True).distinct().order_by('doctor_name')
+
+        doctor_summary = []
+        doctor_stats_query = invoices.values('doctor_name').annotate(
+            total_bills=Count('id'),
+            total_sales=Sum('total_amount'),
+            total_discount=Sum('discount_amount'),
+            avg_bill=Avg('total_amount'),
+            unique_patients=Count('patient_name', distinct=True)
+        ).order_by('-total_sales')
+
+        for item in doctor_stats_query:
+            doc_name = item['doctor_name'] if item['doctor_name'] else 'SELF / Unspecified'
+            doctor_summary.append({
+                'doctor_name': doc_name,
+                'total_bills': item['total_bills'],
+                'total_sales': item['total_sales'] or Decimal('0.00'),
+                'total_discount': item['total_discount'] or Decimal('0.00'),
+                'avg_bill': item['avg_bill'] or Decimal('0.00'),
+                'unique_patients': item['unique_patients'] or 0
+            })
+
+        total_revenue = invoices.aggregate(Sum('total_amount'))['total_amount__sum'] or Decimal('0.00')
+        total_bills_count = invoices.count()
+        total_discount_amount = invoices.aggregate(Sum('discount_amount'))['discount_amount__sum'] or Decimal('0.00')
+        total_unique_patients = invoices.exclude(patient_name__isnull=True).exclude(patient_name__exact='').values('patient_name').distinct().count()
+        total_doctors_count = len([d for d in doctor_summary if d['doctor_name'] != 'SELF / Unspecified'])
+
+        top_medicines = SaleItem.objects.filter(
+            tenant=request.tenant,
+            sale_invoice__in=invoices
+        ).values('product__product_name').annotate(
+            total_qty=Sum('quantity'),
+            total_revenue=Sum('total_amount')
+        ).order_by('-total_qty')[:10]
+
+        invoice_list = invoices.select_related('customer', 'user').order_by('-created_at')[:100]
+
+        if export_type == 'csv':
+            response = HttpResponse(content_type='text/csv')
+            response['Content-Disposition'] = f'attachment; filename="doctor_sales_report_{start_date}_to_{end_date}.csv"'
+            writer = csv.writer(response)
+            writer.writerow(['Doctor Name', 'Total Bills', 'Unique Patients', 'Total Discount (Rs)', 'Total Sales Revenue (Rs)', 'Average Bill Value (Rs)'])
+            for row in doctor_summary:
+                writer.writerow([
+                    row['doctor_name'],
+                    row['total_bills'],
+                    row['unique_patients'],
+                    f"{row['total_discount']:.2f}",
+                    f"{row['total_sales']:.2f}",
+                    f"{row['avg_bill']:.2f}"
+                ])
+            return response
+
+        context = {
+            'start_date': start_date,
+            'end_date': end_date,
+            'selected_doctor': selected_doctor,
+            'available_doctors': available_doctors,
+            'doctor_summary': doctor_summary,
+            'total_revenue': total_revenue,
+            'total_bills_count': total_bills_count,
+            'total_discount_amount': total_discount_amount,
+            'total_unique_patients': total_unique_patients,
+            'total_doctors_count': total_doctors_count,
+            'top_medicines': top_medicines,
+            'invoice_list': invoice_list,
+        }
+
+        return render(request, self.template_name, context)

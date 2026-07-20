@@ -1,0 +1,241 @@
+{% extends 'includes/base.html' %}
+{% load static %}
+{% load custom_filters %}
+
+{% block title %}Doctor-wise Patient & Sale Report{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row align-items-center mb-4">
+        <div class="col-md-7">
+            <h2 class="fw-bold mb-1 text-dark">
+                <i class="bi bi-person-badge text-primary me-2"></i>Doctor-wise Patient & Sale Report
+            </h2>
+            <p class="text-muted small mb-0">Track prescription performance, patient volume, and sales revenue per doctor.</p>
+        </div>
+        <div class="col-md-5 text-md-end mt-3 mt-md-0">
+            <a href="?start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}&doctor={{ selected_doctor }}&export=csv" class="btn btn-success shadow-sm px-3 me-2">
+                <i class="bi bi-file-earmark-spreadsheet me-1"></i> Export CSV
+            </a>
+            <button onclick="window.print()" class="btn btn-outline-secondary shadow-sm px-3">
+                <i class="bi bi-printer me-1"></i> Print
+            </button>
+        </div>
+    </div>
+
+    <!-- Filter Card -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-body p-3">
+            <form method="GET" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">Start Date</label>
+                    <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">End Date</label>
+                    <input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold text-muted text-uppercase mb-1">Doctor Filter</label>
+                    <select name="doctor" class="form-select form-select-sm">
+                        <option value="">-- All Doctors --</option>
+                        {% for doc in available_doctors %}
+                            <option value="{{ doc }}" {% if selected_doctor == doc %}selected{% endif %}>{{ doc }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary btn-sm px-4 flex-grow-1">
+                        <i class="bi bi-funnel me-1"></i> Apply Filter
+                    </button>
+                    <a href="{% url 'doctor_sale_report' %}" class="btn btn-light btn-sm border" title="Reset Filters">
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Key Metrics Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 p-3 border-start border-primary border-4 bg-white">
+                <div class="d-flex align-items-center">
+                    <div class="rounded-circle p-3 bg-primary bg-opacity-10 text-primary me-3">
+                        <i class="bi bi-currency-rupee fs-4"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted small fw-bold text-uppercase">Total Sales Revenue</span>
+                        <h4 class="fw-bold mb-0 text-dark">₹{{ total_revenue|floatformat:2 }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 p-3 border-start border-success border-4 bg-white">
+                <div class="d-flex align-items-center">
+                    <div class="rounded-circle p-3 bg-success bg-opacity-10 text-success me-3">
+                        <i class="bi bi-person-heart fs-4"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted small fw-bold text-uppercase">Active Doctors</span>
+                        <h4 class="fw-bold mb-0 text-dark">{{ total_doctors_count }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 p-3 border-start border-info border-4 bg-white">
+                <div class="d-flex align-items-center">
+                    <div class="rounded-circle p-3 bg-info bg-opacity-10 text-info me-3">
+                        <i class="bi bi-receipt fs-4"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted small fw-bold text-uppercase">Total Bills / Invoices</span>
+                        <h4 class="fw-bold mb-0 text-dark">{{ total_bills_count }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm rounded-4 p-3 border-start border-warning border-4 bg-white">
+                <div class="d-flex align-items-center">
+                    <div class="rounded-circle p-3 bg-warning bg-opacity-10 text-warning me-3">
+                        <i class="bi bi-people fs-4"></i>
+                    </div>
+                    <div>
+                        <span class="text-muted small fw-bold text-uppercase">Unique Patients</span>
+                        <h4 class="fw-bold mb-0 text-dark">{{ total_unique_patients }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Doctor Sales Summary & Charts Row -->
+    <div class="row g-4 mb-4">
+        <!-- Summary Table -->
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-list-stars me-2 text-primary"></i>Doctor Sales Summary</h5>
+                    <span class="badge bg-primary rounded-pill">{{ doctor_summary|length }} Doctors</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="bg-light text-muted small text-uppercase">
+                                <tr>
+                                    <th class="ps-4">Doctor Name</th>
+                                    <th class="text-center">Bills</th>
+                                    <th class="text-center">Unique Patients</th>
+                                    <th class="text-end">Total Discount</th>
+                                    <th class="text-end">Total Sales</th>
+                                    <th class="text-end pe-4">Avg Bill</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for doc in doctor_summary %}
+                                <tr>
+                                    <td class="ps-4 fw-bold">
+                                        <a href="?start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}&doctor={{ doc.doctor_name }}" class="text-decoration-none text-dark">
+                                            <i class="bi bi-person-circle text-muted me-2"></i>{{ doc.doctor_name }}
+                                        </a>
+                                    </td>
+                                    <td class="text-center"><span class="badge bg-light text-dark border">{{ doc.total_bills }}</span></td>
+                                    <td class="text-center"><span class="badge bg-info-subtle text-info border">{{ doc.unique_patients }}</span></td>
+                                    <td class="text-end text-muted">₹{{ doc.total_discount|floatformat:2 }}</td>
+                                    <td class="text-end fw-bold text-success">₹{{ doc.total_sales|floatformat:2 }}</td>
+                                    <td class="text-end pe-4">₹{{ doc.avg_bill|floatformat:2 }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center py-5 text-muted">
+                                        <i class="bi bi-info-circle fs-3 d-block mb-2"></i>
+                                        No sales records found for the selected period/doctor.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Prescribed Medicines Side Card -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white border-0 py-3">
+                    <h5 class="fw-bold mb-0 text-dark">
+                        <i class="bi bi-capsule me-2 text-warning"></i>Top Prescribed Medicines
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush">
+                        {% for med in top_medicines %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center py-3">
+                            <div>
+                                <div class="fw-bold text-dark small">{{ med.product__product_name }}</div>
+                                <div class="text-muted x-small" style="font-size:0.75rem;">Qty: {{ med.total_qty }} units</div>
+                            </div>
+                            <span class="badge bg-success-subtle text-success border">₹{{ med.total_revenue|floatformat:2 }}</span>
+                        </li>
+                        {% empty %}
+                        <li class="list-group-item text-center py-4 text-muted small">No items data available.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Doctor Invoices Table -->
+    <div class="card border-0 shadow-sm rounded-4 mb-4">
+        <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+            <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-clock-history me-2 text-info"></i>Doctor Prescriptions & Patient Sales Log</h5>
+            <span class="text-muted small">Showing last 100 entries</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light text-muted small text-uppercase">
+                        <tr>
+                            <th class="ps-4">Date</th>
+                            <th>Invoice #</th>
+                            <th>Patient Name</th>
+                            <th>Doctor Name</th>
+                            <th>Payment Mode</th>
+                            <th class="text-end pe-4">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for inv in invoice_list %}
+                        <tr>
+                            <td class="ps-4 small text-muted">{{ inv.created_at|date:"d M Y, h:i A" }}</td>
+                            <td class="fw-semibold text-primary">{{ inv.invoice_number }}</td>
+                            <td>
+                                <div><strong class="text-dark">{{ inv.patient_name|default:"Walk-in Patient" }}</strong></div>
+                                {% if inv.patient_phone %}<div class="text-muted x-small" style="font-size:0.75rem;">Ph: {{ inv.patient_phone }}</div>{% endif %}
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary-subtle text-dark border">{{ inv.doctor_name|default:"SELF" }}</span>
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark border">{{ inv.payment_mode }}</span>
+                            </td>
+                            <td class="text-end pe-4 fw-bold">₹{{ inv.total_amount|floatformat:2 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center py-4 text-muted small">No prescription invoices recorded.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
