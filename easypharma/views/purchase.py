@@ -17,7 +17,7 @@ from easypharma.models.sales import SaleItem
 from django.db import transaction
 from django.utils.timezone import now
 from django.utils import timezone
-from datetime import timedelta
+from datetime import timedelta,datetime
 import json
 import io
 import re
