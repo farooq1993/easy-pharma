@@ -85,9 +85,10 @@ def parse_expiry(value):
     """
     Handles multiple expiry formats:
       - DDMMYYYY        → e.g. 01062026
-      - DD-MM-YYYY      → e.g. 01-06-2026
+      - DD-MM-YYYY      → e.g. 01-06-2026 or 31-01-2027
       - DD/MM/YYYY      → e.g. 01/06/2026
-      - DDMMYYYY (8-digit MicroPro style) → e.g. 31102028
+      - YYYY-MM-DD      → e.g. 2027-01-31
+      - MM/YYYY or MM-YYYY → e.g. 01/2027
     """
     if not value:
         return None
@@ -101,13 +102,27 @@ def parse_expiry(value):
         if 1 <= int(month) <= 12:
             return f'{year}-{month}-{day}'
 
-    # 2. DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY
-    text = re.sub(r'[/\.]', '-', text)
-    if re.match(r'^\d{1,2}-\d{1,2}-\d{4}$', text):
-        parts = text.split('-')
+    # 2. YYYY-MM-DD or YYYY/MM/DD
+    text_clean = re.sub(r'[/\.]', '-', text)
+    if re.match(r'^\d{4}-\d{1,2}-\d{1,2}$', text_clean):
+        parts = text_clean.split('-')
+        year, month, day = parts[0], parts[1], parts[2]
+        if 1 <= int(month) <= 12:
+            return f'{year}-{month.zfill(2)}-{day.zfill(2)}'
+
+    # 3. DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY
+    if re.match(r'^\d{1,2}-\d{1,2}-\d{4}$', text_clean):
+        parts = text_clean.split('-')
         day, month, year = parts[0], parts[1], parts[2]
         if len(year) == 4 and 1 <= int(month) <= 12:
             return f'{year}-{month.zfill(2)}-{day.zfill(2)}'
+
+    # 4. MM-YYYY or MM/YYYY
+    if re.match(r'^\d{1,2}-\d{4}$', text_clean):
+        parts = text_clean.split('-')
+        month, year = parts[0], parts[1]
+        if 1 <= int(month) <= 12:
+            return f'{year}-{month.zfill(2)}-01'
 
     return None
 
@@ -242,52 +257,45 @@ def parse_marg_format(rows, request):
 
 # ====================== MICROPRO FORMAT ======================
 
-def detect_micropro_variant(rows):
+def detect_micropro_layout_type(rows):
     """
-    MicroPro T-rows come in two layouts:
-
-    Variant A (older — e.g. I_NBVORASONS):
-      col[4] = ItemCode or Barcode  (compact alphanumeric, no spaces)
-      col[5] = ProductName
-
-    Variant B (newer — e.g. PDdC):
-      col[4] = CompanyName          (has spaces, or is empty string)
-      col[5] = ProductName
-
-    Both layouts share the same column positions from col[5] onward,
-    so only col[4] differs and product name is always at col[5].
-
-    Detection logic: if col[4] of the first T-row contains a space
-    OR is empty → Variant B (company name); otherwise → Variant A.
+    Detects whether MicroPro CSV uses:
+      - 'compact' (Style 2 - e.g. I_Sale_ES14724): ProductName at col[2] (Col C)
+      - 'standard' (Style 1 - e.g. I_sanjavni): ProductName at col[5] (Col F)
     """
     for row in rows:
         if not row or str(row[0]).strip().upper() != 'T':
             continue
-        if len(row) <= 4:
-            continue
-        col4 = str(row[4]).strip()
-        if ' ' in col4 or col4 == '':
-            return 'B'
-        return 'A'
-    return 'A'  # safe default
+        col2 = str(row[2]).strip() if len(row) > 2 else ''
+        col5 = str(row[5]).strip() if len(row) > 5 else ''
+
+        # Compact layout check: col[2] contains a valid product name string
+        if len(col2) >= 3 and any(c.isalpha() for c in col2):
+            return 'compact'
+        # Standard layout check: col[5] contains product name
+        if len(col5) >= 3 and any(c.isalpha() for c in col5):
+            return 'standard'
+
+    return 'standard'
 
 
 def parse_micropro_format(rows, request):
     """
-    MicroPro CSV — auto-detects column-layout variant.
+    MicroPro CSV — auto-detects standard vs compact layout.
 
-    Both variants share these column positions:
-      H row : col[2]=InvoiceNo   col[3]=InvoiceDate (DDMMYYYY)
-      T rows: col[5]=ProductName col[6]=Packing     col[7]=CompanyCode
-              col[8]=BatchNo     col[9]=Expiry(DDMMYYYY)
-              col[10]=PurRate    col[12]=MRP
-              col[15]=Qty        col[16]=FreeQty
+    Standard Layout (e.g. I_sanjavni):
+      H row : col[2]=InvoiceNo, col[3]=InvoiceDate (DDMMYYYY)
+      T rows: col[5]=ProductName, col[6]=Packing, col[7]=CompanyCode,
+              col[8]=BatchNo, col[9]=Expiry, col[10]=PurRate, col[12]=MRP,
+              col[15]=Qty, col[16]=FreeQty
 
-    Variant A adds an ItemCode/Barcode at col[4].
-    Variant B adds a CompanyName at col[4] (same slot, different content).
-    Since ProductName is always col[5], no offset adjustment is needed.
+    Compact Layout (e.g. I_Sale_ES14724):
+      H row : col[2]=InvoiceDate (DD-MM-YYYY), col[3]=InvoiceNo, col[5]=SupplierName
+      T rows: col[1]=ItemCode, col[2]=ProductName, col[3]=Company, col[4]=Packing,
+              col[6]=Qty, col[7]=FreeQty, col[8]=MRP, col[9]=PurRate,
+              col[10]=BatchNo, col[11]=Expiry
     """
-    variant = detect_micropro_variant(rows)  # logged for debugging; logic is same for both
+    layout_type = detect_micropro_layout_type(rows)
 
     invoice_number = None
     invoice_date   = None
@@ -301,33 +309,75 @@ def parse_micropro_format(rows, request):
 
         # ── Header row ──
         if rec_type == 'H':
-            if len(row) > 2:
-                inv_raw = str(row[2]).strip()
-                if inv_raw:
-                    invoice_number = inv_raw
-            if len(row) > 3:
-                date_raw = str(row[3]).strip()
-                if len(date_raw) == 8 and date_raw.isdigit():
-                    invoice_date = f'{date_raw[4:8]}-{date_raw[2:4]}-{date_raw[0:2]}'
+            if layout_type == 'compact':
+                # Compact H row: col[2] = Date (20-07-2026), col[3] = InvoiceNo (ES14724)
+                if len(row) > 3:
+                    inv_raw = str(row[3]).strip()
+                    if inv_raw:
+                        invoice_number = inv_raw
+                if len(row) > 2:
+                    date_raw = str(row[2]).strip()
+                    parsed_d = parse_expiry(date_raw)
+                    if parsed_d:
+                        invoice_date = parsed_d
+            else:
+                # Standard H row: col[2] = InvoiceNo (INV14144), col[3] = Date (20072026)
+                if len(row) > 2:
+                    inv_raw = str(row[2]).strip()
+                    if inv_raw:
+                        invoice_number = inv_raw
+                if len(row) > 3:
+                    date_raw = str(row[3]).strip()
+                    parsed_d = parse_expiry(date_raw)
+                    if parsed_d:
+                        invoice_date = parsed_d
             continue
 
         # ── Transaction / item row ──
         if rec_type == 'T':
-            if len(row) < 16:
-                continue
+            if layout_type == 'compact':
+                # Compact T row (e.g. I_Sale_ES14724):
+                if len(row) < 7:
+                    continue
 
-            # ProductName is always col[5] in both Variant A and Variant B
-            product_name = str(row[5]).strip()
-            if not product_name or len(product_name) < 3:
-                continue
+                product_name = str(row[2]).strip()
+                if not product_name or len(product_name) < 3:
+                    continue
 
-            batch_number   = str(row[8]).strip()  if len(row) > 8  else ''
-            expiry_text    = str(row[9]).strip()   if len(row) > 9  else ''
-            purchase_price = parse_decimal_value(row[10] if len(row) > 10 else 0)
-            mrp            = parse_decimal_value(row[12] if len(row) > 12 else 0)
-            quantity       = parse_integer_value(row[15] if len(row) > 15 else 0)
-            free_quantity  = parse_integer_value(row[16] if len(row) > 16 else 0)
-            expiry_date    = parse_expiry(expiry_text)
+                if len(row) > 6 and str(row[6]).strip().replace('.', '', 1).isdigit():
+                    quantity       = parse_integer_value(row[6])
+                    free_quantity  = parse_integer_value(row[7] if len(row) > 7 else 0)
+                    mrp            = parse_decimal_value(row[8] if len(row) > 8 else 0)
+                    purchase_price = parse_decimal_value(row[9] if len(row) > 9 else 0)
+                    batch_number   = str(row[10]).strip() if len(row) > 10 else ''
+                    exp_1          = str(row[11]).strip() if len(row) > 11 else ''
+                    exp_2          = str(row[10]).strip() if len(row) > 10 else ''
+                    expiry_date    = parse_expiry(exp_1) or parse_expiry(exp_2)
+                else:
+                    quantity       = parse_integer_value(row[5] if len(row) > 5 else 0)
+                    free_quantity  = parse_integer_value(row[6] if len(row) > 6 else 0)
+                    mrp            = parse_decimal_value(row[7] if len(row) > 7 else 0)
+                    purchase_price = parse_decimal_value(row[8] if len(row) > 8 else 0)
+                    batch_number   = str(row[9]).strip() if len(row) > 9 else ''
+                    expiry_text    = str(row[10]).strip() if len(row) > 10 else ''
+                    expiry_date    = parse_expiry(expiry_text)
+
+            else:
+                # Standard T row (e.g. I_sanjavni):
+                if len(row) < 16:
+                    continue
+
+                product_name = str(row[5]).strip()
+                if not product_name or len(product_name) < 3:
+                    continue
+
+                batch_number   = str(row[8]).strip() if len(row) > 8 else ''
+                expiry_text    = str(row[9]).strip() if len(row) > 9 else ''
+                purchase_price = parse_decimal_value(row[10] if len(row) > 10 else 0)
+                mrp            = parse_decimal_value(row[12] if len(row) > 12 else 0)
+                quantity       = parse_integer_value(row[15] if len(row) > 15 else 0)
+                free_quantity  = parse_integer_value(row[16] if len(row) > 16 else 0)
+                expiry_date    = parse_expiry(expiry_text)
 
             product = find_product(request.tenant, product_name)
 
