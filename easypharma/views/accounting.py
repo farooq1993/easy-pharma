@@ -5,6 +5,7 @@ from django.http import JsonResponse
 from django.db import transaction
 from django.utils.timezone import now
 import json
+from django.contrib.auth.mixins import LoginRequiredMixin
 
 from easypharma.models.purchase_invoice import Supplier, PurchaseInvoice
 from easypharma.models.sales import Customer
@@ -646,7 +647,7 @@ class CustomerPaymentView(View):
                     remarks=data.get('remarks', f"Payment received via {data['payment_mode']}")
                 )
 
-            return JsonResponse({'success': True})
+            return JsonResponse({'success': True, 'payment_id': payment.id})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
 
@@ -711,3 +712,31 @@ class CustomerCreditBillsView(View):
             })
             
         return JsonResponse(data, safe=False)
+
+
+class PrintCustomerPaymentReceiptView(LoginRequiredMixin, View):
+    def get(self, request, pk):
+        from easypharma.models.print_setup import PrintSetup
+        payment = get_object_or_404(CustomerPayment, id=pk, tenant=request.tenant)
+        ps, _ = PrintSetup.objects.get_or_create(tenant=request.tenant)
+        
+        # Get adjusted invoices if any
+        adjusted_invoices = []
+        if payment.payment_details and 'adjusted_invoices' in payment.payment_details:
+            from easypharma.models.sales import SaleInvoice
+            for adj in payment.payment_details['adjusted_invoices']:
+                try:
+                    inv = SaleInvoice.objects.get(id=adj['id'], tenant=request.tenant)
+                    adjusted_invoices.append({
+                        'invoice_number': inv.invoice_number,
+                        'date': inv.created_at.strftime('%Y-%m-%d') if inv.created_at else '',
+                        'amount': adj['amount']
+                    })
+                except SaleInvoice.DoesNotExist:
+                    pass
+
+        return render(request, 'accounting/print_payment_receipt.html', {
+            'payment': payment,
+            'ps': ps,
+            'adjusted_invoices': adjusted_invoices,
+        })

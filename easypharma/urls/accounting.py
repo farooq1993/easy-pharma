@@ -4,7 +4,8 @@ from easypharma.views.accounting import (
     StockBatchAutocomplete, SupplierCreditBillsView,
     DeleteSupplierPaymentView, DeleteExpiryReturnView,
     SupplierUnadjustedReturnsView,
-    CustomerPaymentView, DeleteCustomerPaymentView, CustomerCreditBillsView
+    CustomerPaymentView, DeleteCustomerPaymentView, CustomerCreditBillsView,
+    PrintCustomerPaymentReceiptView
 )
 
 urlpatterns = [
@@ -20,5 +21,6 @@ urlpatterns = [
     # Customer Credit Accounting
     path('accounting/customer-payment/', CustomerPaymentView.as_view(), name='customer_payment'),
     path('accounting/customer-payment/<int:pk>/delete/', DeleteCustomerPaymentView.as_view(), name='delete_customer_payment'),
+    path('accounting/customer-payment/<int:pk>/print/', PrintCustomerPaymentReceiptView.as_view(), name='print_customer_payment_receipt'),
     path('api/customer-credit-bills/', CustomerCreditBillsView.as_view(), name='customer_credit_bills'),
 ]
