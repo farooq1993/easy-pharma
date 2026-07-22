@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Payment Receipt - PAY-{{ payment.id }}</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 13px;
+            color: #333;
+            background: #fff;
+            padding: 20px;
+        }
+        .receipt-container {
+            max-width: 800px;
+            margin: 0 auto;
+            border: 1px solid #ddd;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.05);
+        }
+        .header {
+            text-align: center;
+            border-bottom: 2px double #333;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+        .pharmacy-name {
+            font-size: 22px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            color: #000;
+        }
+        .pharmacy-details {
+            font-size: 12px;
+            color: #555;
+            line-height: 1.5;
+        }
+        .receipt-title {
+            text-align: center;
+            font-size: 16px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            margin: 15px 0;
+            text-decoration: underline;
+            text-transform: uppercase;
+        }
+        .meta-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            font-size: 13px;
+        }
+        .meta-col {
+            line-height: 1.6;
+        }
+        .info-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 25px;
+        }
+        .info-table td {
+            padding: 10px;
+            border: 1px solid #eee;
+            vertical-align: top;
+        }
+        .info-table td.label {
+            font-weight: bold;
+            color: #555;
+            width: 30%;
+            background-color: #f9f9f9;
+        }
+        .amount-box {
+            background-color: #f1f8e9;
+            border: 2px solid #81c784;
+            padding: 12px 20px;
+            border-radius: 6px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #2e7d32;
+            display: inline-block;
+            margin-bottom: 25px;
+        }
+        .adjustment-section {
+            margin-top: 20px;
+            margin-bottom: 25px;
+        }
+        .adjustment-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            font-size: 13px;
+            color: #444;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+        .adj-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .adj-table th, .adj-table td {
+            padding: 8px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        .adj-table th {
+            background-color: #f5f5f5;
+            font-weight: bold;
+        }
+        .adj-table td.right, .adj-table th.right {
+            text-align: right;
+        }
+        .footer-section {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 50px;
+            padding-top: 20px;
+        }
+        .signature-block {
+            text-align: center;
+            width: 200px;
+        }
+        .signature-line {
+            border-top: 1px solid #333;
+            margin-bottom: 8px;
+        }
+        .action-bar {
+            max-width: 800px;
+            margin: 0 auto 15px auto;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        .btn {
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            border: 1px solid transparent;
+        }
+        .btn-primary {
+            background-color: #0d6efd;
+            color: #fff;
+            border-color: #0d6efd;
+        }
+        .btn-secondary {
+            background-color: #6c757d;
+            color: #fff;
+            border-color: #6c757d;
+        }
+        @media print {
+            .action-bar {
+                display: none !important;
+            }
+            body {
+                padding: 0;
+            }
+            .receipt-container {
+                border: none;
+                box-shadow: none;
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="action-bar">
+    <button class="btn btn-secondary" onclick="window.close()">Close</button>
+    <button class="btn btn-primary" onclick="window.print()">Print Receipt</button>
+</div>
+
+<div class="receipt-container">
+    <!-- HEADER -->
+    <div class="header">
+        <div class="pharmacy-name">{{ payment.tenant.pharmacy_name }}</div>
+        <div class="pharmacy-details">
+            {% if payment.tenant.address %}{{ payment.tenant.address }}{% endif %}
+            {% if payment.tenant.city %} - {{ payment.tenant.city }}{% endif %}
+            {% if payment.tenant.phone %} | Ph: {{ payment.tenant.phone }}{% endif %}
+            {% if payment.tenant.email %} | Email: {{ payment.tenant.email }}{% endif %}
+            {% if ps.show_gst_details and payment.tenant.gst_number %}<br>GSTIN: {{ payment.tenant.gst_number }}{% endif %}
+            {% if ps.show_dl_details and payment.tenant.license_number %} | DL No: {{ payment.tenant.license_number }}{% endif %}
+        </div>
+    </div>
+
+    <!-- TITLE -->
+    <div class="receipt-title">Payment Receipt</div>
+
+    <!-- META INFO -->
+    <div class="meta-row">
+        <div class="meta-col">
+            <strong>Receipt No:</strong> PAY-{{ payment.id }}<br>
+            <strong>Payment Mode:</strong> {{ payment.payment_mode }}
+            {% if payment.reference_number %}
+                ({{ payment.reference_number }})
+            {% endif %}
+        </div>
+        <div class="meta-col" style="text-align: right;">
+            <strong>Date:</strong> {{ payment.payment_date|date:"d-M-Y" }}<br>
+            <strong>Status:</strong> Paid
+        </div>
+    </div>
+
+    <!-- INFO TABLE -->
+    <table class="info-table">
+        <tr>
+            <td class="label">Received From</td>
+            <td>
+                <strong>{{ payment.customer.name }}</strong>
+                {% if payment.customer.phone %}<br>Phone: {{ payment.customer.phone }}{% endif %}
+                {% if payment.customer.address %}<br>Address: {{ payment.customer.address }}{% endif %}
+            </td>
+        </tr>
+        <tr>
+            <td class="label">Remarks / Note</td>
+            <td>{{ payment.remarks|default:"Payment received with thanks." }}</td>
+        </tr>
+    </table>
+
+    <!-- AMOUNT BOX -->
+    <div class="amount-box">
+        Amount Received: ₹{{ payment.amount|floatformat:2 }}
+    </div>
+
+    <!-- ADJUSTED BILLS SECTION (IF ANY) -->
+    {% if adjusted_invoices %}
+    <div class="adjustment-section">
+        <div class="adjustment-title">Adjusted Against Credit Sales</div>
+        <table class="adj-table">
+            <thead>
+                <tr>
+                    <th>Invoice No</th>
+                    <th>Invoice Date</th>
+                    <th class="right">Allocated Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for adj in adjusted_invoices %}
+                <tr>
+                    <td>{{ adj.invoice_number }}</td>
+                    <td>{{ adj.date }}</td>
+                    <td class="right">₹{{ adj.amount|floatformat:2 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- SIGNATURES -->
+    <div class="footer-section">
+        <div class="signature-block">
+            <div class="signature-line"></div>
+            <div>Customer Signature</div>
+        </div>
+        <div class="signature-block">
+            <div class="signature-line"></div>
+            <div>Authorized Signatory</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Auto-trigger print on page load
+    window.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+            window.print();
+        }, 300);
+    });
+</script>
+</body>
+</html>

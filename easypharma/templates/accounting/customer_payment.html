@@ -39,6 +39,9 @@
                             <td>{{ p.remarks|default:"-" }}</td>
                             <td class="text-end fw-bold text-success">₹{{ p.amount|floatformat:2 }}</td>
                             <td class="text-center">
+                                <a href="{% url 'print_customer_payment_receipt' p.id %}" target="_blank" class="btn btn-sm btn-outline-secondary me-1" title="Print Receipt">
+                                    <i class="bi bi-printer"></i>
+                                </a>
                                 <button class="btn btn-sm btn-outline-primary me-1" 
                                     onclick='editPayment({{ p.id }}, {{ p.customer.id }}, "{{ p.payment_date|date:"Y-m-d" }}", "{{ p.amount }}", "{{ p.payment_mode }}", "{{ p.reference_number|escapejs }}", "{{ p.remarks|escapejs }}")' title="Edit Payment">
                                     <i class="bi bi-pencil"></i>
@@ -344,6 +347,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const result = await res.json();
             
             if (result.success) {
+                if (!editingPaymentId && result.payment_id) {
+                    if (confirm("Payment saved successfully! Do you want to print the receipt?")) {
+                        window.open(`/accounting/customer-payment/${result.payment_id}/print/`, '_blank');
+                    }
+                }
                 window.location.reload();
             } else {
                 alert('Error: ' + result.error);
