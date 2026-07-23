@@ -29,6 +29,7 @@ class PrintSetup(models.Model):
     show_logo = models.BooleanField(default=True)
     show_gst_details = models.BooleanField(default=True)
     show_dl_details = models.BooleanField(default=True)
+    print_single_copy = models.BooleanField(default=False, help_text="If true, prints a single copy instead of original + duplicate (For carbon paper)")
 
     # Margins (in mm)
     margin_top = models.IntegerField(default=10)

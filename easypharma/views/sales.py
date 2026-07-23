@@ -335,7 +335,10 @@ class PrintInvoiceView(LoginRequiredMixin, View):
             W = 65
             template = 'sales/print_invoice.html'
             single = self.generate_bill_text(invoice, ps, W)
-            bill_text = single + "\n" + single  # 2 copies ek ke baad ek
+            if ps.print_single_copy:
+                bill_text = single
+            else:
+                bill_text = single + "\n" + single  # 2 copies ek ke baad ek
 
         elif ps.paper_size in ['80mm', '58mm']:
             W = 32 if ps.paper_size == '58mm' else 42
@@ -347,11 +350,13 @@ class PrintInvoiceView(LoginRequiredMixin, View):
             template = 'sales/print_invoice_a4.html'
             bill_text = self.generate_bill_text(invoice, ps, W)
 
+        copies = ['ORIGINAL'] if ps.print_single_copy else ['ORIGINAL', 'DUPLICATE']
+
         return render(request, template, {
             'invoice': invoice,
             'ps': ps,
             'bill_text': bill_text,
-            'copies': ['ORIGINAL', 'DUPLICATE'],  
+            'copies': copies,  
             'total_qty': total_qty,
         })
 
