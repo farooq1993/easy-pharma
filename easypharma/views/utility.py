@@ -79,6 +79,7 @@ class PrintingSetupView(View):
         setup.show_dl_details = request.POST.get('show_dl_details') == 'on'
         setup.show_customer_signature = request.POST.get('show_customer_signature') == 'on'
         setup.show_pharmacist_signature = request.POST.get('show_pharmacist_signature') == 'on'
+        setup.print_single_copy = request.POST.get('print_single_copy') == 'on'
 
         # Custom text
         setup.custom_header = request.POST.get('custom_header', '').strip() or None
