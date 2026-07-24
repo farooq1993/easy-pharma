@@ -343,11 +343,15 @@ class ProductMasterSearchAPI(LoginRequiredMixin,View):
         except ValueError:
             limit = 20
         products = Products.objects.filter(
-            tenant=request.tenant,
-            product_name__istartswith=query
-        ).select_related('product_tax', 'product_schedule').only(
+            tenant=request.tenant
+        ).filter(
+            Q(product_name__istartswith=query) |
+            Q(product_name__icontains=query) |
+            Q(product_content__content_name__icontains=query)
+        ).select_related('product_tax', 'product_schedule', 'product_content').only(
             'id', 'product_name', 'product_packing', 'conversion_factor', 'product_tax__tax_rate',
-            'product_schedule__schedule_name', 'compny_name', 'product_hsn_code'
+            'product_schedule__schedule_name', 'compny_name', 'product_hsn_code',
+            'product_content__content_name'
         )[:limit]
         
         data = []
@@ -361,7 +365,8 @@ class ProductMasterSearchAPI(LoginRequiredMixin,View):
                 'schedule_id': p.product_schedule_id or '',
                 'schedule_name': p.product_schedule.schedule_name if p.product_schedule else '',
                 'company_id': p.compny_name_id or '',
-                'hsn_code': p.product_hsn_code or ''
+                'hsn_code': p.product_hsn_code or '',
+                'salt': p.product_content.content_name if p.product_content else ''
             })
         return JsonResponse(data, safe=False)
 
