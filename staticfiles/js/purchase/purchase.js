@@ -391,6 +391,13 @@ function csvConfirmAndLoad() {
     mainSupplierSel.value = suppVal;
     mainSupplierSel.dispatchEvent(new Event('change'));
 
+    // Sync main page's supplierSearchInput
+    const mainSupplierSI = document.getElementById('supplierSearchInput');
+    if (mainSupplierSI && mainSupplierSel.selectedIndex >= 0) {
+        const selOpt = mainSupplierSel.options[mainSupplierSel.selectedIndex];
+        if (selOpt) mainSupplierSI.value = selOpt.text.split(' | ')[0];
+    }
+
     document.getElementById('invoiceNumber').value = invNum;
     if (invDate) document.getElementById('purchaseDate').value = invDate;
     document.getElementById('summaryPaymentMode').value = payMode;
@@ -475,35 +482,72 @@ document.getElementById('csvImportModal').addEventListener('hidden.bs.modal', re
     }
 
     function renderDrop(opts) {
-        filtered  = opts;
-        activeIdx = opts.length > 0 ? 0 : -1;
+        filtered = [...opts];
+        
+        // Add a special "+ Add New" option
+        const q = input.value.trim();
+        const addNewOpt = { value: 'ADD_NEW', text: q ? `+ Add "${q}" as new supplier` : '+ Add New Supplier' };
+        filtered.push(addNewOpt);
+        
+        activeIdx = filtered.length > 0 ? 0 : -1;
         dropdown.innerHTML = '';
-        if (opts.length === 0) {
-            dropdown.innerHTML = '<div style="padding:10px 14px;color:#888;font-size:0.85rem;">No suppliers found</div>';
-        } else {
-            opts.forEach((opt, i) => {
-                const div = document.createElement('div');
-                div.style.cssText = 'padding:9px 14px;font-size:0.88rem;cursor:pointer;border-left:3px solid transparent;transition:all 0.15s;';
-                div.textContent = opt.text;
-                div.addEventListener('mouseover', () => { activeIdx = i; highlight(); });
-                div.addEventListener('mousedown', e => { e.preventDefault(); pick(opt); });
-                dropdown.appendChild(div);
-            });
+        
+        if (opts.length === 0 && q) {
+            const noFoundDiv = document.createElement('div');
+            noFoundDiv.style.cssText = 'padding:10px 14px;color:#888;font-size:0.85rem;';
+            noFoundDiv.textContent = 'No suppliers found';
+            dropdown.appendChild(noFoundDiv);
         }
+        
+        // Render options
+        opts.forEach((opt, i) => {
+            const div = document.createElement('div');
+            div.style.cssText = 'padding:9px 14px;font-size:0.88rem;cursor:pointer;border-left:3px solid transparent;transition:all 0.15s;';
+            div.textContent = opt.text;
+            div.addEventListener('mouseover', () => { activeIdx = i; highlight(); });
+            div.addEventListener('mousedown', e => { e.preventDefault(); pick(opt); });
+            dropdown.appendChild(div);
+        });
+        
+        // Render Add New Supplier option
+        const addNewDiv = document.createElement('div');
+        addNewDiv.style.cssText = 'padding:9px 14px;font-size:0.88rem;cursor:pointer;border-left:3px solid transparent;transition:all 0.15s;font-weight:bold;color:#1d4ed8;border-top:1px solid #e5e7eb;';
+        addNewDiv.textContent = addNewOpt.text;
+        const addNewIdx = opts.length;
+        addNewDiv.addEventListener('mouseover', () => { activeIdx = addNewIdx; highlight(); });
+        addNewDiv.addEventListener('mousedown', e => { e.preventDefault(); pick(addNewOpt); });
+        dropdown.appendChild(addNewDiv);
+        
         highlight();
         dropdown.style.display = 'block';
     }
 
     function highlight() {
         Array.from(dropdown.children).forEach((el, i) => {
-            el.style.background   = i === activeIdx ? 'linear-gradient(90deg,#6366f1,#818cf8)' : '';
-            el.style.color        = i === activeIdx ? '#fff' : '';
-            el.style.borderLeftColor = i === activeIdx ? '#4338ca' : 'transparent';
-            if (i === activeIdx) el.scrollIntoView({ block: 'nearest' });
+            // Adjust index if we have "No suppliers found" placeholder in the DOM list
+            const hasNoFoundPlaceholder = dropdown.firstChild && dropdown.firstChild.textContent === 'No suppliers found';
+            const domIndex = hasNoFoundPlaceholder ? i - 1 : i;
+            
+            if (domIndex === -1) {
+                el.style.background = '';
+                el.style.color = '#888';
+                return;
+            }
+            
+            el.style.background   = domIndex === activeIdx ? 'linear-gradient(90deg,#6366f1,#818cf8)' : '';
+            el.style.color        = domIndex === activeIdx ? '#fff' : '';
+            el.style.borderLeftColor = domIndex === activeIdx ? '#4338ca' : 'transparent';
+            if (domIndex === activeIdx) el.scrollIntoView({ block: 'nearest' });
         });
     }
 
     function pick(opt) {
+        if (opt.value === 'ADD_NEW') {
+            dropdown.style.display = 'none';
+            activeIdx = -1;
+            openCsvSupplierModal();
+            return;
+        }
         sel.value    = opt.value;
         input.value  = opt.text;
         dropdown.style.display = 'none';
@@ -551,20 +595,134 @@ document.getElementById('csvImportModal').addEventListener('hidden.bs.modal', re
     };
 })();
 
+// ── Supplier Modal helpers for CSV Import ──
+function openCsvSupplierModal() {
+    const csvImportModalEl = document.getElementById('csvImportModal');
+    const csvSupplierModalEl = document.getElementById('csvSupplierModal');
+    if (!csvImportModalEl || !csvSupplierModalEl) return;
+
+    const csvImportModal = bootstrap.Modal.getInstance(csvImportModalEl) || bootstrap.Modal.getOrCreateInstance(csvImportModalEl);
+    csvImportModal.hide();
+
+    const searchVal = document.getElementById('csvSupplierSearchInput').value.trim();
+    document.getElementById('csvNewSupplierName').value = searchVal;
+
+    document.getElementById('csvNewSupplierPhone').value = '';
+    document.getElementById('csvNewSupplierAddress').value = '';
+    document.getElementById('csvNewSupplierGst').value = '';
+    document.getElementById('csvNewSupplierDl').value = '';
+
+    const csvSupplierModal = bootstrap.Modal.getOrCreateInstance(csvSupplierModalEl);
+    csvSupplierModal.show();
+}
+
+// Ensure backdrop stacking is also handled cleanly for csvSupplierModal just in case
+(function() {
+    const csvSuppEl = document.getElementById('csvSupplierModal');
+    if (!csvSuppEl) return;
+
+    csvSuppEl.addEventListener('show.bs.modal', function() {
+        const openBackdrops = document.querySelectorAll('.modal-backdrop').length;
+        const baseZ = 1060 + (openBackdrops * 20);
+        csvSuppEl.style.zIndex = baseZ + 10;
+        setTimeout(() => {
+            const backdrops = document.querySelectorAll('.modal-backdrop');
+            const thisBackdrop = backdrops[backdrops.length - 1];
+            if (thisBackdrop) thisBackdrop.style.zIndex = baseZ;
+        }, 0);
+    });
+
+    csvSuppEl.addEventListener('hidden.bs.modal', function() {
+        csvSuppEl.style.zIndex = '';
+    });
+})();
+
+function closeCsvSupplierModal() {
+    const csvSupplierModalEl = document.getElementById('csvSupplierModal');
+    const csvImportModalEl = document.getElementById('csvImportModal');
+    if (!csvSupplierModalEl || !csvImportModalEl) return;
+
+    const csvSupplierModal = bootstrap.Modal.getInstance(csvSupplierModalEl) || bootstrap.Modal.getOrCreateInstance(csvSupplierModalEl);
+    csvSupplierModal.hide();
+
+    const csvImportModal = bootstrap.Modal.getInstance(csvImportModalEl) || bootstrap.Modal.getOrCreateInstance(csvImportModalEl);
+    csvImportModal.show();
+}
+
+async function saveCsvSupplier() {
+    const url = '/type/drug-supplier/';
+    const name = document.getElementById('csvNewSupplierName').value.trim();
+    const phone = document.getElementById('csvNewSupplierPhone').value.trim();
+    if (!name) return showToast('Supplier name is required', 'error');
+    if (!phone) return showToast('Phone number is required', 'error');
+
+    const payload = new URLSearchParams();
+    payload.append('name', name);
+    payload.append('phone', phone);
+    payload.append('address', document.getElementById('csvNewSupplierAddress').value.trim());
+    payload.append('gst_number', document.getElementById('csvNewSupplierGst').value.trim());
+    payload.append('dl_number', document.getElementById('csvNewSupplierDl').value.trim());
+
+    try {
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: payload.toString()
+        });
+        const res = await resp.json();
+        if (!res.success) {
+            return showToast('Error: ' + (res.error || 'Could not save supplier'), 'error');
+        }
+
+        // Add to the CSV supplier select dropdown and input
+        const sel = document.getElementById('csvSupplierSelect');
+        const option = document.createElement('option');
+        option.value = res.id;
+        option.text = res.name;
+        sel.appendChild(option);
+        sel.value = res.id;
+
+        // Set the search input value to show the new supplier's name
+        const input = document.getElementById('csvSupplierSearchInput');
+        if (input) input.value = res.name;
+
+        // Also add it to the main page's supplierSelect so that it's in sync!
+        const mainSel = document.getElementById('supplierSelect');
+        if (mainSel) {
+            const mainOpt = document.createElement('option');
+            mainOpt.value = res.id;
+            mainOpt.text = res.name;
+            mainSel.appendChild(mainOpt);
+        }
+
+        closeCsvSupplierModal();
+        showToast(`Supplier "${res.name}" added successfully`, 'success');
+    } catch (err) {
+        showToast('Error: ' + err.message, 'error');
+    }
+}
+
 // ── Expose functions called from inline HTML onclick/onchange ───────────
-window.csvDragOver           = csvDragOver;
-window.csvDragLeave          = csvDragLeave;
-window.csvDrop               = csvDrop;
-window.csvFileSelected       = csvFileSelected;
-window.csvClearFile          = csvClearFile;
-window.csvGoToStep1          = csvGoToStep1;
-window.submitCsvParse        = submitCsvParse;
-window.csvConfirmAndLoad     = csvConfirmAndLoad;
-window.csvClearAll           = csvClearAll;
-window._csvUpdateItem        = _csvUpdateItem;
-window._csvRecalcRow         = _csvRecalcRow;
-window._csvRefreshTotals     = _csvRefreshTotals;
-window._csvRemoveRow         = _csvRemoveRow;
+window.csvDragOver             = csvDragOver;
+window.csvDragLeave            = csvDragLeave;
+window.csvDrop                 = csvDrop;
+window.csvFileSelected         = csvFileSelected;
+window.csvClearFile            = csvClearFile;
+window.csvGoToStep1            = csvGoToStep1;
+window.submitCsvParse          = submitCsvParse;
+window.csvConfirmAndLoad       = csvConfirmAndLoad;
+window.csvClearAll             = csvClearAll;
+window._csvUpdateItem          = _csvUpdateItem;
+window._csvRecalcRow           = _csvRecalcRow;
+window._csvRefreshTotals       = _csvRefreshTotals;
+window._csvRemoveRow           = _csvRemoveRow;
+window.openCsvSupplierModal    = openCsvSupplierModal;
+window.closeCsvSupplierModal   = closeCsvSupplierModal;
+window.saveCsvSupplier         = saveCsvSupplier;
 // Note: window.resetCsvImportModal is already set above (wrapped version
 // that also clears the supplier search input) — don't overwrite it here.
 

@@ -50,14 +50,15 @@
                                     <option value="{{ supplier.id }}">{{ supplier.name }} | {{ supplier.address }}</option>
                                 {% endfor %}
                             </select>
-                            <!-- Searchable supplier input -->
-                            <div class="position-relative" id="supplierSearchWrap">
-                                <input type="text" id="supplierSearchInput" class="ep-input" placeholder="Search supplier..." autocomplete="off">
-                                <div id="supplierDropdown" style="display:none; position:absolute; background:white; width:100%; z-index:1055; border-radius:12px; border:1px solid #dee2e6; box-shadow:0 4px 12px rgba(0,0,0,0.1); max-height:220px; overflow-y:auto;"></div>
-                            </div>
-                            <div class="d-flex align-items-center justify-content-between mt-1 gap-2">
-                                <div class="text-muted small">Can’t find supplier?</div>
-                                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#supplierModal">Add Supplier</button>
+                            <!-- Searchable supplier input with inline Add button -->
+                            <div class="d-flex gap-1 align-items-center">
+                                <div class="position-relative flex-grow-1" id="supplierSearchWrap">
+                                    <input type="text" id="supplierSearchInput" class="ep-input" placeholder="Search supplier..." autocomplete="off">
+                                    <div id="supplierDropdown" style="display:none; position:absolute; background:white; width:100%; z-index:1055; border-radius:12px; border:1px solid #dee2e6; box-shadow:0 4px 12px rgba(0,0,0,0.1); max-height:220px; overflow-y:auto;"></div>
+                                </div>
+                                <button type="button" class="btn btn-light border" style="height:38px; border-radius:10px; width:38px; padding:0; display:flex; align-items:center; justify-content:center; flex-shrink:0; background:#f8fafc; border-color:#e2e8f0; color:#64748b; transition: all 0.2s;" data-bs-toggle="modal" data-bs-target="#supplierModal" title="Add New Supplier" onmouseover="this.style.background='#e2e8f0'; this.style.color='#0f172a';" onmouseout="this.style.background='#f8fafc'; this.style.color='#64748b';">
+                                    <i class="fas fa-plus" style="font-size: 0.9rem;"></i>
+                                </button>
                             </div>
                         </div>
                         <div class="col-md-4"><label class="ep-label">Invoice No.</label><input type="text" id="invoiceNumber" class="ep-input" placeholder="INV-001"></div>
@@ -82,7 +83,7 @@
                             <label class="ep-label">Medicine <i class="fas fa-search"></i></label>
                             <div class="search-wrap position-relative">
                                 <input type="text" id="productSearch" class="ep-input" placeholder="Type name..." autocomplete="off">
-                                <div id="searchResults" class="search-dropdown" style="position:absolute; background:white; width:100%; z-index:1055;"></div>
+                                <div id="searchResults" class="search-dropdown" style="position:absolute; background:white; width:100%; min-width:450px; z-index:1055;"></div>
                             </div>
                             <div id="productInfo" class="product-info-bar mt-1" style="font-size:0.7rem; background:var(--brand-light); border-radius:6px; padding:4px 8px; display:none;"></div>
                         </div>
@@ -1200,6 +1201,28 @@
                 }
 
                 function selectSupplier(opt) {
+                    if (opt.value === 'ADD_NEW') {
+                        dropdown.style.display = 'none';
+                        supplierActiveIdx = -1;
+                        
+                        // Pre-fill supplier name
+                        const q = searchInput.value.trim();
+                        document.getElementById('supplierName').value = q;
+                        
+                        // Clear other fields
+                        ['supplierPhone', 'supplierAddress', 'supplierGst', 'supplierDl'].forEach(id => {
+                            const el = document.getElementById(id);
+                            if (el) el.value = '';
+                        });
+                        
+                        // Open the bootstrap modal
+                        const modalEl = document.getElementById('supplierModal');
+                        if (modalEl) {
+                            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                            modal.show();
+                        }
+                        return;
+                    }
                     supplierSelect.value = opt.value;
                     supplierSelect.dispatchEvent(new Event('change'));
                     searchInput.value = opt.text.split(' | ')[0];
@@ -1225,27 +1248,47 @@
                 }
 
                 function renderDropdown(filtered) {
-                    filteredOptions = filtered;
-                    supplierActiveIdx = -1;
+                    filteredOptions = [...filtered];
+                    
+                    // Add a special "+ Add New" option
+                    const q = searchInput.value.trim();
+                    const addNewOpt = { value: 'ADD_NEW', text: q ? `+ Add "${q}" as new supplier` : '+ Add New Supplier' };
+                    filteredOptions.push(addNewOpt);
+                    
+                    supplierActiveIdx = filteredOptions.length > 0 ? 0 : -1;
                     dropdown.innerHTML = '';
-                    if (filtered.length === 0) {
-                        dropdown.innerHTML = '<div style="padding:10px 14px; color:#888; font-size:0.85rem;"><i class="fas fa-search me-1"></i> No suppliers found</div>';
-                    } else {
-                        filtered.forEach((opt, i) => {
-                            const div = document.createElement('div');
-                            div.className = 'supplier-item';
-                            div.style.cssText = 'padding:9px 14px; font-size:0.88rem; cursor:pointer; border-left:3px solid transparent; transition:all 0.15s;';
-                            const name = opt.text.split(' | ')[0];
-                            const addr = opt.text.split(' | ')[1] || '';
-                            div.innerHTML = `<div style="font-weight:600;">${name}</div>${addr ? `<div style="font-size:0.75rem;color:#888;">${addr}</div>` : ''}`;
-                            div.addEventListener('mouseover', () => { supplierActiveIdx = i; updateSupplierHighlight(); });
-                            div.addEventListener('mousedown', (e) => { e.preventDefault(); selectSupplier(opt); });
-                            dropdown.appendChild(div);
-                        });
-                        // Auto-highlight first result
-                        supplierActiveIdx = 0;
-                        updateSupplierHighlight();
+                    
+                    if (filtered.length === 0 && q) {
+                        const noFoundDiv = document.createElement('div');
+                        noFoundDiv.style.cssText = 'padding:10px 14px; color:#888; font-size:0.85rem;';
+                        noFoundDiv.innerHTML = '<i class="fas fa-search me-1"></i> No suppliers found';
+                        dropdown.appendChild(noFoundDiv);
                     }
+                    
+                    // Render options
+                    filtered.forEach((opt, i) => {
+                        const div = document.createElement('div');
+                        div.className = 'supplier-item';
+                        div.style.cssText = 'padding:9px 14px; font-size:0.88rem; cursor:pointer; border-left:3px solid transparent; transition:all 0.15s;';
+                        const name = opt.text.split(' | ')[0];
+                        const addr = opt.text.split(' | ')[1] || '';
+                        div.innerHTML = `<div style="font-weight:600;">${name}</div>${addr ? `<div style="font-size:0.75rem;color:#888;">${addr}</div>` : ''}`;
+                        div.addEventListener('mouseover', () => { supplierActiveIdx = i; updateSupplierHighlight(); });
+                        div.addEventListener('mousedown', (e) => { e.preventDefault(); selectSupplier(opt); });
+                        dropdown.appendChild(div);
+                    });
+                    
+                    // Render Add New Supplier option
+                    const addNewDiv = document.createElement('div');
+                    addNewDiv.className = 'supplier-item';
+                    addNewDiv.style.cssText = 'padding:9px 14px; font-size:0.88rem; cursor:pointer; border-left:3px solid transparent; transition:all 0.15s; font-weight:bold; color:#1d4ed8; border-top:1px solid #e5e7eb;';
+                    addNewDiv.textContent = addNewOpt.text;
+                    const addNewIdx = filtered.length;
+                    addNewDiv.addEventListener('mouseover', () => { supplierActiveIdx = addNewIdx; updateSupplierHighlight(); });
+                    addNewDiv.addEventListener('mousedown', (e) => { e.preventDefault(); selectSupplier(addNewOpt); });
+                    dropdown.appendChild(addNewDiv);
+                    
+                    updateSupplierHighlight();
                     dropdown.style.display = 'block';
                 }
 
@@ -1373,8 +1416,16 @@
             } else {
                 data.forEach(p => {
                     const btn = document.createElement('button');
-                    btn.className = 'search-item d-flex justify-content-between w-100 p-2 border-0 bg-transparent';
-                    btn.innerHTML = `<div><strong>${p.name}</strong><div class="small text-muted">${p.packing || ''} | Factor:×${p.conversion_factor}</div></div><span class="badge bg-info">${p.tax_rate}% GST</span>`;
+                    btn.className = 'search-item d-flex justify-content-between align-items-center w-100 px-3 py-2.5 border-0 bg-transparent text-start';
+                    btn.style.outline = 'none';
+                    btn.innerHTML = `
+                        <div style="min-width: 0; flex-grow: 1; padding-right: 12px; text-align: left;">
+                            <div style="font-size: 0.86rem; font-weight: 600; color: #1e293b; line-height: 1.3;">${p.name}</div>
+                            ${p.salt ? `<div style="font-size: 0.74rem; color: #f97316; font-weight: 500; margin-top: 1px; font-style: italic;">${p.salt}</div>` : ''}
+                            <div style="font-size: 0.74rem; color: #64748b; margin-top: 3px;">${p.packing || 'Standard'} | Factor: ×${p.conversion_factor}</div>
+                        </div>
+                        <span style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; font-size: 0.72rem; border-radius: 6px; padding: 4px 8px; font-weight: 600; flex-shrink: 0; white-space: nowrap;">${p.tax_rate}% GST</span>
+                    `;
                     btn.onclick = () => {
                         selectedProduct = p;
                         searchInput.value = p.name;
@@ -2712,9 +2763,10 @@
     .search-dropdown {
         border-radius: 12px;
         border: 1px solid #dee2e6;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        max-height: 250px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.12);
+        max-height: 280px;
         overflow-y: auto;
+        overflow-x: hidden; /* Prevent horizontal scrollbar */
     }
     /* ── Product & Batch dropdown hover / keyboard-selected highlight ── */
     .search-item {

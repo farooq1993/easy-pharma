@@ -126,10 +126,15 @@
                                         <option value="{{ supplier.id }}">{{ supplier.name }}</option>
                                     {% endfor %}
                                 </select>
-                                <!-- Searchable input -->
-                                <div class="position-relative" id="csvSupplierSearchWrap">
-                                    <input type="text" id="csvSupplierSearchInput" class="ep-input" style="font-size:0.85rem;" placeholder="Search supplier..." autocomplete="off">
-                                    <div id="csvSupplierDropdown" style="display:none;position:absolute;background:white;width:100%;z-index:1055;border-radius:12px;border:1px solid #dee2e6;box-shadow:0 4px 12px rgba(0,0,0,0.1);max-height:200px;overflow-y:auto;"></div>
+                                <!-- Searchable input with Add button next to it -->
+                                <div class="d-flex gap-1 align-items-center">
+                                    <div class="position-relative flex-grow-1" id="csvSupplierSearchWrap">
+                                        <input type="text" id="csvSupplierSearchInput" class="ep-input" style="font-size:0.85rem;" placeholder="Search supplier..." autocomplete="off">
+                                        <div id="csvSupplierDropdown" style="display:none;position:absolute;background:white;width:100%;z-index:1055;border-radius:12px;border:1px solid #dee2e6;box-shadow:0 4px 12px rgba(0,0,0,0.1);max-height:200px;overflow-y:auto;"></div>
+                                    </div>
+                                    <button type="button" class="btn btn-outline-primary" style="height:38px;border-radius:10px;padding:0 12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;" onclick="openCsvSupplierModal()" title="Add New Supplier">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
                                 </div>
                             </div>
                             <div class="col-md-3">
@@ -243,6 +248,55 @@
                         <i class="fas fa-check-circle me-1"></i> Confirm & Load to Purchase
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Add Supplier Modal from CSV Import ── -->
+<div class="modal fade" id="csvSupplierModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" style="z-index: 1060;">
+    <div class="modal-dialog modal-md modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius:20px; overflow:hidden;">
+            <div style="background:linear-gradient(135deg,#1e3a8a 0%,#3b82f6 100%);padding:20px 24px;flex-shrink:0;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="fas fa-truck-loading" style="font-size:1.2rem;color:#fff;"></i>
+                        <h5 style="color:#fff;font-weight:700;margin:0;font-size:1rem;">Add New Supplier</h5>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" onclick="closeCsvSupplierModal()"></button>
+                </div>
+            </div>
+            <div class="modal-body p-4">
+                <div class="mb-3">
+                    <label class="ep-label mb-1">Supplier Name <span class="text-danger">*</span></label>
+                    <input type="text" id="csvNewSupplierName" class="ep-input" style="font-size:0.85rem;" placeholder="Supplier name">
+                </div>
+                <div class="mb-3">
+                    <label class="ep-label mb-1">Phone <span class="text-danger">*</span></label>
+                    <input type="text" id="csvNewSupplierPhone" class="ep-input" style="font-size:0.85rem;" placeholder="Phone number">
+                </div>
+                <div class="mb-3">
+                    <label class="ep-label mb-1">Address</label>
+                    <textarea id="csvNewSupplierAddress" class="ep-input" style="font-size:0.85rem; height:60px;" placeholder="Supplier address"></textarea>
+                </div>
+                <div class="row g-3">
+                    <div class="col-6">
+                        <label class="ep-label mb-1">GST Number</label>
+                        <input type="text" id="csvNewSupplierGst" class="ep-input" style="font-size:0.85rem;" placeholder="GST number">
+                    </div>
+                    <div class="col-6">
+                        <label class="ep-label mb-1">DL Number</label>
+                        <input type="text" id="csvNewSupplierDl" class="ep-input" style="font-size:0.85rem;" placeholder="DL number">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top px-4 py-3 gap-2" style="justify-content:flex-end;">
+                <button type="button" class="btn btn-outline-secondary rounded-pill px-4" onclick="closeCsvSupplierModal()" style="font-size:0.85rem;">
+                    Cancel
+                </button>
+                <button type="button" class="btn btn-primary rounded-pill px-4 fw-bold" onclick="saveCsvSupplier()" style="font-size:0.85rem;">
+                    <i class="fas fa-save me-1"></i> Save Supplier
+                </button>
             </div>
         </div>
     </div>
