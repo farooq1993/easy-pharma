@@ -12,6 +12,11 @@ from tenants.models import Tenant
 
 class DailySaleReportViewTests(TestCase):
     def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username='tester',
+            user_type='tenant_owner',
+            password='secret123',
+        )
         self.tenant = Tenant.objects.create(
             name='Test Tenant',
             subdomain='testtenant',
@@ -20,11 +25,7 @@ class DailySaleReportViewTests(TestCase):
             phone='1234567890',
             city='Test City',
             license_number='LIC-001',
-        )
-        self.user = get_user_model().objects.create_user(
-            username='tester',
-            email='tester@example.com',
-            password='secret123',
+            owner=self.user,
         )
         self.factory = RequestFactory()
 
@@ -53,15 +54,16 @@ class DailySaleReportViewTests(TestCase):
             tax_amount=Decimal('0.00'),
             discount_amount=Decimal('0.00'),
             total_amount=Decimal('500.00'),
-            created_at=(timezone.now() - timedelta(days=1)),
         )
+        SaleInvoice.objects.filter(id=old_sale.id).update(created_at=timezone.now() - timedelta(days=1))
+        old_sale.refresh_from_db()
         old_return = SalesReturn.objects.create(
             tenant=self.tenant,
             sale_invoice=old_sale,
             return_qty=1,
             return_amount=Decimal('150.00'),
         )
-        old_return.return_at = timezone.now()
+        old_return.return_at = timezone.now() - timedelta(days=1)
         old_return.save(update_fields=['return_at'])
 
         request = self.factory.get('/')
