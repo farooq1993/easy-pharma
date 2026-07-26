@@ -22,9 +22,11 @@ def add_access_key_field(apps, schema_editor):
     
     if not column_exists:
         # Column doesn't exist, add it
+        field = models.CharField(blank=True, max_length=100, null=True, unique=True)
+        field.set_attributes_from_name('access_key')
         schema_editor.add_field(
             apps.get_model('tenants', 'Tenant'),
-            models.CharField(blank=True, max_length=100, null=True, unique=True, name='access_key')
+            field
         )
 
 

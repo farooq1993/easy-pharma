@@ -20,9 +20,11 @@ def add_invoice_message_field(apps, schema_editor):
     
     if not column_exists:
         # Column doesn't exist, add it
+        field = models.TextField(blank=True, null=True)
+        field.set_attributes_from_name('invoice_message')
         schema_editor.add_field(
             apps.get_model('tenants', 'Tenant'),
-            models.TextField(blank=True, null=True, name='invoice_message')
+            field
         )
 
 

@@ -82,7 +82,7 @@ def is_date_in_locked_fy(tenant, dt):
 def generate_fy_invoice_number(tenant, invoice_date=None, prefix="INV"):
     """
     Generates a FY-specific invoice number.
-    Format: INV-{fy_code}-{seq:04d} (e.g. INV-25-26-0001)
+    Format: INV-{tenant_id}-{fy_code}-{seq:04d} (e.g. INV-1-25-26-0001)
     Every 1st April (or new FY), the sequence automatically resets to 0001!
     """
     from easypharma.models.sales import SaleInvoice
@@ -92,12 +92,20 @@ def generate_fy_invoice_number(tenant, invoice_date=None, prefix="INV"):
     start_date, end_date, fy_code = get_financial_year_dates(invoice_date)
     get_or_create_financial_year(tenant, invoice_date)
 
-    fy_prefix = f"{prefix}-{fy_code}-"
+    fy_prefix = f"{prefix}-{tenant.id}-{fy_code}-"
+    old_fy_prefix = f"{prefix}-{fy_code}-"
 
     last_inv = SaleInvoice.objects.filter(
         tenant=tenant,
         invoice_number__startswith=fy_prefix
     ).order_by('-id').first()
+
+    if not last_inv:
+        # Fallback to the old format to maintain numbering continuity for existing tenants
+        last_inv = SaleInvoice.objects.filter(
+            tenant=tenant,
+            invoice_number__startswith=old_fy_prefix
+        ).order_by('-id').first()
 
     if last_inv:
         try:
