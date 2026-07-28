@@ -99,7 +99,7 @@ function saveEdit(id) {
         return;
     }
 
-    console.log("Sending PATCH request for ID:", id, "New name:", newName);
+    // console.log("Sending PATCH request for ID:", id, "New name:", newName);
 
     fetch("/master/show-all-drug-schedule-types/", {
         method: "PATCH",
@@ -114,7 +114,7 @@ function saveEdit(id) {
         }),
     })
     .then(response => {
-        console.log("Response status:", response.status);
+        // console.log("Response status:", response.status);
         
         // Check if response is JSON
         const contentType = response.headers.get("content-type");
@@ -132,7 +132,7 @@ function saveEdit(id) {
         }
     })
     .then(data => {
-        console.log("Success data:", data);
+        // console.log("Success data:", data);
         if (data.success) {
             alert(data.success);
             document.getElementById(`name-display-${id}`).textContent = newName;
@@ -154,7 +154,7 @@ function saveEdit(id) {
 function deleteDrugSchedule(id) {
     if (!confirm("Are you sure you want to delete this drug schedule?")) return;
 
-    console.log("Sending DELETE request for ID:", id);
+    // console.log("Sending DELETE request for ID:", id);
 
     fetch("/master/show-all-drug-schedule-types/", {
         method: "DELETE",
@@ -166,7 +166,7 @@ function deleteDrugSchedule(id) {
         body: JSON.stringify({ id: id }),
     })
     .then(response => {
-        console.log("Response status:", response.status);
+        // console.log("Response status:", response.status);
         
         // Check if response is JSON
         const contentType = response.headers.get("content-type");
@@ -184,7 +184,7 @@ function deleteDrugSchedule(id) {
         }
     })
     .then(data => {
-        console.log("Success data:", data);
+        // console.log("Success data:", data);
         if (data.success) {
             alert("Drug schedule deleted successfully.");
             document.getElementById(`row-${id}`).remove();

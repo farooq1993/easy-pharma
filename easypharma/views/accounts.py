@@ -67,7 +67,6 @@ def home_view(request):
     near_expiry_batches = StockBatch.objects.filter(
         tenant=request.tenant,
         expiry_date__lte=expiry_limit,
-        expiry_date__gte=today,
         current_quantity__gt=0
     ).select_related('product').order_by('expiry_date')[:100]
 
@@ -184,6 +183,7 @@ def home_view(request):
         'low_stock_count': low_stock_count,
         'prescriptions_count': prescriptions_count,
         'near_expiry_batches': near_expiry_batches,
+        'today': today,
         'top_doctors': top_doctors,
         'pharmacy_name': request.tenant.pharmacy_name if request.tenant else "Pharmacy App",
         
@@ -849,7 +849,6 @@ def home_view(request):
     near_expiry_batches = StockBatch.objects.filter(
         tenant=request.tenant,
         expiry_date__lte=expiry_limit,
-        expiry_date__gte=today,
         current_quantity__gt=0
     ).select_related('product').order_by('expiry_date')[:100]
 
@@ -982,6 +981,7 @@ def home_view(request):
         'low_stock_count': low_stock_count,
         'prescriptions_count': prescriptions_count,
         'near_expiry_batches': near_expiry_batches,
+        'today': today,
         'top_doctors': top_doctors,
         'pharmacy_name': request.tenant.pharmacy_name if request.tenant else "Pharmacy App",
         

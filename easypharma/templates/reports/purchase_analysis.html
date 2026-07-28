@@ -15,7 +15,13 @@
       <p class="text-muted mb-0">Intelligent purchase insights &amp; cost analytics</p>
     </div>
     <div class="col-md-5">
-      <form method="GET" class="d-flex gap-2 justify-content-md-end flex-wrap">
+      <form method="GET" class="d-flex gap-2 justify-content-md-end flex-wrap align-items-center">
+        <select name="supplier_id" class="form-select form-select-sm" style="max-width:180px;">
+          <option value="">-- All Suppliers --</option>
+          {% for s in suppliers %}
+            <option value="{{ s.id }}" {% if s.id|stringformat:"s" == selected_supplier_id %}selected{% endif %}>{{ s.name }}</option>
+          {% endfor %}
+        </select>
         <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date|date:'Y-m-d' }}" style="max-width:150px;">
         <input type="date" name="end_date"   class="form-control form-control-sm" value="{{ end_date|date:'Y-m-d' }}"   style="max-width:150px;">
         <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i> Analyze</button>

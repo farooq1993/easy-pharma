@@ -1511,7 +1511,7 @@
 
                 renderPurchaseSearchResults(data);
             } catch (err) {
-                console.log('[Purchase] Offline product search activated');
+                // console.log('[Purchase] Offline product search activated');
                 if (typeof OfflineSync !== 'undefined') {
                     const offlineResults = await OfflineSync.searchOfflineProducts(query, 'master');
                     renderPurchaseSearchResults(offlineResults);
@@ -2324,7 +2324,7 @@
 
         try {
             if (!navigator.onLine && typeof OfflineSync !== 'undefined') {
-                console.log('[Purchase] Queuing offline...', endpoint);
+                // console.log('[Purchase] Queuing offline...', endpoint);
                 await OfflineSync.queueRequest(
                     OfflineSync.purchaseStore, 
                     endpoint, 

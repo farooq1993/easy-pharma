@@ -11,6 +11,9 @@
     border-bottom: 1px solid #eef2f5;
     gap: 10px;
 }
+.expired-bg {
+    background-color: rgba(220, 53, 69, 0.07) !important;
+}
 #expiryScrollContainer::-webkit-scrollbar {
     display: none;
 }
@@ -190,25 +193,41 @@
         <div class="col-lg-3">
             <div class="card border-0 shadow-sm h-100" style="border-radius: 12px;">
                 <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 fw-bold text-danger"><i class="bi bi-calendar-x me-2"></i>Expiry Alerts (Next 90 Days)</h6>
-                    <span class="badge bg-danger rounded-pill">{{ near_expiry_batches|length }} Items</span>
+                    <h6 class="m-0 fw-bold text-danger"><i class="bi bi-calendar-x me-2"></i>Expiry Alerts</h6>
+                    <div class="d-flex align-items-center gap-1">
+                        <button id="clearAllExpiredBtn" class="btn btn-xs btn-outline-danger py-0 px-2 fw-semibold" style="font-size: 0.65rem; display: none;" onclick="removeAllExpiredBatches()">
+                            Clear Expired
+                        </button>
+                        <span id="expiryBadgeCount" class="badge bg-danger rounded-pill">{{ near_expiry_batches|length }} Items</span>
+                    </div>
                 </div>
                 <div class="card-body p-0 d-flex flex-column justify-content-between" style="min-height: 280px;">
                     <div id="expiryScrollContainer" style="max-height: 270px; overflow: hidden;" class="px-2 position-relative">
                         <div id="expiryTickerTrack">
                             {% for batch in near_expiry_batches %}
-                            <div class="expiry-item py-2 px-3 border-bottom d-flex justify-content-between align-items-center" style="font-size: 0.8rem;">
-                                <div>
-                                    <div class="fw-bold text-dark">{{ batch.product.product_name }}</div>
+                            <div class="expiry-item py-2 px-3 border-bottom d-flex justify-content-between align-items-center {% if batch.expiry_date < today %}expired-bg{% endif %}" id="batch-row-{{ batch.id }}" style="font-size: 0.8rem;">
+                                <div style="max-width: 60%;">
+                                    <div class="fw-bold text-dark text-truncate" title="{{ batch.product.product_name }}">{{ batch.product.product_name }}</div>
                                     <div class="text-muted" style="font-size: 0.7rem;">Batch: {{ batch.batch_number }}</div>
                                 </div>
-                                <div class="text-end">
-                                    <div class="text-danger fw-bold">{{ batch.expiry_date|date:"M Y" }}</div>
-                                    <div class="text-muted" style="font-size: 0.7rem;">{{ batch.current_quantity }} Units</div>
+                                <div class="text-end d-flex align-items-center gap-2">
+                                    <div>
+                                        {% if batch.expiry_date < today %}
+                                        <span class="badge bg-danger text-white mb-1" style="font-size: 0.65rem;">EXPIRED</span>
+                                        {% else %}
+                                        <div class="text-danger fw-bold" style="font-size: 0.75rem;">{{ batch.expiry_date|date:"M Y" }}</div>
+                                        {% endif %}
+                                        <div class="text-muted" style="font-size: 0.7rem;">{{ batch.current_quantity }} Units</div>
+                                    </div>
+                                    {% if batch.expiry_date < today %}
+                                    <button class="btn btn-sm btn-outline-danger p-1 border-0" onclick="removeExpiredBatch({{ batch.id }})" title="Remove this expired batch from stock">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                    {% endif %}
                                 </div>
                             </div>
                             {% empty %}
-                            <div class="text-center py-5 text-muted small">✓ No items expiring soon.</div>
+                            <div class="text-center py-5 text-muted small">✓ No expiry alerts.</div>
                             {% endfor %}
                         </div>
                     </div>
@@ -595,6 +614,13 @@
     // ── Auto-Scroll Loop for Expiry Alerts (Seamless Infinite CSS Marquee Ticker) ──
     (function initExpiryAutoTicker() {
         document.addEventListener('DOMContentLoaded', function() {
+            // Show/hide Clear Expired button on load
+            const expiredItems = document.querySelectorAll('.expired-bg');
+            if (expiredItems.length > 0) {
+                const btn = document.getElementById('clearAllExpiredBtn');
+                if (btn) btn.style.display = 'inline-block';
+            }
+
             const track = document.getElementById('expiryTickerTrack');
             if (!track) return;
 
@@ -610,5 +636,98 @@
             track.classList.add('ticker-animated-track');
         });
     })();
+
+    // ── Discard Expired Stock Actions ──
+    async function removeExpiredBatch(batchId) {
+        if (!confirm('Are you sure you want to write-off this expired batch from stock?')) return;
+        
+        try {
+            const response = await fetch('/api/stock/remove-expired-batch/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ batch_id: batchId })
+            });
+            const result = await response.json();
+            if (result.success) {
+                // Fade out and remove all elements for this batch
+                const rows = document.querySelectorAll(`[id="batch-row-${batchId}"]`);
+                rows.forEach(r => {
+                    r.style.transition = 'all 0.4s ease';
+                    r.style.opacity = '0';
+                    r.style.height = '0';
+                    r.style.padding = '0';
+                    setTimeout(() => r.remove(), 400);
+                });
+                
+                // Update count badge
+                const countBadge = document.getElementById('expiryBadgeCount');
+                if (countBadge) {
+                    let currentCount = parseInt(countBadge.textContent) || 0;
+                    currentCount = Math.max(0, currentCount - 1);
+                    countBadge.textContent = currentCount + ' Items';
+                }
+                
+                // Check if any expired items are left
+                setTimeout(() => {
+                    const expiredRemaining = document.querySelectorAll('.expired-bg');
+                    if (expiredRemaining.length === 0) {
+                        const btn = document.getElementById('clearAllExpiredBtn');
+                        if (btn) btn.style.display = 'none';
+                    }
+                }, 500);
+            } else {
+                alert('Error: ' + (result.error || 'Failed to remove batch'));
+            }
+        } catch (e) {
+            alert('Error removing batch.');
+        }
+    }
+
+    async function removeAllExpiredBatches() {
+        if (!confirm('Are you sure you want to write-off ALL expired batches currently in stock?')) return;
+        
+        try {
+            const response = await fetch('/api/stock/remove-expired-batch/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ action: 'clear_all' })
+            });
+            const result = await response.json();
+            if (result.success) {
+                // Fade out and remove all expired elements
+                const expiredRows = document.querySelectorAll('.expired-bg');
+                expiredRows.forEach(r => {
+                    r.style.transition = 'all 0.4s ease';
+                    r.style.opacity = '0';
+                    r.style.height = '0';
+                    r.style.padding = '0';
+                    setTimeout(() => r.remove(), 400);
+                });
+                
+                // Update badge count
+                const countBadge = document.getElementById('expiryBadgeCount');
+                if (countBadge) {
+                    const remainingCount = document.querySelectorAll('.expiry-item:not(.expired-bg)').length;
+                    countBadge.textContent = remainingCount + ' Items';
+                }
+                
+                // Hide button
+                const btn = document.getElementById('clearAllExpiredBtn');
+                if (btn) btn.style.display = 'none';
+            } else {
+                alert('Error: ' + (result.error || 'Failed to clear expired batches'));
+            }
+        } catch (e) {
+            alert('Error clearing expired batches.');
+        }
+    }
 </script>
 {% endblock %}

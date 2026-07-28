@@ -1,6 +1,7 @@
 from django.db import models
 from tenants.models import TenantAwareModel
 from easypharma.models.Items import Products
+from django.utils import timezone
 
 class StockBatch(TenantAwareModel):
     product = models.ForeignKey(Products, on_delete=models.CASCADE, related_name='batches')
@@ -22,3 +23,20 @@ class StockBatch(TenantAwareModel):
     class Meta:
         verbose_name_plural = "Stock Batches"
         unique_together = ('tenant', 'product', 'batch_number')
+
+
+class StockDiscard(TenantAwareModel):
+    product = models.ForeignKey(Products, on_delete=models.CASCADE, related_name='discards')
+    batch_number = models.CharField(max_length=100)
+    quantity = models.PositiveIntegerField(help_text="Quantity in units (e.g. strips/bottles/tablets)")
+    discard_date = models.DateField(default=timezone.now)
+    remarks = models.TextField(blank=True, null=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Discard: {self.product.product_name} - {self.batch_number} ({self.quantity} units)"
+
+    class Meta:
+        verbose_name_plural = "Stock Discards"

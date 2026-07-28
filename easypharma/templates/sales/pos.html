@@ -974,7 +974,6 @@
         document.getElementById('patientAddress').value = data.patient_address || '';
         document.getElementById('patientPhone').value = data.patient_phone || '';
         document.getElementById('doctorName').value = data.doctor_name || '';
-        console.log('pateint address:', data.patient_address);
         if (data.payment_mode) {
             const paymentOption = document.querySelector(`input[name="paymentMethod"][value="${data.payment_mode}"]`);
             if (paymentOption) paymentOption.checked = true;
@@ -1338,7 +1337,6 @@
 
             renderSearchResults(data);
         } catch (err) {
-            console.log('Offline search activated');
             const offlineResults = await OfflineSync.searchOfflineProducts(query);
             renderSearchResults({ results: offlineResults });
         }
@@ -1853,8 +1851,6 @@
                 return sum + (taxPerItem * (parseInt(item.quantity) || 0));
             }, 0);
             
-            console.log("POS CART STATE:", JSON.stringify(cart));
-            console.log("Calculated SubTotal:", subTotal, "TotalTax:", totalTax);
             
             const validSubTotal = isNaN(subTotal) ? 0 : subTotal;
             const validTotalTax = isNaN(totalTax) ? 0 : totalTax;

@@ -1537,6 +1537,11 @@ class PurchaseAnalysisView(LoginRequiredMixin,View):
             except ValueError:
                 pass
 
+        # Fetch suppliers list for filter dropdown
+        from easypharma.models.purchase_invoice import Supplier
+        suppliers = Supplier.objects.filter(tenant=request.tenant).order_by('name')
+        selected_supplier_id = request.GET.get('supplier_id', '').strip()
+
         purchases = PurchaseInvoice.objects.filter(
             tenant=request.tenant,
             purchase_date__gte=start_date,
@@ -1548,6 +1553,10 @@ class PurchaseAnalysisView(LoginRequiredMixin,View):
             purchase_invoice__purchase_date__gte=start_date,
             purchase_invoice__purchase_date__lte=end_date,
         ).select_related('product', 'purchase_invoice', 'purchase_invoice__supplier')
+
+        if selected_supplier_id:
+            purchases = purchases.filter(supplier_id=selected_supplier_id)
+            purchase_items = purchase_items.filter(purchase_invoice__supplier_id=selected_supplier_id)
 
         # ── KPI Aggregates ────────────────────────────────────────────────────
         kpi = purchases.aggregate(
@@ -1597,11 +1606,16 @@ class PurchaseAnalysisView(LoginRequiredMixin,View):
                 m_end = datetime(y + 1, 1, 1).date() - timedelta(days=1)
             else:
                 m_end = datetime(y, m + 1, 1).date() - timedelta(days=1)
-            m_total = PurchaseInvoice.objects.filter(
+            
+            trend_qs = PurchaseInvoice.objects.filter(
                 tenant=request.tenant,
                 purchase_date__gte=m_start,
                 purchase_date__lte=m_end,
-            ).aggregate(t=Sum('total_amount'))['t'] or Decimal('0')
+            )
+            if selected_supplier_id:
+                trend_qs = trend_qs.filter(supplier_id=selected_supplier_id)
+            
+            m_total = trend_qs.aggregate(t=Sum('total_amount'))['t'] or Decimal('0')
             monthly_trend.append({
                 'month': datetime(y, m, 1).strftime('%b %Y'),
                 'total': float(m_total),
@@ -1635,7 +1649,32 @@ class PurchaseAnalysisView(LoginRequiredMixin,View):
             current_quantity__gt=0,
             expiry_date__lte=expiry_threshold,
             expiry_date__gte=today,
-        ).select_related('product').order_by('expiry_date')[:20]
+        ).select_related('product').order_by('expiry_date')
+
+        if selected_supplier_id:
+            candidate_batches = list(expiry_risk.values_list('product_id', 'batch_number'))
+            q_candidates = Q()
+            for prod_id, batch_num in candidate_batches:
+                q_candidates |= Q(product_id=prod_id, batch_number=batch_num)
+            
+            if q_candidates:
+                matching_supplier_batches = set(PurchaseItem.objects.filter(
+                    tenant=request.tenant,
+                    purchase_invoice__supplier_id=selected_supplier_id
+                ).filter(q_candidates).values_list('product_id', 'batch_number'))
+                
+                q_matching = Q()
+                for prod_id, batch_num in matching_supplier_batches:
+                    q_matching |= Q(product_id=prod_id, batch_number=batch_num)
+                
+                if q_matching:
+                    expiry_risk = expiry_risk.filter(q_matching)
+                else:
+                    expiry_risk = expiry_risk.none()
+            else:
+                expiry_risk = expiry_risk.none()
+
+        expiry_risk = list(expiry_risk[:20])
 
         expiry_value = Decimal('0')
         for b in expiry_risk:
@@ -1656,6 +1695,8 @@ class PurchaseAnalysisView(LoginRequiredMixin,View):
         context = {
             'start_date': start_date,
             'end_date':   end_date,
+            'suppliers':  suppliers,
+            'selected_supplier_id': selected_supplier_id,
             'kpi':               kpi,
             'supplier_spending': supplier_spending,
             'gst_breakdown':     gst_breakdown,

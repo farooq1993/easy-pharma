@@ -267,7 +267,7 @@
 
         navigator.serviceWorker.register('/sw.js', { scope: '/' })
             .then(function (reg) {
-                console.log('[PWA] Service Worker registered. Scope:', reg.scope);
+                // console.log('[PWA] Service Worker registered. Scope:', reg.scope);
             })
             .catch(function (err) {
                 console.warn('[PWA] Service Worker registration failed:', err);

@@ -92,7 +92,7 @@ self.addEventListener('activate', event => {
         keys
           .filter(k => k !== CACHE_STATIC && k !== CACHE_PAGES && k !== CACHE_API)
           .map(k => {
-            console.log('[SW] Deleting old cache:', k);
+            // console.log('[SW] Deleting old cache:', k);
             return caches.delete(k);
           })
       )
@@ -183,7 +183,7 @@ async function handleOfflinePost(request, event) {
     } catch (syncError) {
       // Background sync not available; offline queue will still be processed later.
     }
-    console.log('[SW] POST intercepted for offline queuing:', request.url);
+    // console.log('[SW] POST intercepted for offline queuing:', request.url);
     return new Response(JSON.stringify({
       error: 'offline',
       queued: true,
@@ -235,7 +235,7 @@ async function saveRequestToQueue(request) {
   };
 
   await store.add(entry);
-  console.log('[SW] Request queued successfully:', request.url);
+  // console.log('[SW] Request queued successfully:', request.url);
   return tx.complete;
 }
 
@@ -263,7 +263,7 @@ function deleteQueuedRequest(id) {
 
 async function replayQueuedRequests() {
   const queued = await getQueuedRequests();
-  console.log(`[SW] Replaying ${queued.length} queued requests...`);
+  // console.log(`[SW] Replaying ${queued.length} queued requests...`);
 
   for (const item of queued) {
     try {
@@ -277,11 +277,11 @@ async function replayQueuedRequests() {
 
       const response = await fetch(request);
       
-      console.log(`[SW] Replay ${item.url} → Status: ${response.status}`);
+      // console.log(`[SW] Replay ${item.url} → Status: ${response.status}`);
 
       if (response && (response.ok || response.status === 200)) {
         await deleteQueuedRequest(item.id);
-        console.log('[SW] Successfully replayed and deleted from queue');
+        // console.log('[SW] Successfully replayed and deleted from queue');
       }
     } catch (err) {
       console.error('[SW] Replay failed for', item.url, err);
