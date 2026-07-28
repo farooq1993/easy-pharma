@@ -12,14 +12,14 @@ const OfflineSync = {
         this.purchaseStore = localforage.createInstance({ name: 'ep_purchases' });
         this.masterStore = localforage.createInstance({ name: 'ep_masters' });
 
-        console.log('[OfflineSync] Initialized successfully with 3 stores.');
+        // console.log('[OfflineSync] Initialized successfully with 3 stores.');
 
         // Preload product cache for offline use
         this.preloadProductCache();
 
         // Listen for back online
         window.addEventListener('online', () => {
-            console.log('[OfflineSync] 🔄 Back online. Starting sync...');
+            // console.log('[OfflineSync] 🔄 Back online. Starting sync...');
             this.syncAll();
         });
 
@@ -51,7 +51,7 @@ const OfflineSync = {
     async preloadProductCache() {
         if (!navigator.onLine) return;
         try {
-            console.log('[OfflineSync] Preloading product cache...');
+            // console.log('[OfflineSync] Preloading product cache...');
             // Fetch products for POS (with batches)
             const posResponse = await fetch('/api/products/search/?limit=5000');
             if (posResponse.ok) {
@@ -60,7 +60,7 @@ const OfflineSync = {
                     const store = localforage.createInstance({ name: 'ep_product_cache' });
                     await store.setItem('pos_products', products);
                     await store.setItem('all_products', products);
-                    console.log(`[OfflineSync] Cached ${products.length} products for POS offline use.`);
+                    // console.log(`[OfflineSync] Cached ${products.length} products for POS offline use.`);
                 }
             }
             
@@ -71,7 +71,7 @@ const OfflineSync = {
                 if (Array.isArray(products) && products.length > 0) {
                     const store = localforage.createInstance({ name: 'ep_product_cache' });
                     await store.setItem('master_products', products);
-                    console.log(`[OfflineSync] Cached ${products.length} products for Purchase offline use.`);
+                    // console.log(`[OfflineSync] Cached ${products.length} products for Purchase offline use.`);
                 }
             }
         } catch (e) {
@@ -105,7 +105,7 @@ const OfflineSync = {
                         return;
                     }
                     
-                    console.log(`[OfflineSync] Syncing ${items.length} Service Worker queued requests...`);
+                    // console.log(`[OfflineSync] Syncing ${items.length} Service Worker queued requests...`);
                     const csrfToken = await this.getCSRFToken();
                     
                     for (const item of items) {
@@ -132,7 +132,7 @@ const OfflineSync = {
                                 const deleteTx = db.transaction(storeName, 'readwrite');
                                 const deleteStore = deleteTx.objectStore(storeName);
                                 deleteStore.delete(item.id);
-                                console.log(`[OfflineSync] Successfully synced SW request: ${item.url}`);
+                                // console.log(`[OfflineSync] Successfully synced SW request: ${item.url}`);
                             }
                         } catch (err) {
                             console.error(`[OfflineSync] Failed to sync SW request:`, err);
@@ -165,7 +165,7 @@ const OfflineSync = {
                 }
             });
             await store.setItem('all_products', existing.slice(0, 5000)); // limit total cache size
-            console.log('[OfflineSync] Products cached for offline search');
+            // console.log('[OfflineSync] Products cached for offline search');
         } catch (e) {
             console.warn('[OfflineSync] Failed to cache products', e);
         }
@@ -213,7 +213,7 @@ const OfflineSync = {
         };
 
         await store.setItem(id, reqData);
-        console.log(`[OfflineSync] ✅ Queued to ${url}`, reqData);
+        // console.log(`[OfflineSync] ✅ Queued to ${url}`, reqData);
 
         this.showToast(successMsg);
         this.updateOfflineBadge();
@@ -227,14 +227,14 @@ const OfflineSync = {
         const keys = await store.keys();
         if (keys.length === 0) return;
 
-        console.log(`[OfflineSync] Processing ${keys.length} items from ${store._config.name}...`);
+        // console.log(`[OfflineSync] Processing ${keys.length} items from ${store._config.name}...`);
 
         for (let key of keys) {
             const reqData = await store.getItem(key);
             if (!reqData) continue;
 
             try {
-                console.log(`[OfflineSync] Sending queued purchase:`, reqData.url);
+                // console.log(`[OfflineSync] Sending queued purchase:`, reqData.url);
 
                 const response = await fetch(reqData.url, {
                     method: 'POST',
@@ -248,17 +248,17 @@ const OfflineSync = {
                     credentials: 'include'
                 });
 
-                console.log(`[OfflineSync] Response Status: ${response.status}`);
+                // console.log(`[OfflineSync] Response Status: ${response.status}`);
 
                 let result = {};
                 try {
                     result = await response.json();
                 } catch (e) {}
 
-                console.log(`[OfflineSync] Server Result:`, result);
+                // console.log(`[OfflineSync] Server Result:`, result);
 
                 if (response.ok || response.status === 200 || response.status === 201 || result.success) {
-                    console.log(`[OfflineSync] ✅ Successfully synced ${key}`);
+                    // console.log(`[OfflineSync] ✅ Successfully synced ${key}`);
                     await store.removeItem(key);
                 } else {
                     console.warn(`[OfflineSync] Rejected by server:`, result);
@@ -270,7 +270,7 @@ const OfflineSync = {
     },
 
     async syncAll() {
-        console.log('[OfflineSync] 🚀 Starting full synchronization...');
+        // console.log('[OfflineSync] 🚀 Starting full synchronization...');
         
         const csrfToken = await this.getCSRFToken();
         if (!csrfToken) {
@@ -287,7 +287,7 @@ const OfflineSync = {
         await this.processQueue(this.purchaseStore, csrfToken);
         await this.processQueue(this.masterStore, csrfToken);
 
-        console.log('[OfflineSync] Sync cycle completed.');
+        // console.log('[OfflineSync] Sync cycle completed.');
     },
 
     updateOfflineBadge() {

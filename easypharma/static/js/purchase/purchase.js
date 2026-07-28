@@ -20,7 +20,7 @@
 let _csvParsedItems  = [];
 let _csvMissing      = [];
 
-console.log("✅ CSV Import JS Loaded");
+// console.log("✅ CSV Import JS Loaded");
 
 // ── Stacked modal fix ─────────────────────────
 // When "+ Add" is clicked from inside the CSV preview, quickAddModal opens

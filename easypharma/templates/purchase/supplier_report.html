@@ -10,6 +10,19 @@
     z-index: 1400 !important;
     max-height: 320px;
     overflow: auto;
+    background-color: #ffffff !important;
+    border: 1px solid #dee2e6 !important;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15) !important;
+    border-radius: 8px !important;
+}
+.ts-dropdown .option {
+    background-color: #ffffff !important;
+    color: #212529 !important;
+    padding: 8px 12px !important;
+}
+.ts-dropdown .active {
+    background-color: #0d6efd !important;
+    color: #ffffff !important;
 }
 </style>
 
@@ -54,9 +67,9 @@
             <div class="col-md-3">
                 <div class="card text-white bg-primary">
                     <div class="card-body">
-                        <h6 class="card-title">Total Items</h6>
+                        <h6 class="card-title">Total Bills</h6>
                         <h4 id="totalCount">0</h4>
-                        <small>line items</small>
+                        <small>invoices</small>
                     </div>
                 </div>
             </div>
@@ -81,9 +94,9 @@
             <div class="col-md-3">
                 <div class="card text-white bg-info">
                     <div class="card-body">
-                        <h6 class="card-title">Avg per Item</h6>
+                        <h6 class="card-title">Avg per Bill</h6>
                         <h4 id="avgAmount">₹0</h4>
-                        <small>average amount</small>
+                        <small>average bill amount</small>
                     </div>
                 </div>
             </div>
@@ -92,7 +105,7 @@
         <div class="card shadow-sm mt-3">
             <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2 py-2">
                 <span class="fw-semibold">
-                    <i class="bi bi-list-check me-1"></i>Purchase Item Details
+                    <i class="bi bi-list-check me-1"></i>Purchase Bill Details
                     <span id="tableRowCount" class="badge bg-secondary ms-1">0</span>
                 </span>
                 <div class="d-flex align-items-center gap-2">
@@ -110,7 +123,7 @@
                         </button>
                     </div>
                     <span id="searchResultCount" class="text-muted small" style="display:none;"></span>
-                    <button class="btn btn-sm btn-outline-danger" type="button" onclick="exportTableToPDF()" title="Export purchase item list as PDF">
+                    <button class="btn btn-sm btn-outline-danger" type="button" onclick="exportTableToPDF()" title="Export purchase bill list as PDF">
                         <i class="bi bi-file-earmark-pdf me-1"></i>Export PDF
                     </button>
                 </div>
@@ -119,12 +132,11 @@
                 <table class="table table-bordered table-hover mb-0">
                     <thead class="table-dark">
                         <tr>
-                            <th>Product Name</th>
+                            <th>Date</th>
                             <th>Bill No.</th>
                             <th>Supplier</th>
-                            <th>Payment</th>
-                            <th class="text-end">Qty</th>
-                            <th class="text-end">Amount</th>
+                            <th>Payment Mode</th>
+                            <th class="text-end">Total Amount</th>
                             <th class="text-center">Action</th>
                         </tr>
                     </thead>
@@ -297,40 +309,41 @@
                 reportBody.innerHTML = '';
 
                 if (purchases.length > 0) {
-                    // Flatten purchases into item-level rows
+                    // Populate bill-wise rows
                     let totalItems = 0;
                     let total = 0;
                     const monthlyMap = {};
 
                     purchases.forEach(p => {
                         const supplierForPurchase = p.supplier_name || supplierName || '—';
-                        if (p.items && p.items.length) {
-                            p.items.forEach(item => {
-                                const amount = parseFloat(item.total_amount) || 0;
-                                totalItems += 1;
-                                total += amount;
+                        const amount = parseFloat(p.total_amount) || 0;
+                        totalItems += 1;
+                        total += amount;
 
-                                const d = new Date(p.date);
-                                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                                monthlyMap[key] = (monthlyMap[key] || 0) + amount;
+                        const d = new Date(p.date);
+                        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                        monthlyMap[key] = (monthlyMap[key] || 0) + amount;
 
-                                // Insert a product-level row
-                                reportBody.insertAdjacentHTML('beforeend', `
-                                    <tr>
-                                        <td>${item.product_name}</td>
-                                        <td class="fw-semibold">${p.invoice_number}</td>
-                                        <td>${supplierForPurchase}</td>
-                                        <td>${p.payment_mode || '—'}</td>
-                                        <td class="text-end">${item.quantity}</td>
-                                        <td class="text-end">₹${amount.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
-                                        <td class="text-center">
-                                            <a href="/purchase/edit/${p.id}/" class="btn btn-sm btn-outline-primary">
-                                                View
-                                            </a>
-                                        </td>
-                                    </tr>`);
-                            });
-                        }
+                        // Stringified invoice for the modal button
+                        const invoiceStr = JSON.stringify(p).replace(/'/g, "&#39;");
+
+                        // Insert a bill-level row
+                        reportBody.insertAdjacentHTML('beforeend', `
+                            <tr>
+                                <td>${p.date}</td>
+                                <td class="fw-semibold">${p.invoice_number}</td>
+                                <td>${supplierForPurchase}</td>
+                                <td>${p.payment_mode || '—'}</td>
+                                <td class="text-end fw-bold">₹${amount.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                                <td class="text-center">
+                                    <button class="btn btn-sm btn-outline-info view-invoice-btn animate-fade-in" data-invoice='${invoiceStr}' data-supplier="${supplierForPurchase}">
+                                        Items
+                                    </button>
+                                    <a href="/purchase/edit/${p.id}/" class="btn btn-sm btn-outline-primary">
+                                        Edit
+                                    </a>
+                                </td>
+                            </tr>`);
                     });
 
                     document.getElementById('noDataMessage').style.display = 'none';
@@ -644,7 +657,9 @@
             rows.push([
                 cells[0].textContent.trim(),
                 cells[1].textContent.trim(),
-                cells[2].textContent.trim().replace('₹', 'Rs. '),
+                cells[2].textContent.trim(),
+                cells[3].textContent.trim(),
+                cells[4].textContent.trim().replace('₹', 'Rs. '),
             ]);
         });
 
@@ -654,7 +669,7 @@
         }
 
         doc.autoTable({
-            head: [['Invoice Number', 'Date', 'Total Amount']],
+            head: [['Date', 'Invoice Number', 'Supplier', 'Payment Mode', 'Total Amount']],
             body: rows,
             startY: 47,
             theme: 'grid',

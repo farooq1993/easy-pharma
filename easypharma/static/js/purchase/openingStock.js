@@ -69,8 +69,8 @@ async function handleSaveQuickProduct() {
         hsn_code: (document.getElementById('quickHsn') || {}).value?.trim() || null
     };
     
-    console.log("Sending data:", data);   // For debugging
-    console.log("Quick Name Value:", document.getElementById('quickName')?.value);
+    // console.log("Sending data:", data);   // For debugging
+    // console.log("Quick Name Value:", document.getElementById('quickName')?.value);
 
     try {
         const res = await fetch("/api/products/quick-add/", {
@@ -103,7 +103,7 @@ async function handleSaveQuickProduct() {
             setTimeout(() => {
                 const event = new Event('input', { bubbles: true });
                 searchInput.dispatchEvent(event);
-                console.log('Product search refreshed after quick add');
+                // console.log('Product search refreshed after quick add');
             }, 400);
         }
 
