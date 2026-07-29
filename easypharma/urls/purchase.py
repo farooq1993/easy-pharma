@@ -6,7 +6,8 @@ from easypharma.views.purchase import (PurchaseEntryView, PurchaseListView,
                                         QuickCreateProductView, ProductBatchHistoryView,SmartPurchaseSuggestPageView,
                                         SmartPurchaseSuggestAPIView,PurchaseEntryView,
                                         OpeningStockListView,OpeningStockEntryView,OpeningStockEditView,CheckInvoiceNumberView,OpeningStockDeleteView,
-                                        DiscardExpiredBatchView, StockDiscardView, StockDiscardDeleteView)
+                                        DiscardExpiredBatchView, StockDiscardView, StockDiscardDeleteView,
+                                        PurchaseScanAPI)
 
 urlpatterns = [
     path('entry/', PurchaseEntryView.as_view(), name='purchase_entry'),
@@ -32,6 +33,7 @@ urlpatterns = [
     path('export/csv/', PurchaseExportCSVView.as_view(), name='purchase_export_csv'),
     path('export/pdf/', PurchaseExportPDFView.as_view(), name='purchase_export_pdf'),
     path('import/csv/', PurchaseImportCSVView.as_view(), name='purchase_import_csv'),
+    path('import/ocr/', PurchaseScanAPI.as_view(), name='purchase_import_ocr'),
     path('api/products/batch-history/', ProductBatchHistoryView.as_view(), name='batch_history'),
     path('api/stock/remove-expired-batch/', DiscardExpiredBatchView.as_view(), name='remove_expired_batch'),
     path('stock/discard/', StockDiscardView.as_view(), name='stock_discard'),

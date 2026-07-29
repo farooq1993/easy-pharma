@@ -498,6 +498,108 @@ class PrintInvoiceView(LoginRequiredMixin, View):
 
         return "\n".join(lines)
 
+
+class PrintInvoiceDirectView(LoginRequiredMixin, View):
+
+    def get(self, request, invoice_id):
+        import ctypes
+        from django.http import JsonResponse
+        from django.shortcuts import get_object_or_404
+        from easypharma.models.print_setup import PrintSetup
+
+        invoice = get_object_or_404(
+            SaleInvoice.objects.prefetch_related('items', 'items__product'),
+            id=invoice_id
+        )
+
+        if not invoice.tenant and request.tenant:
+            invoice.tenant = request.tenant
+        tenant = invoice.tenant or request.tenant
+
+        ps, _ = PrintSetup.objects.get_or_create(tenant=tenant)
+        
+        printer_view = PrintInvoiceView()
+        
+        if ps.paper_size == 'A4':
+            W = 55
+            single = printer_view.generate_bill_text(invoice, ps, W)
+            bill_text = single
+        elif ps.paper_size in ['4x6', '8x4']:
+            W = 65
+            single = printer_view.generate_bill_text(invoice, ps, W)
+            if ps.print_single_copy:
+                bill_text = single
+            else:
+                bill_text = single + "\n\n" + single
+        elif ps.paper_size in ['80mm', '58mm']:
+            W = 32 if ps.paper_size == '58mm' else 42
+            bill_text = printer_view.generate_bill_text(invoice, ps, W)
+        else:
+            W = 55
+            bill_text = printer_view.generate_bill_text(invoice, ps, W)
+
+        # Feed paper a bit and reset printer (for dot matrix standard)
+        bill_text += "\n\n\n\n\x1b@"
+
+        try:
+            winspool = ctypes.WinDLL('winspool.drv')
+            
+            buffer_size = ctypes.c_uint32(0)
+            try:
+                winspool.GetDefaultPrinterW(None, ctypes.byref(buffer_size))
+            except:
+                pass
+                
+            if buffer_size.value == 0:
+                return JsonResponse({'success': False, 'error': 'No default printer configured.'})
+                
+            buffer = ctypes.create_unicode_buffer(buffer_size.value)
+            if not winspool.GetDefaultPrinterW(buffer, ctypes.byref(buffer_size)):
+                return JsonResponse({'success': False, 'error': 'Failed to get default printer name.'})
+                
+            printer_name = buffer.value
+            
+            hPrinter = ctypes.c_void_p()
+            if not winspool.OpenPrinterW(printer_name, ctypes.byref(hPrinter), None):
+                return JsonResponse({'success': False, 'error': f'Failed to open printer: {printer_name}'})
+                
+            try:
+                class DOC_INFO_1(ctypes.Structure):
+                    _fields_ = [
+                        ("pDocName", ctypes.c_wchar_p),
+                        ("pOutputFile", ctypes.c_wchar_p),
+                        ("pDatatype", ctypes.c_wchar_p),
+                    ]
+                
+                doc_info = DOC_INFO_1()
+                doc_info.pDocName = f"Invoice {invoice.invoice_number}"
+                doc_info.pOutputFile = None
+                doc_info.pDatatype = "RAW"
+                
+                if winspool.StartDocPrinterW(hPrinter, 1, ctypes.byref(doc_info)) <= 0:
+                    return JsonResponse({'success': False, 'error': 'Failed to start document.'})
+                
+                try:
+                    if not winspool.StartPagePrinter(hPrinter):
+                        return JsonResponse({'success': False, 'error': 'Failed to start page.'})
+                    
+                    try:
+                        bytes_written = ctypes.c_uint32()
+                        data_bytes = bill_text.encode('cp437', errors='replace')
+                        if not winspool.WritePrinter(hPrinter, data_bytes, len(data_bytes), ctypes.byref(bytes_written)):
+                            return JsonResponse({'success': False, 'error': 'Failed to write data.'})
+                    finally:
+                        winspool.EndPagePrinter(hPrinter)
+                finally:
+                    winspool.EndDocPrinter(hPrinter)
+            finally:
+                winspool.ClosePrinter(hPrinter)
+                
+            return JsonResponse({'success': True, 'printer': printer_name})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
+
 # class PrintInvoiceView(LoginRequiredMixin,View):
 #     template_name = 'sales/print_invoice.html'
 

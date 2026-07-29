@@ -346,5 +346,13 @@ tbody td.center { text-align: center; }
 </div>
 {% endfor %}
 
+<script>
+    window.addEventListener('load', () => {
+        window.print();
+        setTimeout(() => {
+            window.close();
+        }, 500);
+    });
+</script>
 </body>
 </html>

@@ -24,3 +24,6 @@ admin.site.register(PurchaseItem)
 admin.site.register(OpeningStock)
 admin.site.register(OpeningStockItem)
 
+from easypharma.models.purchase_scan_log import PurchaseScanLog
+admin.site.register(PurchaseScanLog)
+

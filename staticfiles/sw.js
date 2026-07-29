@@ -9,13 +9,13 @@
  * Failed POST transactions are stored locally and retried when connectivity returns.
  */
 
-const SW_VERSION = 'v1.5.4';   // 
+const SW_VERSION = 'v1.6.1';   // 
 const CACHE_STATIC = `ep-static-${SW_VERSION}`;
 const CACHE_PAGES  = `ep-pages-${SW_VERSION}`;
 const CACHE_API    = `ep-api-${SW_VERSION}`;
 
 const DB_NAME = 'ep-offline-requests';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const DB_STORE = 'requests';
 
 // Static assets to pre-cache on install
@@ -26,13 +26,16 @@ const PRECACHE_ASSETS = [
   '/static/img/pwa-icon-512.png',
   '/offline/',
   '/pos/',
-  '/purchase/',
+  '/entry/',
 ];
 
 // URLs whose responses should always come from the network (write/auth pages)
 const NETWORK_ONLY_PATTERNS = [
+  /^\/$/,              // Root URL (login page)
   /\/accounts\//,
   /\/admin\//,
+  /\/logout/,
+  /\/createuser/,
 ];
 
 // URLs that are pure static assets (Cache-First)
@@ -89,7 +92,7 @@ self.addEventListener('activate', event => {
         keys
           .filter(k => k !== CACHE_STATIC && k !== CACHE_PAGES && k !== CACHE_API)
           .map(k => {
-            console.log('[SW] Deleting old cache:', k);
+            // console.log('[SW] Deleting old cache:', k);
             return caches.delete(k);
           })
       )
@@ -134,12 +137,11 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       fetch(request).catch(() => 
         new Response(JSON.stringify({ 
-          results: [],
           error: 'offline',
           message: 'Product search requires internet.' 
         }), {
           headers: { 'Content-Type': 'application/json' },
-          status: 200   // ← 503 ki jagah 200 kar do taaki frontend crash na kare
+          status: 503
         })
       )
     );
@@ -152,9 +154,9 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 4. Stale-While-Revalidate for HTML pages
+  // 4. Network-First for HTML pages (ensures real-time updates when online, falls back to cache offline)
   if (request.headers.get('Accept') && request.headers.get('Accept').includes('text/html')) {
-    event.respondWith(staleWhileRevalidate(request, CACHE_PAGES));
+    event.respondWith(networkFirstHTML(request, CACHE_PAGES));
     return;
   }
 
@@ -181,7 +183,7 @@ async function handleOfflinePost(request, event) {
     } catch (syncError) {
       // Background sync not available; offline queue will still be processed later.
     }
-    console.log('[SW] POST intercepted for offline queuing:', request.url);
+    // console.log('[SW] POST intercepted for offline queuing:', request.url);
     return new Response(JSON.stringify({
       error: 'offline',
       queued: true,
@@ -233,7 +235,7 @@ async function saveRequestToQueue(request) {
   };
 
   await store.add(entry);
-  console.log('[SW] Request queued successfully:', request.url);
+  // console.log('[SW] Request queued successfully:', request.url);
   return tx.complete;
 }
 
@@ -261,7 +263,7 @@ function deleteQueuedRequest(id) {
 
 async function replayQueuedRequests() {
   const queued = await getQueuedRequests();
-  console.log(`[SW] Replaying ${queued.length} queued requests...`);
+  // console.log(`[SW] Replaying ${queued.length} queued requests...`);
 
   for (const item of queued) {
     try {
@@ -275,11 +277,11 @@ async function replayQueuedRequests() {
 
       const response = await fetch(request);
       
-      console.log(`[SW] Replay ${item.url} → Status: ${response.status}`);
+      // console.log(`[SW] Replay ${item.url} → Status: ${response.status}`);
 
       if (response && (response.ok || response.status === 200)) {
         await deleteQueuedRequest(item.id);
-        console.log('[SW] Successfully replayed and deleted from queue');
+        // console.log('[SW] Successfully replayed and deleted from queue');
       }
     } catch (err) {
       console.error('[SW] Replay failed for', item.url, err);
@@ -321,7 +323,7 @@ async function cacheFirst(request, cacheName) {
 
 async function staleWhileRevalidate(request, cacheName) {
   const cache = await caches.open(cacheName);
-  const cached = await cache.match(request);
+  const cached = await caches.match(request);
 
   const fetchPromise = fetch(request)
     .then(response => {
@@ -347,6 +349,27 @@ async function staleWhileRevalidate(request, cacheName) {
   return offline || new Response('<h1>You are offline</h1>', {
     headers: { 'Content-Type': 'text/html' }
   });
+}
+
+async function networkFirstHTML(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch (err) {
+    // Fetch failed (offline) — return cached copy if available
+    const cached = await caches.match(request);
+    if (cached) return cached;
+
+    // Show offline fallback page
+    const offline = await caches.match('/offline/');
+    return offline || new Response('<h1>You are offline</h1>', {
+      headers: { 'Content-Type': 'text/html' }
+    });
+  }
 }
 
 async function networkFirstWithTimeout(request, cacheName, timeout) {
