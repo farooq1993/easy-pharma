@@ -685,6 +685,677 @@ async function saveCsvSupplier() {
     }
 }
 
+
+// ════════════════════════════════════════════
+//  Purchase AI OCR Logic
+// ════════════════════════════════════════════
+
+let _ocrParsedItems  = [];
+let _ocrMissing      = [];
+let ocrFile          = null;
+
+function ocrDragOver(e) {
+    e.preventDefault();
+    const zone = document.getElementById('ocrDropZone');
+    if (zone) {
+        zone.style.borderColor = '#0f766e';
+        zone.style.background = '#e6f4f1';
+    }
+}
+
+function ocrDragLeave(e) {
+    e.preventDefault();
+    const zone = document.getElementById('ocrDropZone');
+    if (zone) {
+        zone.style.borderColor = '#0d9488';
+        zone.style.background = '#f0fdf9';
+    }
+}
+
+function ocrDrop(e) {
+    e.preventDefault();
+    ocrDragLeave(e);
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+        const fileInput = document.getElementById('purchaseBillFile');
+        if (fileInput) {
+            fileInput.files = files;
+            ocrFileSelected(fileInput);
+        }
+    }
+}
+
+function ocrFileSelected(input) {
+    const warningsContainer = document.getElementById('ocrImportWarnings');
+    if (warningsContainer) warningsContainer.innerHTML = '';
+    const errAlert = document.getElementById('ocrParseError');
+    if (errAlert) errAlert.classList.add('d-none');
+
+    if (input.files && input.files[0]) {
+        ocrFile = input.files[0];
+        document.getElementById('ocrSelectedFileName').textContent = ocrFile.name;
+        document.getElementById('ocrSelectedFileSize').textContent = `(${(ocrFile.size / 1024).toFixed(1)} KB)`;
+        document.getElementById('ocrSelectedFile').classList.remove('d-none');
+        document.getElementById('ocrParseBtn').disabled = false;
+    } else {
+        ocrClearFile();
+    }
+}
+
+function ocrClearFile() {
+    ocrFile = null;
+    const fileInput = document.getElementById('purchaseBillFile');
+    if (fileInput) fileInput.value = '';
+    document.getElementById('ocrSelectedFile').classList.add('d-none');
+    document.getElementById('ocrParseBtn').disabled = true;
+    document.getElementById('ocrParseError').classList.add('d-none');
+}
+
+function compressOcrImage(file, callback) {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = function(event) {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = function() {
+            const maxDim = 1200;
+            let width = img.width;
+            let height = img.height;
+            
+            if (width > maxDim || height > maxDim) {
+                if (width > height) {
+                    height = Math.round((height * maxDim) / width);
+                    width = maxDim;
+                } else {
+                    width = Math.round((width * maxDim) / height);
+                    height = maxDim;
+                }
+            }
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            canvas.toBlob(function(blob) {
+                callback(blob);
+            }, 'image/jpeg', 0.85);
+        };
+    };
+}
+
+function submitOcrParse() {
+    if (!ocrFile) return;
+
+    const progress = document.getElementById('ocrParseProgress');
+    const parseBtn = document.getElementById('ocrParseBtn');
+    const ocrBackBtn = document.getElementById('ocrBackBtn');
+    const cancelBtn = document.querySelector('#ocrImportModal .modal-footer .btn-outline-secondary');
+
+    progress.classList.remove('d-none');
+    parseBtn.disabled = true;
+    if (ocrBackBtn) ocrBackBtn.disabled = true;
+    if (cancelBtn) cancelBtn.disabled = true;
+    
+    document.getElementById('ocrParseError').classList.add('d-none');
+
+    compressOcrImage(ocrFile, function(compressedBlob) {
+        const formData = new FormData();
+        formData.append('bill_image', compressedBlob, 'bill.jpg');
+
+        fetch('/import/ocr/', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': csrfToken
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            progress.classList.add('d-none');
+            parseBtn.disabled = false;
+            if (ocrBackBtn) ocrBackBtn.disabled = false;
+            if (cancelBtn) cancelBtn.disabled = false;
+
+            if (data.success) {
+                document.getElementById('ocrScansToday').textContent = data.scans_today;
+                document.getElementById('ocrMaxScans').textContent = data.max_scans;
+
+                document.getElementById('ocrInvoiceNumber').value = data.invoice_number || '';
+                if (data.purchase_date) {
+                    document.getElementById('ocrPurchaseDate').value = data.purchase_date;
+                } else {
+                    const today = new Date().toISOString().split('T')[0];
+                    document.getElementById('ocrPurchaseDate').value = today;
+                }
+                if (data.payment_mode) {
+                    document.getElementById('ocrPaymentMode').value = data.payment_mode;
+                }
+
+                const suppSelect = document.getElementById('ocrSupplierSelect');
+                const suppSearchInput = document.getElementById('ocrSupplierSearchInput');
+                if (data.supplier_id) {
+                    suppSelect.value = data.supplier_id;
+                    suppSelect.dispatchEvent(new Event('change'));
+                    const opt = suppSelect.options[suppSelect.selectedIndex];
+                    if (opt) suppSearchInput.value = opt.text;
+                } else if (data.supplier_name) {
+                    suppSearchInput.value = data.supplier_name;
+                } else {
+                    suppSearchInput.value = '';
+                    suppSelect.value = '';
+                }
+
+                const dupWarning = document.getElementById('ocrDuplicateInvoiceWarning');
+                if (data.is_duplicate) {
+                    dupWarning.classList.remove('d-none');
+                } else {
+                    dupWarning.classList.add('d-none');
+                }
+
+                _ocrParsedItems = data.items || [];
+                _ocrMissing = data.missing_products || [];
+
+                _ocrRenderMissingBar();
+                _ocrRenderPreviewTable(_ocrParsedItems);
+                ocrGoToStep2();
+            } else {
+                _ocrShowError(data.error || 'Failed to scan the bill.');
+            }
+        })
+        .catch(err => {
+            progress.classList.add('d-none');
+            parseBtn.disabled = false;
+            if (ocrBackBtn) ocrBackBtn.disabled = false;
+            if (cancelBtn) cancelBtn.disabled = false;
+            _ocrShowError('Connection error: ' + err.message);
+        });
+    });
+}
+
+function ocrGoToStep2() {
+    document.getElementById('ocrStep1').classList.add('d-none');
+    document.getElementById('ocrStep2').classList.remove('d-none');
+
+    document.getElementById('ocrStep1Ind').classList.remove('active');
+    document.getElementById('ocrStep2Ind').classList.add('active');
+
+    document.getElementById('ocrParseBtn').classList.add('d-none');
+    document.getElementById('ocrConfirmBtn').classList.remove('d-none');
+    document.getElementById('ocrBackBtn').style.display = '';
+}
+
+function ocrGoToStep1() {
+    document.getElementById('ocrStep2').classList.add('d-none');
+    document.getElementById('ocrStep1').classList.remove('d-none');
+
+    document.getElementById('ocrStep2Ind').classList.remove('active');
+    document.getElementById('ocrStep1Ind').classList.add('active');
+
+    document.getElementById('ocrConfirmBtn').classList.add('d-none');
+    document.getElementById('ocrParseBtn').classList.remove('d-none');
+    document.getElementById('ocrBackBtn').style.display = 'none';
+}
+
+function resetOcrImportModal() {
+    ocrClearFile();
+    ocrGoToStep1();
+    _ocrParsedItems = [];
+    _ocrMissing = [];
+    document.getElementById('ocrSupplierSearchInput').value = '';
+    document.getElementById('ocrSupplierSelect').value = '';
+    document.getElementById('ocrInvoiceNumber').value = '';
+    document.getElementById('ocrPurchaseDate').value = '';
+    document.getElementById('ocrPaymentMode').value = 'Cash';
+    document.getElementById('ocrPreviewTbody').innerHTML = '';
+    document.getElementById('ocrTotalQty').textContent = '';
+    document.getElementById('ocrTotalAmount').textContent = '';
+    document.getElementById('ocrDuplicateInvoiceWarning').classList.add('d-none');
+    document.getElementById('ocrMissingProductsBar').classList.add('d-none');
+}
+
+function _ocrShowError(msg) {
+    document.getElementById('ocrParseErrorMsg').textContent = msg;
+    document.getElementById('ocrParseError').classList.remove('d-none');
+}
+
+function _ocrRenderMissingBar() {
+    const bar = document.getElementById('ocrMissingProductsBar');
+    const list = document.getElementById('ocrMissingProductsList');
+    if (_ocrMissing.length === 0) {
+        bar.classList.add('d-none');
+        list.innerHTML = '';
+        return;
+    }
+    bar.classList.remove('d-none');
+    let html = '<ul class="mb-2 ps-3">';
+    _ocrMissing.forEach((p, idx) => {
+        html += `<li><strong>Row ${p.row || (idx+1)}:</strong> "${_esc(p.product)}" (Batch: ${_esc(p.batch_number || 'N/A')}, Price: ₹${p.purchase_price || 0}, MRP: ₹${p.mrp || 0}) 
+        <button class="btn btn-sm btn-link p-0 ms-2 fw-bold text-teal" style="font-size:0.75rem; text-decoration:none; color:#0d9488;" onclick="openOcrQuickAdd('${_esc(p.product)}')">
+          <i class="fas fa-plus-circle"></i> Quick Add
+        </button></li>`;
+    });
+    html += '</ul>';
+    list.innerHTML = html;
+}
+
+window.openOcrQuickAdd = function(name) {
+    const qaModalEl = document.getElementById('quickAddModal');
+    if (!qaModalEl) return;
+    const modal = bootstrap.Modal.getOrCreateInstance(qaModalEl);
+    document.getElementById('quickName').value = name;
+    modal.show();
+
+    qaModalEl.addEventListener('hidden.bs.modal', async function onHide() {
+        qaModalEl.removeEventListener('hidden.bs.modal', onHide);
+        showToast('Rechecking database for matched products...', 'info');
+        await _ocrRecheckMissingProducts();
+    });
+};
+
+async function _ocrRecheckMissingProducts() {
+    const stillMissing = [];
+    for (const item of _ocrMissing) {
+        try {
+            const resp = await fetch(`/api/products/search/?q=${encodeURIComponent(item.product)}`);
+            const data = await resp.json();
+            if (data && data.length > 0) {
+                const matchedProduct = data.find(p => p.product_name.toLowerCase().trim() === item.product.toLowerCase().trim()) || data[0];
+                _ocrParsedItems.push({
+                    product_id: matchedProduct.id,
+                    name: matchedProduct.product_name,
+                    packing: matchedProduct.product_packing || '',
+                    conversion_factor: matchedProduct.conversion_factor || 1,
+                    batch_number: item.batch_number,
+                    expiry_date: item.expiry_date,
+                    quantity: item.quantity,
+                    free_quantity: item.free_quantity,
+                    total_units: (item.quantity + item.free_quantity) * (matchedProduct.conversion_factor || 1),
+                    purchase_price: item.purchase_price,
+                    tax_percentage: parseFloat(matchedProduct.tax_rate || 12.0),
+                    tax_amount: (item.purchase_price * item.quantity) * parseFloat(matchedProduct.tax_rate || 12.0) / 100.0,
+                    mrp: item.mrp,
+                    sale_price: item.mrp,
+                    total: item.total
+                });
+                showToast(`Matched "${matchedProduct.product_name}" successfully!`, 'success');
+            } else {
+                stillMissing.push(item);
+            }
+        } catch (e) {
+            stillMissing.push(item);
+        }
+    }
+    _ocrMissing = stillMissing;
+    _ocrRenderMissingBar();
+    _ocrRenderPreviewTable(_ocrParsedItems);
+}
+
+function _ocrRenderPreviewTable(items) {
+    const tbody = document.getElementById('ocrPreviewTbody');
+    tbody.innerHTML = '';
+
+    if (items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="11" class="text-center py-4 text-muted"><i class="fas fa-info-circle me-1"></i>No items to display. Upload a bill photo.</td></tr>`;
+        return;
+    }
+
+    items.forEach((item, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td class="text-muted" style="padding:6px;">${idx + 1}</td>
+            <td><div class="fw-bold text-dark">${_esc(item.name)}</div></td>
+            <td contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'batch_number', this.textContent)" style="background:#fffbeb; cursor:text;">${_esc(item.batch_number)}</td>
+            <td contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'expiry_date', this.textContent)" style="background:#fffbeb; cursor:text;" placeholder="YYYY-MM-DD">${_esc(item.expiry_date || '')}</td>
+            <td class="text-center" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'quantity', this.textContent)" style="background:#fffbeb; cursor:text; font-weight:bold;">${item.quantity}</td>
+            <td class="text-center text-success" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'free_quantity', this.textContent)" style="background:#fffbeb; cursor:text;">${item.free_quantity}</td>
+            <td class="text-end" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'purchase_price', this.textContent)" style="background:#fffbeb; cursor:text;">${Number(item.purchase_price).toFixed(2)}</td>
+            <td class="text-end" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'mrp', this.textContent)" style="background:#fffbeb; cursor:text;">${Number(item.mrp).toFixed(2)}</td>
+            <td class="text-center" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'tax_percentage', this.textContent)" style="background:#fffbeb; cursor:text;">${item.tax_percentage}</td>
+            <td class="text-end fw-bold text-teal" id="ocrRowTotal-${idx}">₹${Number(item.total).toFixed(2)}</td>
+            <td class="text-center">
+                <button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="window._ocrRemoveRow(${idx})" title="Remove item">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    _ocrRefreshTotals();
+}
+
+function _ocrUpdateItem(idx, field, value) {
+    const item = _ocrParsedItems[idx];
+    if (!item) return;
+
+    if (field === 'quantity' || field === 'free_quantity') {
+        item[field] = parseInt(value) || 0;
+    } else if (field === 'purchase_price' || field === 'mrp' || field === 'tax_percentage') {
+        item[field] = parseFloat(value) || 0.0;
+    } else {
+        item[field] = value.trim();
+    }
+
+    _ocrRecalcRow(idx);
+    _ocrRefreshTotals();
+}
+
+function _ocrRecalcRow(idx) {
+    const item = _ocrParsedItems[idx];
+    if (!item) return;
+
+    const qty = item.quantity || 0;
+    const price = item.purchase_price || 0.0;
+    const taxRate = item.tax_percentage || 0.0;
+
+    const taxAmt = (price * qty) * (taxRate / 100.0);
+    item.tax_amount = taxAmt;
+    item.total = (price * qty) + taxAmt;
+
+    const cell = document.getElementById(`ocrRowTotal-${idx}`);
+    if (cell) {
+        cell.textContent = '₹' + item.total.toFixed(2);
+    }
+}
+
+function _ocrRefreshTotals() {
+    const totalQty = _ocrParsedItems.reduce((s, i) => s + (i.quantity || 0), 0);
+    const totalAmt = _ocrParsedItems.reduce((s, i) => s + (i.total || 0), 0);
+    const totalQtyEl = document.getElementById('ocrTotalQty');
+    if (totalQtyEl) totalQtyEl.textContent = totalQty;
+    const totalAmtEl = document.getElementById('ocrTotalAmount');
+    if (totalAmtEl) totalAmtEl.textContent = '₹' + totalAmt.toFixed(2);
+
+    const confirmBtn = document.getElementById('ocrConfirmBtn');
+    if (confirmBtn) {
+        if (_ocrParsedItems.length === 0) {
+            confirmBtn.disabled = true;
+            confirmBtn.style.opacity = '0.55';
+        } else {
+            confirmBtn.disabled = false;
+            confirmBtn.style.opacity = '';
+        }
+    }
+}
+
+function _ocrRemoveRow(idx) {
+    if (!confirm('Remove this item?')) return;
+    _ocrParsedItems.splice(idx, 1);
+    _ocrRenderPreviewTable(_ocrParsedItems);
+}
+
+function ocrConfirmAndLoad() {
+    if (_ocrParsedItems.length === 0) {
+        alert('No items to load.');
+        return;
+    }
+
+    const suppVal = document.getElementById('ocrSupplierSelect').value;
+    const invNum = document.getElementById('ocrInvoiceNumber').value.trim();
+    const invDate = document.getElementById('ocrPurchaseDate').value;
+    const payMode = document.getElementById('ocrPaymentMode').value;
+
+    if (!suppVal || !invNum) {
+        showToast('Please select supplier and enter invoice number', 'error');
+        return;
+    }
+
+    const mainSupplierSel = document.getElementById('supplierSelect');
+    mainSupplierSel.value = suppVal;
+    mainSupplierSel.dispatchEvent(new Event('change'));
+
+    const mainSupplierSI = document.getElementById('supplierSearchInput');
+    if (mainSupplierSI && mainSupplierSel.selectedIndex >= 0) {
+        const selOpt = mainSupplierSel.options[mainSupplierSel.selectedIndex];
+        if (selOpt) mainSupplierSI.value = selOpt.text.split(' | ')[0];
+    }
+
+    document.getElementById('invoiceNumber').value = invNum;
+    if (invDate) document.getElementById('purchaseDate').value = invDate;
+    document.getElementById('summaryPaymentMode').value = payMode;
+
+    items = [];
+    _ocrParsedItems.forEach(item => {
+        item.quantity = Number(item.quantity) || 0;
+        item.free_quantity = Number(item.free_quantity) || 0;
+        item.purchase_price = Number(item.purchase_price) || 0;
+        item.mrp = Number(item.mrp) || 0;
+        item.tax_percentage = Number(item.tax_percentage) || 0;
+
+        if (item.expiry_date && String(item.expiry_date).length === 7) {
+            item.expiry_date = item.expiry_date + '-01';
+        }
+
+        if (!item.tax_amount) {
+            const sub = item.quantity * item.purchase_price;
+            item.tax_amount = sub * (item.tax_percentage / 100);
+        }
+        if (!item.total) {
+            const sub = item.quantity * item.purchase_price;
+            item.total = sub + (item.tax_amount || 0);
+        }
+
+        items.push(item);
+    });
+
+    renderTable();
+    calculateSummary();
+
+    const ocrModalEl = document.getElementById('ocrImportModal');
+    if (ocrModalEl) {
+        bootstrap.Modal.getInstance(ocrModalEl).hide();
+    }
+    resetOcrImportModal();
+
+    showToast(`${items.length} items loaded from AI OCR Scan ✓`, 'success');
+}
+
+// ── Supplier Dropdown Autocomplete for OCR ──
+(function() {
+    const sel      = document.getElementById('ocrSupplierSelect');
+    const input    = document.getElementById('ocrSupplierSearchInput');
+    const dropdown = document.getElementById('ocrSupplierDropdown');
+    if (!sel || !input || !dropdown) return;
+
+    let activeIdx = -1;
+    let filtered  = [];
+
+    function getOptions() {
+        return Array.from(sel.options)
+            .filter(o => o.value !== '')
+            .map(o => ({ value: o.value, text: o.text }));
+    }
+
+    function renderDrop(opts) {
+        filtered = [...opts];
+        const q = input.value.trim();
+        const addNewOpt = { value: 'ADD_NEW', text: q ? `+ Add "${q}" as new supplier` : '+ Add New Supplier' };
+        filtered.push(addNewOpt);
+        activeIdx = filtered.length > 0 ? 0 : -1;
+        dropdown.innerHTML = '';
+        if (opts.length === 0 && q) {
+            const noFoundDiv = document.createElement('div');
+            noFoundDiv.style.cssText = 'padding:10px 14px;color:#888;font-size:0.85rem;';
+            noFoundDiv.textContent = 'No suppliers found';
+            dropdown.appendChild(noFoundDiv);
+        }
+        opts.forEach((opt, i) => {
+            const div = document.createElement('div');
+            div.style.cssText = 'padding:9px 14px;font-size:0.88rem;cursor:pointer;border-left:3px solid transparent;transition:all 0.15s;';
+            div.textContent = opt.text;
+            div.addEventListener('mouseover', () => { activeIdx = i; highlight(); });
+            div.addEventListener('mousedown', e => { e.preventDefault(); pick(opt); });
+            dropdown.appendChild(div);
+        });
+        const addNewDiv = document.createElement('div');
+        addNewDiv.style.cssText = 'padding:9px 14px;font-size:0.88rem;cursor:pointer;border-left:3px solid transparent;transition:all 0.15s;font-weight:bold;color:#0d9488;border-top:1px solid #e5e7eb;';
+        addNewDiv.textContent = addNewOpt.text;
+        const addNewIdx = opts.length;
+        addNewDiv.addEventListener('mouseover', () => { activeIdx = addNewIdx; highlight(); });
+        addNewDiv.addEventListener('mousedown', e => { e.preventDefault(); pick(addNewOpt); });
+        dropdown.appendChild(addNewDiv);
+        highlight();
+        dropdown.style.display = 'block';
+    }
+
+    function highlight() {
+        Array.from(dropdown.children).forEach((el, i) => {
+            const hasNoFoundPlaceholder = dropdown.firstChild && dropdown.firstChild.textContent === 'No suppliers found';
+            const domIndex = hasNoFoundPlaceholder ? i - 1 : i;
+            if (domIndex === -1) {
+                el.style.background = '';
+                el.style.color = '#888';
+                return;
+            }
+            el.style.background   = domIndex === activeIdx ? 'linear-gradient(90deg,#0d9488,#0f766e)' : '';
+            el.style.color        = domIndex === activeIdx ? '#fff' : '';
+            el.style.borderLeftColor = domIndex === activeIdx ? '#0f766e' : 'transparent';
+            if (domIndex === activeIdx) el.scrollIntoView({ block: 'nearest' });
+        });
+    }
+
+    function pick(opt) {
+        if (opt.value === 'ADD_NEW') {
+            dropdown.style.display = 'none';
+            activeIdx = -1;
+            openOcrSupplierModal();
+            return;
+        }
+        sel.value    = opt.value;
+        input.value  = opt.text;
+        dropdown.style.display = 'none';
+        activeIdx = -1;
+    }
+
+    input.addEventListener('focus', () => {
+        const q = input.value.trim().toLowerCase();
+        renderDrop(q ? getOptions().filter(o => o.text.toLowerCase().includes(q)) : getOptions());
+    });
+
+    input.addEventListener('input', () => {
+        const q = input.value.trim().toLowerCase();
+        if (!q) sel.value = '';
+        renderDrop(q ? getOptions().filter(o => o.text.toLowerCase().includes(q)) : getOptions());
+    });
+
+    input.addEventListener('keydown', e => {
+        if (dropdown.style.display === 'none') {
+            if (e.key === 'ArrowDown') { e.preventDefault(); renderDrop(getOptions()); }
+            return;
+        }
+        if (e.key === 'ArrowDown') {
+            e.preventDefault(); activeIdx = Math.min(activeIdx + 1, filtered.length - 1); highlight();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault(); activeIdx = Math.max(activeIdx - 1, 0); highlight();
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+            if (activeIdx >= 0 && filtered[activeIdx]) { e.preventDefault(); pick(filtered[activeIdx]); }
+        } else if (e.key === 'Escape') {
+            dropdown.style.display = 'none';
+        }
+    });
+
+    document.addEventListener('mousedown', e => {
+        const wrap = document.getElementById('ocrSupplierSearchWrap');
+        if (wrap && !wrap.contains(e.target)) dropdown.style.display = 'none';
+    });
+
+    const _origOcrReset = resetOcrImportModal;
+    window.resetOcrImportModal = function() {
+        _origOcrReset();
+        input.value = '';
+        sel.value   = '';
+        dropdown.style.display = 'none';
+    };
+})();
+
+// Supplier Modal helper functions for OCR
+function openOcrSupplierModal() {
+    const ocrImportModalEl = document.getElementById('ocrImportModal');
+    const ocrSupplierModalEl = document.getElementById('ocrSupplierModal');
+    if (!ocrImportModalEl || !ocrSupplierModalEl) return;
+
+    bootstrap.Modal.getOrCreateInstance(ocrImportModalEl).hide();
+
+    const searchVal = document.getElementById('ocrSupplierSearchInput').value.trim();
+    document.getElementById('ocrNewSupplierName').value = searchVal;
+    document.getElementById('ocrNewSupplierPhone').value = '';
+    document.getElementById('ocrNewSupplierAddress').value = '';
+    document.getElementById('ocrNewSupplierGst').value = '';
+    document.getElementById('ocrNewSupplierDl').value = '';
+
+    bootstrap.Modal.getOrCreateInstance(ocrSupplierModalEl).show();
+}
+
+function closeOcrSupplierModal() {
+    const ocrSupplierModalEl = document.getElementById('ocrSupplierModal');
+    const ocrImportModalEl = document.getElementById('ocrImportModal');
+    if (!ocrSupplierModalEl || !ocrImportModalEl) return;
+
+    bootstrap.Modal.getOrCreateInstance(ocrSupplierModalEl).hide();
+    bootstrap.Modal.getOrCreateInstance(ocrImportModalEl).show();
+}
+
+async function saveOcrSupplier() {
+    const url = '/type/drug-supplier/';
+    const name = document.getElementById('ocrNewSupplierName').value.trim();
+    const phone = document.getElementById('ocrNewSupplierPhone').value.trim();
+    if (!name) return showToast('Supplier name is required', 'error');
+    if (!phone) return showToast('Phone number is required', 'error');
+
+    const payload = new URLSearchParams();
+    payload.append('name', name);
+    payload.append('phone', phone);
+    payload.append('address', document.getElementById('ocrNewSupplierAddress').value.trim());
+    payload.append('gst_number', document.getElementById('ocrNewSupplierGst').value.trim());
+    payload.append('dl_number', document.getElementById('ocrNewSupplierDl').value.trim());
+
+    try {
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: payload.toString()
+        });
+        const res = await resp.json();
+        if (!res.success) {
+            return showToast('Error: ' + (res.error || 'Could not save supplier'), 'error');
+        }
+
+        const sel = document.getElementById('ocrSupplierSelect');
+        const option = document.createElement('option');
+        option.value = res.id;
+        option.text = res.name;
+        sel.appendChild(option);
+        sel.value = res.id;
+
+        const input = document.getElementById('ocrSupplierSearchInput');
+        if (input) input.value = res.name;
+
+        const mainSel = document.getElementById('supplierSelect');
+        if (mainSel) {
+            const mainOpt = document.createElement('option');
+            mainOpt.value = res.id;
+            mainOpt.text = res.name;
+            mainSel.appendChild(mainOpt);
+        }
+
+        closeOcrSupplierModal();
+        showToast(`Supplier "${res.name}" added successfully`, 'success');
+    } catch (err) {
+        showToast('Error: ' + err.message, 'error');
+    }
+}
+
+const ocrImportModalEl = document.getElementById('ocrImportModal');
+if (ocrImportModalEl) {
+    ocrImportModalEl.addEventListener('hidden.bs.modal', resetOcrImportModal);
+}
+
 // ── Expose functions called from inline HTML onclick/onchange ───────────
 window.csvDragOver             = csvDragOver;
 window.csvDragLeave            = csvDragLeave;
@@ -702,7 +1373,22 @@ window._csvRemoveRow           = _csvRemoveRow;
 window.openCsvSupplierModal    = openCsvSupplierModal;
 window.closeCsvSupplierModal   = closeCsvSupplierModal;
 window.saveCsvSupplier         = saveCsvSupplier;
-// Note: window.resetCsvImportModal is already set above (wrapped version
-// that also clears the supplier search input) — don't overwrite it here.
+
+window.ocrDragOver             = ocrDragOver;
+window.ocrDragLeave            = ocrDragLeave;
+window.ocrDrop                 = ocrDrop;
+window.ocrFileSelected         = ocrFileSelected;
+window.ocrClearFile            = ocrClearFile;
+window.ocrGoToStep1            = ocrGoToStep1;
+window.submitOcrParse          = submitOcrParse;
+window.ocrConfirmAndLoad       = ocrConfirmAndLoad;
+window.ocrClearAll             = ocrClearAll;
+window._ocrUpdateItem          = _ocrUpdateItem;
+window._ocrRecalcRow           = _ocrRecalcRow;
+window._ocrRefreshTotals       = _ocrRefreshTotals;
+window._ocrRemoveRow           = _ocrRemoveRow;
+window.openOcrSupplierModal    = openOcrSupplierModal;
+window.closeOcrSupplierModal   = closeOcrSupplierModal;
+window.saveOcrSupplier         = saveOcrSupplier;
 
 })(); // ← closes the top-level IIFE opened at the start of this file

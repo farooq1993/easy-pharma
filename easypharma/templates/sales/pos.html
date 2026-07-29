@@ -2077,8 +2077,20 @@
                     document.getElementById('successInvoiceNum').textContent = result.invoice_number;
                     
                     document.getElementById('btnSuccessPrint').style.display = 'inline-block';
-                    document.getElementById('btnSuccessPrint').onclick = () => {
-                        window.open(`/pos/print/${result.invoice_id}/`, '_blank');
+                    document.getElementById('btnSuccessPrint').onclick = async () => {
+                        try {
+                            const directResp = await fetch(`/pos/print-direct/${result.invoice_id}/`);
+                            const directRes = await directResp.json();
+                            if (directRes.success) {
+                                showToast(`Printing directly to "${directRes.printer}"...`, 'success');
+                            } else {
+                                console.warn("Direct printing failed: " + directRes.error);
+                                window.open(`/pos/print/${result.invoice_id}/`, '_blank');
+                            }
+                        } catch (err) {
+                            console.error("Direct printing request error: ", err);
+                            window.open(`/pos/print/${result.invoice_id}/`, '_blank');
+                        }
                         setTimeout(() => resetPOS(result.next_invoice_number), 500);
                     };
                     

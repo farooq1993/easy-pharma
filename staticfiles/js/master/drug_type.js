@@ -94,7 +94,7 @@ function deleteProductType(productTypeId) {
         }
     })
     .then(data => {
-        console.log("Delete request sent for Product Type ID:", productTypeId);
+        // console.log("Delete request sent for Product Type ID:", productTypeId);
         if (data.success) {
             alert("Product type deleted successfully.");
             document.getElementById(`row-${productTypeId}`).remove();

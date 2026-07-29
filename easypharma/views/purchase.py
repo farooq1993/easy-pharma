@@ -1329,3 +1329,164 @@ class StockDiscardDeleteView(LoginRequiredMixin, View):
                 return JsonResponse({'success': True})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+
+from easypharma.models.purchase_scan_log import PurchaseScanLog
+from easypharma.utility.purchase_ocr_service import extract_purchase_bill_data
+from easypharma.utility.purchase_import import find_product, parse_expiry
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+
+@method_decorator(csrf_exempt, name='dispatch')
+class PurchaseScanAPI(LoginRequiredMixin, View):
+    def post(self, request):
+        if not request.tenant:
+            return JsonResponse({'success': False, 'error': 'No Pharmacy detected!'})
+            
+        # 1. Check daily limit
+        today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        scans_today = PurchaseScanLog.objects.filter(
+            tenant=request.tenant,
+            created_at__gte=today_start
+        ).count()
+        
+        limit = request.tenant.max_daily_scans
+        if scans_today >= limit:
+            return JsonResponse({
+                'success': False, 
+                'error': f'Daily bill scan limit of {limit} reached! Please upgrade your subscription plan.'
+            })
+            
+        # 2. Get uploaded file
+        bill_file = request.FILES.get('bill_image')
+        if not bill_file:
+            return JsonResponse({'success': False, 'error': 'No bill image file uploaded.'})
+            
+        # 3. Call service to parse image
+        try:
+            parsed_data = extract_purchase_bill_data(bill_file)
+        except ValueError as ve:
+            return JsonResponse({'success': False, 'error': str(ve)})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': f'AI Scanning failed: {str(e)}'})
+            
+        # 4. Success: Log the scan
+        PurchaseScanLog.objects.create(
+            tenant=request.tenant,
+            user=request.user
+        )
+        
+        # 5. Try to match supplier
+        supplier_name = parsed_data.get('supplier_name')
+        matched_supplier_id = None
+        if supplier_name:
+            supplier_name_clean = supplier_name.strip()
+            # Match supplier by name containing the extracted supplier name
+            supplier = Supplier.objects.filter(
+                tenant=request.tenant,
+                name__icontains=supplier_name_clean
+            ).first()
+            if supplier:
+                matched_supplier_id = supplier.id
+                
+        # 6. Match extracted medicines with database Products
+        extracted_items = parsed_data.get('items', [])
+        matched_items = []
+        missing_products = []
+        
+        for idx, item in enumerate(extracted_items, start=1):
+            name = (item.get('name') or '').strip()
+            batch_number = (item.get('batch_number') or '').strip().upper()
+            expiry_raw = (item.get('expiry_date') or '').strip()
+            
+            # Expiry date parsing
+            expiry_date = parse_expiry(expiry_raw)
+            if expiry_date and len(expiry_date) == 7:
+                expiry_date = expiry_date + '-01'
+            
+            try:
+                quantity = int(item.get('quantity') or 0)
+            except (ValueError, TypeError):
+                quantity = 0
+                
+            try:
+                free_quantity = int(item.get('free_quantity') or 0)
+            except (ValueError, TypeError):
+                free_quantity = 0
+                
+            try:
+                purchase_price = float(item.get('purchase_price') or 0.0)
+            except (ValueError, TypeError):
+                purchase_price = 0.0
+                
+            try:
+                mrp = float(item.get('mrp') or 0.0)
+            except (ValueError, TypeError):
+                mrp = 0.0
+                
+            try:
+                tax_percentage = float(item.get('tax_percentage') or 12.0)
+            except (ValueError, TypeError):
+                tax_percentage = 12.0
+
+            try:
+                total = float(item.get('total') or (quantity * purchase_price))
+            except (ValueError, TypeError):
+                total = quantity * purchase_price
+
+            # Find product in db
+            product = find_product(request.tenant, name)
+            if product:
+                tax_rate = getattr(getattr(product, 'product_tax', None), 'tax_rate', tax_percentage)
+                matched_items.append({
+                    'product_id': product.id,
+                    'name': product.product_name,
+                    'packing': getattr(product, 'product_packing', ''),
+                    'conversion_factor': getattr(product, 'conversion_factor', 1),
+                    'batch_number': batch_number,
+                    'expiry_date': expiry_date,
+                    'quantity': quantity,
+                    'free_quantity': free_quantity,
+                    'total_units': (quantity + free_quantity) * getattr(product, 'conversion_factor', 1),
+                    'purchase_price': purchase_price,
+                    'tax_percentage': float(tax_rate),
+                    'tax_amount': (purchase_price * quantity) * float(tax_rate) / 100.0,
+                    'mrp': mrp,
+                    'sale_price': mrp,
+                    'total': total,
+                })
+            else:
+                missing_products.append({
+                    'row': idx,
+                    'product': name,
+                    'batch_number': batch_number,
+                    'expiry_date': expiry_date,
+                    'quantity': quantity,
+                    'free_quantity': free_quantity,
+                    'purchase_price': purchase_price,
+                    'mrp': mrp,
+                    'tax_percentage': tax_percentage,
+                    'total': total,
+                })
+                
+        # 7. Check if invoice number is duplicate
+        invoice_number = parsed_data.get('invoice_number')
+        is_duplicate = False
+        if invoice_number and PurchaseInvoice.objects.filter(
+            tenant=request.tenant, invoice_number=invoice_number
+        ).exists():
+            is_duplicate = True
+
+        return JsonResponse({
+            'success': True,
+            'scans_today': scans_today + 1,
+            'max_scans': limit,
+            'supplier_id': matched_supplier_id,
+            'supplier_name': supplier_name,
+            'invoice_number': invoice_number,
+            'purchase_date': parsed_data.get('purchase_date'),
+            'payment_mode': parsed_data.get('payment_mode') or 'Cash',
+            'items': matched_items,
+            'missing_products': missing_products,
+            'is_duplicate': is_duplicate
+        })
