@@ -800,7 +800,9 @@ class ProductSearchAPI(LoginRequiredMixin,View):
 
         # ── Store in cache for next identical/same-case query ──
         cache.set(cache_key, data, self.CACHE_TIMEOUT)
-        return JsonResponse(data, safe=False)
+        response = JsonResponse(data, safe=False)
+        response['Cache-Control'] = 'private, max-age=30, stale-while-revalidate=60'
+        return response
 
 
 class SubstituteSearchAPI(LoginRequiredMixin,View):

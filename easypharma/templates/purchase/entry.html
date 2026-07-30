@@ -1501,22 +1501,24 @@
                 showDefaultProductsPurchase(); 
                 return; 
             }
+
+            // ── Immediately use offline cache if no connection ──
+            if (!navigator.onLine) {
+                if (typeof OfflineSync !== 'undefined') {
+                    const offlineResults = await OfflineSync.searchOfflineProducts(query, 'master');
+                    renderPurchaseSearchResults(offlineResults);
+                }
+                return;
+            }
+
             try {
                 const resp = await fetch(`/api/products/master-search/?q=${encodeURIComponent(query)}`);
                 if (!resp.ok) {
                     throw new Error('Offline');
                 }
                 const data = await resp.json();
-                
-                // Cache for offline
-                const productsToCache = data?.results || data?.products || data || [];
-                if (Array.isArray(productsToCache) && productsToCache.length > 0 && typeof OfflineSync !== 'undefined') {
-                    OfflineSync.cacheProducts(productsToCache);
-                }
-
                 renderPurchaseSearchResults(data);
             } catch (err) {
-                // console.log('[Purchase] Offline product search activated');
                 if (typeof OfflineSync !== 'undefined') {
                     const offlineResults = await OfflineSync.searchOfflineProducts(query, 'master');
                     renderPurchaseSearchResults(offlineResults);

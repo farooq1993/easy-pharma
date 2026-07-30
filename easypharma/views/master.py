@@ -335,13 +335,25 @@ class QuickProductAPI(LoginRequiredMixin,View):
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
 class ProductMasterSearchAPI(LoginRequiredMixin,View):
+    CACHE_TIMEOUT = 120  # 2 minutes
+
     def get(self, request):
+        from django.core.cache import cache
         query = request.GET.get('q', '')
         limit_str = request.GET.get('limit', '20')
         try:
             limit = int(limit_str)
         except ValueError:
             limit = 20
+
+        tenant_id = request.tenant.id
+        cache_key = f'master_search:{tenant_id}:{query.lower().strip()}:lim{limit}'
+        cached = cache.get(cache_key)
+        if cached is not None:
+            response = JsonResponse(cached, safe=False)
+            response['Cache-Control'] = 'private, max-age=30, stale-while-revalidate=60'
+            return response
+
         products = Products.objects.filter(
             tenant=request.tenant
         ).filter(
@@ -368,7 +380,10 @@ class ProductMasterSearchAPI(LoginRequiredMixin,View):
                 'hsn_code': p.product_hsn_code or '',
                 'salt': p.product_content.content_name if p.product_content else ''
             })
-        return JsonResponse(data, safe=False)
+        cache.set(cache_key, data, self.CACHE_TIMEOUT)
+        response = JsonResponse(data, safe=False)
+        response['Cache-Control'] = 'private, max-age=30, stale-while-revalidate=60'
+        return response
 
 class ProductListView(LoginRequiredMixin,View):
     template_name = 'masters/products/product_list.html'
