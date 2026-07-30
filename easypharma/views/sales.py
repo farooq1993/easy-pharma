@@ -1242,6 +1242,7 @@ class PrescriptionReminderView(LoginRequiredMixin,View):
     
     def post(self, request):
         patient_name = request.POST.get('customer_id')
+        patient_phone = request.POST.get('patient_phone', '').strip()
         prescription_date = request.POST.get('prescription_date')
         reminder_date = request.POST.get('reminder_date')
         notes = request.POST.get('notes', '').strip()
@@ -1251,10 +1252,10 @@ class PrescriptionReminderView(LoginRequiredMixin,View):
             return redirect('prescription_reminders')
         
         try:
-            patient_name = request.POST.get('customer_id')
             reminder = PrescriptionReminder.objects.create(
                 tenant=request.tenant,
                 patient_name=patient_name,
+                patient_phone=patient_phone,
                 prescription_date=prescription_date,
                 reminder_date=reminder_date,
                 notes=notes
@@ -1312,8 +1313,28 @@ def get_customer_invoices(request):
             'invoice_number': item.sale_invoice.invoice_number,
         })
 
+    # Retrieve latest patient phone number from SaleInvoice or Customer models
+    phone_number = ""
+    latest_invoice = SaleInvoice.objects.filter(
+        tenant=request.tenant,
+        patient_name=patient_name
+    ).exclude(
+        patient_phone=''
+    ).exclude(
+        patient_phone__isnull=True
+    ).order_by('-created_at').first()
+
+    if latest_invoice:
+        phone_number = latest_invoice.patient_phone
+    elif patient_name:
+        from easypharma.models.sales import Customer
+        cust = Customer.objects.filter(tenant=request.tenant, name=patient_name).exclude(phone='').exclude(phone__isnull=True).first()
+        if cust:
+            phone_number = cust.phone
+
     return JsonResponse({
-        'products': data
+        'products': data,
+        'phone_number': phone_number
     })
 
 

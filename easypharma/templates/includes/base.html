@@ -423,8 +423,12 @@
             // 1. Show on form submissions
             document.querySelectorAll('form').forEach(form => {
                 if (form.id !== 'productSearchForm' && !form.classList.contains('no-loader')) {
-                    form.addEventListener('submit', function() {
-                        globalLoader.style.display = 'flex';
+                    form.addEventListener('submit', function(e) {
+                        setTimeout(() => {
+                            if (!e.defaultPrevented) {
+                                globalLoader.style.display = 'flex';
+                            }
+                        }, 0);
                     });
                 }
             });

@@ -120,11 +120,16 @@ class SalesReturnItem(TenantAwareModel):
 
 class PrescriptionReminder(TenantAwareModel):
     patient_name = models.CharField(max_length=255)
-
+    patient_phone = models.CharField(max_length=20, null=True, blank=True)
     prescription_date = models.DateField()
     reminder_date = models.DateField()
     notes = models.TextField(blank=True, null=True)
-
+    status = models.CharField(
+        max_length=20,
+        choices=[('pending', 'Pending'), ('sent', 'Sent'), ('failed', 'Failed')],
+        default='pending'
+    )
+    sent_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
