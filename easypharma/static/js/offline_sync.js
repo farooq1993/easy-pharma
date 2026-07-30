@@ -51,16 +51,28 @@ const OfflineSync = {
     async preloadProductCache() {
         if (!navigator.onLine) return;
         try {
-            // console.log('[OfflineSync] Preloading product cache...');
+            const store = localforage.createInstance({ name: 'ep_product_cache' });
+            
+            // Check if we already have cached products and a fresh sync time
+            const cachedPos = await store.getItem('pos_products');
+            const cachedMaster = await store.getItem('master_products');
+            const lastSync = await store.getItem('last_product_sync_time');
+            
+            const now = Date.now();
+            const cacheDuration = 30 * 60 * 1000; // 30 minutes cache validity
+            
+            if (cachedPos && cachedMaster && lastSync && (now - lastSync < cacheDuration)) {
+                // Product cache is fresh. Skip network requests to save bandwidth and CPU.
+                return;
+            }
+
             // Fetch products for POS (with batches)
             const posResponse = await fetch('/api/products/search/?limit=5000');
             if (posResponse.ok) {
                 const products = await posResponse.json();
                 if (Array.isArray(products) && products.length > 0) {
-                    const store = localforage.createInstance({ name: 'ep_product_cache' });
                     await store.setItem('pos_products', products);
                     await store.setItem('all_products', products);
-                    // console.log(`[OfflineSync] Cached ${products.length} products for POS offline use.`);
                 }
             }
             
@@ -69,11 +81,12 @@ const OfflineSync = {
             if (masterResponse.ok) {
                 const products = await masterResponse.json();
                 if (Array.isArray(products) && products.length > 0) {
-                    const store = localforage.createInstance({ name: 'ep_product_cache' });
                     await store.setItem('master_products', products);
-                    // console.log(`[OfflineSync] Cached ${products.length} products for Purchase offline use.`);
                 }
             }
+            
+            // Record last sync time
+            await store.setItem('last_product_sync_time', now);
         } catch (e) {
             console.warn('[OfflineSync] Failed to preload product cache', e);
         }
