@@ -40,246 +40,7 @@ def get_low_stock_count(tenant):
         cache.set(cache_key, count, 300) # 5 minutes
     return count
 
-@login_required
-def home_view(request):
-    period = request.GET.get('period', 'today')
-    today = date.today()
-    if not request.tenant:
-        messages.warning(request, "No pharmacy linked to your account. Please assign one in Admin.")
-    
-    # Determine date range based on period
-    if period == 'month':
-        start_date = today.replace(day=1)
-        period_label = 'This Month'
-    elif period == 'year':
-        start_date = today.replace(month=1, day=1)
-        period_label = 'This Year'
-    else:
-        start_date = today
-        period_label = 'Today'
 
-    # Period Stats
-    period_revenue = SaleInvoice.objects.filter(
-        tenant=request.tenant, 
-        created_at__date__gte=start_date,
-        created_at__date__lte=today
-    ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-
-    period_transactions = SaleInvoice.objects.filter(
-        tenant=request.tenant, 
-        created_at__date__gte=start_date,
-        created_at__date__lte=today
-    ).count()
-
-    new_customers_period = Customer.objects.filter(
-        tenant=request.tenant,
-        created_at__date__gte=start_date,
-        created_at__date__lte=today
-    ).count()
-
-    # Basic Stats
-    today_revenue = SaleInvoice.objects.filter(tenant=request.tenant, created_at__date=today).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-    total_customers = Customer.objects.filter(tenant=request.tenant).count()
-    prescriptions_count = SaleInvoice.objects.filter(tenant=request.tenant, created_at__date=today).count()
-    
-    # Expiry Alert (within 90 days)
-    from easypharma.models.stock import StockBatch
-    expiry_limit = today + timedelta(days=90)
-    near_expiry_batches = StockBatch.objects.filter(
-        tenant=request.tenant,
-        expiry_date__lte=expiry_limit,
-        current_quantity__gt=0
-    ).select_related('product').order_by('expiry_date')[:100]
-
-    # Top Doctors by Sales (respect period)
-    top_doctors = SaleInvoice.objects.filter(
-        tenant=request.tenant,
-        created_at__date__gte=start_date,
-        created_at__date__lte=today
-    ).exclude(doctor_name__isnull=True).exclude(doctor_name__exact='').values('doctor_name').annotate(
-        total_bills=Count('id'),
-        total_sales=Sum('total_amount')
-    ).order_by('-total_sales')[:5]
-    
-    # Low stock logic (optimized with caching)
-    low_stock_count = get_low_stock_count(request.tenant)
-    
-    # Monthly Revenue Trend (Last 12 months in single query)
-    twelve_months_ago = today.replace(day=1) - timedelta(days=11*30)
-    twelve_months_ago = twelve_months_ago.replace(day=1)
-    
-    monthly_sales = list(SaleInvoice.objects.filter(
-        tenant=request.tenant,
-        created_at__date__gte=twelve_months_ago,
-        created_at__date__lte=today
-    ).annotate(
-        month=TruncMonth('created_at')
-    ).values('month').annotate(
-        total=Sum('total_amount')
-    ).order_by('month'))
-    
-    revenue_trend = []
-    labels_revenue = []
-    monthly_sales_map = {item['month'].date().replace(day=1): item['total'] for item in monthly_sales if item['month']}
-    
-    for i in range(11, -1, -1):
-        month_start_trend = today.replace(day=1) - timedelta(days=i*30)
-        month_start_trend = month_start_trend.replace(day=1)
-        
-        monthly_revenue = monthly_sales_map.get(month_start_trend, 0)
-        revenue_trend.append(float(monthly_revenue))
-        labels_revenue.append(month_start_trend.strftime('%b'))
-    
-    # Sales by Payment Method (respect period)
-    payment_methods = SaleInvoice.objects.filter(
-        tenant=request.tenant,
-        created_at__date__gte=start_date,
-        created_at__date__lte=today
-    ).values('payment_mode').annotate(count=Count('id'), total=Sum('total_amount'))
-    
-    payment_labels = []
-    payment_data = []
-    payment_colors = {'Cash': '#1cc88a', 'Card': '#4e73df', 'UPI': '#36b9cc', 'Credit': '#f6c23e'}
-    for method in payment_methods:
-        payment_labels.append(method['payment_mode'])
-        payment_data.append(float(method['total'] or 0))
-    
-    # Daily Sales for Last 7 days (in single query)
-    seven_days_ago = today - timedelta(days=6)
-    
-    daily_sales_data = list(SaleInvoice.objects.filter(
-        tenant=request.tenant,
-        created_at__date__gte=seven_days_ago,
-        created_at__date__lte=today
-    ).annotate(
-        day=TruncDate('created_at')
-    ).values('day').annotate(
-        total=Sum('total_amount')
-    ).order_by('day'))
-    
-    daily_sales_map = {item['day']: item['total'] for item in daily_sales_data if item['day']}
-    
-    daily_sales = []
-    daily_labels = []
-    for i in range(6, -1, -1):
-        day = today - timedelta(days=i)
-        day_revenue = daily_sales_map.get(day, 0)
-        daily_sales.append(float(day_revenue))
-        daily_labels.append(day.strftime('%a'))
-    
-    # Top 5 Selling Products (respect period)
-    top_products = SaleItem.objects.filter(
-        tenant=request.tenant,
-        sale_invoice__created_at__date__gte=start_date,
-        sale_invoice__created_at__date__lte=today
-    ).values('product__product_name').annotate(
-        total_qty=Sum('quantity'),
-        total_revenue=Sum('total_amount')
-    ).order_by('-total_qty')[:5]
-    
-    top_product_names = [p['product__product_name'][:15] for p in top_products]
-    top_product_qty = [p['total_qty'] for p in top_products]
-    
-    # Total Inventory Value - Make it consistent with Stock Report
-    inventory_value = StockBatch.objects.filter(
-        tenant=request.tenant,
-        current_quantity__gt=0
-    ).aggregate(
-        total_value=Sum(
-            ExpressionWrapper(
-                F('current_quantity') * (F('purchase_price') / F('product__conversion_factor')),
-                output_field=DecimalField(max_digits=12, decimal_places=2)
-            )
-        )
-    )['total_value'] or 0
-    
-    # Customer Growth (Last 7 days)
-    new_customers_week = Customer.objects.filter(
-        tenant=request.tenant,
-        created_at__date__gte=today - timedelta(days=7)
-    ).count()
-    
-    # Total Sales (respect period)
-    total_sales_30 = SaleInvoice.objects.filter(
-        tenant=request.tenant,
-        created_at__date__gte=start_date,
-        created_at__date__lte=today
-    ).count()
-    
-    # Month to Date Revenue
-    month_start = today.replace(day=1)
-    mtd_revenue = SaleInvoice.objects.filter(
-        tenant=request.tenant,
-        created_at__date__gte=month_start,
-        created_at__date__lte=today
-    ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-    
-    context = {
-        'period': period,
-        'period_label': period_label,
-        'period_revenue': period_revenue,
-        'period_transactions': period_transactions,
-        'new_customers_period': new_customers_period,
-        'today_revenue': today_revenue,
-        'total_customers': total_customers,
-        'low_stock_count': low_stock_count,
-        'prescriptions_count': prescriptions_count,
-        'near_expiry_batches': near_expiry_batches,
-        'today': today,
-        'top_doctors': top_doctors,
-        'pharmacy_name': request.tenant.pharmacy_name if request.tenant else "Pharmacy App",
-        
-        # Chart data
-        'revenue_trend': json.dumps(revenue_trend),
-        'labels_revenue': json.dumps(labels_revenue),
-        'daily_sales': json.dumps(daily_sales),
-        'daily_labels': json.dumps(daily_labels),
-        'payment_labels': json.dumps(payment_labels),
-        'payment_data': json.dumps(payment_data),
-        'payment_colors': json.dumps(list(payment_colors.values())[:len(payment_labels)]),
-        'top_product_names': json.dumps(top_product_names),
-        'top_product_qty': json.dumps(top_product_qty),
-        
-        # Additional metrics
-        'inventory_value': inventory_value,
-        'new_customers_week': new_customers_week,
-        'total_sales_30': total_sales_30,
-        'mtd_revenue': mtd_revenue,
-    }
-    return render(request, "home.html", context)
-
-
-from django.http import JsonResponse
-
-@login_required
-def dashboard_stats_api(request):
-    """Lightweight JSON endpoint – called every 30 s by the dashboard for live stats."""
-    today = date.today()
-    tenant = request.tenant
-    if not tenant:
-        return JsonResponse({'error': 'No tenant'}, status=403)
-
-    from django.db.models import Sum as DbSum
-
-    today_revenue = SaleInvoice.objects.filter(
-        tenant=tenant, created_at__date=today
-    ).aggregate(DbSum('total_amount'))['total_amount__sum'] or 0
-
-    today_transactions = SaleInvoice.objects.filter(
-        tenant=tenant, created_at__date=today
-    ).count()
-
-    total_customers = Customer.objects.filter(tenant=tenant).count()
-
-    # Cached low stock count
-    low_stock_count = get_low_stock_count(tenant)
-
-    return JsonResponse({
-        'today_revenue':      float(today_revenue),
-        'today_transactions': today_transactions,
-        'total_customers':    total_customers,
-        'low_stock_count':    low_stock_count,
-    })
 
 def create_user(request):
     if request.method =='POST':
@@ -843,202 +604,225 @@ def home_view(request):
     if not request.tenant:
         messages.warning(request, "No pharmacy linked to your account. Please assign one in Admin.")
     
-    # Determine date range based on period
-    if period == 'month':
-        start_date = today.replace(day=1)
-        period_label = 'This Month'
-    elif period == 'year':
-        start_date = today.replace(month=1, day=1)
-        period_label = 'This Year'
-    else:
-        start_date = today
-        period_label = 'Today'
-
-    # Period Stats
-    period_revenue = SaleInvoice.objects.filter(
-        tenant=request.tenant, 
-        created_at__date__gte=start_date,
-        created_at__date__lte=today
-    ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-
-    period_transactions = SaleInvoice.objects.filter(
-        tenant=request.tenant, 
-        created_at__date__gte=start_date,
-        created_at__date__lte=today
-    ).count()
-
-    new_customers_period = Customer.objects.filter(
-        tenant=request.tenant,
-        created_at__date__gte=start_date,
-        created_at__date__lte=today
-    ).count()
-
-    # Basic Stats
-    today_revenue = SaleInvoice.objects.filter(tenant=request.tenant, created_at__date=today).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-    total_customers = Customer.objects.filter(tenant=request.tenant).count()
-    prescriptions_count = SaleInvoice.objects.filter(tenant=request.tenant, created_at__date=today).count()
+    tenant_id = request.tenant.id if request.tenant else 0
+    cache_key = f"dashboard_home_context:{tenant_id}:{period}"
     
-    # Expiry Alert (within 90 days)
-    from easypharma.models.stock import StockBatch
-    expiry_limit = today + timedelta(days=90)
-    near_expiry_batches = StockBatch.objects.filter(
-        tenant=request.tenant,
-        expiry_date__lte=expiry_limit,
-        current_quantity__gt=0
-    ).select_related('product').order_by('expiry_date')[:100]
+    context = cache.get(cache_key)
+    if context is None:
+        # Determine date range based on period
+        if period == 'month':
+            start_date = today.replace(day=1)
+            period_label = 'This Month'
+        elif period == 'year':
+            start_date = today.replace(month=1, day=1)
+            period_label = 'This Year'
+        else:
+            start_date = today
+            period_label = 'Today'
 
-    # Top Doctors by Sales (Last 30 days)
-    top_doctors = SaleInvoice.objects.filter(
-        tenant=request.tenant,
-        created_at__date__gte=today - timedelta(days=30)
-    ).exclude(doctor_name__isnull=True).exclude(doctor_name__exact='').values('doctor_name').annotate(
-        total_bills=Count('id'),
-        total_sales=Sum('total_amount')
-    ).order_by('-total_sales')[:5]
-    
-    # Low stock logic (products with total stock < 50 units)
-    from django.db.models import Sum as DbSum
-    low_stock_count = StockBatch.objects.filter(tenant=request.tenant).values('product').annotate(total=DbSum('current_quantity')).filter(total__lt=50).count()
-    
-    # Monthly Revenue Trend (Last 12 months)
-    revenue_trend = []
-    labels_revenue = []
-    for i in range(11, -1, -1):
-        month_start_trend = today.replace(day=1) - timedelta(days=i*30)
-        month_start_trend = month_start_trend.replace(day=1)
-        month_end_trend = (month_start_trend + timedelta(days=32)).replace(day=1) - timedelta(days=1)
-        
-        monthly_revenue = SaleInvoice.objects.filter(
-            tenant=request.tenant,
-            created_at__date__gte=month_start_trend,
-            created_at__date__lte=month_end_trend
+        # Period Stats
+        period_revenue = SaleInvoice.objects.filter(
+            tenant=request.tenant, 
+            created_at__date__gte=start_date,
+            created_at__date__lte=today
         ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-        
-        revenue_trend.append(float(monthly_revenue))
-        labels_revenue.append(month_start_trend.strftime('%b'))
-    
-    # Sales by Payment Method (Last 30 days)
-    thirty_days_ago = today - timedelta(days=30)
-    payment_methods = SaleInvoice.objects.filter(
-        tenant=request.tenant,
-        created_at__date__gte=thirty_days_ago
-    ).values('payment_mode').annotate(count=Count('id'), total=Sum('total_amount'))
-    
-    payment_labels = []
-    payment_data = []
-    payment_colors = {'Cash': '#1cc88a', 'Card': '#4e73df', 'UPI': '#36b9cc', 'Credit': '#f6c23e'}
-    for method in payment_methods:
-        payment_labels.append(method['payment_mode'])
-        payment_data.append(float(method['total'] or 0))
-    
-    # Daily Sales for Last 7 days
-    daily_sales = []
-    daily_labels = []
-    for i in range(6, -1, -1):
-        day = today - timedelta(days=i)
-        day_revenue = SaleInvoice.objects.filter(
+
+        period_transactions = SaleInvoice.objects.filter(
+            tenant=request.tenant, 
+            created_at__date__gte=start_date,
+            created_at__date__lte=today
+        ).count()
+
+        new_customers_period = Customer.objects.filter(
             tenant=request.tenant,
-            created_at__date=day
-        ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-        daily_sales.append(float(day_revenue))
-        daily_labels.append(day.strftime('%a'))
-    
-    # Top 5 Selling Products
-    top_products = SaleItem.objects.filter(
-        tenant=request.tenant,
-        sale_invoice__created_at__date__gte=thirty_days_ago
-    ).values('product__product_name').annotate(
-        total_qty=Sum('quantity'),
-        total_revenue=Sum('total_amount')
-    ).order_by('-total_qty')[:5]
-    
-    top_product_names = [p['product__product_name'][:15] for p in top_products]
-    top_product_qty = [p['total_qty'] for p in top_products]
-    
-    
-    # Total Inventory Value - Make it consistent with Stock Report
-    inventory_value = StockBatch.objects.filter(
-        tenant=request.tenant,
-        current_quantity__gt=0
-    ).aggregate(
-        total_value=Sum(
-            ExpressionWrapper(
-                F('current_quantity') * (F('purchase_price') / F('product__conversion_factor')),
-                output_field=DecimalField(max_digits=12, decimal_places=2)
+            created_at__date__gte=start_date,
+            created_at__date__lte=today
+        ).count()
+
+        # Basic Stats
+        today_revenue = SaleInvoice.objects.filter(tenant=request.tenant, created_at__date=today).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+        total_customers = Customer.objects.filter(tenant=request.tenant).count()
+        prescriptions_count = SaleInvoice.objects.filter(tenant=request.tenant, created_at__date=today).count()
+        
+        # Expiry Alert (within 90 days)
+        from easypharma.models.stock import StockBatch
+        expiry_limit = today + timedelta(days=90)
+        near_expiry_batches = StockBatch.objects.filter(
+            tenant=request.tenant,
+            expiry_date__lte=expiry_limit,
+            current_quantity__gt=0
+        ).select_related('product').order_by('expiry_date')[:100]
+
+        # Top Doctors by Sales (respect period)
+        top_doctors = SaleInvoice.objects.filter(
+            tenant=request.tenant,
+            created_at__date__gte=start_date,
+            created_at__date__lte=today
+        ).exclude(doctor_name__isnull=True).exclude(doctor_name__exact='').values('doctor_name').annotate(
+            total_bills=Count('id'),
+            total_sales=Sum('total_amount')
+        ).order_by('-total_sales')[:5]
+        
+        # Low stock logic (optimized with caching)
+        low_stock_count = get_low_stock_count(request.tenant)
+        
+        # Monthly Revenue Trend (Last 12 months in single query)
+        twelve_months_ago = today.replace(day=1) - timedelta(days=11*30)
+        twelve_months_ago = twelve_months_ago.replace(day=1)
+        
+        monthly_sales = list(SaleInvoice.objects.filter(
+            tenant=request.tenant,
+            created_at__date__gte=twelve_months_ago,
+            created_at__date__lte=today
+        ).annotate(
+            month=TruncMonth('created_at')
+        ).values('month').annotate(
+            total=Sum('total_amount')
+        ).order_by('month'))
+        
+        revenue_trend = []
+        labels_revenue = []
+        monthly_sales_map = {item['month'].date().replace(day=1): item['total'] for item in monthly_sales if item['month']}
+        
+        for i in range(11, -1, -1):
+            month_start_trend = today.replace(day=1) - timedelta(days=i*30)
+            month_start_trend = month_start_trend.replace(day=1)
+            
+            monthly_revenue = monthly_sales_map.get(month_start_trend, 0)
+            revenue_trend.append(float(monthly_revenue))
+            labels_revenue.append(month_start_trend.strftime('%b'))
+        
+        # Sales by Payment Method (respect period)
+        payment_methods = SaleInvoice.objects.filter(
+            tenant=request.tenant,
+            created_at__date__gte=start_date,
+            created_at__date__lte=today
+        ).values('payment_mode').annotate(count=Count('id'), total=Sum('total_amount'))
+        
+        payment_labels = []
+        payment_data = []
+        payment_colors = {'Cash': '#1cc88a', 'Card': '#4e73df', 'UPI': '#36b9cc', 'Credit': '#f6c23e'}
+        for method in payment_methods:
+            payment_labels.append(method['payment_mode'])
+            payment_data.append(float(method['total'] or 0))
+        
+        # Daily Sales for Last 7 days (in single query)
+        seven_days_ago = today - timedelta(days=6)
+        
+        daily_sales_data = list(SaleInvoice.objects.filter(
+            tenant=request.tenant,
+            created_at__date__gte=seven_days_ago,
+            created_at__date__lte=today
+        ).annotate(
+            day=TruncDate('created_at')
+        ).values('day').annotate(
+            total=Sum('total_amount')
+        ).order_by('day'))
+        
+        daily_sales_map = {item['day']: item['total'] for item in daily_sales_data if item['day']}
+        
+        daily_sales = []
+        daily_labels = []
+        for i in range(6, -1, -1):
+            day = today - timedelta(days=i)
+            day_revenue = daily_sales_map.get(day, 0)
+            daily_sales.append(float(day_revenue))
+            daily_labels.append(day.strftime('%a'))
+        
+        # Top 5 Selling Products (respect period)
+        top_products = SaleItem.objects.filter(
+            tenant=request.tenant,
+            sale_invoice__created_at__date__gte=start_date,
+            sale_invoice__created_at__date__lte=today
+        ).values('product__product_name').annotate(
+            total_qty=Sum('quantity'),
+            total_revenue=Sum('total_amount')
+        ).order_by('-total_qty')[:5]
+        
+        top_product_names = [p['product__product_name'][:15] for p in top_products]
+        top_product_qty = [p['total_qty'] for p in top_products]
+        
+        # Total Inventory Value - Make it consistent with Stock Report
+        inventory_value = StockBatch.objects.filter(
+            tenant=request.tenant,
+            current_quantity__gt=0
+        ).aggregate(
+            total_value=Sum(
+                ExpressionWrapper(
+                    F('current_quantity') * (F('purchase_price') / F('product__conversion_factor')),
+                    output_field=DecimalField(max_digits=12, decimal_places=2)
+                )
             )
-        )
-    )['total_value'] or 0
-    # inventory_value = StockBatch.objects.filter(
-    #     tenant=request.tenant
-    # ).aggregate(
-    #     total_value=Sum(F('current_quantity') * F('purchase_price'), output_field=DecimalField())
-    # )['total_value'] or 0
-    
-    # Customer Growth (Last 7 days)
-    new_customers_week = Customer.objects.filter(
-        tenant=request.tenant,
-        created_at__date__gte=today - timedelta(days=7)
-    ).count()
-    
-    # Total Sales (Last 30 days)
-    total_sales_30 = SaleInvoice.objects.filter(
-        tenant=request.tenant,
-        created_at__date__gte=thirty_days_ago
-    ).count()
-    
-    # Month to Date Revenue
-    month_start = today.replace(day=1)
-    mtd_revenue = SaleInvoice.objects.filter(
-        tenant=request.tenant,
-        created_at__date__gte=month_start,
-        created_at__date__lte=today
-    ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-    
-    # Month to Date Purchases
-    from easypharma.models.purchase_invoice import PurchaseInvoice
-    mtd_purchases = PurchaseInvoice.objects.filter(
-        tenant=request.tenant,
-        purchase_date__gte=month_start,
-        purchase_date__lte=today
-    ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-
-    # Total Products in inventory
-    total_products = Products.objects.filter(tenant=request.tenant).count()
-
-    context = {
-        'period': period,
-        'period_label': period_label,
-        'period_revenue': period_revenue,
-        'period_transactions': period_transactions,
-        'new_customers_period': new_customers_period,
-        'today_revenue': today_revenue,
-        'total_customers': total_customers,
-        'low_stock_count': low_stock_count,
-        'prescriptions_count': prescriptions_count,
-        'near_expiry_batches': near_expiry_batches,
-        'today': today,
-        'top_doctors': top_doctors,
-        'pharmacy_name': request.tenant.pharmacy_name if request.tenant else "Pharmacy App",
+        )['total_value'] or 0
         
-        # Chart data
-        'revenue_trend': json.dumps(revenue_trend),
-        'labels_revenue': json.dumps(labels_revenue),
-        'daily_sales': json.dumps(daily_sales),
-        'daily_labels': json.dumps(daily_labels),
-        'payment_labels': json.dumps(payment_labels),
-        'payment_data': json.dumps(payment_data),
-        'payment_colors': json.dumps(list(payment_colors.values())[:len(payment_labels)]),
-        'top_product_names': json.dumps(top_product_names),
-        'top_product_qty': json.dumps(top_product_qty),
+        # Customer Growth (Last 7 days)
+        new_customers_week = Customer.objects.filter(
+            tenant=request.tenant,
+            created_at__date__gte=today - timedelta(days=7)
+        ).count()
         
-        # Additional metrics
-        'inventory_value': inventory_value,
-        'new_customers_week': new_customers_week,
-        'total_sales_30': total_sales_30,
-        'mtd_revenue': mtd_revenue,
-        'mtd_purchases': mtd_purchases,
-        'total_products': total_products,
-    }
+        # Total Sales (respect period)
+        total_sales_30 = SaleInvoice.objects.filter(
+            tenant=request.tenant,
+            created_at__date__gte=start_date,
+            created_at__date__lte=today
+        ).count()
+        
+        # Month to Date Revenue
+        month_start = today.replace(day=1)
+        mtd_revenue = SaleInvoice.objects.filter(
+            tenant=request.tenant,
+            created_at__date__gte=month_start,
+            created_at__date__lte=today
+        ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+        
+        # Month to Date Purchases
+        from easypharma.models.purchase_invoice import PurchaseInvoice
+        mtd_purchases = PurchaseInvoice.objects.filter(
+            tenant=request.tenant,
+            purchase_date__gte=month_start,
+            purchase_date__lte=today
+        ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+
+        # Total Products in inventory
+        total_products = Products.objects.filter(tenant=request.tenant).count()
+
+        context = {
+            'period': period,
+            'period_label': period_label,
+            'period_revenue': period_revenue,
+            'period_transactions': period_transactions,
+            'new_customers_period': new_customers_period,
+            'today_revenue': today_revenue,
+            'total_customers': total_customers,
+            'low_stock_count': low_stock_count,
+            'prescriptions_count': prescriptions_count,
+            'near_expiry_batches': near_expiry_batches,
+            'today': today,
+            'top_doctors': top_doctors,
+            'pharmacy_name': request.tenant.pharmacy_name if request.tenant else "Pharmacy App",
+            
+            # Chart data
+            'revenue_trend': json.dumps(revenue_trend),
+            'labels_revenue': json.dumps(labels_revenue),
+            'daily_sales': json.dumps(daily_sales),
+            'daily_labels': json.dumps(daily_labels),
+            'payment_labels': json.dumps(payment_labels),
+            'payment_data': json.dumps(payment_data),
+            'payment_colors': json.dumps(list(payment_colors.values())[:len(payment_labels)]),
+            'top_product_names': json.dumps(top_product_names),
+            'top_product_qty': json.dumps(top_product_qty),
+            
+            # Additional metrics
+            'inventory_value': inventory_value,
+            'new_customers_week': new_customers_week,
+            'total_sales_30': total_sales_30,
+            'mtd_revenue': mtd_revenue,
+            'mtd_purchases': mtd_purchases,
+            'total_products': total_products,
+        }
+        cache.set(cache_key, context, 60) # Cache for 60 seconds
+        
     return render(request, "home.html", context)
 
 
@@ -1047,36 +831,41 @@ from django.http import JsonResponse
 @login_required
 def dashboard_stats_api(request):
     """Lightweight JSON endpoint – called every 30 s by the dashboard for live stats."""
+    period = request.GET.get('period', 'today')
     today = date.today()
     tenant = request.tenant
     if not tenant:
         return JsonResponse({'error': 'No tenant'}, status=403)
 
-    from easypharma.models.stock import StockBatch
+    if period == 'month':
+        start_date = today.replace(day=1)
+    elif period == 'year':
+        start_date = today.replace(month=1, day=1)
+    else:
+        start_date = today
+
     from django.db.models import Sum as DbSum
 
-    today_revenue = SaleInvoice.objects.filter(
-        tenant=tenant, created_at__date=today
+    period_revenue = SaleInvoice.objects.filter(
+        tenant=tenant, 
+        created_at__date__gte=start_date,
+        created_at__date__lte=today
     ).aggregate(DbSum('total_amount'))['total_amount__sum'] or 0
 
-    today_transactions = SaleInvoice.objects.filter(
-        tenant=tenant, created_at__date=today
+    period_transactions = SaleInvoice.objects.filter(
+        tenant=tenant, 
+        created_at__date__gte=start_date,
+        created_at__date__lte=today
     ).count()
 
     total_customers = Customer.objects.filter(tenant=tenant).count()
 
-    low_stock_count = (
-        StockBatch.objects
-        .filter(tenant=tenant)
-        .values('product')
-        .annotate(total=DbSum('current_quantity'))
-        .filter(total__lt=50)
-        .count()
-    )
+    # Cached low stock count
+    low_stock_count = get_low_stock_count(tenant)
 
     return JsonResponse({
-        'today_revenue':      float(today_revenue),
-        'today_transactions': today_transactions,
+        'period_revenue':      float(period_revenue),
+        'period_transactions': period_transactions,
         'total_customers':    total_customers,
         'low_stock_count':    low_stock_count,
     })

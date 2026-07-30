@@ -86,13 +86,13 @@
 
     <!-- Key Metrics Cards Row 1 -->
     <div class="row g-4 mb-4">
-        <!-- Today Revenue -->
+        <!-- Period Revenue -->
         <div class="col-sm-6 col-lg-3">
             <div class="card p-3 border-0 shadow-sm h-100" style="border-left: 5px solid #10b981 !important; border-radius: 12px;">
                 <div class="d-flex align-items-center">
                     <div class="flex-grow-1">
-                        <div class="text-xs font-weight-bold text-muted text-uppercase mb-1 small" style="font-size: 0.75rem;">Today Revenue</div>
-                        <div class="h4 mb-0 fw-bold text-dark" id="dashRevenue">₹{{ today_revenue|floatformat:2 }}</div>
+                        <div class="text-xs font-weight-bold text-muted text-uppercase mb-1 small" style="font-size: 0.75rem;">{{ period_label }} Revenue</div>
+                        <div class="h4 mb-0 fw-bold text-dark" id="dashRevenue">₹{{ period_revenue|floatformat:2 }}</div>
                         <p class="text-success small mt-2 mb-0 d-flex align-items-center gap-1"><i class="bi bi-arrow-up-short fs-5 lh-1"></i> Real-time</p>
                     </div>
                     <div class="rounded-circle p-3 d-flex align-items-center justify-content-center" style="background-color: rgba(16, 185, 129, 0.1); width: 56px; height: 56px;">
@@ -102,13 +102,13 @@
             </div>
         </div>
 
-        <!-- Today Transactions -->
+        <!-- Period Transactions -->
         <div class="col-sm-6 col-lg-3">
             <div class="card p-3 border-0 shadow-sm h-100" style="border-left: 5px solid #3b82f6 !important; border-radius: 12px;">
                 <div class="d-flex align-items-center">
                     <div class="flex-grow-1">
-                        <div class="text-xs font-weight-bold text-muted text-uppercase mb-1 small" style="font-size: 0.75rem;">Today Transactions</div>
-                        <div class="h4 mb-0 fw-bold text-dark" id="dashTransactions">{{ prescriptions_count }}</div>
+                        <div class="text-xs font-weight-bold text-muted text-uppercase mb-1 small" style="font-size: 0.75rem;">{{ period_label }} Transactions</div>
+                        <div class="h4 mb-0 fw-bold text-dark" id="dashTransactions">{{ period_transactions }}</div>
                         <p class="text-muted small mt-2 mb-0">Completed Sales</p>
                     </div>
                     <div class="rounded-circle p-3 d-flex align-items-center justify-content-center" style="background-color: rgba(59, 130, 246, 0.1); width: 56px; height: 56px;">
@@ -569,7 +569,7 @@
         const POLL_INTERVAL = 30000; // 30 seconds
         async function fetchStats() {
             try {
-                const res = await fetch('/api/dashboard-stats/', { credentials: 'same-origin' });
+                const res = await fetch('/api/dashboard-stats/?period={{ period }}', { credentials: 'same-origin' });
                 if (!res.ok) return;
                 const d = await res.json();
 
@@ -586,11 +586,11 @@
                 }
 
                 if (rev) {
-                    const newVal = '₹' + d.today_revenue.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    const newVal = '₹' + d.period_revenue.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
                     if (rev.textContent !== newVal) { rev.textContent = newVal; flash(rev); }
                 }
                 if (txn) {
-                    const newVal = String(d.today_transactions);
+                    const newVal = String(d.period_transactions);
                     if (txn.textContent !== newVal) { txn.textContent = newVal; flash(txn); }
                 }
                 if (cust) {
