@@ -2143,17 +2143,15 @@
 
     function calculateDiscount(changed) {
         const sub    = items.reduce((s,i) => s + (i.quantity * i.purchase_price), 0);
-        const taxSum = items.reduce((s,i) => s + i.tax_amount, 0);
-        const gross  = sub + taxSum;
 
         let discAmt  = parseFloat(document.getElementById('summaryDiscount').value) || 0;
         let discPerc = parseFloat(document.getElementById('summaryDiscountPerc').value) || 0;
 
         if (changed === 'perc') {
-            discAmt = (gross * discPerc) / 100;
+            discAmt = (sub * discPerc) / 100;
             document.getElementById('summaryDiscount').value = discAmt.toFixed(2);
         } else {
-            if (gross > 0) discPerc = (discAmt / gross) * 100;
+            if (sub > 0) discPerc = (discAmt / sub) * 100;
             document.getElementById('summaryDiscountPerc').value = discPerc.toFixed(2);
         }
 
@@ -2174,12 +2172,11 @@
             return s + (parseFloat(i.tax_amount) || 0);
         }, 0);
 
-        const gross = originalSub + taxSum;
-
         let discAmt  = parseFloat(document.getElementById('summaryDiscount').value) || 0;
         let discPerc = parseFloat(document.getElementById('summaryDiscountPerc').value) || 0;
 
-        const discountRatio = gross > 0 ? discAmt / gross : 0;
+        // GST discount is calculated based on Sub Total (Basic Price) discount ratio
+        const discountRatio = originalSub > 0 ? discAmt / originalSub : 0;
 
         const effectiveSub = originalSub * (1 - discountRatio);
         const effectiveTax = taxSum * (1 - discountRatio);
@@ -2244,6 +2241,7 @@
         if (roundOffRow) {
             if (Math.abs(roundOff) >= 0.005) {
                 roundOffRow.style.display = 'flex';
+                document.getElementById('summaryRoundOff').innerHTML = `₹${roundOff.toFixed(2)}`;
             } else {
                 roundOffRow.style.display = 'none';
             }
