@@ -1328,6 +1328,9 @@
                 throw new Error('Offline');
             }
             const data = await response.json();
+            
+            // Populate memory cache for 0ms subsequent search hits
+            _posSearchCache[query] = data;
 
             // Cache for offline
             const productsToCache = data?.results || data?.products || data || [];

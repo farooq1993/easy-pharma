@@ -9,7 +9,7 @@
  * Failed POST transactions are stored locally and retried when connectivity returns.
  */
 
-const SW_VERSION = 'v1.6.1';   // 
+const SW_VERSION = 'v1.6.2';   // 
 const CACHE_STATIC = `ep-static-${SW_VERSION}`;
 const CACHE_PAGES  = `ep-pages-${SW_VERSION}`;
 const CACHE_API    = `ep-api-${SW_VERSION}`;
