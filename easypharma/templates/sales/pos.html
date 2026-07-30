@@ -1323,6 +1323,13 @@
 
     _posDebounceTimer = setTimeout(async () => {
         try {
+            // ── Immediately use offline cache if no connection ──
+            if (!navigator.onLine) {
+                const offlineResults = await OfflineSync.searchOfflineProducts(query, 'pos');
+                renderSearchResults(offlineResults);
+                return;
+            }
+
             const response = await fetch(`/api/products/search/?q=${encodeURIComponent(query)}`);
             if (!response.ok) {
                 throw new Error('Offline');
@@ -1332,16 +1339,11 @@
             // Populate memory cache for 0ms subsequent search hits
             _posSearchCache[query] = data;
 
-            // Cache for offline
-            const productsToCache = data?.results || data?.products || data || [];
-            if (Array.isArray(productsToCache) && productsToCache.length > 0) {
-                OfflineSync.cacheProducts(productsToCache);
-            }
-
             renderSearchResults(data);
         } catch (err) {
-            const offlineResults = await OfflineSync.searchOfflineProducts(query);
-            renderSearchResults({ results: offlineResults });
+            // Network failed — use cached data
+            const offlineResults = await OfflineSync.searchOfflineProducts(query, 'pos');
+            renderSearchResults(offlineResults);
         }
     }, 300);
     
