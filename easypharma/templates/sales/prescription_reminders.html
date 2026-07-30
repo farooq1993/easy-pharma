@@ -44,6 +44,11 @@
                     </div>
 
                     <div class="col-md-4 mb-3">
+                        <label class="form-label">Phone Number <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="patient_phone" id="patient_phone" placeholder="Enter 10-digit mobile number" required>
+                    </div>
+
+                    <div class="col-md-4 mb-3">
                         <label class="form-label">Prescription Date <span class="text-danger">*</span></label>
                         <input type="date" class="form-control" name="prescription_date" required>
                     </div>
@@ -77,6 +82,7 @@
                     <thead>
                         <tr>
                             <th>Customer</th>
+                            <th>Phone Number</th>
                             <th>Prescription Date</th>
                             <th>Reminder Date</th>
                             <th>Notes</th>
@@ -88,18 +94,30 @@
                         {% for reminder in reminders %}
                         <tr>
                             <td><strong>{{ reminder.patient_name }}</strong></td>
+                            <td>{{ reminder.patient_phone|default:"-" }}</td>
                             <td>{{ reminder.prescription_date|date:"d M, Y" }}</td>
                             <td>{{ reminder.reminder_date|date:"d M, Y" }}</td>
                             <td>{{ reminder.notes|truncatechars:60|default:"-" }}</td>
                             <td>
-                                {% if reminder.reminder_date|date:"Y-m-d" >= today|date:"Y-m-d" %}
-                                    <span class="badge bg-warning">Upcoming</span>
-                                {% else %}
-                                    <span class="badge bg-secondary">Past</span>
-                                {% endif %}
+                                <div>
+                                    {% if reminder.reminder_date|date:"Y-m-d" >= today|date:"Y-m-d" %}
+                                        <span class="badge bg-warning">Upcoming</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Past</span>
+                                    {% endif %}
+                                </div>
+                                <div class="mt-1">
+                                    {% if reminder.status == 'sent' %}
+                                        <span class="badge bg-success" title="Sent at {{ reminder.sent_at|date:'d M Y, h:i A' }}"><i class="fas fa-check-circle"></i> Auto Sent</span>
+                                    {% elif reminder.status == 'failed' %}
+                                        <span class="badge bg-danger" title="Sending failed. Click manual send to retry."><i class="fas fa-exclamation-circle"></i> Auto Failed</span>
+                                    {% else %}
+                                        <span class="badge bg-info"><i class="fas fa-clock"></i> Auto Pending</span>
+                                    {% endif %}
+                                </div>
                             </td>
                             <td>
-                                <a href="#" class="btn btn-sm btn-outline-success me-1" onclick="sendWhatsAppReminder('{{ reminder.patient_name }}', '{{ reminder.reminder_date|date:'d M, Y' }}')" title="Send WhatsApp">
+                                <a href="#" class="btn btn-sm btn-outline-success me-1" onclick="sendWhatsAppReminder('{{ reminder.patient_name }}', '{{ reminder.reminder_date|date:'d M, Y' }}', '{{ reminder.patient_phone|default:'' }}')" title="Send WhatsApp">
                                     <i class="fab fa-whatsapp"></i>
                                 </a>
                                 <a href="#" class="btn btn-sm btn-outline-danger" onclick="deleteReminder({{ reminder.id }})" title="Delete">
@@ -137,8 +155,10 @@ document.addEventListener('DOMContentLoaded', function() {
     customerSelect.addEventListener('change', function() {
 
         const patientName = this.value;
+        const phoneInput = document.getElementById('patient_phone');
 
         itemsSelect.innerHTML = '<option value="">Loading...</option>';
+        if (phoneInput) phoneInput.value = '';
 
         if (!patientName) {
             itemsSelect.innerHTML = '<option value="">Select Customer First</option>';
@@ -167,6 +187,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     itemsSelect.innerHTML =
                         '<option value="">No products found</option>';
+                }
+
+                // Prefill phone number if returned
+                if (data.phone_number && phoneInput) {
+                    phoneInput.value = data.phone_number;
                 }
             })
             .catch(() => {
@@ -208,8 +233,8 @@ function deleteReminder(id) {
     });
 }
 
-function sendWhatsAppReminder(patientName, dateStr) {
-    let phone = prompt("Enter 10-digit WhatsApp number for " + patientName + ":", "");
+function sendWhatsAppReminder(patientName, dateStr, existingPhone = '') {
+    let phone = prompt("Enter 10-digit WhatsApp number for " + patientName + ":", existingPhone);
     if (!phone) return;
     
     // Auto prefix 91 if it's a 10 digit Indian number
