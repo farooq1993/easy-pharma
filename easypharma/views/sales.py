@@ -114,7 +114,9 @@ class POSView(LoginRequiredMixin,View):
                 edit_data = {
                     'invoice_id': edit_invoice.id,
                     'invoice_number': edit_invoice.invoice_number,
+                    'date': edit_invoice.created_at.strftime('%Y-%m-%d'),
                     'patient_name': edit_invoice.patient_name,
+                    'patient_address': edit_invoice.patient_address,
                     'patient_phone': edit_invoice.patient_phone,
                     'doctor_name': edit_invoice.doctor_name,
                     'payment_mode': edit_invoice.payment_mode,
@@ -135,6 +137,7 @@ class POSView(LoginRequiredMixin,View):
             'edit_data': edit_data,
             'next_invoice_number': next_invoice_number,
             'ps': ps,
+            'today_date': timezone.localtime(timezone.now()).strftime('%Y-%m-%d'),
         })
 
     def post(self, request):
@@ -209,6 +212,10 @@ class POSView(LoginRequiredMixin,View):
                     invoice.paid_amount = 0.00
                 if data.get('invoice_number'):
                     invoice.invoice_number = data['invoice_number']
+                if bill_date:
+                    local_time = timezone.localtime(timezone.now()).time()
+                    bill_datetime = datetime.combine(bill_date, local_time)
+                    invoice.created_at = timezone.make_aware(bill_datetime, timezone.get_current_timezone())
                 invoice.save()
 
                 # If payment mode is Credit, link/create customer account and post to CustomerLedger
@@ -619,7 +626,7 @@ class SaleListView(LoginRequiredMixin, View):
     PAGE_SIZE = 20
 
     def get(self, request):
-        qs = SaleInvoice.objects.filter(tenant=request.tenant).order_by('-created_at')
+        qs = SaleInvoice.objects.filter(tenant=request.tenant).order_by('-id')
 
         # ── Filters ──────────────────────────────────────────────
         q = request.GET.get('q', '').strip()

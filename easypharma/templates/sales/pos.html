@@ -156,6 +156,10 @@
                             </h6>
                         </div>
                         <div class="mb-2">
+                            <label class="form-label x-small text-muted mb-1 fw-bold text-uppercase"><i class="fas fa-calendar-alt me-1"></i> Bill Date</label>
+                            <input type="date" id="billDate" class="form-control border-0 bg-light py-2" value="{% if edit_data %}{{ edit_data.date }}{% else %}{{ today_date }}{% endif %}">
+                        </div>
+                        <div class="mb-2">
                             <input type="text" id="patientName" class="form-control border-0 bg-light py-2"
                                 placeholder="Patient Name *" autocomplete="off">
                             <div class="invalid-feedback">Patient name is required.</div>
@@ -843,6 +847,8 @@
     // Check if ?mode=counter is present in URL
     document.addEventListener('DOMContentLoaded', () => {
         updateBillNumberDisplay();
+        
+
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('mode') === 'counter') {
             enableCounterMode();
@@ -970,6 +976,9 @@
 
     function populateEditData(data) {
         if (!data) return;
+        if (data.date) {
+            document.getElementById('billDate').value = data.date;
+        }
         document.getElementById('patientName').value = data.patient_name || '';
         document.getElementById('patientAddress').value = data.patient_address || '';
         document.getElementById('patientPhone').value = data.patient_phone || '';
@@ -1982,6 +1991,7 @@
 
         const data = {
             invoice_id: editData?.invoice_id || null,
+            date: document.getElementById('billDate') ? document.getElementById('billDate').value : null,
             patient_name: document.getElementById('patientName').value,
             patient_address: document.getElementById('patientAddress').value,
             
@@ -2315,6 +2325,10 @@ function addNewBill() {
         mrpEditMode = false;
         renderCart();
         
+        const billDateEl = document.getElementById('billDate');
+        if (billDateEl) {
+            billDateEl.value = "{{ today_date }}";
+        }
         document.getElementById('patientName').value = '';
         const isCounterMode = !document.getElementById('counterSaleBanner').classList.contains('d-none');
         document.getElementById('patientAddress').value = isCounterMode ? 'COUNTER' : tenantCity;
