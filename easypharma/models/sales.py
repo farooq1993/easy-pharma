@@ -3,6 +3,8 @@ from tenants.models import TenantAwareModel
 from easypharma.models.Items import Products
 from django.conf import settings
 from django.db import transaction
+from django.utils import timezone
+
 
 class Customer(TenantAwareModel):
     name = models.CharField(max_length=200)
@@ -29,7 +31,7 @@ class SaleInvoice(TenantAwareModel):
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     payment_mode = models.CharField(max_length=50, choices=[('Cash', 'Cash'), ('Card', 'Card'), ('UPI', 'UPI'), ('Credit', 'Credit')], default='Cash')
     sale_type = models.CharField(max_length=50, choices=[('Prescription', 'Prescription Sale'), ('Counter', 'Counter Sale')], default='Prescription')
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
