@@ -58,7 +58,8 @@ class PurchaseEntryView(LoginRequiredMixin,View):
                         'total_units': (item.quantity + item.free_quantity) * item.product.conversion_factor,
                         'purchase_price': float(item.purchase_price),
                         'tax_percentage': float(item.tax_percentage),
-                        'tax_amount': float((item.quantity * item.purchase_price * item.tax_percentage) / 100),
+                        'discount_percentage': float(item.discount_percentage or 0),
+                        'tax_amount': float(((item.quantity * item.purchase_price * (1 - float(item.discount_percentage or 0)/100)) * item.tax_percentage) / 100),
                         'mrp': float(item.mrp),
                         'sale_price': float(item.sale_price),
                         'total': float(item.total_amount),
@@ -171,6 +172,7 @@ class PurchaseEntryView(LoginRequiredMixin,View):
                         mrp=item['mrp'],
                         sale_price=item['sale_price'],
                         tax_percentage=item.get('tax_percentage', 0),
+                        discount_percentage=item.get('discount_percentage', 0),
                         total_amount=item['total']
                     )
                 

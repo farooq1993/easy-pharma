@@ -94,6 +94,7 @@ class PurchaseItem(TenantAwareModel):
     sale_price = models.DecimalField(max_digits=10, decimal_places=2)
     
     tax_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
+    discount_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
 
     def __str__(self):

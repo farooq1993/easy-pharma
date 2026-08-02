@@ -142,6 +142,8 @@
                         <div><label class="ep-label" style="color:var(--green)">Free</label><input type="number" id="itemFreeQty" class="ep-input" value="0" min="0"></div>
                         <!-- Cost per pack -->
                         <div><label class="ep-label">Pur rate (₹)</label><input type="number" id="itemPrice" class="ep-input" step="0.01"></div>
+                        <!-- Disc % -->
+                        <div><label class="ep-label">Disc %</label><input type="number" id="itemDisc" class="ep-input" value="0" min="0" max="100" step="0.01"></div>
                         <!-- Amount (readonly, auto-calculated) -->
                         <div><label class="ep-label">Amount (₹)</label><input type="text" id="itemAmount" class="ep-input" readonly style="background:#f8f9fa;" value="0.00"></div>
                         <!-- GST (readonly but shows) -->
@@ -198,8 +200,8 @@
                 <div class="ep-card-body p-0">
                     <div class="items-table-wrap">
                         <table class="items-table" id="purchaseTable">
-                            <thead><tr><th>Product</th><th>Batch</th><th>Expiry</th><th>Qty</th><th>Free</th><th>GST %</th><th>Pur rate</th><th>Amount</th><th>MRP</th><th>GST</th><th>Total</th><th></th></tr></thead>
-                            <tbody id="itemsTbody"><tr id="emptyRow"><td colspan="12"><div class="empty-state text-center p-4">No items added.</div></td></tr></tbody>
+                            <thead><tr><th>Product</th><th>Batch</th><th>Expiry</th><th>Qty</th><th>Free</th><th>GST %</th><th>Pur rate</th><th>Disc %</th><th>Amount</th><th>MRP</th><th>GST</th><th>Total</th><th></th></tr></thead>
+                            <tbody id="itemsTbody"><tr id="emptyRow"><td colspan="13"><div class="empty-state text-center p-4">No items added.</div></td></tr></tbody>
                         </table>
                     </div>
                 </div>
@@ -887,22 +889,25 @@
         updateItemTotal();
     }
 
-    // Real-time item total = qty * price + gst
+    // Real-time item total = qty * price - discount + gst
     function updateItemTotal() {
         const qty    = parseFloat(document.getElementById('itemQty').value)   || 0;
         const price  = parseFloat(document.getElementById('itemPrice').value) || 0;
         const taxPct = parseFloat(document.getElementById('itemTax').value)   || 0;
+        const discPct = parseFloat(document.getElementById('itemDisc').value) || 0;
         const subTotal  = qty * price;
+        const discAmt  = (subTotal * discPct) / 100;
+        const taxable = subTotal - discAmt;
 
         const amountEl = document.getElementById('itemAmount');
         if (amountEl) {
-            amountEl.value = subTotal.toFixed(2);
+            amountEl.value = taxable.toFixed(2);
         }
 
         const el     = document.getElementById('itemTotalDisplay');
         if (!el) return;
-        const taxAmt    = (subTotal * taxPct) / 100;
-        const total     = subTotal + taxAmt;
+        const taxAmt    = (taxable * taxPct) / 100;
+        const total     = taxable + taxAmt;
         el.textContent  = '\u20b9' + total.toFixed(2);
         // Visual cue — pulse green when non-zero
         if (total > 0) {
@@ -1970,8 +1975,8 @@
         ['itemQty', 'itemFreeQty'].forEach(id => {
             document.getElementById(id).addEventListener('input', () => updateUnitPreview());
         });
-        // Price & tax change → update item total instantly
-        ['itemPrice', 'itemTax'].forEach(id => {
+        // Price, tax & discount change → update item total instantly
+        ['itemPrice', 'itemTax', 'itemDisc'].forEach(id => {
             document.getElementById(id).addEventListener('input', () => updateItemTotal());
             document.getElementById(id).addEventListener('change', () => updateItemTotal());
         });
@@ -2009,6 +2014,7 @@
         const freeQty = parseFloat(document.getElementById('itemFreeQty').value) || 0;
         const price = parseFloat(document.getElementById('itemPrice').value);
         const taxPerc = parseFloat(document.getElementById('itemTax').value) || 0;
+        const discPerc = parseFloat(document.getElementById('itemDisc').value) || 0;
         let mrp = parseFloat(document.getElementById('itemMrp').value);
 
         if (!batch) { showToast('Batch number required', 'error'); return; }
@@ -2035,8 +2041,10 @@
         if (isNaN(mrp) || mrp <= 0) mrp = price * 1.2;
 
         const subTotal = qty * price;
-        const taxAmount = (subTotal * taxPerc) / 100;
-        const totalWithTax = subTotal + taxAmount;
+        const discAmount = (subTotal * discPerc) / 100;
+        const taxable = subTotal - discAmount;
+        const taxAmount = (taxable * taxPerc) / 100;
+        const totalWithTax = taxable + taxAmount;
         const totalUnits = (qty + freeQty) * (selectedProduct.conversion_factor || 1);
 
         items.push({
@@ -2051,6 +2059,7 @@
             total_units: totalUnits, 
             purchase_price: price, 
             tax_percentage: taxPerc, 
+            discount_percentage: discPerc,
             tax_amount: taxAmount,
             mrp: mrp, 
             sale_price: mrp / (selectedProduct.conversion_factor || 1), 
@@ -2081,6 +2090,7 @@
         document.getElementById('itemQty').value = '1';
         document.getElementById('itemFreeQty').value = '0';
         document.getElementById('itemPrice').value = '';
+        document.getElementById('itemDisc').value = '0';
         document.getElementById('itemAmount').value = '0.00';
         document.getElementById('itemMrp').value = '';
         document.getElementById('productInfo').style.display = 'none';
@@ -2103,7 +2113,7 @@
         const tbody = document.getElementById('itemsTbody');
         document.getElementById('itemCount').innerText = `${items.length} item${items.length !== 1 ? 's' : ''}`;
         if (items.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="12"><div class="empty-state text-center p-4">No items added.</div></td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="13"><div class="empty-state text-center p-4">No items added.</div></td></tr>`;
             calculateSummary();
             return;
         }
@@ -2127,7 +2137,8 @@
                 <td>${item.quantity}</td><td class="text-success">+${item.free_quantity || 0}</td>
                 <td>${item.tax_percentage || 0}%</td>
                 <td>₹${(item.purchase_price || 0).toFixed(2)}</td>
-                <td>₹${(item.quantity * item.purchase_price).toFixed(2)}</td>
+                <td>${item.discount_percentage || 0}%</td>
+                <td>₹${((item.quantity * item.purchase_price) * (1 - (item.discount_percentage || 0) / 100)).toFixed(2)}</td>
                 <td>₹${(item.mrp || 0).toFixed(2)}</td>
                 <td>₹${(item.tax_amount || 0).toFixed(2)}</td>
                 <td>₹${(item.total || 0).toFixed(2)}</td>
@@ -2144,7 +2155,14 @@
     function removeItem(index) { items.splice(index,1); renderTable(); showToast('Item removed'); }
 
     function calculateDiscount(changed) {
-        const sub    = items.reduce((s,i) => s + (i.quantity * i.purchase_price), 0);
+        const sub = items.reduce((s, i) => {
+            const qty = parseFloat(i.quantity) || 0;
+            const price = parseFloat(i.purchase_price) || 0;
+            const itemDisc = parseFloat(i.discount_percentage) || 0;
+            const itemSub = qty * price;
+            const itemDiscAmt = (itemSub * itemDisc) / 100;
+            return s + (itemSub - itemDiscAmt);
+        }, 0);
 
         let discAmt  = parseFloat(document.getElementById('summaryDiscount').value) || 0;
         let discPerc = parseFloat(document.getElementById('summaryDiscountPerc').value) || 0;
@@ -2166,7 +2184,10 @@
         const originalSub = items.reduce((s, i) => {
             const qty = parseFloat(i.quantity) || 0;
             const price = parseFloat(i.purchase_price) || 0;
-            return s + (qty * price);
+            const itemDisc = parseFloat(i.discount_percentage) || 0;
+            const itemSub = qty * price;
+            const itemDiscAmt = (itemSub * itemDisc) / 100;
+            return s + (itemSub - itemDiscAmt);
         }, 0);
 
         // Safe Tax Sum
@@ -2884,11 +2905,15 @@
                     </div>
                 </div>
                 <div class="row g-2 mb-2">
-                    <div class="col-6">
+                    <div class="col-4">
                         <label class="ep-label">MRP/Pack (₹)</label>
                         <input type="number" id="editItemMrp" class="ep-input" step="0.01">
                     </div>
-                    <div class="col-6">
+                    <div class="col-4">
+                        <label class="ep-label">Disc %</label>
+                        <input type="number" id="editItemDisc" class="ep-input" min="0" max="100" step="0.01">
+                    </div>
+                    <div class="col-4">
                         <label class="ep-label">GST %</label>
                         <input type="text" id="editItemTax" class="ep-input" readonly style="background:#f8f9fa;">
                     </div>
@@ -2927,6 +2952,7 @@
         document.getElementById('editItemFreeQty').value = item.free_quantity || 0;
         document.getElementById('editItemPrice').value = (item.purchase_price || 0).toFixed(2);
         document.getElementById('editItemMrp').value = (item.mrp || 0).toFixed(2);
+        document.getElementById('editItemDisc').value = item.discount_percentage || 0;
         document.getElementById('editItemTax').value = item.tax_percentage || 0;
         const modal = new bootstrap.Modal(document.getElementById('editItemModal'));
         modal.show();
@@ -2944,6 +2970,7 @@
         const freeQty = parseFloat(document.getElementById('editItemFreeQty').value) || 0;
         const price = parseFloat(document.getElementById('editItemPrice').value);
         const mrp = parseFloat(document.getElementById('editItemMrp').value);
+        const discPerc = parseFloat(document.getElementById('editItemDisc').value) || 0;
         const taxPerc = parseFloat(document.getElementById('editItemTax').value) || 0;
 
         if (!batch) { showToast('Batch number required', 'error'); return; }
@@ -2966,8 +2993,10 @@
         }
 
         const subTotal = qty * price;
-        const taxAmount = (subTotal * taxPerc) / 100;
-        const totalWithTax = subTotal + taxAmount;
+        const discAmount = (subTotal * discPerc) / 100;
+        const taxable = subTotal - discAmount;
+        const taxAmount = (taxable * taxPerc) / 100;
+        const totalWithTax = taxable + taxAmount;
         const totalUnits = (qty + freeQty) * (item.conversion_factor || 1);
 
         items[idx] = {
@@ -2980,6 +3009,7 @@
             purchase_price: price,
             mrp: isNaN(mrp) ? price * 1.2 : mrp,
             sale_price: (isNaN(mrp) ? price * 1.2 : mrp) / (item.conversion_factor || 1),
+            discount_percentage: discPerc,
             tax_amount: taxAmount,
             total: totalWithTax
         };
