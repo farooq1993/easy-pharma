@@ -746,6 +746,8 @@ function ocrClearFile() {
     ocrFile = null;
     const fileInput = document.getElementById('purchaseBillFile');
     if (fileInput) fileInput.value = '';
+    const cameraInput = document.getElementById('purchaseBillCamera');
+    if (cameraInput) cameraInput.value = '';
     document.getElementById('ocrSelectedFile').classList.add('d-none');
     document.getElementById('ocrParseBtn').disabled = true;
     document.getElementById('ocrParseError').classList.add('d-none');

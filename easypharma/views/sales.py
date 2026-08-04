@@ -812,14 +812,81 @@ class ProductSearchAPI(LoginRequiredMixin,View):
         return response
 
 
+import re
+
+def parse_and_normalize_composition(comp_name):
+    """
+    Parses a composition string like:
+    'Paracetamol 500mg + Ibuprofen 200mg'
+    into a set of normalized tuples:
+    {('paracetamol', 500.0, 'mg'), ('ibuprofen', 200.0, 'mg')}
+    """
+    if not comp_name:
+        return set()
+    
+    comp_name = comp_name.lower().strip()
+    # Split by +, /, or ,
+    parts = re.split(r'\s*[\+,\/]\s*', comp_name)
+    normalized = set()
+    
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        # Extract name and quantity
+        match = re.search(r'([a-z\s\-]+?)\s*(\d+(?:\.\d+)?)\s*(mg|mcg|g|ml|%|pct)?\b', part)
+        if match:
+            salt_name = match.group(1).strip()
+            try:
+                qty = float(match.group(2))
+            except ValueError:
+                qty = 0.0
+            unit = match.group(3) or ''
+            normalized.add((salt_name, qty, unit))
+        else:
+            # Fallback if no numeric quantity
+            normalized.add((part, 0.0, ''))
+    return normalized
+
+def calculate_similarity_score(set1, set2):
+    """
+    Calculates similarity between two normalized composition sets.
+    1.0 = Exact match (same ingredients, quantities, and units)
+    0.8 = Same ingredients but different strengths (e.g. Paracetamol 650mg vs 500mg)
+    0.5 = Partial match (e.g. only 1 out of 2 ingredients match)
+    0.0 = No match
+    """
+    if not set1 or not set2:
+        return 0.0
+        
+    names1 = {item[0] for item in set1}
+    names2 = {item[0] for item in set2}
+    
+    # If the set of active ingredient names matches exactly
+    if names1 == names2:
+        # Check if strengths are exact
+        if set1 == set2:
+            return 1.0
+        else:
+            return 0.8  # Same ingredients, different strength
+            
+    # Partial matches (intersection of ingredients)
+    intersect = names1.intersection(names2)
+    if intersect:
+        return (len(intersect) / max(len(names1), len(names2))) * 0.6
+        
+    return 0.0
+
+
 class SubstituteSearchAPI(LoginRequiredMixin,View):
-    """Returns in-stock drugs with the same content/composition as the given product."""
+    """Returns smart AI-matched in-stock drug substitutes with profit margin calculation."""
     def get(self, request):
         product_id = request.GET.get('product_id')
         if not product_id:
             return JsonResponse([], safe=False)
         
         from easypharma.models.stock import StockBatch
+        from easypharma.models.Items import ProductContent
         try:
             source = Products.objects.select_related('product_content').get(
                 id=product_id, tenant=request.tenant
@@ -827,15 +894,31 @@ class SubstituteSearchAPI(LoginRequiredMixin,View):
         except Products.DoesNotExist:
             return JsonResponse([], safe=False)
         
-        if not source.product_content:
+        if not source.product_content or not source.product_content.content_name:
             return JsonResponse([], safe=False)
         
+        # Get all ProductContents for the tenant
+        all_contents = ProductContent.objects.filter(tenant=request.tenant)
+        source_set = parse_and_normalize_composition(source.product_content.content_name)
+        
+        matched_content_ids = []
+        similarity_scores = {}
+        
+        for c in all_contents:
+            if not c.content_name:
+                continue
+            c_set = parse_and_normalize_composition(c.content_name)
+            score = calculate_similarity_score(source_set, c_set)
+            if score >= 0.5:  # At least 50% match
+                matched_content_ids.append(c.id)
+                similarity_scores[c.id] = score
+
         from django.db.models import Prefetch
         
-        # Find other products with same content that have stock
+        # Find other products with similar content that have stock
         subs = Products.objects.filter(
             tenant=request.tenant,
-            product_content=source.product_content,
+            product_content_id__in=matched_content_ids,
         ).exclude(id=source.id).select_related(
             'product_tax', 'product_content', 'compny_name'
         ).prefetch_related(
@@ -843,13 +926,23 @@ class SubstituteSearchAPI(LoginRequiredMixin,View):
                 'batches',
                 queryset=StockBatch.objects.filter(current_quantity__gt=0).order_by('expiry_date')
             )
-        )[:15]
+        )
         
         data = []
         for p in subs:
             batches = list(p.batches.all())
             if not batches:
                 continue
+            
+            # Calculate average margin or use first batch's margin
+            first_batch = batches[0]
+            mrp = float(first_batch.mrp) if first_batch.mrp else 0.0
+            purchase_price = float(first_batch.purchase_price) if first_batch.purchase_price else 0.0
+            margin = ((mrp - purchase_price) / mrp * 100) if mrp > 0 else 0.0
+            
+            score = similarity_scores.get(p.product_content_id, 0.5)
+            match_label = "Exact Match" if score == 1.0 else ("Alt Strength" if score == 0.8 else "Partial Match")
+
             batch_list = []
             for batch in batches:
                 unit_price = float(batch.sale_price) if batch.sale_price is not None else 0.0
@@ -864,16 +957,23 @@ class SubstituteSearchAPI(LoginRequiredMixin,View):
                     'stock': batch.current_quantity,
                     'price': unit_price,
                 })
+            
             data.append({
                 'id': p.id,
                 'name': p.product_name,
                 'packing': p.product_packing,
                 'company': p.compny_name.company_name if p.compny_name else '—',
-                'content': source.product_content.content_name,
+                'content': p.product_content.content_name if p.product_content else '—',
                 'tax_rate': p.product_tax.tax_rate if p.product_tax else 0,
                 'conversion_factor': p.conversion_factor,
+                'similarity_score': score,
+                'match_label': match_label,
+                'margin': round(margin, 1),
                 'batches': batch_list,
             })
+        
+        # Sort by similarity score descending (highest matches first), then margin descending
+        data = sorted(data, key=lambda x: (-x['similarity_score'], -x['margin']))
         
         return JsonResponse(data, safe=False)
 

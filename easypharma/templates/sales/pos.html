@@ -2040,7 +2040,8 @@
                     msg += `Patient: ${data.patient_name || 'Cash Customer'}\n\n`;
                     msg += `*ITEMS:*\n`;
                     cart.forEach(item => {
-                        msg += `- ${item.name} (x${item.quantity}) = ₹${(item.price * item.quantity).toFixed(2)}\n`;
+                        const batchExp = ` [B: ${item.batch_no || '—'}, Exp: ${item.expiry || '—'}]`;
+                        msg += `- ${item.name}${batchExp} (x${item.quantity}) = ₹${(item.price * item.quantity).toFixed(2)}\n`;
                     });
                     msg += `\n*Total Amount: ₹${data.total_amount.toFixed(2)}*\n\n`;
                     msg += `Thank you for your visit!\n`;
@@ -2128,7 +2129,8 @@
                         
                         msg += `*ITEMS:*\n`;
                         cart.forEach(item => {
-                            msg += `- ${item.name} (x${item.quantity}) = ₹${(item.price * item.quantity).toFixed(2)}\n`;
+                            const batchExp = ` [B: ${item.batch_no || '—'}, Exp: ${item.expiry || '—'}]`;
+                            msg += `- ${item.name}${batchExp} (x${item.quantity}) = ₹${(item.price * item.quantity).toFixed(2)}\n`;
                         });
                         msg += `\n*Total Amount: ₹${data.total_amount.toFixed(2)}*\n\n`;
                         msg += `Thank you for your visit!\n`;
@@ -2186,7 +2188,8 @@
                         msg += `Name: ${data.patient_name || 'Cash Customer'}\n\n`;
                         msg += `*ITEMS:*\n`;
                         cart.forEach(item => {
-                            msg += `- ${item.name} (x${item.quantity}) = ₹${(item.price * item.quantity).toFixed(2)}\n`;
+                            const batchExp = ` [B: ${item.batch_no || '—'}, Exp: ${item.expiry || '—'}]`;
+                            msg += `- ${item.name}${batchExp} (x${item.quantity}) = ₹${(item.price * item.quantity).toFixed(2)}\n`;
                         });
                         msg += `\n*Total Amount: ₹${data.total_amount.toFixed(2)}*\n\n`;
                         msg += `Thank you for your visit!\n`;

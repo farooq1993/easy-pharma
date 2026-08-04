@@ -14,7 +14,11 @@
     <!-- Header -->
     <div class="page-header">
         <div>
-            <h1 class="page-title"><i class="fas fa-file-invoice" style="color:var(--brand); margin-right:8px;"></i> Purchase Entry</h1>
+            <h1 class="page-title">
+                <i class="fas fa-file-invoice" style="color:var(--brand); margin-right:8px;"></i> 
+                Purchase Entry 
+                <span id="editVoucherBadge" class="badge bg-warning text-dark ms-2 d-none" style="font-size: 0.9rem; vertical-align: middle;"></span>
+            </h1>
             <p class="ep-label mt-1" style="margin-bottom:0;">Stock + GST + Batch tracking</p>
         </div>
         <div class="d-flex align-items-center gap-2">
@@ -958,6 +962,13 @@
             if (_selOpt) _suppSI.value = _selOpt.text.split(' | ')[0];
         }
         document.getElementById('invoiceNumber').value = data.invoice_number || '';
+        if (data.voucher_number) {
+            const badge = document.getElementById('editVoucherBadge');
+            if (badge) {
+                badge.innerText = 'Voucher: ' + data.voucher_number;
+                badge.classList.remove('d-none');
+            }
+        }
         document.getElementById('purchaseDate').value = data.purchase_date || '';
         document.getElementById('summaryDiscount').value = parseFloat(data.discount_amount || 0).toFixed(2);
         document.getElementById('summaryDiscountPerc').value = parseFloat(data.discount_percentage || 0).toFixed(2);
