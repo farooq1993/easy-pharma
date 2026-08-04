@@ -197,7 +197,7 @@ class DailySaleReportView(LoginRequiredMixin,View):
     """Daily Sale Report - Show sales data for a specific date"""
     template_name = 'reports/daily_sale_report.html'
 
-    def get_report_context(self, request, date_obj, selected_schedule):
+    def get_report_context(self, request, date_obj, selected_schedule, selected_user_id='all'):
         sales = SaleInvoice.objects.filter(
             tenant=request.tenant,
             created_at__date=date_obj
@@ -205,6 +205,9 @@ class DailySaleReportView(LoginRequiredMixin,View):
 
         if selected_schedule and selected_schedule.lower() != 'all':
             sales = sales.filter(items__product__product_schedule__schedule_name=selected_schedule).distinct()
+
+        if selected_user_id and selected_user_id.lower() != 'all':
+            sales = sales.filter(user_id=selected_user_id)
 
         sales_returns = SalesReturn.objects.filter(
             tenant=request.tenant,
@@ -214,6 +217,9 @@ class DailySaleReportView(LoginRequiredMixin,View):
             sales_returns = sales_returns.filter(
                 return_items__sale_item__product__product_schedule__schedule_name=selected_schedule
             ).distinct()
+
+        if selected_user_id and selected_user_id.lower() != 'all':
+            sales_returns = sales_returns.filter(sale_invoice__user_id=selected_user_id)
 
         daily_stats = sales.aggregate(
             total_sales=Count('id'),
@@ -295,6 +301,42 @@ class DailySaleReportView(LoginRequiredMixin,View):
         top_products_list = list(top_products)
         report_schedules_list = list(report_schedules)
 
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        tenant_users = list(User.objects.filter(tenant=request.tenant, is_active=True).order_by('username'))
+
+        user_sales_summary = []
+        if selected_user_id == 'all':
+            for u in tenant_users:
+                u_sales = sales.filter(user=u)
+                u_sales_stats = u_sales.aggregate(
+                    count=Count('id'),
+                    gross_sales=Sum('total_amount')
+                )
+                u_returns = sales_returns.filter(sale_invoice__user=u)
+                u_returns_amount = u_returns.aggregate(total=Sum('return_amount'))['total'] or Decimal('0')
+                
+                gross_sales = u_sales_stats['gross_sales'] or Decimal('0')
+                net_sales = gross_sales - u_returns_amount
+                
+                # Aggregate payment mode details
+                u_payments = u_sales.values('payment_mode').annotate(amount=Sum('total_amount'))
+                pay_modes = []
+                for p in u_payments:
+                    pay_modes.append(f"{p['payment_mode']}: ₹{float(p['amount'] or 0):.2f}")
+                payment_summary = ", ".join(pay_modes) if pay_modes else "—"
+                
+                if u_sales_stats['count'] > 0 or u_returns_amount > 0:
+                    user_sales_summary.append({
+                        'username': u.username,
+                        'role': u.get_user_type_display(),
+                        'invoices_count': u_sales_stats['count'],
+                        'gross_sales': gross_sales,
+                        'returns_amount': u_returns_amount,
+                        'net_sales': net_sales,
+                        'payment_summary': payment_summary
+                    })
+
         return {
             'date': date_obj,
             'sales': sales_list,
@@ -309,10 +351,14 @@ class DailySaleReportView(LoginRequiredMixin,View):
             'total_daily_profit': total_daily_profit,
             'total_daily_cost': total_daily_cost,
             'total_daily_margin': total_daily_margin,
+            'users': tenant_users,
+            'selected_user_id': selected_user_id,
+            'user_sales_summary': user_sales_summary,
         }
 
     def get(self, request):
         selected_schedule = request.GET.get('schedule', 'all')
+        selected_user_id = request.GET.get('user_id', 'all')
         date_str = request.GET.get('date', now().date())
         if isinstance(date_str, str):
             try:
@@ -324,7 +370,7 @@ class DailySaleReportView(LoginRequiredMixin,View):
 
         is_csv = request.GET.get('csv') == '1'
         is_pdf = request.GET.get('pdf') == '1'
-        cache_key = _daily_sale_cache_key(request.tenant.id, str(date_obj), selected_schedule)
+        cache_key = _daily_sale_cache_key(request.tenant.id, str(date_obj), selected_schedule, selected_user_id)
 
         if not is_csv and not is_pdf:
             cached_ctx = cache.get(cache_key)
@@ -333,7 +379,7 @@ class DailySaleReportView(LoginRequiredMixin,View):
                 return render(request, self.template_name, cached_ctx)
 
         logger.debug('DailySaleReportView.get date=%s schedule=%s tenant=%s user=%s', date_obj, selected_schedule, request.tenant, request.user)
-        context = self.get_report_context(request, date_obj, selected_schedule)
+        context = self.get_report_context(request, date_obj, selected_schedule, selected_user_id)
 
         if is_csv:
             filename = f"daily_sale_report_{date_obj}.csv"
@@ -769,8 +815,8 @@ def _stock_report_cache_key(tenant_id):
     return f"stock_report:{tenant_id}"
 
 
-def _daily_sale_cache_key(tenant_id, date_str, schedule):
-    return f"daily_sale:{tenant_id}:{date_str}:{schedule}"
+def _daily_sale_cache_key(tenant_id, date_str, schedule, user_id='all'):
+    return f"daily_sale:{tenant_id}:{date_str}:{schedule}:{user_id}"
 
 
 def invalidate_stock_cache(tenant_id):
@@ -1412,7 +1458,7 @@ class GSTR1ReportView(LoginRequiredMixin,View):
 
             for item in invoice.items.all():
                 rate = float(item.tax_percentage)
-                tv   = Decimal(str(item.quantity)) * Decimal(str(item.unit_price))
+                tv   = Decimal(str(item.total_amount)) - Decimal(str(item.tax_amount or 0))
                 tax  = Decimal(str(item.tax_amount or 0))
                 cgst = (tax / 2).quantize(Decimal('0.01'))
                 sgst = (tax / 2).quantize(Decimal('0.01'))
@@ -1442,7 +1488,7 @@ class GSTR1ReportView(LoginRequiredMixin,View):
                 'sgst':           total_sgst.quantize(Decimal('0.01')),
                 'igst':           Decimal('0'),
                 'total_tax':      total_tax.quantize(Decimal('0.01')),
-                'total':          invoice.total_amount,
+                'total':          (taxable_value + total_tax).quantize(Decimal('0.01')),
                 'rate_map':       rate_map,
             })
 
@@ -1451,26 +1497,71 @@ class GSTR1ReportView(LoginRequiredMixin,View):
         grand_taxable     = sum(r['taxable_value'] for r in bill_rows)
         grand_cgst        = sum(r['cgst']          for r in bill_rows)
         grand_sgst        = sum(r['sgst']          for r in bill_rows)
-        grand_total       = sum(r['total']         for r in bill_rows)
+        grand_total_tax   = grand_cgst + grand_sgst
+        grand_total       = grand_taxable + grand_total_tax
 
         # ── CSV Export ───────────────────────────────────────────────────────
+        if request.GET.get('csv') == 'b2cs':
+            GST_STATE_CODES = {
+                '01': '01-Jammu & Kashmir', '02': '02-Himachal Pradesh', '03': '03-Punjab', '04': '04-Chandigarh',
+                '05': '05-Uttarakhand', '06': '06-Haryana', '07': '07-Delhi', '08': '08-Rajasthan',
+                '09': '09-Uttar Pradesh', '10': '10-Bihar', '11': '11-Sikkim', '12': '12-Arunachal Pradesh',
+                '13': '13-Nagaland', '14': '14-Manipur', '15': '15-Mizoram', '16': '16-Tripura',
+                '17': '17-Meghalaya', '18': '18-Assam', '19': '19-West Bengal', '20': '20-Jharkhand',
+                '21': '21-Odisha', '22': '22-Chhattisgarh', '23': '23-Madhya Pradesh', '24': '24-Gujarat',
+                '26': '26-Dadra & Nagar Haveli and Daman & Diu', '27': '27-Maharashtra', '28': '28-Andhra Pradesh',
+                '29': '29-Karnataka', '30': '30-Goa', '31': '31-Lakshadweep', '32': '32-Kerala',
+                '33': '33-Tamil Nadu', '34': '34-Puducherry', '35': '35-Andaman & Nicobar Islands',
+                '36': '36-Telangana', '37': '37-Andhra Pradesh (New)', '38': '38-Ladakh'
+            }
+            response = HttpResponse(content_type='text/csv')
+            label = datetime(year, month, 1).strftime('%B_%Y')
+            response['Content-Disposition'] = f'attachment; filename="GSTR1_B2CS_{label}.csv"'
+            writer = csv.writer(response)
+            
+            # Official GST Portal B2CS offline utility columns
+            writer.writerow([
+                'Type', 'Place Of Supply', 'Applicable % of Tax Rate', 'Taxable Value', 'Cess Amount', 'E-Commerce GSTIN'
+            ])
+            
+            # Aggregate taxable values by tax rate
+            b2cs_aggregation = {}
+            for row in bill_rows:
+                for rate, vals in row['rate_map'].items():
+                    if rate not in b2cs_aggregation:
+                        b2cs_aggregation[rate] = Decimal('0')
+                    b2cs_aggregation[rate] += vals['taxable']
+            
+            gstin = request.tenant.gst_number or ''
+            state_code = gstin[:2] if len(gstin) >= 2 and gstin[:2].isdigit() else '27'
+            pos = GST_STATE_CODES.get(state_code, '27-Maharashtra')
+            
+            for rate, taxable in sorted(b2cs_aggregation.items()):
+                rate_formatted = f"{float(rate):.1f}" if rate % 1 != 0 else f"{int(rate)}.0"
+                writer.writerow([
+                    'OE',           # Type
+                    pos,            # Place of Supply
+                    rate_formatted, # Tax Rate
+                    float(taxable.quantize(Decimal('0.01'))), # Taxable Value
+                    0.00,           # Cess
+                    ''              # E-comm GSTIN
+                ])
+            return response
+
         if request.GET.get('csv') == '1':
             response = HttpResponse(content_type='text/csv')
             label = datetime(year, month, 1).strftime('%B_%Y')
             response['Content-Disposition'] = f'attachment; filename="GSTR1_{label}.csv"'
             writer = csv.writer(response)
             writer.writerow([
-                'Invoice No', 'Date', 'Customer / Patient', 'Sale Type',
-                'Payment Mode', 'Taxable Value (₹)', 'CGST (₹)', 'SGST (₹)',
-                'IGST (₹)', 'Total Tax (₹)', 'Invoice Total (₹)'
+                'Invoice No', 'Date', 'Customer / Patient', 'Taxable Value (₹)',
+                'CGST (₹)', 'SGST (₹)', 'IGST (₹)', 'Total Tax (₹)', 'Invoice Total (₹)'
             ])
             for row in bill_rows:
                 writer.writerow([
                     row['invoice_number'],
                     row['date'],
                     row['customer'],
-                    row['sale_type'],
-                    row['payment_mode'],
                     float(row['taxable_value']),
                     float(row['cgst']),
                     float(row['sgst']),
@@ -1480,7 +1571,7 @@ class GSTR1ReportView(LoginRequiredMixin,View):
                 ])
             writer.writerow([])
             writer.writerow([
-                'TOTAL', '', '', '', '',
+                'TOTAL', '', '',
                 float(grand_taxable),
                 float(grand_cgst),
                 float(grand_sgst),
@@ -1499,6 +1590,7 @@ class GSTR1ReportView(LoginRequiredMixin,View):
             'grand_taxable':   grand_taxable,
             'grand_cgst':      grand_cgst,
             'grand_sgst':      grand_sgst,
+            'grand_total_tax': grand_total_tax,
             'grand_total':     grand_total,
             'pharmacy':        request.tenant,
         }
