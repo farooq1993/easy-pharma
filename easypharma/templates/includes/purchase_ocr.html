@@ -62,15 +62,25 @@
 
                     <!-- Upload zone -->
                     <div id="ocrDropZone"
-                         style="border:2.5px dashed #0d9488;border-radius:16px;padding:45px 24px;text-align:center;cursor:pointer;transition:all .2s;background:#f0fdf9;"
-                         onclick="document.getElementById('purchaseBillFile').click()"
+                         style="border:2.5px dashed #0d9488;border-radius:16px;padding:35px 24px;text-align:center;transition:all .2s;background:#f0fdf9;"
                          ondragover="ocrDragOver(event)"
                          ondragleave="ocrDragLeave(event)"
                          ondrop="ocrDrop(event)">
-                        <i class="fas fa-camera" style="font-size:2.6rem;color:#0d9488;"></i>
-                        <div class="mt-3 fw-bold" style="color:#0f766e;font-size:1rem;">Drop purchase bill photo here or click to select</div>
-                        <div class="mt-1" style="font-size:0.8rem;color:#6b7280;">Supported: JPG, JPEG, PNG formats</div>
+                        <div onclick="document.getElementById('purchaseBillFile').click()" style="cursor:pointer;">
+                            <i class="fas fa-file-invoice" style="font-size:2.6rem;color:#0d9488;"></i>
+                            <div class="mt-3 fw-bold" style="color:#0f766e;font-size:1rem;">Drop purchase bill photo here or choose an option:</div>
+                        </div>
+                        <div class="d-flex flex-wrap justify-content-center gap-3 mt-3">
+                            <button type="button" class="btn btn-teal text-white rounded-pill px-3" style="background-color:#0d9488; border-color:#0d9488; font-size:0.85rem;" onclick="document.getElementById('purchaseBillCamera').click()">
+                                <i class="fas fa-camera me-1"></i> Take Photo (Camera)
+                            </button>
+                            <button type="button" class="btn btn-outline-teal rounded-pill px-3" style="color:#0d9488; border-color:#0d9488; font-size:0.85rem;" onclick="document.getElementById('purchaseBillFile').click()">
+                                <i class="fas fa-image me-1"></i> Choose from Gallery
+                            </button>
+                        </div>
+                        <div class="mt-2 text-muted" style="font-size:0.78rem;">Supported: JPG, JPEG, PNG formats</div>
                         <input type="file" id="purchaseBillFile" accept="image/*" style="display:none;" onchange="ocrFileSelected(this)">
+                        <input type="file" id="purchaseBillCamera" accept="image/*" capture="environment" style="display:none;" onchange="ocrFileSelected(this)">
                     </div>
 
                     <!-- Selected file info -->

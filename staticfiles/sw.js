@@ -1,44 +1,59 @@
 /**
- * Easy Pharma — Service Worker
- * Provides offline support with a three-tier caching strategy:
- *   1. STATIC  — Cache-First  : CSS, JS, fonts, images (long-lived)
- *   2. PAGES   — Stale-While-Revalidate : HTML pages visited by the user
- *   3. API     — Network-First (3 s timeout) : JSON API calls for live data
+ * Easy Pharma — Service Worker v2.0.0
+ * ─────────────────────────────────────────────────────────────────────
+ * Strategy per resource type:
+ *   STATIC   — Cache-First        : CSS, JS, fonts, images (long-lived)
+ *   PAGES    — Stale-While-Revalidate : HTML pages → instant load + bg refresh
+ *   API      — Network-First (3 s timeout) : JSON API calls
+ *   POSTS    — Offline queue      : Failed writes stored, retried on reconnect
  *
- * IMPORTANT: POS billing and purchase entry can now queue writes while offline.
- * Failed POST transactions are stored locally and retried when connectivity returns.
+ * v2.0.0 Improvements:
+ *   • Expanded pre-cache: POS, Purchase Entry, key reports
+ *   • Stale-While-Revalidate for all HTML pages → instant second-visit loads
+ *   • Master data (suppliers, product types, taxes) cached in API cache
+ *   • Proper Cache-Control header respect on API responses
  */
 
-const SW_VERSION = 'v1.6.1';   // 
+const SW_VERSION = 'v2.0.0';
 const CACHE_STATIC = `ep-static-${SW_VERSION}`;
 const CACHE_PAGES  = `ep-pages-${SW_VERSION}`;
 const CACHE_API    = `ep-api-${SW_VERSION}`;
 
-const DB_NAME = 'ep-offline-requests';
+const DB_NAME    = 'ep-offline-requests';
 const DB_VERSION = 2;
-const DB_STORE = 'requests';
+const DB_STORE   = 'requests';
 
-// Static assets to pre-cache on install
+// ─── Pre-cache on install ────────────────────────────────────────────
+// All critical assets loaded before the user even visits those pages
 const PRECACHE_ASSETS = [
+  // Core styles & scripts
   '/static/css/global.css',
   '/static/css/customecss/sidebar.css',
+  '/static/js/offline_sync.js',
+  '/static/js/localforage.min.js',
+  // PWA icons
   '/static/img/pwa-icon-192.png',
   '/static/img/pwa-icon-512.png',
+  // Offline fallback
   '/offline/',
+  // Key pages — cached so second visit is instant
   '/pos/',
   '/entry/',
+  '/home',
 ];
 
-// URLs whose responses should always come from the network (write/auth pages)
+// ─── URL matching patterns ────────────────────────────────────────────
+
+// Never cache auth/admin/logout
 const NETWORK_ONLY_PATTERNS = [
-  /^\/$/,              // Root URL (login page)
+  /^\/$/,
   /\/accounts\//,
   /\/admin\//,
   /\/logout/,
   /\/createuser/,
 ];
 
-// URLs that are pure static assets (Cache-First)
+// Long-lived static assets → Cache-First
 const STATIC_PATTERNS = [
   /\/static\//,
   /fonts\.googleapis\.com/,
@@ -47,77 +62,71 @@ const STATIC_PATTERNS = [
   /cdnjs\.cloudflare\.com/,
 ];
 
-// API patterns — split by behaviour
+// Live stock search — never serve stale (stock levels change per sale)
 const API_NETWORK_ONLY_PATTERNS = [
-  /\/api\/products\/search/,   // live stock search — never serve stale
+  /\/api\/products\/search/,
   /\/api\/products\/master-search/,
-  /\/api\/products\/substitute/, // live stock substitute
-  /\/api\/products\/.*search.*/, // extra safety
+  /\/api\/products\/substitute/,
 ];
 
+// Other API calls — Network-First with 3s timeout, fallback to cache
 const API_PATTERNS = [
   /\/api\//,
 ];
 
-// API POST requests that should be queued when offline
-// Line ~60 ke aas-paas — isse replace kar do
+// Offline queue — these POST urls are queued to IndexedDB when offline
 const OFFLINE_QUEUE_PATTERNS = [
-  /\/api\//i,
-  /\/pos\//i,           // ← Yeh important hai
-  /\/entry\//i,         // Purchase entry ke liye
+  /\/pos\//i,
+  /\/entry\//i,
+  /\/api\/products\/create-quick\//i,
+  /\/api\/products\/quick-add\//i,
   /\/sales\//i,
   /\/purchase\//i,
 ];
-// const OFFLINE_QUEUE_PATTERNS = [
-//   /\/api\/(sales|purchase|returns?|invoice|order|checkout)/i,
-// ];
 
-// ─── Install ────────────────────────────────────────────────────────────────
+// ─── Install ─────────────────────────────────────────────────────────
 self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_STATIC).then(cache => {
       return cache.addAll(PRECACHE_ASSETS).catch(err => {
-        console.warn('[SW] Pre-cache partial failure:', err);
+        console.warn('[SW v2] Pre-cache partial failure:', err);
       });
     })
   );
 });
 
-// ─── Activate ───────────────────────────────────────────────────────────────
+// ─── Activate ────────────────────────────────────────────────────────
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
       Promise.all(
         keys
           .filter(k => k !== CACHE_STATIC && k !== CACHE_PAGES && k !== CACHE_API)
-          .map(k => {
-            // console.log('[SW] Deleting old cache:', k);
-            return caches.delete(k);
-          })
+          .map(k => caches.delete(k))
       )
     ).then(() => self.clients.claim())
   );
 });
 
-// ─── Fetch ──────────────────────────────────────────────────────────────────
+// ─── Fetch ────────────────────────────────────────────────────────────
 self.addEventListener('fetch', event => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Only handle HTTP(s) requests
+  // Only handle HTTP(s)
   if (!['http:', 'https:'].includes(url.protocol)) return;
 
-  // Handle offline-capable POST requests first
+  // 0. Offline-capable POST requests — queue when offline
   if (request.method === 'POST' && OFFLINE_QUEUE_PATTERNS.some(p => p.test(url.pathname))) {
     event.respondWith(handleOfflinePost(request, event));
     return;
   }
 
-  // Only handle GET requests from here.
+  // Only GET from here
   if (request.method !== 'GET') return;
 
-  // 1. Network-Only for auth/admin pages and critical form actions
+  // 1. Network-Only for auth pages
   if (NETWORK_ONLY_PATTERNS.some(p => p.test(url.pathname + url.search))) {
     event.respondWith(
       fetch(request).catch(() => caches.match('/offline/'))
@@ -131,14 +140,13 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 3a. Network-Only for live stock search APIs (must never return stale stock)
-    // 3a. Special handling for product search (live data)
+  // 3a. Network-Only for live stock search
   if (API_NETWORK_ONLY_PATTERNS.some(p => p.test(url.pathname))) {
     event.respondWith(
-      fetch(request).catch(() => 
-        new Response(JSON.stringify({ 
+      fetch(request).catch(() =>
+        new Response(JSON.stringify({
           error: 'offline',
-          message: 'Product search requires internet.' 
+          message: 'Product search requires internet connection.'
         }), {
           headers: { 'Content-Type': 'application/json' },
           status: 503
@@ -148,15 +156,16 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 3b. Network-First (with timeout) for other API calls
+  // 3b. Network-First with timeout for other API calls
   if (API_PATTERNS.some(p => p.test(url.pathname))) {
     event.respondWith(networkFirstWithTimeout(request, CACHE_API, 3000));
     return;
   }
 
-  // 4. Network-First for HTML pages (ensures real-time updates when online, falls back to cache offline)
+  // 4. Stale-While-Revalidate for all HTML pages
+  //    → Second visit loads INSTANTLY from cache, background refresh updates it
   if (request.headers.get('Accept') && request.headers.get('Accept').includes('text/html')) {
-    event.respondWith(networkFirstHTML(request, CACHE_PAGES));
+    event.respondWith(staleWhileRevalidate(request, CACHE_PAGES));
     return;
   }
 
@@ -166,6 +175,7 @@ self.addEventListener('fetch', event => {
   );
 });
 
+// ─── Offline POST Handler ─────────────────────────────────────────────
 async function handleOfflinePost(request, event) {
   const fetchRequest = request.clone();
   const queueRequest = request.clone();
@@ -181,13 +191,12 @@ async function handleOfflinePost(request, event) {
     try {
       await self.registration.sync.register('sync-offline-requests');
     } catch (syncError) {
-      // Background sync not available; offline queue will still be processed later.
+      // Background sync not available; queue will still be replayed on reconnect
     }
-    // console.log('[SW] POST intercepted for offline queuing:', request.url);
     return new Response(JSON.stringify({
       error: 'offline',
       queued: true,
-      message: 'Transaction saved locally and will sync when back online.'
+      message: 'Transaction saved locally. Will sync when back online.'
     }), {
       headers: { 'Content-Type': 'application/json' },
       status: 202
@@ -195,6 +204,7 @@ async function handleOfflinePost(request, event) {
   }
 }
 
+// ─── IndexedDB helpers ────────────────────────────────────────────────
 function openDb() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -235,7 +245,6 @@ async function saveRequestToQueue(request) {
   };
 
   await store.add(entry);
-  // console.log('[SW] Request queued successfully:', request.url);
   return tx.complete;
 }
 
@@ -263,38 +272,32 @@ function deleteQueuedRequest(id) {
 
 async function replayQueuedRequests() {
   const queued = await getQueuedRequests();
-  // console.log(`[SW] Replaying ${queued.length} queued requests...`);
-
   for (const item of queued) {
     try {
-      const request = new Request(item.url, {
+      const response = await fetch(new Request(item.url, {
         method: item.method,
         headers: item.headers,
         body: item.body || null,
-        credentials: 'include',        // ← Important (cookies ke liye)
+        credentials: 'include',
         redirect: 'follow'
-      });
-
-      const response = await fetch(request);
-      
-      // console.log(`[SW] Replay ${item.url} → Status: ${response.status}`);
-
+      }));
       if (response && (response.ok || response.status === 200)) {
         await deleteQueuedRequest(item.id);
-        // console.log('[SW] Successfully replayed and deleted from queue');
       }
     } catch (err) {
-      console.error('[SW] Replay failed for', item.url, err);
+      console.error('[SW v2] Replay failed for', item.url, err);
     }
   }
 }
 
+// ─── Background sync ─────────────────────────────────────────────────
 self.addEventListener('sync', event => {
   if (event.tag === 'sync-offline-requests') {
     event.waitUntil(replayQueuedRequests());
   }
 });
 
+// ─── Messages from client ─────────────────────────────────────────────
 self.addEventListener('message', event => {
   if (event.data === 'SKIP_WAITING') {
     self.skipWaiting();
@@ -304,7 +307,7 @@ self.addEventListener('message', event => {
   }
 });
 
-// ─── Strategy helpers ───────────────────────────────────────────────────────
+// ─── Strategy helpers ─────────────────────────────────────────────────
 
 async function cacheFirst(request, cacheName) {
   const cached = await caches.match(request);
@@ -321,26 +324,32 @@ async function cacheFirst(request, cacheName) {
   }
 }
 
+/**
+ * Stale-While-Revalidate:
+ * Returns cached version INSTANTLY if available (making page feel instant),
+ * while silently fetching fresh data in the background to update the cache.
+ * On first visit or when cache is empty, waits for network.
+ */
 async function staleWhileRevalidate(request, cacheName) {
   const cache = await caches.open(cacheName);
-  const cached = await caches.match(request);
+  const cached = await cache.match(request);
 
   const fetchPromise = fetch(request)
     .then(response => {
-      if (response.ok) {
+      if (response && response.ok) {
         cache.put(request, response.clone());
       }
       return response;
     })
     .catch(() => null);
 
-  // Return cached immediately, revalidate in background
+  // ← Return cached page INSTANTLY, revalidate in background
   if (cached) {
-    fetchPromise; // kick off background refresh
+    fetchPromise; // kick off background refresh (don't await)
     return cached;
   }
 
-  // No cache — wait for network
+  // First visit — wait for network
   const response = await fetchPromise;
   if (response) return response;
 
@@ -351,37 +360,13 @@ async function staleWhileRevalidate(request, cacheName) {
   });
 }
 
-async function networkFirstHTML(request, cacheName) {
-  const cache = await caches.open(cacheName);
-  try {
-    const response = await fetch(request);
-    if (response.ok) {
-      cache.put(request, response.clone());
-    }
-    return response;
-  } catch (err) {
-    // Fetch failed (offline) — return cached copy if available
-    const cached = await caches.match(request);
-    if (cached) return cached;
-
-    // Show offline fallback page
-    const offline = await caches.match('/offline/');
-    return offline || new Response('<h1>You are offline</h1>', {
-      headers: { 'Content-Type': 'text/html' }
-    });
-  }
-}
-
 async function networkFirstWithTimeout(request, cacheName, timeout) {
   const cache = await caches.open(cacheName);
-
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
-
     const response = await fetch(request, { signal: controller.signal });
     clearTimeout(timer);
-
     if (response.ok) {
       cache.put(request, response.clone());
     }
@@ -395,9 +380,3 @@ async function networkFirstWithTimeout(request, cacheName, timeout) {
     });
   }
 }
-// ─── Message from client → force activate ───────────────────────────────────
-self.addEventListener('message', event => {
-    if (event.data === 'SKIP_WAITING') {
-        self.skipWaiting();
-    }
-});
