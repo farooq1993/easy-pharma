@@ -451,6 +451,9 @@
 
             // 3. Show on page unload (refreshes, back/forward)
             window.addEventListener('beforeunload', function() {
+                if (window.bypassLoader) {
+                    return;
+                }
                 globalLoader.style.display = 'flex';
             });
         }

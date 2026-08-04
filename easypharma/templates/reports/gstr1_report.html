@@ -32,8 +32,11 @@
         </select>
         <input type="number" name="year" class="form-control form-control-sm" value="{{ year }}" min="2020" max="2030" style="max-width:90px;">
         <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search"></i> View</button>
-        <button type="button" id="exportCsvBtn" class="btn btn-sm btn-success">
-          <i class="bi bi-file-earmark-arrow-down me-1"></i>Export CSV
+        <button type="button" id="exportCsvBtn" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-file-earmark-arrow-down me-1"></i>Check Sheet (CSV)
+        </button>
+        <button type="button" id="exportB2csCsvBtn" class="btn btn-sm btn-success fw-bold">
+          <i class="bi bi-cloud-arrow-up-fill me-1"></i>GST Portal B2CS (CSV)
         </button>
       </form>
     </div>
@@ -107,7 +110,7 @@
         <div class="card-body py-3">
           <i class="bi bi-percent fs-3 text-warning mb-1"></i>
           <div class="small text-muted fw-semibold">CGST + SGST</div>
-          <div class="h4 fw-bold text-warning mb-0">₹{% widthratio grand_cgst 1 1 %}{{ grand_cgst|floatformat:2 }}</div>
+          <div class="h4 fw-bold text-warning mb-0">₹{{ grand_total_tax|floatformat:2 }}</div>
         </div>
       </div>
     </div>
@@ -158,14 +161,8 @@
               <td><strong class="text-primary">{{ row.invoice_number }}</strong></td>
               <td class="small">{{ row.date }}</td>
               <td class="small">{{ row.customer }}</td>
-              <td>
-                {% if row.sale_type == 'Counter' %}
-                  <span class="badge bg-primary bg-opacity-10 text-primary">Counter</span>
-                {% else %}
-                  <span class="badge bg-success bg-opacity-10 text-success">Rx</span>
-                {% endif %}
-              </td>
-              <td><span class="badge bg-secondary bg-opacity-15 text-secondary small">{{ row.payment_mode }}</span></td>
+              <td class="small">{{ row.sale_type }}</td>
+              <td class="small">{{ row.payment_mode }}</td>
               <td class="text-end fw-semibold">{{ row.taxable_value|floatformat:2 }}</td>
               <td class="text-end text-info">{{ row.cgst|floatformat:2 }}</td>
               <td class="text-end text-info">{{ row.sgst|floatformat:2 }}</td>
@@ -182,7 +179,7 @@
               <td class="text-end">₹{{ grand_cgst|floatformat:2 }}</td>
               <td class="text-end">₹{{ grand_sgst|floatformat:2 }}</td>
               <td class="text-end">₹0.00</td>
-              <td class="text-end">₹{% with t=grand_cgst|add:grand_sgst %}{{ t|floatformat:2 }}{% endwith %}</td>
+              <td class="text-end">₹{{ grand_total_tax|floatformat:2 }}</td>
               <td class="text-end fs-6">₹{{ grand_total|floatformat:2 }}</td>
             </tr>
           </tfoot>
@@ -198,12 +195,6 @@
     </div>
   </div>
 
-  <div class="text-muted small text-center mt-3">
-    <i class="bi bi-info-circle me-1"></i>
-    All supplies are treated as <strong>B2C (Intra-state)</strong> — CGST + SGST split. IGST = ₹0.
-    Export this report as CSV to upload on the GST portal.
-  </div>
-
 </div>
 
 <style>
@@ -213,10 +204,21 @@
 
 <script>
 document.getElementById('exportCsvBtn').addEventListener('click', function () {
+  window.bypassLoader = true;
   const form = document.getElementById('gstr1FilterForm');
   const month = form.querySelector('[name="month"]').value;
   const year  = form.querySelector('[name="year"]').value;
   window.location.href = `?month=${month}&year=${year}&csv=1`;
+  setTimeout(function() { window.bypassLoader = false; }, 1000);
+});
+
+document.getElementById('exportB2csCsvBtn').addEventListener('click', function () {
+  window.bypassLoader = true;
+  const form = document.getElementById('gstr1FilterForm');
+  const month = form.querySelector('[name="month"]').value;
+  const year  = form.querySelector('[name="year"]').value;
+  window.location.href = `?month=${month}&year=${year}&csv=b2cs`;
+  setTimeout(function() { window.bypassLoader = false; }, 1000);
 });
 </script>
 {% endblock %}
