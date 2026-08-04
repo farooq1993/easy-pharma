@@ -26,12 +26,51 @@ def home_view(request):
         .filter(tenant=request.tenant, created_at__date=today)
         .count()
     )
+    from easypharma.models.purchase_invoice import Supplier
+    from easypharma.models.accounting import SupplierLedger, SupplierPayment
+
+    # ── Top 5 Suppliers with Credit Balance & Last Payment Details ──
+    suppliers = Supplier.objects.filter(tenant=request.tenant)
+    supplier_balances = []
+    
+    for s in suppliers:
+        ledger_stats = SupplierLedger.objects.filter(
+            tenant=request.tenant,
+            supplier=s
+        ).aggregate(
+            total_credit=Sum('credit'),
+            total_debit=Sum('debit')
+        )
+        
+        credit = ledger_stats['total_credit'] or 0
+        debit = ledger_stats['total_debit'] or 0
+        balance = credit - debit
+        
+        if balance > 0:
+            last_payment = SupplierPayment.objects.filter(
+                tenant=request.tenant,
+                supplier=s
+            ).order_by('-payment_date', '-id').first()
+            
+            last_payment_date = last_payment.payment_date.strftime('%d/%m/%Y') if last_payment else "—"
+            last_payment_amount = float(last_payment.amount) if last_payment else 0.0
+            
+            supplier_balances.append({
+                'name': s.name,
+                'balance': float(balance),
+                'last_payment_date': last_payment_date,
+                'last_payment_amount': last_payment_amount
+            })
+            
+    top_suppliers = sorted(supplier_balances, key=lambda x: -x['balance'])[:5]
+
     context = {
         'today_revenue':        today_revenue,
         'total_customers':      total_customers,
         'low_stock_count':      low_stock_count,
         'prescriptions_count':  prescriptions_count,
         'today_str':            today.strftime('%Y-%m'),
+        'top_suppliers':        top_suppliers,
     }
     return render(request, "home.html", context)
 
