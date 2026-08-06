@@ -292,7 +292,7 @@ async function saveOpeningStock() {
 
         if (result.success) {
             showToast(`✅ Saved! Voucher: ${result.voucher_number}`, 'success');
-            setTimeout(() => window.location.href = "/opening/stock/list/", 1500);
+            setTimeout(() => window.location.href = "opening/stock/list/", 1500);
         } else {
             showToast(result.error || 'Failed to save', 'error');
         }

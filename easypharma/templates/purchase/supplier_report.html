@@ -27,6 +27,13 @@
 </style>
 
 <div class="container mt-4">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb mb-0">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}" style="color: #0d9488; text-decoration: none;">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'purchase_list' %}" style="color: #0d9488; text-decoration: none;">Purchase</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Supplier-wise Report</li>
+        </ol>
+    </nav>
     <h1 class="mb-3">Purchase Report</h1>
     <div class="row g-2 mb-3">
         <div class="col-md-3">

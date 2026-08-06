@@ -19,6 +19,8 @@
 
 let _csvParsedItems  = [];
 let _csvMissing      = [];
+let isTransitioningToCsvSupplier = false;
+let isTransitioningToOcrSupplier = false;
 
 // console.log("✅ CSV Import JS Loaded");
 
@@ -378,9 +380,15 @@ function csvConfirmAndLoad() {
     }
 
     const suppVal  = document.getElementById('csvSupplierSelect').value;
+    const suppSearchInputVal = document.getElementById('csvSupplierSearchInput').value.trim();
     const invNum   = document.getElementById('csvInvoiceNumber').value.trim();
     const invDate  = document.getElementById('csvPurchaseDate').value;
     const payMode  = document.getElementById('csvPaymentMode').value;
+
+    if (suppSearchInputVal && !suppVal) {
+        showToast(`Supplier "${suppSearchInputVal}" does not exist. Please add this supplier first.`, 'error');
+        return;
+    }
 
     if (!suppVal || !invNum) {
         showToast('Please fill supplier and invoice number', 'error');
@@ -448,6 +456,10 @@ function _esc(str) {
 }
 
 function resetCsvImportModal() {
+    if (isTransitioningToCsvSupplier) {
+        isTransitioningToCsvSupplier = false;
+        return;
+    }
     _csvParsedItems  = [];
     _csvMissing      = [];
     csvClearFile();
@@ -601,6 +613,7 @@ function openCsvSupplierModal() {
     const csvSupplierModalEl = document.getElementById('csvSupplierModal');
     if (!csvImportModalEl || !csvSupplierModalEl) return;
 
+    isTransitioningToCsvSupplier = true;
     const csvImportModal = bootstrap.Modal.getInstance(csvImportModalEl) || bootstrap.Modal.getOrCreateInstance(csvImportModalEl);
     csvImportModal.hide();
 
@@ -621,6 +634,7 @@ function closeCsvSupplierModal() {
     const csvImportModalEl = document.getElementById('csvImportModal');
     if (!csvSupplierModalEl || !csvImportModalEl) return;
 
+    isTransitioningToCsvSupplier = true;
     const csvSupplierModal = bootstrap.Modal.getInstance(csvSupplierModalEl) || bootstrap.Modal.getOrCreateInstance(csvSupplierModalEl);
     csvSupplierModal.hide();
 
@@ -901,6 +915,10 @@ function ocrGoToStep1() {
 }
 
 function resetOcrImportModal() {
+    if (isTransitioningToOcrSupplier) {
+        isTransitioningToOcrSupplier = false;
+        return;
+    }
     ocrClearFile();
     ocrGoToStep1();
     _ocrParsedItems = [];
@@ -1088,6 +1106,12 @@ function _ocrRemoveRow(idx) {
     _ocrRenderPreviewTable(_ocrParsedItems);
 }
 
+function ocrClearAll() {
+    if (!confirm('Remove all items?')) return;
+    _ocrParsedItems = [];
+    _ocrRenderPreviewTable([]);
+}
+
 function ocrConfirmAndLoad() {
     if (_ocrParsedItems.length === 0) {
         alert('No items to load.');
@@ -1095,9 +1119,15 @@ function ocrConfirmAndLoad() {
     }
 
     const suppVal = document.getElementById('ocrSupplierSelect').value;
+    const suppSearchInputVal = document.getElementById('ocrSupplierSearchInput').value.trim();
     const invNum = document.getElementById('ocrInvoiceNumber').value.trim();
     const invDate = document.getElementById('ocrPurchaseDate').value;
     const payMode = document.getElementById('ocrPaymentMode').value;
+
+    if (suppSearchInputVal && !suppVal) {
+        showToast(`Supplier "${suppSearchInputVal}" does not exist. Please add this supplier first.`, 'error');
+        return;
+    }
 
     if (!suppVal || !invNum) {
         showToast('Please select supplier and enter invoice number', 'error');
@@ -1278,6 +1308,7 @@ function openOcrSupplierModal() {
     const ocrSupplierModalEl = document.getElementById('ocrSupplierModal');
     if (!ocrImportModalEl || !ocrSupplierModalEl) return;
 
+    isTransitioningToOcrSupplier = true;
     bootstrap.Modal.getOrCreateInstance(ocrImportModalEl).hide();
 
     const searchVal = document.getElementById('ocrSupplierSearchInput').value.trim();
@@ -1295,6 +1326,7 @@ function closeOcrSupplierModal() {
     const ocrImportModalEl = document.getElementById('ocrImportModal');
     if (!ocrSupplierModalEl || !ocrImportModalEl) return;
 
+    isTransitioningToOcrSupplier = true;
     bootstrap.Modal.getOrCreateInstance(ocrSupplierModalEl).hide();
     bootstrap.Modal.getOrCreateInstance(ocrImportModalEl).show();
 }
