@@ -2,7 +2,7 @@ from django.views import View
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from django.http import JsonResponse
+from django.http import JsonResponse, Http404
 import json
 from django.core.paginator import Paginator
 from django.apps import apps
@@ -90,6 +90,16 @@ class MasterCRUDView(LoginRequiredMixin,View):
         else:
             items = model.objects.filter(tenant=request.tenant).order_by('id')
             
+        search_query = request.GET.get('q', '').strip()
+        if search_query:
+            search_fields = self.get_context_data(master_type).get('fields', [])
+            q_objects = Q()
+            for field in search_fields:
+                if field.get('type') == 'text':
+                    q_objects |= Q(**{f"{field['name']}__icontains": search_query})
+            if q_objects:
+                items = items.filter(q_objects)
+
         paginator = Paginator(items, 25) # 25 items per page
         page_number = request.GET.get('page')
         page_obj = paginator.get_page(page_number)
@@ -97,6 +107,7 @@ class MasterCRUDView(LoginRequiredMixin,View):
         context = self.get_context_data(master_type)
         context['items'] = page_obj
         context['page_obj'] = page_obj
+        context['search_query'] = search_query
         return render(request, 'masters/generic_master.html', context)
 
     def post(self, request, master_type):
@@ -215,6 +226,8 @@ class MasterCRUDView(LoginRequiredMixin,View):
                 item = get_object_or_404(model, id=data.get('id'), tenant=request.tenant)
             item.delete()
             return JsonResponse({'success': True})
+        except Http404:
+            return JsonResponse({'success': True, 'message': 'Record already deleted'})
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=400)
 

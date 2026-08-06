@@ -15,7 +15,7 @@ urlpatterns = [
     path('edit/<int:invoice_id>/', PurchaseEntryView.as_view(), name='purchase_edit'),
     path('delete/<int:invoice_id>/', PurchaseListView.as_view(), name='purchase_delete'),
 
-    path('opening/stock/list', OpeningStockListView.as_view(), name='opening_stock'),
+    path('opening/stock/list/', OpeningStockListView.as_view(), name='opening_stock'),
     path('opening/stock/entry/', OpeningStockEntryView.as_view(), name='opening_stock_entry'),
     path('opening/stock/edit/<int:stock_id>/', OpeningStockEditView.as_view(), name='opening_stock_edit'),
     path('opening-stock/delete/<int:stock_id>/', OpeningStockDeleteView.as_view(), name='opening_stock_delete'),
