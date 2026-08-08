@@ -71,7 +71,8 @@
                             <th>Purchase Rate (Unit)</th>
                             <th>Sale Price (Unit)</th>
                             <th>Stock Value</th>
-                            <th class="text-end pe-4">Status</th>
+                            <th>Status</th>
+                            <th class="text-end pe-4">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -89,17 +90,25 @@
                             <td>₹{{ stock.purchase_rate_per_unit|floatformat:2 }}</td>
                             <td>₹{{ stock.sale_price }}</td>
                             <td class="fw-bold text-primary">₹{{ stock.stock_value|floatformat:2 }}</td>
-                            <td class="text-end pe-4">
+                            <td>
                                 {% if stock.current_quantity <= stock.product.conversion_factor %}
                                 <span class="badge bg-warning text-dark">Low Stock</span>
                                 {% else %}
                                 <span class="badge bg-success-soft text-success">Available</span>
                                 {% endif %}
                             </td>
+                            <td class="text-end pe-4">
+                                <button type="button" class="btn btn-sm btn-outline-primary border-0 rounded-pill px-2 py-1" 
+                                        style="font-size:0.78rem;" 
+                                        onclick="openEditBatchModal('{{ stock.id }}', '{{ stock.product.product_name|escapejs }}', '{{ stock.batch_number|escapejs }}', '{{ stock.expiry_date|date:'m/Y' }}', '{{ stock.mrp }}', '{{ stock.sale_price }}', '{{ stock.current_quantity }}')" 
+                                        title="Edit Batch Details">
+                                    <i class="fas fa-edit"></i> Edit
+                                </button>
+                            </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="9" class="text-center py-5 text-muted">No stock available. Record a purchase to add inventory.</td>
+                            <td colspan="10" class="text-center py-5 text-muted">No stock available. Record a purchase to add inventory.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -108,6 +117,108 @@
         </div>
     </div>
 </div>
+
+<!-- Edit Batch Modal -->
+<div class="modal fade" id="editBatchModal" tabindex="-1" aria-labelledby="editBatchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow-lg">
+            <div class="modal-header border-0 py-3" style="background:linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%);">
+                <h5 class="modal-title fw-bold text-white" id="editBatchModalLabel"><i class="fas fa-edit me-2"></i>Edit Batch Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="editBatchForm">
+                <div class="modal-body p-4">
+                    <input type="hidden" id="editBatchId" name="batch_id">
+                    <div class="mb-3">
+                        <label class="form-label text-muted small fw-bold">Medicine Name</label>
+                        <input type="text" class="form-control bg-light" id="editProductLabel" readonly style="border-radius:10px;">
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="editBatchNumber" class="form-label text-muted small fw-bold">Batch Number</label>
+                            <input type="text" class="form-control rounded-3" id="editBatchNumber" name="batch_number" required style="border-radius:10px;">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="editExpiryDate" class="form-label text-muted small fw-bold">Expiry (MM/YY or MM/YYYY)</label>
+                            <input type="text" class="form-control rounded-3" id="editExpiryDate" name="expiry_date" placeholder="MM/YY" required style="border-radius:10px;">
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="editMRP" class="form-label text-muted small fw-bold">MRP (per pack)</label>
+                            <input type="number" step="0.01" class="form-control rounded-3 bg-light" id="editMRP" name="mrp" readonly style="border-radius:10px;">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="editSalePrice" class="form-label text-muted small fw-bold">Sale Price (per pack)</label>
+                            <input type="number" step="0.01" class="form-control rounded-3 bg-light" id="editSalePrice" name="sale_price" readonly style="border-radius:10px;">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editCurrentQuantity" class="form-label text-muted small fw-bold">Current Stock Quantity (in units)</label>
+                        <input type="number" class="form-control rounded-3 bg-light" id="editCurrentQuantity" name="current_quantity" readonly style="border-radius:10px;">
+                    </div>
+                </div>
+                <div class="modal-footer border-0 px-4 pb-4 pt-0">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 shadow-sm" id="saveBatchBtn" style="background:#2563eb; border-color:#2563eb;">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function openEditBatchModal(id, productName, batchNo, expiry, mrp, salePrice, quantity) {
+    document.getElementById('editBatchId').value = id;
+    document.getElementById('editProductLabel').value = productName;
+    document.getElementById('editBatchNumber').value = batchNo;
+    document.getElementById('editExpiryDate').value = expiry;
+    document.getElementById('editMRP').value = mrp;
+    document.getElementById('editSalePrice').value = (salePrice && salePrice !== 'None') ? salePrice : '';
+    document.getElementById('editCurrentQuantity').value = quantity;
+    
+    var myModal = new bootstrap.Modal(document.getElementById('editBatchModal'));
+    myModal.show();
+}
+
+document.getElementById('editBatchForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const saveBtn = document.getElementById('saveBatchBtn');
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Saving...';
+
+    const payload = {
+        batch_id: document.getElementById('editBatchId').value,
+        batch_number: document.getElementById('editBatchNumber').value,
+        expiry_date: document.getElementById('editExpiryDate').value
+    };
+
+    fetch('/api/stock/update-batch/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = 'Save Changes';
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert('An unexpected error occurred.');
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = 'Save Changes';
+    });
+});
+</script>
 
 <style>
     .bg-success-soft { background-color: rgba(25, 135, 84, 0.1); }

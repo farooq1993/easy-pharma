@@ -706,7 +706,7 @@ async function saveCsvSupplier() {
 
 let _ocrParsedItems  = [];
 let _ocrMissing      = [];
-let ocrFile          = null;
+let ocrFilesList     = [];
 
 function ocrDragOver(e) {
     e.preventDefault();
@@ -745,24 +745,80 @@ function ocrFileSelected(input) {
     const errAlert = document.getElementById('ocrParseError');
     if (errAlert) errAlert.classList.add('d-none');
 
-    if (input.files && input.files[0]) {
-        ocrFile = input.files[0];
-        document.getElementById('ocrSelectedFileName').textContent = ocrFile.name;
-        document.getElementById('ocrSelectedFileSize').textContent = `(${(ocrFile.size / 1024).toFixed(1)} KB)`;
-        document.getElementById('ocrSelectedFile').classList.remove('d-none');
-        document.getElementById('ocrParseBtn').disabled = false;
-    } else {
-        ocrClearFile();
+    if (input.files && input.files.length > 0) {
+        for (let i = 0; i < input.files.length; i++) {
+            ocrFilesList.push(input.files[i]);
+        }
+        input.value = ''; // Reset input to allow re-selecting same files
+        renderOcrFilesList();
     }
 }
 
+function renderOcrFilesList() {
+    const selectedFileContainer = document.getElementById('ocrSelectedFile');
+    if (!selectedFileContainer) return;
+    
+    selectedFileContainer.innerHTML = '';
+    
+    if (ocrFilesList.length > 0) {
+        selectedFileContainer.classList.remove('d-none');
+        document.getElementById('ocrParseBtn').disabled = false;
+        
+        ocrFilesList.forEach((file, index) => {
+            const fileItem = document.createElement('div');
+            fileItem.style.background = '#f0fdf4';
+            fileItem.style.border = '1px solid #bbf7d0';
+            fileItem.style.borderRadius = '10px';
+            fileItem.style.padding = '10px 16px';
+            fileItem.style.marginBottom = '8px';
+            fileItem.className = 'd-flex align-items-center justify-content-between';
+            
+            fileItem.innerHTML = `
+                <div class="d-flex align-items-center gap-2">
+                    <i class="fas fa-file-image" style="color:#16a34a;font-size:1.2rem;"></i>
+                    <span class="fw-bold" style="color:#15803d;font-size:0.9rem;">Page ${index + 1}: ${file.name}</span>
+                    <span class="text-muted" style="font-size:0.78rem;">(${(file.size / 1024).toFixed(1)} KB)</span>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger rounded-pill" onclick="ocrRemovePage(${index})" style="font-size:0.75rem;">
+                    <i class="fas fa-times me-1"></i>Remove
+                </button>
+            `;
+            selectedFileContainer.appendChild(fileItem);
+        });
+        
+        const addMoreDiv = document.createElement('div');
+        addMoreDiv.className = 'mt-3 text-center';
+        addMoreDiv.innerHTML = `
+            <button type="button" class="btn btn-sm btn-outline-teal rounded-pill px-3" style="color:#0d9488; border-color:#0d9488; font-size:0.8rem;" onclick="document.getElementById('purchaseBillFile').click()">
+                <i class="fas fa-plus me-1"></i>+ Add Another Page
+            </button>
+        `;
+        selectedFileContainer.appendChild(addMoreDiv);
+    } else {
+        selectedFileContainer.classList.add('d-none');
+        document.getElementById('ocrParseBtn').disabled = true;
+    }
+}
+
+function ocrRemovePage(index) {
+    ocrFilesList.splice(index, 1);
+    renderOcrFilesList();
+}
+
+window.ocrRemovePage = ocrRemovePage;
+
 function ocrClearFile() {
-    ocrFile = null;
+    ocrFilesList = [];
     const fileInput = document.getElementById('purchaseBillFile');
     if (fileInput) fileInput.value = '';
     const cameraInput = document.getElementById('purchaseBillCamera');
     if (cameraInput) cameraInput.value = '';
-    document.getElementById('ocrSelectedFile').classList.add('d-none');
+    
+    const selectedFileContainer = document.getElementById('ocrSelectedFile');
+    if (selectedFileContainer) {
+        selectedFileContainer.innerHTML = '';
+        selectedFileContainer.classList.add('d-none');
+    }
     document.getElementById('ocrParseBtn').disabled = true;
     document.getElementById('ocrParseError').classList.add('d-none');
 }
@@ -802,7 +858,7 @@ function compressOcrImage(file, callback) {
 }
 
 function submitOcrParse() {
-    if (!ocrFile) return;
+    if (ocrFilesList.length === 0) return;
 
     const progress = document.getElementById('ocrParseProgress');
     const parseBtn = document.getElementById('ocrParseBtn');
@@ -816,10 +872,10 @@ function submitOcrParse() {
     
     document.getElementById('ocrParseError').classList.add('d-none');
 
-    compressOcrImage(ocrFile, function(compressedBlob) {
-        const formData = new FormData();
-        formData.append('bill_image', compressedBlob, 'bill.jpg');
+    let compressedFilesCount = 0;
+    const formData = new FormData();
 
+    const onAllCompressed = () => {
         fetch('/import/ocr/', {
             method: 'POST',
             body: formData,
@@ -886,6 +942,22 @@ function submitOcrParse() {
             if (ocrBackBtn) ocrBackBtn.disabled = false;
             if (cancelBtn) cancelBtn.disabled = false;
             _ocrShowError('Connection error: ' + err.message);
+        });
+    };
+
+    ocrFilesList.forEach((file, idx) => {
+        compressOcrImage(file, function(compressedBlob) {
+            formData.append('bill_images', compressedBlob, `page_${idx + 1}.jpg`);
+            compressedFilesCount++;
+            
+            const statusText = document.getElementById('ocrProgressStatusText');
+            if (statusText) {
+                statusText.textContent = `AI OCR engine is reading bill (Page ${compressedFilesCount} of ${ocrFilesList.length})...`;
+            }
+            
+            if (compressedFilesCount === ocrFilesList.length) {
+                onAllCompressed();
+            }
         });
     });
 }

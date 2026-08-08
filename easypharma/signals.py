@@ -35,6 +35,17 @@ def _invalidate_on_purchase(instance, **kwargs):
         logger.warning('Cache invalidation failed (purchase): %s', e)
 
 
+# ── Product Master — cache invalidate on change ──────────────────────────────
+def _invalidate_on_product(instance, **kwargs):
+    """Clear stock and daily sale cache when a product is modified/deleted (e.g. schedule changes)."""
+    try:
+        from easypharma.views.reports import invalidate_stock_cache, invalidate_daily_sale_cache
+        invalidate_stock_cache(instance.tenant_id)
+        invalidate_daily_sale_cache(instance.tenant_id)
+    except Exception as e:
+        logger.warning('Cache invalidation failed (product): %s', e)
+
+
 # ── User — auto-create UserPermission when a tenant user is saved ─────────────
 def _auto_create_user_permission(sender, instance, created, **kwargs):
     """
@@ -105,11 +116,14 @@ def register_signals():
     from easypharma.models.sales import SaleInvoice
     from easypharma.models.purchase_invoice import PurchaseInvoice
     from easypharma.models.accounts import User
+    from easypharma.models.Items import Products
 
     post_save.connect(_invalidate_on_sale,     sender=SaleInvoice,     weak=False)
     post_delete.connect(_invalidate_on_sale,   sender=SaleInvoice,     weak=False)
     post_save.connect(_invalidate_on_purchase,   sender=PurchaseInvoice, weak=False)
     post_delete.connect(_invalidate_on_purchase, sender=PurchaseInvoice, weak=False)
+    post_save.connect(_invalidate_on_product, sender=Products, weak=False)
+    post_delete.connect(_invalidate_on_product, sender=Products, weak=False)
 
     # User permission auto-creation
     post_save.connect(_auto_create_user_permission, sender=User, weak=False)

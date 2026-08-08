@@ -381,6 +381,21 @@
 
 <!-- Analytics Charts Scripts -->
 <script>
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
     // Parse data from Django context
     const revenueData = {{ revenue_trend|safe }};
     const revenueLabels = {{ labels_revenue|safe }};
@@ -700,7 +715,7 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}',
+                    'X-CSRFToken': getCookie('csrftoken') || '{{ csrf_token }}',
                     'X-Requested-With': 'XMLHttpRequest'
                 },
                 body: JSON.stringify({ batch_id: batchId })
@@ -749,7 +764,7 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}',
+                    'X-CSRFToken': getCookie('csrftoken') || '{{ csrf_token }}',
                     'X-Requested-With': 'XMLHttpRequest'
                 },
                 body: JSON.stringify({ action: 'clear_all' })
