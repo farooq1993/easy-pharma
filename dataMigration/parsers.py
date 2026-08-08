@@ -96,18 +96,34 @@ def clean_value(val):
 # CSV / Text → rows
 # ============================================================
 
-def parse_csv_to_rows(content, drop_first_column=False):
+def parse_csv_to_rows(content, drop_first_column=False, skip_junk=True):
     start_time = time.time()
-    _dbg("parse_csv_to_rows: content_len=%d chars, drop_first_col=%s", len(content), drop_first_column)
+    _dbg("parse_csv_to_rows: content_len=%d chars, drop_first_col=%s, skip_junk=%s", len(content), drop_first_column, skip_junk)
     rows = []
     junk_count = 0
-    csv_reader = csv.reader(io.StringIO(content))
+    
+    # Delimiter detection
+    delimiter = ','
+    first_lines = [line for line in content.splitlines() if line.strip()][:5]
+    if first_lines:
+        comma_count = sum(line.count(',') for line in first_lines)
+        semicolon_count = sum(line.count(';') for line in first_lines)
+        tab_count = sum(line.count('\t') for line in first_lines)
+        
+        if semicolon_count > comma_count and semicolon_count > tab_count:
+            delimiter = ';'
+            _dbg("parse_csv_to_rows: detected semicolon ';' delimiter")
+        elif tab_count > comma_count and tab_count > semicolon_count:
+            delimiter = '\t'
+            _dbg("parse_csv_to_rows: detected tab '\\t' delimiter")
+
+    csv_reader = csv.reader(io.StringIO(content), delimiter=delimiter)
     for row in csv_reader:
         cleaned = [str(col).strip() if col is not None else "" for col in row]
         #cleaned = [str(col).strip() for col in row if str(col).strip()]
         if not cleaned:
             continue
-        if is_junk_report_row(cleaned):
+        if skip_junk and is_junk_report_row(cleaned):
             junk_count += 1
             continue
         if drop_first_column and len(cleaned) > 1:
@@ -122,9 +138,9 @@ def parse_csv_to_rows(content, drop_first_column=False):
     return rows
 
 
-def parse_text_lines_to_rows(text_content, drop_first_column=False):
+def parse_text_lines_to_rows(text_content, drop_first_column=False, skip_junk=True):
     start_time = time.time()
-    _dbg("parse_text_lines_to_rows: content_len=%d chars, drop_first_col=%s", len(text_content), drop_first_column)
+    _dbg("parse_text_lines_to_rows: content_len=%d chars, drop_first_col=%s, skip_junk=%s", len(text_content), drop_first_column, skip_junk)
     lines = text_content.strip().split('\n')
     _dbg("parse_text_lines_to_rows: total raw lines=%d", len(lines))
     rows = []
@@ -137,7 +153,7 @@ def parse_text_lines_to_rows(text_content, drop_first_column=False):
         cleaned_parts = [clean_value(x) for x in parts]
         if not cleaned_parts:
             continue
-        if is_junk_report_row(cleaned_parts):
+        if skip_junk and is_junk_report_row(cleaned_parts):
             junk_count += 1
             continue
         if drop_first_column and len(cleaned_parts) > 0:
@@ -495,6 +511,47 @@ def parse_suppliers_from_text(text_content):
     return suppliers
 
 
+def map_supplier_headers(header_row):
+    """
+    Given a list of strings representing the header row,
+    returns a dictionary mapping field name to index.
+    """
+    mapping = {}
+    for i, cell in enumerate(header_row):
+        val = str(cell).strip().lower()
+        if not val:
+            continue
+        # Check Name
+        if val in ['firm name', 'firm', 'supplier name', 'supplier', 'name', 'vendor name', 'vendor', 'party name', 'party', 'supplier_name']:
+            if 'name' not in mapping:
+                mapping['name'] = i
+        # Check City
+        elif val in ['city', 'district', 'state', 'location']:
+            if 'city' not in mapping:
+                mapping['city'] = i
+        # Check Address
+        elif 'address' in val or val in ['add', 'addr', 'add.l', 'res.add']:
+            if 'address' not in mapping:
+                mapping['address'] = i
+        # Check Phone
+        elif val in ['phone', 'mobile', 'contact', 'tel', 'telephone', 'mobile no', 'phone no', 'mobile number', 'phone number']:
+            if 'phone' not in mapping:
+                mapping['phone'] = i
+        # Check GST
+        elif 'gst' in val or val in ['gstin', 'gst number', 'gst_number']:
+            if 'gst' not in mapping:
+                mapping['gst'] = i
+        # Check DL
+        elif 'dl' in val or val in ['d.l.', 'dl number', 'dl_number', 'drug license', 'licence', 'license']:
+            if 'dl' not in mapping:
+                mapping['dl'] = i
+        # Check Email
+        elif 'email' in val or val in ['e-mail', 'mail']:
+            if 'email' not in mapping:
+                mapping['email'] = i
+    return mapping
+
+
 def parse_suppliers_from_rows(rows):
     start_time = time.time()
     _dbg("parse_suppliers_from_rows: %d rows, detecting layout...", len(rows))
@@ -503,30 +560,86 @@ def parse_suppliers_from_rows(rows):
         result = parse_suppliers_from_rows_multiline(rows)
     else:
         _dbg("parse_suppliers_from_rows: detected TABULAR layout")
+        
+        has_header = False
+        mapping = {}
+        if len(rows) > 0:
+            mapping = map_supplier_headers(rows[0])
+            if 'name' in mapping or len(mapping) >= 2:
+                has_header = True
+                _dbg("parse_suppliers_from_rows: detected header: %s", mapping)
+
         suppliers = []
-        for r in rows:
+        start_row = 1 if has_header else 0
+
+        for r in rows[start_row:]:
             if len(r) < 1:
                 continue
-            if r[0].upper() in ["NAME", "SUPPLIER", "SUPPLIER NAME", "CODE"]:
+            
+            # Skip header row if it wasn't flagged by has_header but contains header terms
+            if not has_header and str(r[0]).upper() in ["NAME", "SUPPLIER", "SUPPLIER NAME", "CODE", "FIRM NAME", "FIRM"]:
                 continue
+
             supplier = {'name': '', 'code': '', 'phone': '', 'address': '', 'email': '', 'gst': '', 'dl': ''}
-            if len(r) == 1:
-                supplier['name'] = r[0].upper()
-            elif len(r) == 2:
-                supplier['name'] = r[0].upper()
-                supplier['phone'] = re.sub(r'[^\d]+', '', r[1])
-            elif len(r) == 3:
-                supplier['name'] = r[0].upper()
-                supplier['phone'] = re.sub(r'[^\d]+', '', r[1])
-                supplier['address'] = r[2]
+
+            if has_header:
+                supplier['name'] = r[mapping['name']].strip().upper() if 'name' in mapping and len(r) > mapping['name'] else ''
+                
+                # Combine Address and City
+                city = r[mapping['city']].strip() if 'city' in mapping and len(r) > mapping['city'] else ''
+                addr = r[mapping['address']].strip() if 'address' in mapping and len(r) > mapping['address'] else ''
+                if city:
+                    if addr:
+                        if city.lower() not in addr.lower():
+                            supplier['address'] = f"{addr}, {city}"
+                        else:
+                            supplier['address'] = addr
+                    else:
+                        supplier['address'] = city
+                else:
+                    supplier['address'] = addr
+
+                if 'phone' in mapping and len(r) > mapping['phone']:
+                    supplier['phone'] = re.sub(r'[^\d]+', '', r[mapping['phone']])
+                
+                if 'email' in mapping and len(r) > mapping['email']:
+                    supplier['email'] = r[mapping['email']].strip()
+                
+                if 'gst' in mapping and len(r) > mapping['gst']:
+                    supplier['gst'] = r[mapping['gst']].strip().upper()
+                
+                if 'dl' in mapping and len(r) > mapping['dl']:
+                    supplier['dl'] = r[mapping['dl']].strip().upper()
             else:
-                supplier['name'] = r[0].upper()
-                supplier['phone'] = re.sub(r'[^\d]+', '', r[1])
-                supplier['address'] = r[2]
-                supplier['email'] = r[3] if len(r) > 3 else ""
-                supplier['gst'] = r[4].upper() if len(r) > 4 else ""
-                supplier['dl'] = r[5].upper() if len(r) > 5 else ""
+                # Fallback to index-based mapping
+                if len(r) == 1:
+                    supplier['name'] = r[0].upper()
+                elif len(r) == 2:
+                    supplier['name'] = r[0].upper()
+                    supplier['phone'] = re.sub(r'[^\d]+', '', r[1])
+                elif len(r) == 3:
+                    # Smart guess for 3 columns without header (e.g. Name, City, Address)
+                    phone_candidate = re.sub(r'[^\d]+', '', r[1])
+                    if phone_candidate and len(phone_candidate) >= 8:
+                        supplier['name'] = r[0].upper()
+                        supplier['phone'] = phone_candidate
+                        supplier['address'] = r[2]
+                    else:
+                        supplier['name'] = r[0].upper()
+                        supplier['phone'] = '0000000000'
+                        parts = [x.strip() for x in r[1:] if x.strip()]
+                        supplier['address'] = ", ".join(parts)
+                else:
+                    supplier['name'] = r[0].upper()
+                    supplier['phone'] = re.sub(r'[^\d]+', '', r[1])
+                    supplier['address'] = r[2]
+                    supplier['email'] = r[3] if len(r) > 3 else ""
+                    supplier['gst'] = r[4].upper() if len(r) > 4 else ""
+                    supplier['dl'] = r[5].upper() if len(r) > 5 else ""
+
             if supplier['name']:
+                if not supplier['phone']:
+                    supplier['phone'] = '0000000000'
                 suppliers.append(supplier)
         result = suppliers
 

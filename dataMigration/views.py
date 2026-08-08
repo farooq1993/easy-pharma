@@ -35,6 +35,9 @@ from dataMigration.parsers import (
     parse_text_lines_to_rows,
     parse_companies,
     parse_suppliers_from_text,
+    parse_suppliers_from_rows,
+    parse_suppliers_from_rows_multiline,
+    is_multiline_supplier_layout,
     parse_stock_batches,
     parse_product_master_text,
     parse_products_fast,
@@ -48,6 +51,24 @@ logger = logging.getLogger(__name__)
 # =========================================================
 
 def decode_uploaded_file(uploaded_file):
+    name = getattr(uploaded_file, 'name', '').lower()
+    if name.endswith('.xlsx'):
+        try:
+            import openpyxl
+            import csv
+            import io
+            uploaded_file.seek(0)
+            wb = openpyxl.load_workbook(uploaded_file, data_only=True)
+            sheet = wb.active
+            output = io.StringIO()
+            writer = csv.writer(output)
+            for row in sheet.iter_rows(values_only=True):
+                cleaned_row = [str(val).strip() if val is not None else "" for val in row]
+                if any(cleaned_row):
+                    writer.writerow(cleaned_row)
+            return output.getvalue(), 'utf-8'
+        except Exception as e:
+            logger.error(f"Failed to parse xlsx: {str(e)}")
 
     for encoding in ('utf-8', 'cp1252', 'latin1'):
 
@@ -512,9 +533,30 @@ def _run_parse_job(
 
         if import_type == 'supplier':
 
-            parsed_data = parse_suppliers_from_text(
-                content
-            )
+            if input_method == 'file':
+                rows = parse_csv_to_rows(
+                    content,
+                    drop_first_column=False,
+                    skip_junk=False
+                )
+            else:
+                rows = parse_text_lines_to_rows(
+                    content,
+                    drop_first_column=False,
+                    skip_junk=False
+                )
+
+            is_multiline = False
+            if rows:
+                is_multiline = is_multiline_supplier_layout(rows)
+
+            if is_multiline:
+                parsed_data = parse_suppliers_from_rows_multiline(rows)
+            else:
+                parsed_data = parse_suppliers_from_rows(rows)
+
+            if not parsed_data:
+                parsed_data = parse_suppliers_from_text(content)
 
         # =====================================================
         # COMPANY
@@ -1105,7 +1147,22 @@ class MigrationImportView(LoginRequiredMixin, OrganizationRequiredMixin, View):
                 if import_type == 'product_seed':
                     parsed_data = parse_product_seed_csv(content)
                 elif import_type == 'supplier':
-                    parsed_data = parse_suppliers_from_text(content)
+                    if input_method == 'file':
+                        rows = parse_csv_to_rows(content, drop_first_column=False, skip_junk=False)
+                    else:
+                        rows = parse_text_lines_to_rows(content, drop_first_column=False, skip_junk=False)
+                    
+                    is_multiline = False
+                    if rows:
+                        is_multiline = is_multiline_supplier_layout(rows)
+                    
+                    if is_multiline:
+                        parsed_data = parse_suppliers_from_rows_multiline(rows)
+                    else:
+                        parsed_data = parse_suppliers_from_rows(rows)
+                    
+                    if not parsed_data:
+                        parsed_data = parse_suppliers_from_text(content)
                 elif import_type == 'company':
                     if input_method == 'file':
                         rows = parse_csv_to_rows(content, drop_first_column=False)
