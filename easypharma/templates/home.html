@@ -205,21 +205,21 @@
                     <div id="expiryScrollContainer" style="max-height: 270px; overflow: hidden;" class="px-2 position-relative">
                         <div id="expiryTickerTrack">
                             {% for batch in near_expiry_batches %}
-                            <div class="expiry-item py-2 px-3 border-bottom d-flex justify-content-between align-items-center {% if batch.expiry_date < today %}expired-bg{% endif %}" id="batch-row-{{ batch.id }}" style="font-size: 0.8rem;">
+                            <div class="expiry-item py-2 px-3 border-bottom d-flex justify-content-between align-items-center {% if batch.is_expired %}expired-bg{% endif %}" id="batch-row-{{ batch.id }}" style="font-size: 0.8rem;">
                                 <div style="max-width: 60%;">
                                     <div class="fw-bold text-dark text-truncate" title="{{ batch.product.product_name }}">{{ batch.product.product_name }}</div>
                                     <div class="text-muted" style="font-size: 0.7rem;">Batch: {{ batch.batch_number }}</div>
                                 </div>
                                 <div class="text-end d-flex align-items-center gap-2">
                                     <div>
-                                        {% if batch.expiry_date < today %}
+                                        {% if batch.is_expired %}
                                         <span class="badge bg-danger text-white mb-1" style="font-size: 0.65rem;">EXPIRED</span>
                                         {% else %}
                                         <div class="text-danger fw-bold" style="font-size: 0.75rem;">{{ batch.expiry_date|date:"M Y" }}</div>
                                         {% endif %}
                                         <div class="text-muted" style="font-size: 0.7rem;">{{ batch.current_quantity }} Units</div>
                                     </div>
-                                    {% if batch.expiry_date < today %}
+                                    {% if batch.is_expired %}
                                     <button class="btn btn-sm btn-outline-danger p-1 border-0" onclick="removeExpiredBatch({{ batch.id }})" title="Remove this expired batch from stock">
                                         <i class="bi bi-trash"></i>
                                     </button>

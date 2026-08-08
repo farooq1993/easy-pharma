@@ -248,6 +248,11 @@ class POSView(LoginRequiredMixin,View):
                         remarks=f"Sale Invoice #{invoice.invoice_number}"
                     )
                 
+                # Calculate discount ratio to apply to individual items
+                discount_amount = float(data.get('discount_amount') or 0.0)
+                gross_amount = float(data.get('sub_total') or 0.0) + float(data.get('tax_amount') or 0.0) + discount_amount
+                discount_ratio = (gross_amount - discount_amount) / gross_amount if gross_amount > 0 else 1.0
+
                 # Create Sale Items & Deduct Stock
                 for item in data.get('items', []):
                     product = Products.objects.get(id=item['product_id'], tenant=request.tenant)
@@ -273,9 +278,12 @@ class POSView(LoginRequiredMixin,View):
                     
                     # Calculate base price (since MRP is tax-inclusive)
                     unit_price = item['price']
-                    base_price = unit_price / (1 + tax_rate / 100) if tax_rate > 0 else unit_price
-                    tax_per_unit = unit_price - base_price
-                    tax_amount = tax_per_unit * quantity
+                    original_base_price = unit_price / (1 + tax_rate / 100) if tax_rate > 0 else unit_price
+                    original_tax_per_unit = unit_price - original_base_price
+                    
+                    # Apply discount ratio to get actual discounted values
+                    actual_tax_amount = original_tax_per_unit * quantity * discount_ratio
+                    actual_item_total = (unit_price * quantity) * discount_ratio
                     
                     SaleItem.objects.create(
                         tenant=request.tenant,
@@ -286,8 +294,8 @@ class POSView(LoginRequiredMixin,View):
                         quantity=quantity,
                         unit_price=unit_price,
                         tax_percentage=tax_rate,
-                        tax_amount=tax_amount,
-                        total_amount=item['total']
+                        tax_amount=actual_tax_amount,
+                        total_amount=actual_item_total
                     )
                     
                     # Update stock batch
@@ -468,19 +476,49 @@ class PrintInvoiceView(LoginRequiredMixin, View):
         lines.append(" " + "-" * W)
 
         # Amounts
-        lines.append(" " + f"{'Sub Total :':<20}{invoice.sub_total:>10.2f}")
-        lines.append(" " + f"{'GST Amount:':<20}{invoice.tax_amount:>10.2f}")
+        gross_sub_total = float(invoice.sub_total)
+        gross_tax_amount = float(invoice.tax_amount)
+        discount = float(invoice.discount_amount or 0.0)
+        
+        # Check if saved as net or gross
+        is_net_saved = False
+        net_payable_estimated = (gross_sub_total + gross_tax_amount) - discount
+        if abs(float(invoice.total_amount) - net_payable_estimated) >= abs(float(invoice.total_amount) - (gross_sub_total + gross_tax_amount)):
+            is_net_saved = True
+            
+        if is_net_saved and discount > 0:
+            net_total = gross_sub_total + gross_tax_amount
+            original_gross = net_total + discount
+            original_sub_total = gross_sub_total * (original_gross / net_total) if net_total > 0 else 0.0
+            original_tax_amount = gross_tax_amount * (original_gross / net_total) if net_total > 0 else 0.0
+            net_sub_total = gross_sub_total
+            net_tax_amount = gross_tax_amount
+        else:
+            original_sub_total = gross_sub_total
+            original_tax_amount = gross_tax_amount
+            original_gross = original_sub_total + original_tax_amount
+            if discount > 0:
+                net_sub_total = original_sub_total - (original_sub_total * (discount / original_gross) if original_gross > 0 else 0.0)
+                net_tax_amount = original_tax_amount - (original_tax_amount * (discount / original_gross) if original_gross > 0 else 0.0)
+            else:
+                net_sub_total = original_sub_total
+                net_tax_amount = original_tax_amount
 
-        if invoice.discount_amount and invoice.discount_amount > 0:
-            lines.append(" " + f"{'Discount  :':<20}{invoice.discount_amount:>10.2f}")
+        if discount > 0:
+            lines.append(" " + f"{'Gross Total:':<20}{original_gross:>10.2f}")
+            lines.append(" " + f"{'Discount   :':<20}{discount:>10.2f}")
+            lines.append(" " + "-" * W)
+            lines.append(" " + f"{'Taxable Amt:':<20}{net_sub_total:>10.2f}")
+            lines.append(" " + f"{'GST Amount :':<20}{net_tax_amount:>10.2f}")
+        else:
+            lines.append(" " + f"{'Sub Total  :':<20}{net_sub_total:>10.2f}")
+            lines.append(" " + f"{'GST Amount :':<20}{net_tax_amount:>10.2f}")
 
-        round_off = invoice.total_amount - (
-            invoice.sub_total + invoice.tax_amount - invoice.discount_amount
-        )
+        round_off = float(invoice.total_amount) - (net_sub_total + net_tax_amount)
         if abs(round_off) >= 0.01:
-            lines.append(" " + f"{'Round Off :':<20}{round_off:>+10.2f}")
+            lines.append(" " + f"{'Round Off  :':<20}{round_off:>+10.2f}")
 
-        lines.append(" " + f"{'NET AMOUNT:':<20}{invoice.total_amount:>10.2f}")
+        lines.append(" " + f"{'NET AMOUNT :':<20}{invoice.total_amount:>10.2f}")
         lines.append(" " + "-" * W)
 
         # Signature (dot matrix me text se)
