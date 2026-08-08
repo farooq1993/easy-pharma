@@ -1207,6 +1207,7 @@ class DiscardExpiredBatchView(LoginRequiredMixin, View):
             from datetime import date
             data = json.loads(request.body)
             action = data.get('action')
+            tenant_id = request.tenant.id
             
             if action == 'clear_all':
                 today = date.today()
@@ -1215,6 +1216,16 @@ class DiscardExpiredBatchView(LoginRequiredMixin, View):
                     expiry_date__lt=today,
                     current_quantity__gt=0
                 ).update(current_quantity=0)
+                
+                # Invalidate POS and Stock reports cache
+                try:
+                    from easypharma.views.sales import invalidate_pos_cache
+                    from easypharma.views.reports import invalidate_stock_cache
+                    invalidate_pos_cache(tenant_id)
+                    invalidate_stock_cache(tenant_id)
+                except Exception:
+                    pass
+                
                 return JsonResponse({
                     'success': True,
                     'message': f'Successfully removed {updated_count} expired batch(es) from stock.'
@@ -1227,6 +1238,16 @@ class DiscardExpiredBatchView(LoginRequiredMixin, View):
             batch = StockBatch.objects.get(id=batch_id, tenant=request.tenant)
             batch.current_quantity = 0
             batch.save()
+            
+            # Invalidate POS and Stock reports cache
+            try:
+                from easypharma.views.sales import invalidate_pos_cache
+                from easypharma.views.reports import invalidate_stock_cache
+                invalidate_pos_cache(tenant_id)
+                invalidate_stock_cache(tenant_id)
+            except Exception:
+                pass
+                
             return JsonResponse({'success': True, 'message': 'Expired batch removed successfully.'})
         except StockBatch.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Batch not found'}, status=404)
@@ -1253,65 +1274,122 @@ class StockDiscardView(LoginRequiredMixin, View):
     def post(self, request):
         try:
             import json
+            from django.db import transaction
             data = json.loads(request.body)
-            batch_id = data.get('batch_id')
-            quantity = int(data.get('quantity', 0))
+            
+            # Check if this is a multi-item voucher submission
+            items = data.get('items', [])
             discard_date = data.get('discard_date')
             remarks = data.get('remarks', '')
-            discard_id = data.get('discard_id')
-
-            if not batch_id or quantity <= 0:
-                return JsonResponse({'success': False, 'error': 'Invalid batch or quantity'}, status=400)
-
-            batch = get_object_or_404(StockBatch, id=batch_id, tenant=request.tenant)
-
-            with transaction.atomic():
-                if discard_id:
-                    discard = get_object_or_404(StockDiscard, id=discard_id, tenant=request.tenant)
-                    # Revert old quantity
-                    old_batch = StockBatch.objects.filter(
-                        tenant=request.tenant, product=discard.product, batch_number=discard.batch_number
-                    ).first()
-                    if old_batch:
-                        old_batch.current_quantity += discard.quantity
-                        old_batch.save()
+            
+            if items:
+                with transaction.atomic():
+                    for item in items:
+                        batch_id = item.get('batch_id')
+                        quantity = int(item.get('quantity', 0))
+                        
+                        if not batch_id or quantity <= 0:
+                            return JsonResponse({'success': False, 'error': 'Invalid batch or quantity in items'}, status=400)
+                            
+                        batch = get_object_or_404(StockBatch, id=batch_id, tenant=request.tenant)
+                        
+                        if batch.current_quantity < quantity:
+                            return JsonResponse({
+                                'success': False, 
+                                'error': f'Insufficient stock for {batch.product.product_name} (Batch {batch.batch_number}). Available: {batch.current_quantity}'
+                            }, status=400)
+                            
+                        batch.current_quantity -= quantity
+                        batch.save()
+                        
+                        StockDiscard.objects.create(
+                            tenant=request.tenant,
+                            product=batch.product,
+                            batch_number=batch.batch_number,
+                            quantity=quantity,
+                            discard_date=discard_date,
+                            remarks=remarks
+                        )
+                
+                # Invalidate POS and Stock reports cache
+                try:
+                    tenant_id = request.tenant.id
+                    from easypharma.views.sales import invalidate_pos_cache
+                    from easypharma.views.reports import invalidate_stock_cache
+                    invalidate_pos_cache(tenant_id)
+                    invalidate_stock_cache(tenant_id)
+                except Exception:
+                    pass
                     
-                    # Check and deduct new quantity
-                    # Refresh batch from DB to get the reverted quantity
-                    batch = StockBatch.objects.get(id=batch.id, tenant=request.tenant)
-                    if batch.current_quantity < quantity:
-                        # Revert old batch changes to prevent corruption in case of error
+                return JsonResponse({'success': True})
+            
+            else:
+                # Fallback for single item discard/editing
+                batch_id = data.get('batch_id')
+                quantity = int(data.get('quantity', 0))
+                discard_id = data.get('discard_id')
+                
+                if not batch_id or quantity <= 0:
+                    return JsonResponse({'success': False, 'error': 'Invalid batch or quantity'}, status=400)
+                
+                batch = get_object_or_404(StockBatch, id=batch_id, tenant=request.tenant)
+                
+                with transaction.atomic():
+                    if discard_id:
+                        discard = get_object_or_404(StockDiscard, id=discard_id, tenant=request.tenant)
+                        # Revert old quantity
+                        old_batch = StockBatch.objects.filter(
+                            tenant=request.tenant, product=discard.product, batch_number=discard.batch_number
+                        ).first()
                         if old_batch:
-                            old_batch.current_quantity -= discard.quantity
+                            old_batch.current_quantity += discard.quantity
                             old_batch.save()
-                        return JsonResponse({'success': False, 'error': f'Insufficient stock in batch. Available: {batch.current_quantity}'}, status=400)
+                        
+                        # Check and deduct new quantity
+                        batch = StockBatch.objects.get(id=batch.id, tenant=request.tenant)
+                        if batch.current_quantity < quantity:
+                            # Revert old batch changes to prevent corruption in case of error
+                            if old_batch:
+                                old_batch.current_quantity -= discard.quantity
+                                old_batch.save()
+                            return JsonResponse({'success': False, 'error': f'Insufficient stock in batch. Available: {batch.current_quantity}'}, status=400)
+                        
+                        batch.current_quantity -= quantity
+                        batch.save()
+                        
+                        discard.product = batch.product
+                        discard.batch_number = batch.batch_number
+                        discard.quantity = quantity
+                        discard.discard_date = discard_date
+                        discard.remarks = remarks
+                        discard.save()
+                    else:
+                        if batch.current_quantity < quantity:
+                            return JsonResponse({'success': False, 'error': f'Insufficient stock in batch. Available: {batch.current_quantity}'}, status=400)
+                        
+                        batch.current_quantity -= quantity
+                        batch.save()
+                        
+                        StockDiscard.objects.create(
+                            tenant=request.tenant,
+                            product=batch.product,
+                            batch_number=batch.batch_number,
+                            quantity=quantity,
+                            discard_date=discard_date,
+                            remarks=remarks
+                        )
+                
+                # Invalidate POS and Stock reports cache
+                try:
+                    tenant_id = request.tenant.id
+                    from easypharma.views.sales import invalidate_pos_cache
+                    from easypharma.views.reports import invalidate_stock_cache
+                    invalidate_pos_cache(tenant_id)
+                    invalidate_stock_cache(tenant_id)
+                except Exception:
+                    pass
                     
-                    batch.current_quantity -= quantity
-                    batch.save()
-
-                    discard.product = batch.product
-                    discard.batch_number = batch.batch_number
-                    discard.quantity = quantity
-                    discard.discard_date = discard_date
-                    discard.remarks = remarks
-                    discard.save()
-                else:
-                    if batch.current_quantity < quantity:
-                        return JsonResponse({'success': False, 'error': f'Insufficient stock in batch. Available: {batch.current_quantity}'}, status=400)
-                    
-                    batch.current_quantity -= quantity
-                    batch.save()
-
-                    StockDiscard.objects.create(
-                        tenant=request.tenant,
-                        product=batch.product,
-                        batch_number=batch.batch_number,
-                        quantity=quantity,
-                        discard_date=discard_date,
-                        remarks=remarks
-                    )
-
-            return JsonResponse({'success': True})
+                return JsonResponse({'success': True})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
 
@@ -1329,6 +1407,17 @@ class StockDiscardDeleteView(LoginRequiredMixin, View):
                     batch.current_quantity += discard.quantity
                     batch.save()
                 discard.delete()
+                
+                # Invalidate POS and Stock reports cache
+                try:
+                    tenant_id = request.tenant.id
+                    from easypharma.views.sales import invalidate_pos_cache
+                    from easypharma.views.reports import invalidate_stock_cache
+                    invalidate_pos_cache(tenant_id)
+                    invalidate_stock_cache(tenant_id)
+                except Exception:
+                    pass
+
                 return JsonResponse({'success': True})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
