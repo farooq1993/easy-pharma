@@ -760,6 +760,37 @@
 
 <script src="{% static 'js/localforage.min.js' %}"></script>
 <script>
+    function isExpired(expiryStr) {
+        if (!expiryStr || expiryStr === '—') return false;
+        const today = new Date();
+        const currentYear = today.getFullYear();
+        const currentMonth = today.getMonth() + 1; // 1-indexed (Jan is 1)
+        
+        // Check format YYYY-MM-DD
+        if (expiryStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            const parts = expiryStr.split('-');
+            const expYear = parseInt(parts[0]);
+            const expMonth = parseInt(parts[1]);
+            const expDay = parseInt(parts[2]);
+            const expDate = new Date(expYear, expMonth - 1, expDay);
+            const todayDateOnly = new Date(currentYear, currentMonth - 1, today.getDate());
+            return expDate < todayDateOnly;
+        }
+        
+        // Check format MM/YYYY or MM/YY or MM-YYYY
+        const parts = expiryStr.split(/[-/]/);
+        if (parts.length === 2) {
+            let month = parseInt(parts[0]);
+            let year = parseInt(parts[1]);
+            if (year < 100) {
+                year += 2000;
+            }
+            if (year < currentYear) return true;
+            if (year === currentYear && month < currentMonth) return true;
+        }
+        return false;
+    }
+
     const pharmacyInfo = {
         name: "{{ request.tenant.pharmacy_name|escapejs }}",
         address: "{{ request.tenant.address|escapejs }}",
@@ -1267,19 +1298,12 @@
 
             let batchesHtml = '';
             product.batches.forEach(b => {
-                batchesHtml += `
-                <div class="d-flex justify-content-between align-items-center mt-2 p-2 rounded bg-light border-start border-4 border-primary batch-item" data-batch-index="${batchIndex++}">
-                    <div class="flex-grow-1">
-                        <div class="d-flex justify-content-between mb-1">
-                            <span class="badge bg-white text-dark border x-small">B: ${b.batch_no}</span>
-                            <span class="text-muted x-small">Exp: ${b.expiry}</span>
-                        </div>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <span class="fw-bold text-primary">₹${b.price.toFixed(2)}</span>
-                            <span class="badge bg-success text-white x-small">${b.stock} left</span>
-                        </div>
-                    </div>
-                    <button class="btn btn-primary btn-sm ms-3 px-3 rounded-pill fw-bold add-btn" 
+                const expired = isExpired(b.expiry);
+                const borderClass = expired ? 'border-danger' : 'border-primary';
+                const bgClass = expired ? 'bg-danger-soft' : 'bg-light';
+                const btnHtml = expired
+                    ? `<button type="button" class="btn btn-danger btn-sm ms-3 px-3 rounded-pill fw-bold" onclick="alert('Item &quot;${product.name.replace(/"/g, '&quot;').replace(/'/g, "\\'")}&quot; is EXPIRED (Exp: ${b.expiry}) and CANNOT be sold!')"><i class="fas fa-ban me-1"></i>Expired</button>`
+                    : `<button type="button" class="btn btn-primary btn-sm ms-3 px-3 rounded-pill fw-bold add-btn" 
                         onclick='addToCart({
                             id: ${product.id}, 
                             batch_id: ${b.batch_id}, 
@@ -1290,7 +1314,21 @@
                             tax_rate: ${product.tax_rate}, 
                             stock: ${b.stock},
                             schedule: "${(product.schedule || '').replace(/"/g,'&quot;')}"
-                        })'>+ ADD</button>
+                        })'>+ ADD</button>`;
+
+                batchesHtml += `
+                <div class="d-flex justify-content-between align-items-center mt-2 p-2 rounded ${bgClass} border-start border-4 ${borderClass} batch-item" data-batch-index="${batchIndex++}" ${expired ? 'style="background-color: rgba(220, 53, 69, 0.08) !important; border-color: #dc3545 !important;"' : ''}>
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="badge ${expired ? 'bg-danger text-white' : 'bg-white text-dark'} border x-small">B: ${b.batch_no}</span>
+                            <span class="${expired ? 'text-danger fw-bold' : 'text-muted'} x-small">Exp: ${b.expiry} ${expired ? '(EXPIRED)' : ''}</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="fw-bold ${expired ? 'text-danger' : 'text-primary'}">₹${b.price.toFixed(2)}</span>
+                            <span class="badge ${expired ? 'bg-danger' : 'bg-success'} text-white x-small">${expired ? 'Expired' : b.stock + ' left'}</span>
+                        </div>
+                    </div>
+                    ${btnHtml}
                 </div>`;
             });
 
@@ -1411,21 +1449,30 @@
         }
 
         subs.forEach(s => {
-            const batches = s.batches.map(b => `
-                <div class="d-flex justify-content-between align-items-center p-2 rounded bg-light border-start border-3 border-success mt-1">
-                    <div>
-                        <span class="badge bg-white text-dark border x-small">B: ${b.batch_no}</span>
-                        <span class="text-muted x-small ms-2">Exp: ${b.expiry}</span>
-                        <span class="badge bg-success text-white x-small ms-2">${b.stock} left</span>
-                    </div>
-                    <div class="d-flex align-items-center gap-2">
-                        <span class="fw-bold text-success">₹${b.price.toFixed(2)}</span>
-                        <button class="btn btn-success btn-sm px-3 rounded-pill fw-bold"
+            const batches = s.batches.map(b => {
+                const expired = isExpired(b.expiry);
+                const borderClass = expired ? 'border-danger' : 'border-success';
+                const bgClass = expired ? 'bg-danger-soft' : 'bg-light';
+                const btnHtml = expired
+                    ? `<button type="button" class="btn btn-danger btn-sm px-3 rounded-pill fw-bold" onclick="alert('Item &quot;${s.name.replace(/"/g, '&quot;').replace(/'/g, "\\'")}&quot; is EXPIRED (Exp: ${b.expiry}) and CANNOT be sold!')"><i class="fas fa-ban me-1"></i>Expired</button>`
+                    : `<button type="button" class="btn btn-success btn-sm px-3 rounded-pill fw-bold"
                             onclick='addToCart({id:${s.id},batch_id:${b.batch_id},name:"${s.name.replace(/"/g,"&quot;")}",batch_no:"${b.batch_no}",expiry:"${b.expiry}",price:${b.price},tax_rate:${s.tax_rate},stock:${b.stock},schedule:"${(s.schedule || '').replace(/"/g,'&quot;')}"}); bootstrap.Modal.getInstance(document.getElementById("substituteModal")).hide();'>
                             + ADD
-                        </button>
+                        </button>`;
+                
+                return `
+                <div class="d-flex justify-content-between align-items-center p-2 rounded ${bgClass} border-start border-3 ${borderClass} mt-1" ${expired ? 'style="background-color: rgba(220, 53, 69, 0.08) !important; border-color: #dc3545 !important;"' : ''}>
+                    <div>
+                        <span class="badge ${expired ? 'bg-danger text-white' : 'bg-white text-dark'} border x-small">B: ${b.batch_no}</span>
+                        <span class="${expired ? 'text-danger fw-bold' : 'text-muted'} x-small ms-2">Exp: ${b.expiry} ${expired ? '(EXPIRED)' : ''}</span>
+                        <span class="badge ${expired ? 'bg-danger' : 'bg-success'} text-white x-small ms-2">${expired ? 'Expired' : b.stock + ' left'}</span>
                     </div>
-                </div>`).join('');
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="fw-bold ${expired ? 'text-danger' : 'text-success'}">₹${b.price.toFixed(2)}</span>
+                        ${btnHtml}
+                    </div>
+                </div>`;
+            }).join('');
 
             listEl.innerHTML += `
                 <div class="card border-0 shadow-sm rounded-3 mb-3">
@@ -1530,6 +1577,11 @@
     }
 
     function addToCart(product) {
+        if (isExpired(product.expiry)) {
+            alert(`Item "${product.name}" is EXPIRED (Exp: ${product.expiry}) and CANNOT be sold!`);
+            return;
+        }
+
         if (product.stock <= 0) {
             return alert('Out of stock!');
         }
@@ -1869,16 +1921,22 @@
             const validSubTotal = isNaN(subTotal) ? 0 : subTotal;
             const validTotalTax = isNaN(totalTax) ? 0 : totalTax;
             
+            const gross = validSubTotal + validTotalTax;
             const discount = parseFloat(document.getElementById('summaryDiscount').value) || 0;
-            let grandTotal = (validSubTotal + validTotalTax) - discount;
+            const ratio = gross > 0 ? (gross - discount) / gross : 1;
+            
+            const discountedSubTotal = validSubTotal * ratio;
+            const discountedTotalTax = validTotalTax * ratio;
+            
+            let grandTotal = gross - discount;
 
             // ── Round Off ──
             const roundedTotal = Math.round(grandTotal);
             const roundOff = roundedTotal - grandTotal;
             grandTotal = roundedTotal;
 
-            document.getElementById('summarySubTotal').innerText = validSubTotal.toFixed(2);
-            document.getElementById('summaryTax').innerText = validTotalTax.toFixed(2);
+            document.getElementById('summarySubTotal').innerText = discountedSubTotal.toFixed(2);
+            document.getElementById('summaryTax').innerText = discountedTotalTax.toFixed(2);
             document.getElementById('summaryGrandTotal').innerText = grandTotal.toFixed(2);
 
             const roundOffEl = document.getElementById('summaryRoundOff');
@@ -2673,8 +2731,10 @@ function addNewBill() {
             const bestProduct = row.best_match;
             if (bestProduct && bestProduct.batches && bestProduct.batches.length > 0) {
                 bestProduct.batches.forEach((b, bIndex) => {
-                    const isSelected = bIndex === 0 ? 'selected' : '';
-                    batchOptionsHtml += `<option value="${b.batch_id}" data-price="${b.price}" data-batch-no="${b.batch_no}" data-expiry="${b.expiry}" data-stock="${b.stock}" ${isSelected}>${b.batch_no} (Exp: ${b.expiry}, Stock: ${b.stock})</option>`;
+                    const expired = isExpired(b.expiry);
+                    const isSelected = (bIndex === 0 && !expired) ? 'selected' : '';
+                    const disabledAttr = expired ? 'disabled style="color: #dc3545;"' : '';
+                    batchOptionsHtml += `<option value="${b.batch_id}" data-price="${b.price}" data-batch-no="${b.batch_no}" data-expiry="${b.expiry}" data-stock="${b.stock}" ${isSelected} ${disabledAttr}>${b.batch_no} (Exp: ${b.expiry}${expired ? ' - EXPIRED' : ''}, Stock: ${b.stock})</option>`;
                 });
             } else {
                 batchOptionsHtml += `<option value="">No Batch</option>`;
@@ -2762,8 +2822,10 @@ function addNewBill() {
         let batchOptionsHtml = '';
         if (product.batches && product.batches.length > 0) {
             product.batches.forEach((b, bIndex) => {
-                const isSelected = bIndex === 0 ? 'selected' : '';
-                batchOptionsHtml += `<option value="${b.batch_id}" data-price="${b.price}" data-batch-no="${b.batch_no}" data-expiry="${b.expiry}" data-stock="${b.stock}" ${isSelected}>${b.batch_no} (Exp: ${b.expiry}, Stock: ${b.stock})</option>`;
+                const expired = isExpired(b.expiry);
+                const isSelected = (bIndex === 0 && !expired) ? 'selected' : '';
+                const disabledAttr = expired ? 'disabled style="color: #dc3545;"' : '';
+                batchOptionsHtml += `<option value="${b.batch_id}" data-price="${b.price}" data-batch-no="${b.batch_no}" data-expiry="${b.expiry}" data-stock="${b.stock}" ${isSelected} ${disabledAttr}>${b.batch_no} (Exp: ${b.expiry}${expired ? ' - EXPIRED' : ''}, Stock: ${b.stock})</option>`;
             });
             batchSelect.disabled = false;
         } else {
@@ -2819,8 +2881,16 @@ function addNewBill() {
                 });
             });
             
+            let expiredAlerted = false;
             // Add items to POS cart
             itemsToAdd.forEach(item => {
+                if (isExpired(item.expiry)) {
+                    if (!expiredAlerted) {
+                        alert(`Some matched items in the prescription (like "${item.name}") are EXPIRED in your stock and cannot be added to the sale!`);
+                        expiredAlerted = true;
+                    }
+                    return;
+                }
                 const existing = cart.find(
                     cartItem => cartItem.id === item.id && cartItem.batch_id === item.batch_id
                 );

@@ -20,6 +20,20 @@ class StockBatch(TenantAwareModel):
     def __str__(self):
         return f"{self.product.product_name} - {self.batch_number} ({self.current_quantity} left)"
 
+    @property
+    def is_expired(self):
+        from django.utils.timezone import now
+        today = now().date()
+        if not self.expiry_date:
+            return False
+        # Under Indian pharmacy rules, a medicine with expiry MM/YY is valid until the last day of that month.
+        # It is considered expired starting the 1st day of the next month.
+        if self.expiry_date.month == 12:
+            next_month_start = self.expiry_date.replace(year=self.expiry_date.year + 1, month=1, day=1)
+        else:
+            next_month_start = self.expiry_date.replace(month=self.expiry_date.month + 1, day=1)
+        return today >= next_month_start
+
     class Meta:
         verbose_name_plural = "Stock Batches"
         unique_together = ('tenant', 'product', 'batch_number')

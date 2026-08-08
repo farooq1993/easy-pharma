@@ -82,7 +82,7 @@
                             <td>{{ stock.product.product_packing }}</td>
                             <td><span class="badge bg-light text-dark border">#{{ stock.batch_number }}</span></td>
                             <td>
-                                <span class="{% if stock.expiry_date < today %}text-danger fw-bold{% endif %}">
+                                <span class="{% if stock.is_expired %}text-danger fw-bold{% endif %}">
                                     {{ stock.expiry_date|date:"m/Y" }}
                                 </span>
                             </td>
