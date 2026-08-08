@@ -879,6 +879,47 @@
     document.addEventListener('DOMContentLoaded', () => {
         updateBillNumberDisplay();
         
+        // ── Patient details Enter key navigation ──
+        const navigationOrder = [
+            'billDate',
+            'patientName',
+            'patientAddress',
+            'patientPhone',
+            'doctorName',
+            'summaryDiscount'
+        ];
+
+        navigationOrder.forEach((id, idx) => {
+            const inputEl = document.getElementById(id);
+            if (inputEl) {
+                inputEl.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (idx < navigationOrder.length - 1) {
+                            const nextEl = document.getElementById(navigationOrder[idx + 1]);
+                            if (nextEl) {
+                                nextEl.focus();
+                                if (typeof nextEl.select === 'function') {
+                                    nextEl.select();
+                                }
+                            }
+                        } else {
+                            completeOrder();
+                        }
+                    }
+                });
+            }
+        });
+
+        const discPercEl = document.getElementById('summaryDiscountPerc');
+        if (discPercEl) {
+            discPercEl.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    completeOrder();
+                }
+            });
+        }
 
         const urlParams = new URLSearchParams(window.location.search);
         if (urlParams.get('mode') === 'counter') {
@@ -1317,18 +1358,34 @@
                         })'>+ ADD</button>`;
 
                 batchesHtml += `
-                <div class="d-flex justify-content-between align-items-center mt-2 p-2 rounded ${bgClass} border-start border-4 ${borderClass} batch-item" data-batch-index="${batchIndex++}" ${expired ? 'style="background-color: rgba(220, 53, 69, 0.08) !important; border-color: #dc3545 !important;"' : ''}>
-                    <div class="flex-grow-1">
-                        <div class="d-flex justify-content-between mb-1">
-                            <span class="badge ${expired ? 'bg-danger text-white' : 'bg-white text-dark'} border x-small">B: ${b.batch_no}</span>
-                            <span class="${expired ? 'text-danger fw-bold' : 'text-muted'} x-small">Exp: ${b.expiry} ${expired ? '(EXPIRED)' : ''}</span>
+                <div class="d-flex justify-content-between align-items-center mt-2 p-3 rounded ${bgClass} border-start border-4 ${borderClass} batch-item" data-batch-index="${batchIndex++}" ${expired ? 'style="background-color: rgba(220, 53, 69, 0.08) !important; border-color: #dc3545 !important;"' : ''}>
+                    <div class="d-flex align-items-center flex-grow-1" style="min-width: 0;">
+                        <!-- Price & Batch -->
+                        <div class="d-flex flex-column justify-content-center" style="min-width: 140px;">
+                            <div class="fw-extrabold text-primary fs-5" style="font-family: 'JetBrains Mono', monospace; font-weight: 800;">₹${b.price.toFixed(2)}</div>
+                            <div class="mt-1">
+                                <span class="badge ${expired ? 'bg-danger text-white' : 'bg-white text-dark'} border px-2 py-1" style="font-size: 0.78rem; font-family: 'JetBrains Mono', monospace;">B: ${b.batch_no}</span>
+                            </div>
                         </div>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <span class="fw-bold ${expired ? 'text-danger' : 'text-primary'}">₹${b.price.toFixed(2)}</span>
-                            <span class="badge ${expired ? 'bg-danger' : 'bg-success'} text-white x-small">${expired ? 'Expired' : b.stock + ' left'}</span>
+                        
+                        <!-- Expiry Date (Centered & Large) -->
+                        <div class="flex-grow-1 px-3 d-flex align-items-center">
+                            <span class="${expired ? 'text-danger fw-bold' : 'text-dark fw-semibold'}" style="font-size: 0.9rem;">
+                                <i class="far fa-clock me-1 text-muted"></i>Exp: <strong style="font-size: 0.95rem; font-family: 'JetBrains Mono', monospace;">${b.expiry}</strong>
+                                ${expired ? ' <span class="badge bg-danger text-white ms-1">EXPIRED</span>' : ''}
+                            </span>
+                        </div>
+                        
+                        <!-- Stock Qty Badge -->
+                        <div class="px-2">
+                            <span class="badge ${expired ? 'bg-danger' : (b.stock <= 5 ? 'bg-warning text-dark' : 'bg-success')} text-white px-3 py-2 fw-bold" style="font-size: 0.88rem; font-family: 'JetBrains Mono', monospace;">
+                                ${expired ? 'Expired' : b.stock + ' left'}
+                            </span>
                         </div>
                     </div>
-                    ${btnHtml}
+                    <div class="ps-2">
+                        ${btnHtml}
+                    </div>
                 </div>`;
             });
 
@@ -1461,14 +1518,32 @@
                         </button>`;
                 
                 return `
-                <div class="d-flex justify-content-between align-items-center p-2 rounded ${bgClass} border-start border-3 ${borderClass} mt-1" ${expired ? 'style="background-color: rgba(220, 53, 69, 0.08) !important; border-color: #dc3545 !important;"' : ''}>
-                    <div>
-                        <span class="badge ${expired ? 'bg-danger text-white' : 'bg-white text-dark'} border x-small">B: ${b.batch_no}</span>
-                        <span class="${expired ? 'text-danger fw-bold' : 'text-muted'} x-small ms-2">Exp: ${b.expiry} ${expired ? '(EXPIRED)' : ''}</span>
-                        <span class="badge ${expired ? 'bg-danger' : 'bg-success'} text-white x-small ms-2">${expired ? 'Expired' : b.stock + ' left'}</span>
+                <div class="d-flex justify-content-between align-items-center mt-2 p-3 rounded ${bgClass} border-start border-3 ${borderClass}" ${expired ? 'style="background-color: rgba(220, 53, 69, 0.08) !important; border-color: #dc3545 !important;"' : ''}>
+                    <div class="d-flex align-items-center flex-grow-1" style="min-width: 0;">
+                        <!-- Price & Batch -->
+                        <div class="d-flex flex-column justify-content-center" style="min-width: 130px;">
+                            <div class="fw-extrabold text-success fs-5" style="font-family: 'JetBrains Mono', monospace; font-weight: 800;">₹${b.price.toFixed(2)}</div>
+                            <div class="mt-1">
+                                <span class="badge ${expired ? 'bg-danger text-white' : 'bg-white text-dark'} border px-2 py-1" style="font-size: 0.78rem; font-family: 'JetBrains Mono', monospace;">B: ${b.batch_no}</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Expiry (Center) -->
+                        <div class="flex-grow-1 px-2 d-flex align-items-center">
+                            <span class="${expired ? 'text-danger fw-bold' : 'text-dark fw-semibold'}" style="font-size: 0.9rem;">
+                                <i class="far fa-clock me-1 text-muted"></i>Exp: <strong style="font-size: 0.95rem; font-family: 'JetBrains Mono', monospace;">${b.expiry}</strong>
+                                ${expired ? ' <span class="badge bg-danger text-white ms-1">EXPIRED</span>' : ''}
+                            </span>
+                        </div>
+                        
+                        <!-- Stock Qty -->
+                        <div class="px-2">
+                            <span class="badge ${expired ? 'bg-danger' : (b.stock <= 5 ? 'bg-warning text-dark' : 'bg-success')} text-white px-3 py-2 fw-bold" style="font-size: 0.88rem; font-family: 'JetBrains Mono', monospace;">
+                                ${expired ? 'Expired' : b.stock + ' left'}
+                            </span>
+                        </div>
                     </div>
-                    <div class="d-flex align-items-center gap-2">
-                        <span class="fw-bold ${expired ? 'text-danger' : 'text-success'}">₹${b.price.toFixed(2)}</span>
+                    <div class="ps-2">
                         ${btnHtml}
                     </div>
                 </div>`;
@@ -1716,20 +1791,16 @@
             });
 
             if (shouldFocusLastQty) {
-
                 setTimeout(() => {
-
-                    const inputs = tbody.querySelectorAll('.qty-input');
-
-                    const lastQtyInput = inputs[inputs.length - 1];
-
-                    if (lastQtyInput) {
-                        lastQtyInput.focus();
-                        lastQtyInput.select();
+                    const inputs = tbody.querySelectorAll(mrpEditMode ? '.mrp-input' : '.qty-input');
+                    const lastInput = inputs[inputs.length - 1];
+                    if (lastInput) {
+                        lastInput.focus();
+                        if (typeof lastInput.select === 'function') {
+                            lastInput.select();
+                        }
                     }
-
                     shouldFocusLastQty = false;
-
                 }, 50);
             }
         }
@@ -1785,10 +1856,15 @@
     function handleMrpKeydown(event, index) {
         if (event.key === 'Enter') {
             event.preventDefault();
-            // Clear search and focus on it for next item
-            document.getElementById('productSearch').value = '';
-            document.getElementById('productSearch').focus();
-            document.getElementById('searchResults').classList.add('d-none');
+            // Move focus to the quantity input of the same row
+            const rows = document.querySelectorAll('#posTable tbody tr');
+            if (rows[index]) {
+                const qtyInput = rows[index].querySelector('.qty-input');
+                if (qtyInput) {
+                    qtyInput.focus();
+                    qtyInput.select();
+                }
+            }
         } else if (event.key === 'Escape') {
             event.preventDefault();
             document.getElementById('productSearch').focus();
@@ -3055,15 +3131,15 @@ function addNewBill() {
     /* ── Search results dropdown ── */
     #searchResults {
         border-radius: var(--r-lg) !important;
-        border: 1px solid var(--border) !important;
-        box-shadow: var(--shadow-lg) !important;
+        border: 2.5px solid var(--brand) !important;
+        box-shadow: 0 15px 40px rgba(0,0,0,0.18) !important;
         overflow: hidden;
         margin-top: 10px;
-        background: var(--surface);
+        background: #ffffff !important;
     }
     #searchResults .list-group-item {
         border-color: var(--border) !important;
-        background: var(--surface) !important;
+        background: #ffffff !important;
     }
     #searchResults .h6.fw-bold { font-size: 0.95rem; }
     #searchResults .badge.bg-light {
@@ -3082,14 +3158,15 @@ function addNewBill() {
     .batch-item {
         cursor: pointer;
         border-radius: var(--r-sm) !important;
-        background: #FAFBF9 !important;
+        background: rgba(250, 251, 249, 0.9) !important;
         border-left: 4px solid var(--brand) !important;
-        transition: background .12s ease, border-left-color .12s ease, transform .1s ease !important;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }
     .batch-item:hover {
         background: var(--brand-tint) !important;
         border-left-color: var(--brand-dk) !important;
-        transform: translateX(3px) !important;
+        transform: translateY(-2px) scale(1.005) !important;
+        box-shadow: 0 4px 12px rgba(12, 107, 88, 0.08) !important;
     }
     .batch-item.selected-batch, .batch-item.selected-batch:hover {
         background: var(--brand-tint) !important;
