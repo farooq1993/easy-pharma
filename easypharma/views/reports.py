@@ -822,6 +822,10 @@ def _daily_sale_cache_key(tenant_id, date_str, schedule, user_id='all'):
 def invalidate_stock_cache(tenant_id):
     """Call after any purchase is saved or stock is modified."""
     cache.delete(_stock_report_cache_key(tenant_id))
+    # Clear all combination filter cache keys
+    for sched in ['', 'H1']:
+        for filt in ['', 'near_expiry']:
+            cache.delete(f"{_stock_report_cache_key(tenant_id)}:{sched}:{filt}")
 
 
 def invalidate_daily_sale_cache(tenant_id, date_str=None):

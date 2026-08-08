@@ -11,6 +11,7 @@ from .models.Items import Products
 from django.db.models import Sum
 
 @login_required
+@ensure_csrf_cookie
 def home_view(request):
     today = now().date()   # timezone-aware — daily report se match karega
 

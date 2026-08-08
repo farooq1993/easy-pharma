@@ -1360,14 +1360,46 @@ class PurchaseScanAPI(LoginRequiredMixin, View):
                 'error': f'Daily bill scan limit of {limit} reached! Please upgrade your subscription plan.'
             })
             
-        # 2. Get uploaded file
-        bill_file = request.FILES.get('bill_image')
-        if not bill_file:
-            return JsonResponse({'success': False, 'error': 'No bill image file uploaded.'})
+        # 2. Get uploaded files (support single or multiple files)
+        bill_files = request.FILES.getlist('bill_images')
+        if not bill_files:
+            single_file = request.FILES.get('bill_image')
+            if single_file:
+                bill_files = [single_file]
+                
+        if not bill_files:
+            return JsonResponse({'success': False, 'error': 'No bill image files uploaded.'})
             
-        # 3. Call service to parse image
+        # 3. Call service to parse each image page and combine them
+        parsed_items_combined = []
+        parsed_supplier_name = None
+        parsed_invoice_number = None
+        parsed_purchase_date = None
+        parsed_payment_mode = 'Cash'
+
         try:
-            parsed_data = extract_purchase_bill_data(bill_file)
+            for idx, file in enumerate(bill_files):
+                parsed_page = extract_purchase_bill_data(file)
+                page_items = parsed_page.get('items', [])
+                parsed_items_combined.extend(page_items)
+                
+                # Use metadata from the first page that contains them
+                if not parsed_supplier_name and parsed_page.get('supplier_name'):
+                    parsed_supplier_name = parsed_page.get('supplier_name')
+                if not parsed_invoice_number and parsed_page.get('invoice_number'):
+                    parsed_invoice_number = parsed_page.get('invoice_number')
+                if not parsed_purchase_date and parsed_page.get('purchase_date'):
+                    parsed_purchase_date = parsed_page.get('purchase_date')
+                if parsed_payment_mode == 'Cash' and parsed_page.get('payment_mode') == 'Credit':
+                    parsed_payment_mode = 'Credit'
+            
+            parsed_data = {
+                'supplier_name': parsed_supplier_name,
+                'invoice_number': parsed_invoice_number,
+                'purchase_date': parsed_purchase_date,
+                'payment_mode': parsed_payment_mode,
+                'items': parsed_items_combined
+            }
         except ValueError as ve:
             return JsonResponse({'success': False, 'error': str(ve)})
         except Exception as e:
@@ -1493,3 +1525,75 @@ class PurchaseScanAPI(LoginRequiredMixin, View):
             'missing_products': missing_products,
             'is_duplicate': is_duplicate
         })
+
+
+class UpdateStockBatchView(LoginRequiredMixin, View):
+    def post(self, request):
+        try:
+            import json
+            data = json.loads(request.body)
+            batch_id = data.get('batch_id')
+            new_batch_number = data.get('batch_number', '').strip()
+            new_expiry_raw = data.get('expiry_date', '').strip()
+            
+            if not batch_id or not new_batch_number or not new_expiry_raw:
+                return JsonResponse({'success': False, 'error': 'Missing required fields'}, status=400)
+                
+            from easypharma.utility.purchase_import import parse_expiry
+            new_expiry_date = parse_expiry(new_expiry_raw)
+            if not new_expiry_date:
+                return JsonResponse({'success': False, 'error': 'Invalid expiry date format. Use MM/YY or MM/YYYY or DD/MM/YYYY'}, status=400)
+                
+            if new_expiry_date and len(new_expiry_date) == 7:
+                new_expiry_date = new_expiry_date + '-01'
+                
+            from django.db import transaction
+            from easypharma.models.stock import StockBatch
+            from easypharma.models.purchase_invoice import PurchaseItem
+            from easypharma.models.sales import SaleItem
+            from easypharma.views.reports import invalidate_stock_cache, invalidate_daily_sale_cache
+            
+            with transaction.atomic():
+                batch = get_object_or_404(StockBatch, id=batch_id, tenant=request.tenant)
+                old_batch_number = batch.batch_number
+                old_expiry_date = batch.expiry_date
+                
+                # Check uniqueness of new batch number for the same product
+                if old_batch_number != new_batch_number:
+                    if StockBatch.objects.filter(tenant=request.tenant, product=batch.product, batch_number=new_batch_number).exists():
+                        return JsonResponse({'success': False, 'error': f'Batch number {new_batch_number} already exists for this product'}, status=400)
+                
+                # Update StockBatch
+                batch.batch_number = new_batch_number
+                batch.expiry_date = new_expiry_date
+                batch.save()
+                
+                # Update PurchaseItem records matching this product, old batch, and old expiry
+                PurchaseItem.objects.filter(
+                    purchase_invoice__tenant=request.tenant,
+                    product=batch.product,
+                    batch_number=old_batch_number,
+                    expiry_date=old_expiry_date
+                ).update(
+                    batch_number=new_batch_number,
+                    expiry_date=new_expiry_date
+                )
+                
+                # Update SaleItem records matching this product, old batch, and old expiry
+                SaleItem.objects.filter(
+                    sale_invoice__tenant=request.tenant,
+                    product=batch.product,
+                    batch_number=old_batch_number,
+                    expiry_date=old_expiry_date
+                ).update(
+                    batch_number=new_batch_number,
+                    expiry_date=new_expiry_date
+                )
+                
+                # Invalidate report caches
+                invalidate_stock_cache(request.tenant.id)
+                invalidate_daily_sale_cache(request.tenant.id)
+                
+            return JsonResponse({'success': True, 'message': 'Batch details updated successfully'})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)
