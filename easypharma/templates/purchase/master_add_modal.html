@@ -1,0 +1,29 @@
+<div class="modal fade ep-modal" id="masterAddModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-md">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="masterAddTitle"><i class="fas fa-plus-circle me-2" style="color:var(--brand);"></i>Add New</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="masterAddType">
+                <input type="hidden" id="masterSelectId">
+                <input type="hidden" id="masterFieldName">
+
+                <div class="mb-3">
+                    <label class="ep-label" id="masterAddLabel">Name *</label>
+                    <input type="text" id="masterAddValue" class="ep-input" placeholder="Enter value">
+                </div>
+
+                <div class="mb-3" id="masterAddExtraRow" style="display:none;">
+                    <label class="ep-label" id="masterAddExtraLabel">Extra</label>
+                    <input type="text" id="masterAddExtraValue" class="ep-input" placeholder="Enter extra value">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="masterAddSaveBtn" onclick="submitMasterAdd()"><i class="fas fa-save me-1"></i> Save</button>
+            </div>
+        </div>
+    </div>
+</div>

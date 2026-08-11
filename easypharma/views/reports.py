@@ -912,6 +912,33 @@ class ProductHistoryView(LoginRequiredMixin,View):
                 'total': float(Decimal(str(item.quantity)) * Decimal(str(item.purchase_price)))
             })
 
+        # Opening Stocks:
+        from easypharma.models.purchase_invoice import OpeningStockItem
+        opening_stocks = OpeningStockItem.objects.filter(
+            product=product,
+            tenant=request.tenant
+        ).select_related('opening_stock').order_by('-opening_stock__opening_stock_date')
+
+        for item in opening_stocks:
+            qty = item.quantity
+            total_purchased_qty += qty
+            total_purchase_val += Decimal(str(qty)) * Decimal(str(item.purchase_price))
+            purchase_list.append({
+                'date': item.opening_stock.opening_stock_date.strftime('%Y-%m-%d') if item.opening_stock.opening_stock_date else '—',
+                'invoice_number': item.opening_stock.voucher_number or '—',
+                'supplier_name': 'Opening Stock',
+                'batch_number': item.batch_number,
+                'expiry_date': item.expiry_date.strftime('%m/%Y') if item.expiry_date else '—',
+                'quantity': qty,
+                'free_quantity': 0,
+                'mrp': float(item.mrp) if item.mrp is not None else None,
+                'purchase_price': float(item.purchase_price),
+                'total': float(Decimal(str(qty)) * Decimal(str(item.purchase_price)))
+            })
+
+        # Sort combined list by date descending
+        purchase_list.sort(key=lambda x: x['date'], reverse=True)
+
         # Sales:
         sales = SaleItem.objects.filter(
             product=product,

@@ -86,58 +86,106 @@
 
 <!-- Add/Edit Discard Modal -->
 <div class="modal fade" id="discardModal" tabindex="-1" aria-labelledby="discardModalLabel" aria-hidden="true" data-bs-backdrop="static">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title" id="discardModalLabel">Record Discarded Item</h5>
+                <h5 class="modal-title" id="discardModalLabel">Record Discarded Items</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <form id="discardForm">
                     <input type="hidden" id="discardId">
                     
-                    <div class="mb-3" id="batchSelectGroup">
-                        <label for="batchSelect" class="form-label fw-semibold">Search & Select Product Batch:</label>
-                        <select id="batchSelect" class="form-select">
-                            <option value="">-- Select Product Batch --</option>
-                            {% for batch in active_batches %}
-                            <option value="{{ batch.id }}" data-qty="{{ batch.current_quantity }}" data-name="{{ batch.product.product_name }}" data-batch="{{ batch.batch_number }}">
-                                {{ batch.product.product_name }} (Batch: {{ batch.batch_number }} | Stock: {{ batch.current_quantity }} | Exp: {{ batch.expiry_date|date:"d/m/Y" }})
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
+                    <!-- Voucher Add Workspace -->
+                    <div id="voucherAddBlock">
+                        <div class="row align-items-end g-2 mb-3 bg-light p-3 rounded border">
+                            <div class="col-md-7">
+                                <label for="batchSelect" class="form-label fw-semibold mb-1">Search & Select Product Batch:</label>
+                                <select id="batchSelect" class="form-select">
+                                    <option value="">-- Select Product Batch --</option>
+                                    {% for batch in active_batches %}
+                                    <option value="{{ batch.id }}" data-qty="{{ batch.current_quantity }}" data-name="{{ batch.product.product_name }}" data-batch="{{ batch.batch_number }}" data-price="{{ batch.purchase_price|default:0 }}" data-factor="{{ batch.product.conversion_factor|default:1 }}">
+                                        {{ batch.product.product_name }} (Batch: {{ batch.batch_number }} | Stock: {{ batch.current_quantity }} | Exp: {{ batch.expiry_date|date:"d/m/Y" }})
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="discardQty" class="form-label fw-semibold mb-1">Discard Qty:</label>
+                                <input type="number" id="discardQty" class="form-control" min="1" placeholder="Enter qty">
+                                <small class="text-muted d-block mt-1" id="qtyFeedback" style="font-size: 0.72rem; font-weight: 600;"></small>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="button" class="btn btn-primary w-100 fw-bold" onclick="addVoucherItem()" style="height: 38px;">
+                                    <i class="fas fa-plus-circle me-1"></i> Add
+                                </button>
+                            </div>
+                        </div>
 
-                    <!-- Read-only Display for Edit Mode -->
-                    <div class="mb-3 d-none" id="editDisplayGroup">
-                        <label class="form-label fw-semibold text-muted">Selected Item & Batch:</label>
-                        <div class="p-3 bg-light rounded border">
-                            <div class="fw-bold text-dark" id="editProductName"></div>
-                            <div class="text-secondary small mt-1">Batch: <span id="editBatchNo" class="badge bg-secondary"></span></div>
+                        <!-- Voucher Table -->
+                        <div class="table-responsive border rounded mb-3 bg-white" style="max-height: 250px; overflow-y: auto;">
+                            <table class="table table-sm table-hover align-middle mb-0" id="voucherTable" style="font-size: 0.88rem;">
+                                <thead class="table-dark text-white sticky-top">
+                                    <tr>
+                                        <th class="ps-3 py-2">Medicine Name</th>
+                                        <th class="py-2">Batch</th>
+                                        <th class="text-end py-2">Discard Qty</th>
+                                        <th class="text-end py-2">Purchase Rate/Unit</th>
+                                        <th class="text-end py-2">Total Value</th>
+                                        <th class="text-center pe-3 py-2">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="6" class="text-center py-4 text-muted small">No items added to discard list yet.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Voucher Summary -->
+                        <div class="d-flex justify-content-between align-items-center bg-light p-2.5 rounded-3 mb-3 border">
+                            <span class="small text-muted fw-bold ps-2">Voucher Summary:</span>
+                            <div class="pe-2">
+                                <span class="badge bg-secondary me-2 px-2.5 py-1.5" style="font-size: 0.8rem;"><span id="voucherTotalItems">0</span> Item(s)</span>
+                                <span class="badge bg-danger px-2.5 py-1.5" style="font-size: 0.8rem;">Total Value: ₹<span id="voucherTotalValue">0.00</span></span>
+                            </div>
                         </div>
                     </div>
 
+                    <!-- Single Edit Workspace (Hidden by default) -->
+                    <div id="singleEditBlock" class="d-none">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold text-muted">Selected Item & Batch:</label>
+                            <div class="p-3 bg-light rounded border">
+                                <div class="fw-bold text-dark" id="editProductName"></div>
+                                <div class="text-secondary small mt-1">Batch: <span id="editBatchNo" class="badge bg-secondary"></span></div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editQty" class="form-label fw-semibold">Discard Quantity:</label>
+                            <input type="number" id="editQty" class="form-control" min="1" placeholder="Enter quantity">
+                            <small class="text-muted d-block mt-1" id="editQtyFeedback" style="font-size: 0.72rem; font-weight: 600;"></small>
+                        </div>
+                    </div>
+
+                    <!-- Common details -->
                     <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="discardQty" class="form-label fw-semibold">Discard Qty:</label>
-                            <input type="number" id="discardQty" class="form-control" min="1" required placeholder="Enter quantity">
-                            <small class="text-muted" id="qtyFeedback"></small>
-                        </div>
-                        <div class="col-md-6 mb-3">
+                        <div class="col-12 mb-3">
                             <label for="discardDate" class="form-label fw-semibold">Discard Date:</label>
                             <input type="date" id="discardDate" class="form-control" required value="{{ today|date:'Y-m-d' }}">
                         </div>
                     </div>
 
                     <div class="mb-3">
-                        <label for="discardRemarks" class="form-label fw-semibold">Remarks / Reason:</label>
+                        <label for="discardRemarks" class="form-label fw-semibold">Remarks / Reason (Common):</label>
                         <textarea id="discardRemarks" class="form-control" rows="3" placeholder="Reason (e.g. Expired, Damaged, Broken)"></textarea>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-danger" onclick="saveDiscard()">Save Log & Deduct Stock</button>
+                <button type="button" class="btn btn-danger" id="btnSubmitVoucher" onclick="saveDiscard()">Submit Discard Voucher</button>
             </div>
         </div>
     </div>
@@ -147,9 +195,25 @@
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
 
 <script>
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
     let batchTomSelect = null;
     let editSelectedBatchId = null;
     let originalQty = 0;
+    let voucherItems = [];
 
     document.addEventListener('DOMContentLoaded', function() {
         // Initialize TomSelect for batch dropdown search
@@ -179,14 +243,117 @@
         const option = document.querySelector(`#batchSelect option[value="${val}"]`);
         if (option) {
             let available = parseInt(option.getAttribute('data-qty')) || 0;
-            // If editing the same batch, the allowed quantity is current_quantity + original_quantity
-            const editId = document.getElementById('discardId').value;
-            if (editId && val == editSelectedBatchId) {
-                available += originalQty;
-            }
             qtyInput.max = available;
             feedback.textContent = `Max available: ${available}`;
         }
+    }
+
+    function addVoucherItem() {
+        if (!batchTomSelect) return;
+        const val = batchTomSelect.getValue();
+        if (!val) {
+            alert("Please select a product batch first.");
+            return;
+        }
+
+        const qtyInput = document.getElementById('discardQty');
+        const qty = parseInt(qtyInput.value) || 0;
+        if (qty <= 0) {
+            alert("Please enter a valid quantity greater than 0.");
+            return;
+        }
+
+        const option = document.querySelector(`#batchSelect option[value="${val}"]`);
+        if (!option) return;
+
+        const available = parseInt(option.getAttribute('data-qty')) || 0;
+        const name = option.getAttribute('data-name');
+        const batchNo = option.getAttribute('data-batch');
+        const price = parseFloat(option.getAttribute('data-price')) || 0;
+        const factor = parseInt(option.getAttribute('data-factor')) || 1;
+        const ratePerUnit = price / factor;
+        const totalValue = qty * ratePerUnit;
+
+        // Check if already in list
+        const existingIdx = voucherItems.findIndex(item => item.batch_id === val);
+        if (existingIdx > -1) {
+            const newQty = voucherItems[existingIdx].quantity + qty;
+            if (newQty > available) {
+                alert(`Cannot add. Combined quantity (${newQty}) exceeds available stock (${available}).`);
+                return;
+            }
+            voucherItems[existingIdx].quantity = newQty;
+            voucherItems[existingIdx].total_value = newQty * ratePerUnit;
+        } else {
+            if (qty > available) {
+                alert(`Quantity cannot exceed available stock: ${available}`);
+                return;
+            }
+            voucherItems.push({
+                batch_id: val,
+                name: name,
+                batch_no: batchNo,
+                available_stock: available,
+                quantity: qty,
+                price: price,
+                factor: factor,
+                rate_per_unit: ratePerUnit,
+                total_value: totalValue
+            });
+        }
+
+        // Reset inputs
+        batchTomSelect.setValue("");
+        qtyInput.value = "";
+        document.getElementById('qtyFeedback').textContent = "";
+
+        // Re-render
+        renderVoucherTable();
+    }
+
+    function removeVoucherItem(index) {
+        voucherItems.splice(index, 1);
+        renderVoucherTable();
+    }
+
+    function renderVoucherTable() {
+        const tbody = document.querySelector('#voucherTable tbody');
+        tbody.innerHTML = '';
+        
+        if (voucherItems.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center py-4 text-muted small">No items added to discard list yet.</td>
+                </tr>
+            `;
+            document.getElementById('voucherTotalItems').textContent = '0';
+            document.getElementById('voucherTotalValue').textContent = '0.00';
+            return;
+        }
+
+        let totalValue = 0;
+
+        voucherItems.forEach((item, index) => {
+            totalValue += item.total_value;
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="ps-3 fw-bold text-dark">${item.name}</td>
+                <td><span class="badge bg-light text-secondary border">${item.batch_no}</span></td>
+                <td class="text-end fw-bold">${item.quantity} Units</td>
+                <td class="text-end text-muted">₹${item.rate_per_unit.toFixed(2)}</td>
+                <td class="text-end fw-bold text-danger">₹${item.total_value.toFixed(2)}</td>
+                <td class="text-center pe-3">
+                    <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 border-0" onclick="removeVoucherItem(${index})">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById('voucherTotalItems').textContent = voucherItems.length;
+        document.getElementById('voucherTotalValue').textContent = totalValue.toFixed(2);
     }
 
     function openAddModal() {
@@ -196,26 +363,29 @@
         document.getElementById('discardRemarks').value = "";
         document.getElementById('discardDate').value = "{{ today|date:'Y-m-d' }}";
         
+        voucherItems = [];
+        renderVoucherTable();
+        
         if (batchTomSelect) {
             batchTomSelect.setValue("");
             batchTomSelect.enable();
         }
         
-        document.getElementById('batchSelectGroup').classList.remove('d-none');
-        document.getElementById('editDisplayGroup').classList.add('d-none');
+        document.getElementById('voucherAddBlock').classList.remove('d-none');
+        document.getElementById('singleEditBlock').classList.add('d-none');
         
-        document.getElementById('discardModalLabel').textContent = "Record Discarded Item";
+        document.getElementById('discardModalLabel').textContent = "Record Discarded Items (Voucher)";
+        document.getElementById('btnSubmitVoucher').textContent = "Submit Discard Voucher";
+        
         const modal = new bootstrap.Modal(document.getElementById('discardModal'));
         modal.show();
     }
 
     function openEditModal(id, productName, batchNo, quantity, dateStr, remarks) {
         document.getElementById('discardId').value = id;
-        document.getElementById('discardQty').value = quantity;
         document.getElementById('discardDate').value = dateStr;
         document.getElementById('discardRemarks').value = remarks;
         
-        // Find matching option in select to load its batch_id
         editSelectedBatchId = null;
         originalQty = parseInt(quantity) || 0;
         
@@ -229,63 +399,83 @@
             }
         }
 
-        if (editSelectedBatchId && batchTomSelect) {
-            batchTomSelect.setValue(editSelectedBatchId);
-            batchTomSelect.disable(); // cannot change batch during editing to maintain database integrity
-            document.getElementById('batchSelectGroup').classList.remove('d-none');
-            document.getElementById('editDisplayGroup').classList.add('d-none');
+        document.getElementById('voucherAddBlock').classList.add('d-none');
+        document.getElementById('singleEditBlock').classList.remove('d-none');
+        
+        document.getElementById('editProductName').textContent = productName;
+        document.getElementById('editBatchNo').textContent = batchNo;
+
+        // update qty limit logic for edit input
+        const editQtyInput = document.getElementById('editQty');
+        const editFeedback = document.getElementById('editQtyFeedback');
+        editQtyInput.value = quantity;
+
+        if (editSelectedBatchId) {
+            const option = document.querySelector(`#batchSelect option[value="${editSelectedBatchId}"]`);
+            if (option) {
+                let available = parseInt(option.getAttribute('data-qty')) || 0;
+                available += originalQty;
+                editQtyInput.max = available;
+                editFeedback.textContent = `Max available: ${available}`;
+            }
         } else {
-            // If the batch has 0 quantity and is no longer in active_batches dropdown
-            document.getElementById('batchSelectGroup').classList.add('d-none');
-            document.getElementById('editDisplayGroup').classList.remove('d-none');
-            document.getElementById('editProductName').textContent = productName;
-            document.getElementById('editBatchNo').textContent = batchNo;
+            editQtyInput.max = originalQty;
+            editFeedback.textContent = `Batch no longer available. Max limit: ${originalQty}`;
         }
 
-        updateQtyLimit();
         document.getElementById('discardModalLabel').textContent = "Edit Discard Record";
+        document.getElementById('btnSubmitVoucher').textContent = "Save Changes";
+        
         const modal = new bootstrap.Modal(document.getElementById('discardModal'));
         modal.show();
     }
 
     async function saveDiscard() {
         const discardId = document.getElementById('discardId').value;
-        const qty = parseInt(document.getElementById('discardQty').value) || 0;
         const discardDate = document.getElementById('discardDate').value;
         const remarks = document.getElementById('discardRemarks').value;
         
-        let batchId = null;
-        if (discardId && !editSelectedBatchId) {
-            // Edit mode where original batch doesn't exist in dropdown (0 stock). Keep original batch.
-            alert("This batch has 0 stock. You can only delete the record to revert or update quantity if stock exists.");
-            return;
-        } else {
-            batchId = batchTomSelect.getValue();
-        }
-
-        if (!batchId) {
-            alert("Please select a product batch.");
-            return;
-        }
-        if (qty <= 0) {
-            alert("Quantity must be greater than 0.");
-            return;
-        }
-
-        const maxQty = parseInt(document.getElementById('discardQty').max);
-        if (maxQty && qty > maxQty) {
-            alert(`Quantity cannot exceed available stock: ${maxQty}`);
-            return;
-        }
-
-        const payload = {
-            batch_id: batchId,
-            quantity: qty,
-            discard_date: discardDate,
-            remarks: remarks
-        };
+        let payload = {};
+        
         if (discardId) {
-            payload.discard_id = discardId;
+            // Edit Mode - single item submission
+            const qty = parseInt(document.getElementById('editQty').value) || 0;
+            if (qty <= 0) {
+                alert("Quantity must be greater than 0.");
+                return;
+            }
+            const maxQty = parseInt(document.getElementById('editQty').max);
+            if (maxQty && qty > maxQty) {
+                alert(`Quantity cannot exceed available limit: ${maxQty}`);
+                return;
+            }
+            if (!editSelectedBatchId) {
+                alert("Original batch not found. Cannot modify batch. Try deleting and creating a new record.");
+                return;
+            }
+            
+            payload = {
+                discard_id: discardId,
+                batch_id: editSelectedBatchId,
+                quantity: qty,
+                discard_date: discardDate,
+                remarks: remarks
+            };
+        } else {
+            // Add Mode - multi-item voucher submission
+            if (voucherItems.length === 0) {
+                alert("Please add at least one product batch to the discard list before submitting.");
+                return;
+            }
+            
+            payload = {
+                discard_date: discardDate,
+                remarks: remarks,
+                items: voucherItems.map(item => ({
+                    batch_id: item.batch_id,
+                    quantity: item.quantity
+                }))
+            };
         }
 
         try {
@@ -293,7 +483,7 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}',
+                    'X-CSRFToken': getCookie('csrftoken') || '{{ csrf_token }}',
                     'X-Requested-With': 'XMLHttpRequest'
                 },
                 body: JSON.stringify(payload)
@@ -302,7 +492,7 @@
             if (data.success) {
                 location.reload();
             } else {
-                alert("Error: " + (data.error || "Failed to save record"));
+                alert("Error: " + (data.error || "Failed to save discard voucher"));
             }
         } catch (e) {
             alert("Failed to submit request.");
@@ -316,7 +506,7 @@
             const res = await fetch(`/stock/discard/${id}/delete/`, {
                 method: 'DELETE',
                 headers: {
-                    'X-CSRFToken': '{{ csrf_token }}',
+                    'X-CSRFToken': getCookie('csrftoken') || '{{ csrf_token }}',
                     'X-Requested-With': 'XMLHttpRequest'
                 }
             });

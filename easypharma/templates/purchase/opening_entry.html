@@ -64,6 +64,7 @@
                                 <input type="text" id="newProductSearch" class="ep-input" placeholder="Type medicine name..." autocomplete="off">
                                 <div id="newSearchResults" class="search-dropdown" style="display:none;"></div>
                             </div>
+                            <div id="productInfo" style="display:none; font-size: 0.74rem; color: #64748b; margin-top: 3px;"></div>
                         </div>
                         <div><label class="ep-label">Batch No.</label><input type="text" id="newBatch" class="ep-input" placeholder="B2401" style="text-transform:uppercase;"></div>
                         <div><label class="ep-label">Expiry</label><input type="text" id="newExpiry" class="ep-input" placeholder="01-27"></div>
@@ -104,115 +105,18 @@
     </div>
 </div>
 
-<!-- ==================== QUICK ADD MODAL (Exact copy from entry.html) ==================== -->
-<div class="modal fade ep-modal" id="quickAddModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-plus-circle me-2" style="color:var(--brand);"></i>Quick Add Medicine</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
+{% include "purchase/quick_add_modal.html" %}
 
-                <div class="mb-3">
-                    <label class="ep-label">Medicine Name <span class="text-danger">*</span></label>
-                    <input type="text" id="quickName" class="ep-input" placeholder="e.g. Paracetamol 500mg">
-                </div>
+{% include "purchase/edit_product_modal.html" %}
 
-                <div class="row g-3 mb-3">
-                    <div class="col-md-6">
-                        <label class="ep-label">Packing</label>
-                        <input type="text" id="quickPacking" class="ep-input" placeholder="e.g. 10 tablets / strip">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="ep-label">Conversion Factor</label>
-                        <input type="number" id="quickConv" class="ep-input" value="1" min="1">
-                    </div>
-                </div>
-
-                <div class="row g-3 mb-3">
-                    <div class="col-md-6">
-                        <label class="ep-label">Tax Rate</label>
-                        <select id="quickTax" style="display:none;">
-                            {% for tax in product_taxes %}
-                            <option value="{{ tax.id }}">{{ tax.tax_name }} ({{ tax.tax_rate }}%)</option>
-                            {% endfor %}
-                        </select>
-                        <div class="qs-wrap" id="qs-wrap-quickTax">
-                            <div class="qs-input-row">
-                                <input type="text" class="ep-input qs-input" id="qs-input-quickTax" placeholder="Search tax rate...">
-                                <button type="button" class="qs-clear-btn" id="qs-clear-quickTax" onclick="qsClear('quickTax')" style="display:none;">✕</button>
-                            </div>
-                            <div class="qs-dropdown" id="qs-drop-quickTax" style="display:none;"></div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="ep-label">Drug Schedule</label>
-                        <select id="quickSchedule" style="display:none;">
-                            {% for schedule in product_schedules %}
-                            <option value="{{ schedule.id }}">{{ schedule.schedule_name }}</option>
-                            {% endfor %}
-                        </select>
-                        <div class="qs-wrap" id="qs-wrap-quickSchedule">
-                            <div class="qs-input-row">
-                                <input type="text" class="ep-input qs-input" id="qs-input-quickSchedule" placeholder="Search schedule...">
-                                <button type="button" class="qs-clear-btn" id="qs-clear-quickSchedule" onclick="qsClear('quickSchedule')" style="display:none;">✕</button>
-                            </div>
-                            <div class="qs-dropdown" id="qs-drop-quickSchedule" style="display:none;"></div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="ep-label">Product Content</label>
-                        <select id="quickContent" style="display:none;">
-                            {% for content in product_contents %}
-                            <option value="{{ content.id }}">{{ content.content_name }}</option>
-                            {% endfor %}
-                        </select>
-                        <div class="qs-wrap" id="qs-wrap-quickContent">
-                            <div class="qs-input-row">
-                                <input type="text" class="ep-input qs-input" id="qs-input-quickContent" placeholder="Search content...">
-                                <button type="button" class="qs-clear-btn" id="qs-clear-quickContent" onclick="qsClear('quickContent')" style="display:none;">✕</button>
-                            </div>
-                            <div class="qs-dropdown" id="qs-drop-quickContent" style="display:none;"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="row g-3 mb-3">
-                    <div class="col-md-6">
-                        <label class="ep-label">Company Name</label>
-                        <select id="quickCompany" style="display:none;">
-                            {% for company in drug_companies %}
-                            <option value="{{ company.id }}">{{ company.company_name }}</option>
-                            {% endfor %}
-                        </select>
-                        <div class="qs-wrap" id="qs-wrap-quickCompany">
-                            <div class="qs-input-row">
-                                <input type="text" class="ep-input qs-input" id="qs-input-quickCompany" placeholder="Search company...">
-                                <button type="button" class="qs-clear-btn" id="qs-clear-quickCompany" onclick="qsClear('quickCompany')" style="display:none;">✕</button>
-                            </div>
-                            <div class="qs-dropdown" id="qs-drop-quickCompany" style="display:none;"></div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="ep-label">HSN Code</label>
-                        <input type="text" id="quickHsn" class="ep-input" placeholder="e.g. 30049099" maxlength="8">
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button class="btn btn-primary" onclick="handleSaveQuickProduct()">
-                    <i class="fas fa-save me-1"></i> Save Medicine
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
+{% include "purchase/master_add_modal.html" %}
 
 <div class="ep-toast" id="epToast"></div>
 
 
+<script>
+    window.openingStockSaveUrl = "{% url 'opening_stock_entry' %}";
+</script>
 <script src="{% static 'js/purchase/openingStock.js' %}"></script>
 
 <style>

@@ -70,6 +70,7 @@
                                 <input type="text" id="newProductSearch" class="ep-input" placeholder="Search product...">
                                 <div id="newSearchResults" class="search-dropdown"></div>
                             </div>
+                            <div id="productInfo" style="display:none; font-size: 0.74rem; color: #64748b; margin-top: 3px;"></div>
                         </div>
                         <div><label class="ep-label">Batch No.</label><input type="text" id="newBatch" class="ep-input"></div>
                         <div><label class="ep-label">Expiry</label><input type="text" id="newExpiry" class="ep-input" placeholder="01-27"></div>
@@ -119,8 +120,15 @@
 <!-- Quick Add Modal (same as before) -->
 {% include "purchase/quick_add_modal.html" %}   <!-- Or paste the full modal here -->
 
+{% include "purchase/edit_product_modal.html" %}
+
+{% include "purchase/master_add_modal.html" %}
+
 <div class="ep-toast" id="epToast"></div>
 
+<script>
+    window.openingStockSaveUrl = "{% url 'opening_stock_edit' stock.id %}";
+</script>
 <script src="{% static 'js/purchase/openingStock.js' %}"></script>
 
 <script>
@@ -129,6 +137,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (editDataStr && editDataStr !== 'null') {
         try {
             const editData = JSON.parse(editDataStr);
+            window.openingStockId = editData.id;
             
             document.getElementById('voucher_number').value = editData.voucher_number || '';
             document.getElementById('opening_date').value = editData.opening_stock_date || '';
