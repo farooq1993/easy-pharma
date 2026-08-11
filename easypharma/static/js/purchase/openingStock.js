@@ -266,11 +266,36 @@ function getCookie(name) {
 
 const csrfToken = getCookie('csrftoken');
 
+function showLoader(message = 'Please wait...') {
+    const loader = document.getElementById('universalLoader');
+    if (!loader) return;
+    const loaderText = loader.querySelector('.loader-text');
+    if (loaderText) {
+        loaderText.innerText = message;
+    }
+    loader.classList.remove('d-none');
+    loader.setAttribute('aria-busy', 'true');
+}
+
+function hideLoader() {
+    const loader = document.getElementById('universalLoader');
+    if (!loader) return;
+    loader.classList.add('d-none');
+    loader.setAttribute('aria-busy', 'false');
+}
+
 // Save Function
 async function saveOpeningStock() {
     if (openingItems.length === 0) {
         return showToast('Please add at least one item', 'error');
     }
+
+    const saveBtn = document.querySelector('.btn-complete');
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.classList.add('disabled');
+    }
+    showLoader('Saving opening stock...');
 
     const data = {
         opening_stock_date: document.getElementById('opening_date').value,
@@ -308,10 +333,20 @@ async function saveOpeningStock() {
             setTimeout(() => window.location.href = "/opening/stock/list/", 1500);
         } else {
             showToast(result.error || 'Failed to save', 'error');
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.classList.remove('disabled');
+            }
+            hideLoader();
         }
     } catch (e) {
         console.error(e);
         showToast('Server Error', 'error');
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.classList.remove('disabled');
+        }
+        hideLoader();
     }
 }
 
