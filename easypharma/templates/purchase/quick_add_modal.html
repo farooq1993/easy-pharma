@@ -30,7 +30,10 @@
                 <!-- New Product Type Field -->
                 <div class="row g-3 mb-3">
                     <div class="col-md-6">
-                        <label class="ep-label">Product Type</label>
+                        <label class="ep-label d-flex justify-content-between align-items-center">
+                            <span>Product Type</span>
+                            <a href="#" class="text-success text-decoration-none text-lowercase" style="font-size: 0.75rem;" onclick="openMasterAddModal('product-type', 'quickType', 'Product Type', 'name'); return false;">Add New</a>
+                        </label>
                         <select id="quickType" style="display:none;">
                             {% for ptype in product_type %}
                             <option value="{{ ptype.id }}">{{ ptype.name }}</option>
@@ -47,7 +50,10 @@
                         </div>
                     </div>
                     <div class="col-md-6">
-                        <label class="ep-label">Tax Rate</label>
+                        <label class="ep-label d-flex justify-content-between align-items-center">
+                            <span>Tax Rate</span>
+                            <a href="#" class="text-success text-decoration-none text-lowercase" style="font-size: 0.75rem;" onclick="openMasterAddModal('product-tax', 'quickTax', 'Tax Rate', 'tax_name'); return false;">Add New</a>
+                        </label>
                         <select id="quickTax" style="display:none;">
                             {% for tax in product_taxes %}
                             <option value="{{ tax.id }}">{{ tax.tax_name }} ({{ tax.tax_rate }}%)</option>
@@ -65,7 +71,10 @@
 
                 <div class="row g-3 mb-3">
                     <div class="col-md-4">
-                        <label class="ep-label">Drug Schedule</label>
+                        <label class="ep-label d-flex justify-content-between align-items-center">
+                            <span>Drug Schedule</span>
+                            <a href="#" class="text-success text-decoration-none text-lowercase" style="font-size: 0.75rem;" onclick="openMasterAddModal('drug-schedule', 'quickSchedule', 'Drug Schedule', 'schedule_name'); return false;">Add New</a>
+                        </label>
                         <select id="quickSchedule" style="display:none;">
                             {% for schedule in product_schedules %}
                             <option value="{{ schedule.id }}">{{ schedule.schedule_name }}</option>
@@ -80,7 +89,10 @@
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <label class="ep-label">Product Content</label>
+                        <label class="ep-label d-flex justify-content-between align-items-center">
+                            <span>Product Content</span>
+                            <a href="#" class="text-success text-decoration-none text-lowercase" style="font-size: 0.75rem;" onclick="openMasterAddModal('product-content', 'quickContent', 'Product Content', 'content_name'); return false;">Add New</a>
+                        </label>
                         <select id="quickContent" style="display:none;">
                             {% for content in product_contents %}
                             <option value="{{ content.id }}">{{ content.content_name }}</option>
@@ -95,7 +107,10 @@
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <label class="ep-label">Company Name</label>
+                        <label class="ep-label d-flex justify-content-between align-items-center">
+                            <span>Company Name</span>
+                            <a href="#" class="text-success text-decoration-none text-lowercase" style="font-size: 0.75rem;" onclick="openMasterAddModal('drug-company', 'quickCompany', 'Company', 'company_name'); return false;">Add New</a>
+                        </label>
                         <select id="quickCompany" style="display:none;">
                             {% for company in drug_companies %}
                             <option value="{{ company.id }}">{{ company.company_name }}</option>

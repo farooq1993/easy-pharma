@@ -194,17 +194,22 @@ class OpeningStockItem(TenantAwareModel):
         from easypharma.models.stock import StockBatch
         with transaction.atomic():
             super().save(*args, **kwargs)
-            total_units = self.quantity * self.product.conversion_factor
+            # The quantity is already entered in physical single units (e.g. tablet count)
+            total_units = self.quantity
+            conversion_factor = self.product.conversion_factor or 1
             
+            # Since the user entered single-unit purchase price and mrp, but the database expects pack rates,
+            # we multiply by conversion_factor to save pack rates in the StockBatch.
+            # And sale_price in StockBatch is unit price, which is self.mrp.
             batch, created = StockBatch.objects.get_or_create(
                 tenant=self.tenant,
                 product=self.product,
                 batch_number=self.batch_number,
                 defaults={
                     'expiry_date': self.expiry_date,
-                    'purchase_price': self.purchase_price,
-                    'mrp': self.mrp,
-                    # 'sale_price': self.sale_price,
+                    'purchase_price': self.purchase_price * conversion_factor,
+                    'mrp': self.mrp * conversion_factor,
+                    'sale_price': self.mrp,
                     'initial_quantity': total_units,
                     'current_quantity': total_units
                 }

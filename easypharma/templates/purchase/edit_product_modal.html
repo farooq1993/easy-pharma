@@ -1,0 +1,94 @@
+<div class="modal fade ep-modal" id="editProductModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-md">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title mb-0">
+                        <i class="fas fa-edit me-2" style="color:var(--brand);"></i>Edit Product Details
+                    </h5>
+                    <small class="text-muted" id="editProdSubtitle">Updates saved instantly — no page refresh needed</small>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editProdId">
+
+                <!-- Name (readonly) -->
+                <div class="mb-3">
+                    <label class="ep-label">Medicine Name</label>
+                    <input type="text" id="editProdName" class="ep-input" readonly
+                           style="background:#f8f9fa; font-weight:600; color:var(--brand);">
+                </div>
+
+                <!-- Packing + Conv Factor -->
+                <div class="row g-2 mb-3">
+                    <div class="col-7">
+                        <label class="ep-label">Packing</label>
+                        <input type="text" id="editProdPacking" class="ep-input" placeholder="e.g. 10 tablets / strip">
+                    </div>
+                    <div class="col-5">
+                        <label class="ep-label">Conv. Factor <span class="text-muted small">(units/pack)</span></label>
+                        <input type="number" id="editProdConv" class="ep-input" min="1" step="1">
+                    </div>
+                </div>
+
+                <!-- GST — most important field -->
+                <div class="mb-3">
+                    <label class="ep-label">
+                        GST Rate
+                        <span class="badge bg-warning text-dark ms-1" style="font-size:0.7rem;">
+                            <i class="fas fa-bolt me-1"></i>Updates all items in bill
+                        </span>
+                    </label>
+                    <select id="editProdTax" class="ep-input">
+                        <option value="">— Select Tax —</option>
+                        {% for tax in product_taxes %}
+                        <option value="{{ tax.id }}" data-rate="{{ tax.tax_rate }}">
+                            {{ tax.tax_name }} ({{ tax.tax_rate }}%)
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Schedule + Company -->
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="ep-label">Drug Schedule</label>
+                        <select id="editProdSchedule" class="ep-input">
+                            <option value="">— Select Schedule —</option>
+                            {% for schedule in product_schedules %}
+                            <option value="{{ schedule.id }}">{{ schedule.schedule_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="ep-label">Company</label>
+                        <select id="editProdCompany" class="ep-input">
+                            <option value="">— Select Company —</option>
+                            {% for company in drug_companies %}
+                            <option value="{{ company.id }}">{{ company.company_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <!-- HSN Code -->
+                <div class="mb-1">
+                    <label class="ep-label">HSN Code</label>
+                    <input type="text" id="editProdHsn" class="ep-input" placeholder="e.g. 30049099"
+                           maxlength="8" inputmode="numeric"
+                           oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
+                </div>
+
+                <!-- Live feedback bar -->
+                <div id="editProdFeedback" class="mt-3" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="editProdSaveBtn" onclick="saveEditProduct()">
+                    <i class="fas fa-save me-1"></i> Save & Apply
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

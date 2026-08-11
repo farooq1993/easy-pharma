@@ -115,8 +115,37 @@ class PurchaseEntryView(LoginRequiredMixin,View):
                 # If editing, revert old stock first
                 if invoice_id:
                     invoice = PurchaseInvoice.objects.get(id=invoice_id, tenant=request.tenant)
+                    
+                    # Validation: Check if any item has been removed or had its quantity reduced when there are sales
+                    for old_item in invoice.items.all():
+                        batch = StockBatch.objects.filter(
+                            tenant=request.tenant, 
+                            product=old_item.product, 
+                            batch_number=old_item.batch_number
+                        ).first()
+                        if batch and batch.current_quantity < batch.initial_quantity:
+                            new_item = None
+                            for it in data['items']:
+                                if int(it['product_id']) == old_item.product.id and it['batch_number'] == old_item.batch_number:
+                                    new_item = it
+                                    break
+                            
+                            if not new_item:
+                                return JsonResponse({
+                                    'error': f"Cannot remove item '{old_item.product.product_name}' (Batch {old_item.batch_number}) because some quantity has already been sold."
+                                }, status=400)
+                            
+                            old_total_units = (old_item.quantity + old_item.free_quantity) * old_item.product.conversion_factor
+                            new_qty = int(new_item['quantity'])
+                            new_free = int(new_item.get('free_quantity', 0))
+                            new_total_units = (new_qty + new_free) * old_item.product.conversion_factor
+                            
+                            if new_total_units < old_total_units:
+                                return JsonResponse({
+                                    'error': f"Cannot reduce quantity of '{old_item.product.product_name}' (Batch {old_item.batch_number}) because some quantity has already been sold."
+                                }, status=400)
+
                     for item in invoice.items.all():
-                        
                         batch = StockBatch.objects.filter(
                             tenant=request.tenant, product=item.product, batch_number=item.batch_number
                         ).first()
@@ -395,18 +424,34 @@ class PurchaseListView(LoginRequiredMixin,View):
         try:
             with transaction.atomic():
                 invoice = PurchaseInvoice.objects.get(id=invoice_id, tenant=request.tenant)
-                # When deleting an invoice, we must decrease stock
+                # When deleting an invoice, we must check if any items have been sold
                 for item in invoice.items.all():
                     from easypharma.models.stock import StockBatch
-                    batch = StockBatch.objects.get(
+                    batch = StockBatch.objects.filter(
                         tenant=request.tenant, 
                         product=item.product, 
                         batch_number=item.batch_number
-                    )
-                    total_units = (item.quantity + item.free_quantity) * item.product.conversion_factor
-                    batch.current_quantity -= total_units
-                    if batch.current_quantity < 0: batch.current_quantity = 0
-                    batch.save()
+                    ).first()
+                    if batch:
+                        if batch.current_quantity < batch.initial_quantity:
+                            return JsonResponse({
+                                'success': False,
+                                'error': f"Cannot delete invoice. Batch {item.batch_number} for {item.product.product_name} has already been sold."
+                            }, status=400)
+                
+                # Decrease stock
+                for item in invoice.items.all():
+                    from easypharma.models.stock import StockBatch
+                    batch = StockBatch.objects.filter(
+                        tenant=request.tenant, 
+                        product=item.product, 
+                        batch_number=item.batch_number
+                    ).first()
+                    if batch:
+                        total_units = (item.quantity + item.free_quantity) * item.product.conversion_factor
+                        batch.current_quantity -= total_units
+                        if batch.current_quantity < 0: batch.current_quantity = 0
+                        batch.save()
                 
                 invoice.delete()
                 return JsonResponse({'success': True})
@@ -925,6 +970,7 @@ class OpeningStockEntryView(LoginRequiredMixin, View):
     def get(self, request, stock_id=None):
         products = []
         product_taxes = ProductTax.objects.filter(tenant=request.tenant)
+        product_type = ProductType.objects.filter(tenant=request.tenant).order_by('name')
         product_schedules = ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True))
         drug_companies = DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True))
         product_contents = ProductContent.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('content_name')
@@ -962,6 +1008,7 @@ class OpeningStockEntryView(LoginRequiredMixin, View):
         return render(request, self.template_name, {
             'products': products,
             'product_taxes': product_taxes,
+            'product_type': product_type,
             'product_schedules': product_schedules,
             'drug_companies': drug_companies,
             'product_contents': product_contents,
@@ -983,7 +1030,7 @@ class OpeningStockEntryView(LoginRequiredMixin, View):
                             batch_number=item.batch_number
                         ).first()
                         if batch:
-                            batch.current_quantity -= item.quantity * item.product.conversion_factor
+                            batch.current_quantity -= item.quantity
                             if batch.current_quantity < 0:
                                 batch.current_quantity = 0
                             batch.save()
@@ -1009,12 +1056,16 @@ class OpeningStockEntryView(LoginRequiredMixin, View):
                     product = Products.objects.get(id=item['product_id'], tenant=request.tenant)
                     
                     expiry_str = item['expiry_date']
-                    if expiry_str and len(expiry_str) <= 7:  # e.g. "01-28" or "01-2028"
+                    if expiry_str and len(expiry_str) <= 7:  # e.g. "2028-01", "01-28", "01-2028"
                         try:
                             if '-' in expiry_str:
-                                month, year = expiry_str.split('-')
-                                if len(year) == 2:
-                                    year = '20' + year
+                                parts = expiry_str.split('-')
+                                if len(parts[0]) == 4:  # YYYY-MM format
+                                    year, month = parts[0], parts[1]
+                                else:  # MM-YY or MM-YYYY format
+                                    month, year = parts[0], parts[1]
+                                    if len(year) == 2:
+                                        year = '20' + year
                                 expiry_date = f"{year}-{month.zfill(2)}-01"
                             else:
                                 expiry_date = expiry_str
@@ -1035,6 +1086,17 @@ class OpeningStockEntryView(LoginRequiredMixin, View):
                         tax_percentage=item.get('tax_percentage', 0),
                         total_amount=item['total']
                     )
+                # Invalidate caches after successful save
+                try:
+                    from easypharma.views.reports import invalidate_stock_cache, invalidate_product_history_cache
+                    from easypharma.views.sales import invalidate_pos_cache
+                    invalidate_stock_cache(request.tenant.id)
+                    invalidate_pos_cache(request.tenant.id)
+                    for item in data['items']:
+                        invalidate_product_history_cache(request.tenant.id, item['product_id'])
+                except Exception:
+                    pass
+
                 return JsonResponse({
                     'success': True,
                     'stock_id': stock.id,
@@ -1086,6 +1148,7 @@ class OpeningStockEditView(LoginRequiredMixin, View):
         }
 
         return render(request, self.template_name, {
+            'stock': stock,
             'products': products,
             'product_taxes': product_taxes,
             'product_schedules': product_schedules,
@@ -1102,8 +1165,35 @@ class OpeningStockEditView(LoginRequiredMixin, View):
             data = json.loads(request.body)
             with transaction.atomic():
                 if stock_id:
-                    # Revert old stock
                     stock = OpeningStock.objects.get(id=stock_id, tenant=request.tenant)
+                    
+                    # Validation: Check if any item has been removed or had its quantity reduced when there are sales
+                    for old_item in stock.items.all():
+                        batch = StockBatch.objects.filter(
+                            tenant=request.tenant, 
+                            product=old_item.product, 
+                            batch_number=old_item.batch_number
+                        ).first()
+                        if batch and batch.current_quantity < batch.initial_quantity:
+                            new_item = None
+                            for it in data['items']:
+                                if int(it['product_id']) == old_item.product.id and it['batch_number'] == old_item.batch_number:
+                                    new_item = it
+                                    break
+                            
+                            if not new_item:
+                                return JsonResponse({
+                                    'error': f"Cannot remove item '{old_item.product.product_name}' (Batch {old_item.batch_number}) because some quantity has already been sold."
+                                }, status=400)
+                            
+                            old_total_units = old_item.quantity
+                            new_total_units = int(new_item['quantity'])
+                            
+                            if new_total_units < old_total_units:
+                                return JsonResponse({
+                                    'error': f"Cannot reduce quantity of '{old_item.product.product_name}' (Batch {old_item.batch_number}) because some quantity has already been sold."
+                                }, status=400)
+
                     for item in stock.items.all():
                         batch = StockBatch.objects.filter(
                             tenant=request.tenant, 
@@ -1111,7 +1201,7 @@ class OpeningStockEditView(LoginRequiredMixin, View):
                             batch_number=item.batch_number
                         ).first()
                         if batch:
-                            batch.current_quantity -= item.quantity * item.product.conversion_factor
+                            batch.current_quantity -= item.quantity
                             if batch.current_quantity < 0:
                                 batch.current_quantity = 0
                             batch.save()
@@ -1137,12 +1227,16 @@ class OpeningStockEditView(LoginRequiredMixin, View):
                     product = Products.objects.get(id=item['product_id'], tenant=request.tenant)
                     
                     expiry_str = item['expiry_date']
-                    if expiry_str and len(expiry_str) <= 7:  # e.g. "01-28" or "01-2028"
+                    if expiry_str and len(expiry_str) <= 7:  # e.g. "2028-01", "01-28", "01-2028"
                         try:
                             if '-' in expiry_str:
-                                month, year = expiry_str.split('-')
-                                if len(year) == 2:
-                                    year = '20' + year
+                                parts = expiry_str.split('-')
+                                if len(parts[0]) == 4:  # YYYY-MM format
+                                    year, month = parts[0], parts[1]
+                                else:  # MM-YY or MM-YYYY format
+                                    month, year = parts[0], parts[1]
+                                    if len(year) == 2:
+                                        year = '20' + year
                                 expiry_date = f"{year}-{month.zfill(2)}-01"
                             else:
                                 expiry_date = expiry_str
@@ -1163,6 +1257,17 @@ class OpeningStockEditView(LoginRequiredMixin, View):
                         tax_percentage=item.get('tax_percentage', 0),
                         total_amount=item['total']
                     )
+                # Invalidate caches after successful edit
+                try:
+                    from easypharma.views.reports import invalidate_stock_cache, invalidate_product_history_cache
+                    from easypharma.views.sales import invalidate_pos_cache
+                    invalidate_stock_cache(request.tenant.id)
+                    invalidate_pos_cache(request.tenant.id)
+                    for item in data['items']:
+                        invalidate_product_history_cache(request.tenant.id, item['product_id'])
+                except Exception:
+                    pass
+
                 return JsonResponse({
                     'success': True,
                     'stock_id': stock.id,
@@ -1180,6 +1285,22 @@ class OpeningStockDeleteView(LoginRequiredMixin, View):
         try:
             with transaction.atomic():
                 stock = OpeningStock.objects.get(id=stock_id, tenant=request.tenant)
+                # Check if any items have already been sold
+                product_ids = []
+                for item in stock.items.all():
+                    product_ids.append(item.product.id)
+                    batch = StockBatch.objects.filter(
+                        tenant=request.tenant, 
+                        product=item.product, 
+                        batch_number=item.batch_number
+                    ).first()
+                    if batch:
+                        if batch.current_quantity < batch.initial_quantity:
+                            return JsonResponse({
+                                'success': False,
+                                'error': f"Cannot delete opening stock. Batch {item.batch_number} for {item.product.product_name} has already been sold."
+                            }, status=400)
+                
                 # Revert stock quantities from batches before deleting
                 for item in stock.items.all():
                     batch = StockBatch.objects.filter(
@@ -1188,11 +1309,23 @@ class OpeningStockDeleteView(LoginRequiredMixin, View):
                         batch_number=item.batch_number
                     ).first()
                     if batch:
-                        batch.current_quantity -= item.quantity * item.product.conversion_factor
+                        batch.current_quantity -= item.quantity
                         if batch.current_quantity < 0:
                             batch.current_quantity = 0
                         batch.save()
                 stock.delete()
+
+                # Invalidate caches after successful delete
+                try:
+                    from easypharma.views.reports import invalidate_stock_cache, invalidate_product_history_cache
+                    from easypharma.views.sales import invalidate_pos_cache
+                    invalidate_stock_cache(request.tenant.id)
+                    invalidate_pos_cache(request.tenant.id)
+                    for pid in product_ids:
+                        invalidate_product_history_cache(request.tenant.id, pid)
+                except Exception:
+                    pass
+
                 return JsonResponse({'success': True})
         except OpeningStock.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Opening Stock record not found'}, status=404)
