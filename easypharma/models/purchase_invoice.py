@@ -123,6 +123,10 @@ class PurchaseItem(TenantAwareModel):
             )
             if not created:
                 batch.current_quantity += total_units
+                batch.purchase_price = self.purchase_price
+                batch.mrp = self.mrp
+                batch.sale_price = self.sale_price
+                batch.expiry_date = self.expiry_date
                 batch.save()
 
 
@@ -216,6 +220,10 @@ class OpeningStockItem(TenantAwareModel):
             )
             if not created:
                 batch.current_quantity += total_units
+                batch.purchase_price = self.purchase_price * conversion_factor
+                batch.mrp = self.mrp * conversion_factor
+                batch.sale_price = self.mrp
+                batch.expiry_date = self.expiry_date
                 batch.save()
     class Meta:
         db_table = 'easypharma_opening_stock_item'
