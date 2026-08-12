@@ -202,6 +202,10 @@ function clearAddRow() {
         productInfo.style.display = 'none';
     }
     updateNewItemTotal();
+    const searchInputEl = document.getElementById('newProductSearch');
+    if (searchInputEl) {
+        searchInputEl.focus();
+    }
 }
 
 function renderOpeningTable() {
@@ -220,8 +224,8 @@ function renderOpeningTable() {
             <td>${item.batch_number}</td>
             <td>${item.expiry_date || '-'}</td>
             <td>${item.quantity}</td>
-            <td>₹${parseFloat(item.purchase_price).toFixed(2)}</td>
             <td>₹${parseFloat(item.mrp).toFixed(2)}</td>
+            <td>₹${parseFloat(item.purchase_price).toFixed(2)}</td>
             <td>${item.tax_percentage}%</td>
             <td class="fw-bold text-end">₹${parseFloat(item.total).toFixed(2)}</td>
             <td><button onclick="removeOpeningItem(${idx})" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button></td>
@@ -461,14 +465,22 @@ function selectProductForOpening(product) {
 // Enter key on fields to add item & dynamic update listeners
 document.addEventListener('DOMContentLoaded', () => {
     updateNewItemTotal();
-    const fields = ['newBatch','newExpiry','newQty','newPrice','newMrp','newTax'];
-    fields.forEach(id => {
+    const fields = ['newBatch', 'newExpiry', 'newQty', 'newMrp', 'newPrice', 'newTax'];
+    fields.forEach((id, idx) => {
         const el = document.getElementById(id);
         if (el) {
             el.addEventListener('keydown', e => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    addOpeningItem();
+                    if (idx < fields.length - 1) {
+                        const nextEl = document.getElementById(fields[idx + 1]);
+                        if (nextEl) {
+                            nextEl.focus();
+                            nextEl.select();
+                        }
+                    } else {
+                        addOpeningItem();
+                    }
                 }
             });
             // Update total dynamically when values change
