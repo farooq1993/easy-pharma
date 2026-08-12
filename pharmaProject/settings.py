@@ -183,6 +183,9 @@ REDIS_URL = config("REDIS_URL", default="")
 if REDIS_URL:
     try:
         import django_redis
+        connection_pool_kwargs = {}
+        if REDIS_URL.startswith("rediss://"):
+            connection_pool_kwargs["ssl_cert_reqs"] = None
         CACHES = {
             "default": {
                 "BACKEND": "django_redis.cache.RedisCache",
@@ -192,9 +195,7 @@ if REDIS_URL:
                     "IGNORE_EXCEPTIONS": True,  # Don't crash the application if cache is down
                     "SOCKET_CONNECT_TIMEOUT": 5,
                     "SOCKET_TIMEOUT": 5,
-                    "CONNECTION_POOL_KWARGS": {
-                        "ssl_cert_reqs": None  # Support SSL URLs (rediss://) like Upstash
-                    }
+                    "CONNECTION_POOL_KWARGS": connection_pool_kwargs
                 }
             }
         }
