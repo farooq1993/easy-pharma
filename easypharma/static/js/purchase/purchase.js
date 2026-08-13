@@ -1050,14 +1050,15 @@ async function _ocrRecheckMissingProducts() {
     const stillMissing = [];
     for (const item of _ocrMissing) {
         try {
-            const resp = await fetch(`/api/products/search/?q=${encodeURIComponent(item.product)}`);
+            const resp = await fetch(`/api/products/master-search/?q=${encodeURIComponent(item.product)}&nocache=1`);
             const data = await resp.json();
             if (data && data.length > 0) {
-                const matchedProduct = data.find(p => p.product_name.toLowerCase().trim() === item.product.toLowerCase().trim()) || data[0];
+                const matchedProduct = data.find(p => (p.name || p.product_name || '').toLowerCase().trim() === item.product.toLowerCase().trim()) || data[0];
+                const matchedName = matchedProduct.name || matchedProduct.product_name || '';
                 _ocrParsedItems.push({
                     product_id: matchedProduct.id,
-                    name: matchedProduct.product_name,
-                    packing: matchedProduct.product_packing || '',
+                    name: matchedName,
+                    packing: matchedProduct.packing || matchedProduct.product_packing || '',
                     conversion_factor: matchedProduct.conversion_factor || 1,
                     batch_number: item.batch_number,
                     expiry_date: item.expiry_date,
@@ -1071,11 +1072,12 @@ async function _ocrRecheckMissingProducts() {
                     sale_price: item.mrp,
                     total: item.total
                 });
-                showToast(`Matched "${matchedProduct.product_name}" successfully!`, 'success');
+                showToast(`Matched "${matchedName}" successfully!`, 'success');
             } else {
                 stillMissing.push(item);
             }
         } catch (e) {
+            console.error(e);
             stillMissing.push(item);
         }
     }
