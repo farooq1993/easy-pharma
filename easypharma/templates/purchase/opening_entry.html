@@ -57,7 +57,7 @@
                 </div>
                 <div class="ep-card-body">
                     <!-- Inline Add Form -->
-                    <div class="add-row-grid mb-4" style="grid-template-columns: 2fr 1fr 1fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px;">
+                    <div class="add-row-grid mb-4" style="grid-template-columns: 2fr 1.4fr 1.4fr 0.8fr 0.8fr 0.8fr 0.8fr 0.8fr 80px;">
                         <div>
                             <label class="ep-label">Medicine <i class="fas fa-search"></i></label>
                             <div class="search-wrap position-relative">
@@ -81,10 +81,12 @@
                         </div>
                     </div>
 
-                    <table class="items-table" id="openingTable">
-                        <thead><tr><th>Product</th><th>Batch</th><th>Expiry</th><th>Qty</th><th>MRP</th><th>Pur Rate</th><th>GST</th><th>Total</th><th></th></tr></thead>
-                        <tbody id="openingItemsBody"></tbody>
-                    </table>
+                    <div style="overflow-x: auto;">
+                        <table class="items-table" id="openingTable" style="min-width: 680px;">
+                            <thead><tr><th style="min-width:140px">Product</th><th style="min-width:110px">Batch</th><th style="min-width:90px">Expiry</th><th style="min-width:55px">Qty</th><th style="min-width:70px">MRP</th><th style="min-width:80px">Pur Rate</th><th style="min-width:55px">GST</th><th style="min-width:80px">Total</th><th></th></tr></thead>
+                            <tbody id="openingItemsBody"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -116,6 +118,22 @@
 
 <script>
     window.openingStockSaveUrl = "{% url 'opening_stock_entry' %}";
+
+    // Auto-collapse sidebar on Opening Stock Entry for more working space
+    document.addEventListener('DOMContentLoaded', function() {
+        var sidebar = document.getElementById('sidebarMenu');
+        var content  = document.getElementById('content');
+        if (sidebar && !sidebar.classList.contains('collapsed')) {
+            sidebar.classList.add('collapsed');
+            if (content) content.classList.add('active');
+            // update toggle icon
+            var toggleIcon = document.querySelector('#sidebarToggle i');
+            if (toggleIcon) {
+                toggleIcon.classList.remove('bi-list');
+                toggleIcon.classList.add('bi-chevron-right');
+            }
+        }
+    });
 </script>
 <script src="{% static 'js/purchase/openingStock.js' %}"></script>
 

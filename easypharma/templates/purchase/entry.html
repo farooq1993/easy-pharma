@@ -275,17 +275,17 @@
 
                 <!-- Row 2: Packing + Conversion -->
                 <div class="row g-3 mb-3">
-                    <div class="col-md-3">
+                    <div class="col-lg-3 col-md-6 col-12">
                         <label class="ep-label">Packing</label>
                         <input type="text" id="quickPacking" class="ep-input" placeholder="e.g. 10 tablets / strip">
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-lg-3 col-md-6 col-12">
                         <label class="ep-label">Conversion Factor</label>
                         <input type="number" id="quickConv" class="ep-input" value="1" min="1"
                                title="Units per pack (e.g. 10 for a strip of 10 tablets)">
                     </div>
 
-                    <div class="col-md-4">
+                    <div class="col-lg-6 col-md-12 col-12">
                         <label class="ep-label d-flex justify-content-between align-items-center">
                             <span>Product Type</span>
                             <a href="#" class="text-success text-decoration-none text-lowercase" onclick="openMasterAddModal('product-type', 'quickType', 'Product Type', 'name'); return false;">Add New</a>
@@ -309,7 +309,7 @@
 
                 <!-- Row 3: Type + Tax + Drug Schedule -->
                 <div class="row g-3 mb-3">
-                    <div class="col-md-4">
+                    <div class="col-lg-6 col-md-6 col-12">
                         <label class="ep-label d-flex justify-content-between align-items-center">
                             <span>Tax Rate</span>
                             <a href="#" class="text-success text-decoration-none text-lowercase" onclick="openMasterAddModal('product-tax', 'quickTax', 'Tax Rate', 'tax_name'); return false;">Add New</a>
@@ -329,7 +329,7 @@
                             <div class="qs-dropdown" id="qs-drop-quickTax" style="display:none;"></div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-lg-6 col-md-6 col-12">
                         <label class="ep-label d-flex justify-content-between align-items-center">
                             <span>Drug Schedule</span>
                             <a href="#" class="text-success text-decoration-none text-lowercase" onclick="openMasterAddModal('drug-schedule', 'quickSchedule', 'Drug Schedule', 'schedule_name'); return false;">Add New</a>
@@ -352,7 +352,7 @@
 
                 <!-- Row 4: Content + Company + HSN -->
                 <div class="row g-3 mb-1">
-                    <div class="col-md-4">
+                    <div class="col-lg-4 col-md-6 col-12">
                         <label class="ep-label d-flex justify-content-between align-items-center">
                             <span>Product Content</span>
                             <a href="#" class="text-success text-decoration-none text-lowercase" onclick="openMasterAddModal('product-content', 'quickContent', 'Product Content', 'content_name'); return false;">Add New</a>
@@ -371,7 +371,7 @@
                             <div class="qs-dropdown" id="qs-drop-quickContent" style="display:none;"></div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-lg-4 col-md-6 col-12">
                         <label class="ep-label d-flex justify-content-between align-items-center">
                             <span>Company Name</span>
                             <a href="#" class="text-success text-decoration-none text-lowercase" onclick="openMasterAddModal('drug-company', 'quickCompany', 'Company', 'company_name'); return false;">Add New</a>
@@ -390,7 +390,7 @@
                             <div class="qs-dropdown" id="qs-drop-quickCompany" style="display:none;"></div>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-lg-4 col-md-12 col-12">
                         <label class="ep-label">HSN Code</label>
                         <input type="text" id="quickHsn" class="ep-input" placeholder="e.g. 30049099"
                                maxlength="8" inputmode="numeric"
