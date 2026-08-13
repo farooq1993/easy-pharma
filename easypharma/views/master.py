@@ -361,11 +361,14 @@ class ProductMasterSearchAPI(LoginRequiredMixin,View):
 
         tenant_id = request.tenant.id
         cache_key = f'master_search:{tenant_id}:{query.lower().strip()}:lim{limit}'
-        cached = cache.get(cache_key)
-        if cached is not None:
-            response = JsonResponse(cached, safe=False)
-            response['Cache-Control'] = 'private, max-age=30, stale-while-revalidate=60'
-            return response
+        
+        nocache = request.GET.get('nocache') == '1'
+        if not nocache:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                response = JsonResponse(cached, safe=False)
+                response['Cache-Control'] = 'private, max-age=30, stale-while-revalidate=60'
+                return response
 
         products = Products.objects.filter(
             tenant=request.tenant

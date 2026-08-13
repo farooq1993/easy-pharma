@@ -761,10 +761,12 @@ class ProductSearchAPI(LoginRequiredMixin,View):
         # Include limit in cache key if preloading/limiting
         cache_key = f"{self._cache_key(tenant_id, query)}:lim{limit}"
 
-        # ── Cache hit: return instantly without touching DB ──
-        cached = cache.get(cache_key)
-        if cached is not None:
-            return JsonResponse(cached, safe=False)
+        nocache = request.GET.get('nocache') == '1'
+        if not nocache:
+            # ── Cache hit: return instantly without touching DB ──
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return JsonResponse(cached, safe=False)
 
         from easypharma.models.stock import StockBatch
         from django.db.models import Exists, OuterRef, Prefetch
