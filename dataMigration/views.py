@@ -70,7 +70,7 @@ def decode_uploaded_file(uploaded_file):
         except Exception as e:
             logger.error(f"Failed to parse xlsx: {str(e)}")
 
-    for encoding in ('utf-8', 'cp1252', 'latin1'):
+    for encoding in ('utf-8-sig', 'utf-8', 'cp1252', 'latin1'):
 
         try:
 
