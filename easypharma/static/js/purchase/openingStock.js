@@ -358,8 +358,17 @@ async function saveOpeningStock() {
 const searchInput = document.getElementById('newProductSearch');
 const resultsDiv = document.getElementById('newSearchResults');
 
+// What the user actually typed (preserved across arrow navigation)
+let _userTypedQuery = '';
+// Whether we are currently in arrow-preview mode
+let _isNavigating = false;
+
 searchInput.addEventListener('input', async function () {
     const query = this.value.trim();
+
+    // User typed something — exit nav mode, update stored query
+    _isNavigating = false;
+    _userTypedQuery = this.value;
     searchSelectedIndex = -1;
     currentSearchResults = [];
 
@@ -382,8 +391,6 @@ searchInput.addEventListener('input', async function () {
                 div.onclick = () => selectProductForOpening(p);
                 resultsDiv.appendChild(div);
             });
-            searchSelectedIndex = 0;
-            highlightSelected();
         } else {
             resultsDiv.innerHTML = `<div class="p-4 text-center text-muted">No matches.<br>Try Quick Add.</div>`;
         }
@@ -396,7 +403,27 @@ searchInput.addEventListener('input', async function () {
 
 function highlightSelected() {
     const items = resultsDiv.querySelectorAll('.search-item');
-    items.forEach((el, i) => el.classList.toggle('selected', i === searchSelectedIndex));
+    items.forEach((el, i) => {
+        el.classList.toggle('selected', i === searchSelectedIndex);
+        if (i === searchSelectedIndex) {
+            // Preview: show product name in input
+            searchInput.value = currentSearchResults[i].name;
+            // Cursor to end so it looks natural
+            searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
+            // Scroll item into view
+            el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+    });
+}
+
+function exitNavMode() {
+    // Restore the original typed text and clear highlights
+    _isNavigating = false;
+    searchSelectedIndex = -1;
+    searchInput.value = _userTypedQuery;
+    const len = searchInput.value.length;
+    searchInput.setSelectionRange(len, len);
+    resultsDiv.querySelectorAll('.search-item').forEach(el => el.classList.remove('selected'));
 }
 
 searchInput.addEventListener('keydown', function(e) {
@@ -404,19 +431,45 @@ searchInput.addEventListener('keydown', function(e) {
 
     if (e.key === 'ArrowDown') {
         e.preventDefault();
+        if (!_isNavigating) {
+            // Enter nav mode — save current typed text first
+            _userTypedQuery = searchInput.value;
+            _isNavigating = true;
+            searchSelectedIndex = -1;
+        }
         searchSelectedIndex = Math.min(searchSelectedIndex + 1, currentSearchResults.length - 1);
         highlightSelected();
+
     } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        searchSelectedIndex = Math.max(searchSelectedIndex - 1, 0);
-        highlightSelected();
+        if (!_isNavigating) return;
+        if (searchSelectedIndex <= 0) {
+            // Back to top — exit nav, restore typed text
+            exitNavMode();
+        } else {
+            searchSelectedIndex--;
+            highlightSelected();
+        }
+
     } else if (e.key === 'Enter') {
         e.preventDefault();
-        if (currentSearchResults[searchSelectedIndex]) {
+        if (_isNavigating && currentSearchResults[searchSelectedIndex]) {
             selectProductForOpening(currentSearchResults[searchSelectedIndex]);
+        } else if (!_isNavigating && currentSearchResults.length > 0) {
+            // Enter without arrow nav — select first result
+            selectProductForOpening(currentSearchResults[0]);
         }
+
     } else if (e.key === 'Escape') {
+        exitNavMode();
         resultsDiv.style.display = 'none';
+
+    } else if (_isNavigating) {
+        // Any other key (backspace, letter, etc.) while in nav mode:
+        // exit nav mode first (restores original typed text),
+        // then let the browser handle the key normally on the restored text
+        exitNavMode();
+        // Don't preventDefault — browser will process the key on restored input
     }
 });
 
@@ -425,25 +478,12 @@ function selectProductForOpening(product) {
     searchInput.value = product.name;
     document.getElementById('newTax').value = product.tax_rate || 5;
     
-    // Default MRP to unit MRP if conversion_factor > 1, otherwise pack MRP
-    const conv = parseInt(product.conversion_factor) || 1;
-    if (product.batches && product.batches.length) {
-        const mrpPack = parseFloat(product.batches[0].mrp_pack) || 0;
-        const unitMrp = conv > 1 ? (mrpPack / conv) : mrpPack;
-        document.getElementById('newMrp').value = unitMrp > 0 ? unitMrp.toFixed(2) : '';
-    } else {
-        document.getElementById('newMrp').value = '';
-    }
-    
-    // Auto-calculate purchase price as 20% less than MRP
-    const mrpVal = parseFloat(document.getElementById('newMrp').value) || 0;
-    if (mrpVal > 0) {
-        document.getElementById('newPrice').value = (mrpVal * 0.8).toFixed(2);
-    } else {
-        document.getElementById('newPrice').value = '';
-    }
+    // Clear MRP and Purchase Price — user must enter actual opening stock values
+    document.getElementById('newMrp').value = '';
+    document.getElementById('newPrice').value = '';
 
     // Display productInfo bar with Edit button
+    const conv = parseInt(product.conversion_factor) || 1;
     const productInfo = document.getElementById('productInfo');
     if (productInfo) {
         productInfo.innerHTML = `
