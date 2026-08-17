@@ -14,7 +14,7 @@ jobs:
 
       - name: Compress project files
         run: |
-          tar -czf project.tar.gz --exclude=db.sqlite3 --exclude=venv --exclude=env --exclude=.git --exclude=.github --exclude=.vscode --exclude=staticfiles .
+          tar -czf project.tar.gz --exclude=db.sqlite3 --exclude=venv --exclude=env --exclude=.git --exclude=.github --exclude=.vscode --exclude=staticfiles --exclude=project.tar.gz .
 
       - name: Copy archive to VPS
         uses: appleboy/scp-action@master
