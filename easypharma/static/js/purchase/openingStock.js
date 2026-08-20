@@ -187,6 +187,81 @@ function addOpeningItem() {
     showToast('Item added successfully');
 }
 
+// ==================== EDIT ITEM MODAL ====================
+// Opens a modal pre-filled with the item's data so it can be edited
+window.editOpeningItem = function(idx) {
+    const item = openingItems[idx];
+    if (!item) return;
+
+    document.getElementById('editModalIndex').value = idx;
+    document.getElementById('editModalProductName').value = item.product_name || '';
+    document.getElementById('editModalBatch').value = item.batch_number || '';
+    document.getElementById('editModalExpiry').value = item.expiry_date || '';
+    document.getElementById('editModalQty').value = item.quantity;
+    document.getElementById('editModalMrp').value = item.mrp;
+    document.getElementById('editModalPrice').value = item.purchase_price;
+    document.getElementById('editModalTax').value = item.tax_percentage;
+
+    updateEditModalTotal();
+
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('editItemModal')).show();
+};
+
+// Recalculate the live total shown inside the edit modal
+function updateEditModalTotal() {
+    const qty = parseFloat(document.getElementById('editModalQty').value) || 0;
+    const price = parseFloat(document.getElementById('editModalPrice').value) || 0;
+    const tax = parseFloat(document.getElementById('editModalTax').value) || 0;
+
+    const subtotal = qty * price;
+    const taxAmt = subtotal * (tax / 100);
+    const total = subtotal + taxAmt;
+
+    const el = document.getElementById('editModalTotalDisplay');
+    if (el) el.textContent = '₹' + total.toFixed(2);
+}
+
+// Wire up live total updates inside the edit modal once the DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    ['editModalQty', 'editModalPrice', 'editModalTax'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', updateEditModalTotal);
+    });
+});
+
+// Save the edited values back into openingItems[idx]
+window.saveEditedItem = function() {
+    const idx = parseInt(document.getElementById('editModalIndex').value, 10);
+    if (isNaN(idx) || !openingItems[idx]) return;
+
+    const qty = parseFloat(document.getElementById('editModalQty').value) || 0;
+    if (qty <= 0) {
+        showToast('Quantity must be greater than 0', 'error');
+        return;
+    }
+
+    const item = openingItems[idx];
+    item.batch_number = document.getElementById('editModalBatch').value.trim() || 'OPENING';
+    item.expiry_date = document.getElementById('editModalExpiry').value.trim();
+    item.quantity = qty;
+    item.mrp = parseFloat(document.getElementById('editModalMrp').value) || 0;
+    item.purchase_price = parseFloat(document.getElementById('editModalPrice').value) || 0;
+    item.tax_percentage = parseFloat(document.getElementById('editModalTax').value) || 0;
+
+    const subtotal = item.quantity * item.purchase_price;
+    item.tax_amount = subtotal * (item.tax_percentage / 100);
+    item.total = subtotal + item.tax_amount;
+
+    renderOpeningTable();
+    updateSummary();
+
+    const modalEl = document.getElementById('editItemModal');
+    const modalInstance = bootstrap.Modal.getInstance(modalEl);
+    if (modalInstance) modalInstance.hide();
+
+    showToast('Item updated successfully');
+};
+
 function clearAddRow() {
     document.getElementById('newProductSearch').value = '';
     document.getElementById('newBatch').value = '';
@@ -228,7 +303,10 @@ function renderOpeningTable() {
             <td>₹${parseFloat(item.purchase_price).toFixed(2)}</td>
             <td>${item.tax_percentage}%</td>
             <td class="fw-bold text-end">₹${parseFloat(item.total).toFixed(2)}</td>
-            <td><button onclick="removeOpeningItem(${idx})" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button></td>
+            <td class="text-nowrap">
+                <button onclick="editOpeningItem(${idx})" class="btn btn-sm btn-primary me-1" title="Edit item"><i class="fas fa-edit"></i></button>
+                <button onclick="removeOpeningItem(${idx})" class="btn btn-sm btn-danger" title="Delete item"><i class="fas fa-trash"></i></button>
+            </td>
         `;
         tbody.appendChild(row);
     });
