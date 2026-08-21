@@ -1662,17 +1662,17 @@ class PurchaseScanAPI(LoginRequiredMixin, View):
                 expiry_date = expiry_date + '-01'
             
             try:
-                quantity = int(item.get('quantity') or 0)
+                quantity = int(item.get('quantity') or item.get('qty') or item.get('quant') or 0)
             except (ValueError, TypeError):
                 quantity = 0
                 
             try:
-                free_quantity = int(item.get('free_quantity') or 0)
+                free_quantity = int(item.get('free_quantity') or item.get('free_qty') or item.get('freeQty') or item.get('free') or 0)
             except (ValueError, TypeError):
                 free_quantity = 0
                 
             try:
-                purchase_price = float(item.get('purchase_price') or 0.0)
+                purchase_price = float(item.get('purchase_price') or item.get('price') or item.get('rate') or item.get('pur_rate') or 0.0)
             except (ValueError, TypeError):
                 purchase_price = 0.0
                 
