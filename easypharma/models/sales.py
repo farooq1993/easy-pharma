@@ -31,7 +31,7 @@ class SaleInvoice(TenantAwareModel):
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     payment_mode = models.CharField(max_length=50, choices=[('Cash', 'Cash'), ('Card', 'Card'), ('UPI', 'UPI'), ('Credit', 'Credit')], default='Cash')
     sale_type = models.CharField(max_length=50, choices=[('Prescription', 'Prescription Sale'), ('Counter', 'Counter Sale')], default='Prescription')
-    created_at = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):

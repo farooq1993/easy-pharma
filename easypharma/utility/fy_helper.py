@@ -107,6 +107,12 @@ def generate_fy_invoice_number(tenant, invoice_date=None, prefix="INV"):
             invoice_number__startswith=old_fy_prefix
         ).order_by('-id').first()
 
+    # Convert dates to timezone-aware datetimes for fast indexed range query
+    from django.utils.timezone import make_aware
+    import datetime
+    start_dt = make_aware(datetime.datetime.combine(start_date, datetime.time.min))
+    end_dt = make_aware(datetime.datetime.combine(end_date, datetime.time.max))
+
     if last_inv:
         try:
             last_seq = int(last_inv.invoice_number.split('-')[-1])
@@ -114,14 +120,12 @@ def generate_fy_invoice_number(tenant, invoice_date=None, prefix="INV"):
         except (ValueError, IndexError):
             next_seq = SaleInvoice.objects.filter(
                 tenant=tenant,
-                created_at__date__gte=start_date,
-                created_at__date__lte=end_date
+                created_at__range=(start_dt, end_dt)
             ).count() + 1
     else:
         next_seq = SaleInvoice.objects.filter(
             tenant=tenant,
-            created_at__date__gte=start_date,
-            created_at__date__lte=end_date
+            created_at__range=(start_dt, end_dt)
         ).count() + 1
 
     return f"{fy_prefix}{next_seq:04d}"
