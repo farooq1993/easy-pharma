@@ -40,7 +40,7 @@
                             value="{{ search_query }}"
                             autocomplete="off">
                         {% if search_query %}
-                        <a href="{% url 'opening_stock_list' %}" class="btn btn-outline-secondary border-0 bg-light"
+                        <a href="{% url 'opening_stock' %}" class="btn btn-outline-secondary border-0 bg-light"
                            title="Clear search"><i class="fas fa-times"></i></a>
                         {% endif %}
                     </div>
@@ -73,93 +73,9 @@
         </div>
     </div>
 
-    <!-- Table -->
-    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="bg-light text-muted small text-uppercase">
-                        <tr>
-                            <th class="ps-4">Voucher No.</th>
-                            <th>Date</th>
-                            <th class="text-end">Sub Total</th>
-                            <th class="text-end">GST</th>
-                            <th class="text-end">Discount</th>
-                            <th class="text-end">Total Amount</th>
-                            <th class="text-end pe-4">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for stock in opening_stocks %}
-                        <tr id="stock-{{ stock.id }}">
-                            <td class="ps-4">
-                                <span class="voucher-badge" title="Click to copy"
-                                      onclick="copyVoucher('{{ stock.voucher_number }}', this)">
-                                    <i class="fas fa-tag me-1" style="font-size:0.65rem;"></i>
-                                    {{ stock.voucher_number }}
-                                </span>
-                            </td>
-                            <td>
-                                <div class="fw-bold small">
-                                    {{ stock.opening_stock_date|date:"d M Y" }}
-                                </div>
-                            </td>
-                            <td class="text-end small">₹{{ stock.sub_total }}</td>
-                            <td class="text-end small text-primary">₹{{ stock.tax_amount }}</td>
-                            <td class="text-end small text-danger">
-                                {% if stock.discount_amount > 0 %}-₹{{ stock.discount_amount }}{% else %}—{% endif %}
-                            </td>
-                            <td class="text-end fw-bold text-success">₹{{ stock.total_amount }}</td>
-                            <td class="text-end pe-4">
-                                <div class="btn-group">
-                                    <a href="{% url 'opening_stock_edit' stock.id %}" 
-                                       class="btn btn-sm btn-outline-primary border-0" title="Edit">
-                                        <i class="fas fa-edit"></i>
-                                    </a>
-                                    <button class="btn btn-sm btn-outline-danger border-0"
-                                        onclick="deleteOpeningStock({{ stock.id }}, '{{ stock.voucher_number }}')"
-                                        title="Delete">
-                                        <i class="fas fa-trash-alt"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="7" class="text-center py-5">
-                                <div class="opacity-25 mb-3">
-                                    <i class="fas fa-boxes" style="font-size: 3rem;"></i>
-                                </div>
-                                <p class="text-muted">No opening stock entries found.</p>
-                                <a href="{% url 'opening_stock' %}" class="btn btn-success">
-                                    <i class="fas fa-plus me-1"></i> Add Opening Stock
-                                </a>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Pagination -->
-        {% if page_obj.has_other_pages %}
-        <div class="card-footer bg-white border-0 py-3">
-            <!-- Same pagination code as before -->
-            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <small class="text-muted">
-                    Showing <strong>{{ page_obj.start_index }}–{{ page_obj.end_index }}</strong> 
-                    of <strong>{{ total_count }}</strong> records
-                </small>
-                <!-- Pagination HTML (same as your existing one) -->
-                <nav aria-label="Opening stock pagination">
-                    <ul class="pagination pagination-sm mb-0">
-                        <!-- ... (copy your existing pagination block here) ... -->
-                    </ul>
-                </nav>
-            </div>
-        </div>
-        {% endif %}
+    <!-- Table + Pagination (this whole block gets swapped by AJAX on search/filter) -->
+    <div id="resultsWrapper">
+        {% include "purchase/_opening_stock_table.html" %}
     </div>
 </div>
 
@@ -208,12 +124,83 @@ function showToast(msg, type = 'success') {
     setTimeout(() => toast.style.display = 'none', 3000);
 }
 
-// Live Search
+// ---- AJAX filtering (search + date range) without page reload ----
+const filterForm   = document.getElementById('filterForm');
+const searchInput  = document.getElementById('searchInput');
+const resultsEl    = document.getElementById('resultsWrapper');
+const dateFromEl   = filterForm.querySelector('[name="date_from"]');
+const dateToEl     = filterForm.querySelector('[name="date_to"]');
+
 let searchTimer;
-document.getElementById('searchInput').addEventListener('input', function () {
+let currentController = null; // to abort stale in-flight requests
+
+function loadResults(page = 1) {
+    const params = new URLSearchParams();
+    if (searchInput.value.trim()) params.set('q', searchInput.value.trim());
+    if (dateFromEl.value) params.set('date_from', dateFromEl.value);
+    if (dateToEl.value) params.set('date_to', dateToEl.value);
+    if (page > 1) params.set('page', page);
+
+    // Abort any previous in-flight request so results don't race/overwrite each other
+    if (currentController) currentController.abort();
+    currentController = new AbortController();
+
+    resultsEl.style.opacity = '0.5';
+
+    const url = `${window.location.pathname}?${params.toString()}`;
+    fetch(url, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        signal: currentController.signal
+    })
+    .then(r => r.text())
+    .then(html => {
+        resultsEl.innerHTML = html;
+        resultsEl.style.opacity = '1';
+        // Keep the URL bar / back-button in sync without reloading the page
+        window.history.replaceState({}, '', url);
+        attachPaginationHandlers();
+    })
+    .catch(err => {
+        if (err.name !== 'AbortError') {
+            resultsEl.style.opacity = '1';
+            showToast('Could not load results', 'error');
+        }
+    });
+}
+
+// Intercept clicks on the (server-rendered) pagination links inside resultsWrapper
+function attachPaginationHandlers() {
+    resultsEl.querySelectorAll('.pagination a.page-link').forEach(link => {
+        link.addEventListener('click', function (e) {
+            e.preventDefault();
+            const pageParam = new URL(this.href, window.location.origin).searchParams.get('page') || 1;
+            loadResults(pageParam);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+    });
+}
+
+// Live search — trigger after the user has typed at least 2 characters, debounced
+searchInput.addEventListener('input', function () {
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => document.getElementById('filterForm').submit(), 500);
+    const val = searchInput.value.trim();
+    if (val.length === 0 || val.length >= 2) {
+        searchTimer = setTimeout(() => loadResults(1), 400);
+    }
 });
+
+// Date filters trigger immediately on change
+dateFromEl.addEventListener('change', () => loadResults(1));
+dateToEl.addEventListener('change', () => loadResults(1));
+
+// Stop the normal form submit (Filter button) and Enter key from reloading the page
+filterForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    loadResults(1);
+});
+
+// Wire up pagination links present on first page load
+attachPaginationHandlers();
 </script>
 
 <style>

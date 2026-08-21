@@ -934,7 +934,8 @@ class SmartPurchaseSuggestAPIView(LoginRequiredMixin, View):
 
 
 class OpeningStockListView(LoginRequiredMixin, View):
-    template_name = 'purchase/opening_list.html'  # We'll create this
+    template_name = 'purchase/opening_list.html'
+    partial_template_name = 'purchase/_opening_stock_table.html'  # NEW: table+pagination only
     ITEMS_PER_PAGE = 20
 
     def get(self, request):
@@ -954,14 +955,19 @@ class OpeningStockListView(LoginRequiredMixin, View):
         paginator = Paginator(qs, self.ITEMS_PER_PAGE)
         page_obj = paginator.get_page(request.GET.get('page', 1))
 
-        return render(request, self.template_name, {
+        context = {
             'page_obj': page_obj,
             'opening_stocks': page_obj,
             'search_query': search_query,
             'date_from': date_from,
             'date_to': date_to,
             'total_count': paginator.count,
-        })
+        }
+
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return render(request, self.partial_template_name, context)
+
+        return render(request, self.template_name, context)
 
 
 class OpeningStockEntryView(LoginRequiredMixin, View):
