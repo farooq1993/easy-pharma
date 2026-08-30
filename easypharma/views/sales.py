@@ -777,10 +777,12 @@ class ProductSearchAPI(LoginRequiredMixin,View):
             current_quantity__gt=0
         )
         
-        products = Products.objects.filter(
-            tenant=request.tenant,
-            product_name__istartswith=query
-        ).annotate(
+        qs = Products.objects.filter(tenant=request.tenant)
+
+        if query:
+            qs = qs.filter(product_name__istartswith=query)
+
+        products = qs.annotate(
             has_stock=Exists(active_batches)
         ).order_by('-has_stock', 'product_name').select_related(
             'product_tax', 'product_content', 'compny_name', 'product_schedule'
