@@ -352,15 +352,17 @@ class ProductMasterSearchAPI(LoginRequiredMixin,View):
 
     def get(self, request):
         from django.core.cache import cache
-        query = request.GET.get('q', '')
-        limit_str = request.GET.get('limit', '20')
+
+        raw_query = request.GET.get('q', '')
+        query = raw_query.strip()
+        limit_str = request.GET.get('limit', '50')
         try:
             limit = int(limit_str)
         except ValueError:
-            limit = 20
+            limit = 50
 
         tenant_id = request.tenant.id
-        cache_key = f'master_search:{tenant_id}:{query.lower().strip()}:lim{limit}'
+        cache_key = f'master_search:{tenant_id}:{query.lower()}:lim{limit}'
         
         nocache = request.GET.get('nocache') == '1'
         if not nocache:
@@ -370,17 +372,18 @@ class ProductMasterSearchAPI(LoginRequiredMixin,View):
                 response['Cache-Control'] = 'private, max-age=30, stale-while-revalidate=60'
                 return response
 
-        products = Products.objects.filter(
-            tenant=request.tenant
-        ).filter(
-            Q(product_name__istartswith=query) |
-            Q(product_name__icontains=query) |
-            Q(product_content__content_name__icontains=query)
-        ).select_related('product_tax', 'product_schedule', 'product_content').only(
+        qs = Products.objects.filter(tenant=request.tenant)
+
+        if query:
+            qs = qs.filter(product_name__istartswith=query)
+
+        products = qs.select_related(
+            'product_tax', 'product_schedule', 'product_content'
+        ).only(
             'id', 'product_name', 'product_packing', 'conversion_factor', 'product_tax__tax_rate',
             'product_schedule__schedule_name', 'compny_name', 'product_hsn_code',
             'product_content__content_name'
-        )[:limit]
+        ).order_by('product_name')[:limit]
         
         data = []
         for p in products:
