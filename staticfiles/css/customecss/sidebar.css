@@ -1,7 +1,7 @@
 :root {
     --sidebar-bg: #9052b9; /* Purple background */
     --sidebar-hover: #68d12b; /* Green for hover */
-    --sidebar-active: #0d6efd; /* Blue for active */
+    --sidebar-active: rgba(255, 255, 255, 0.15); /* Semi-transparent white for active */
     --sidebar-text: #e7e1cb; /* Cream text */
     --sidebar-width: 280px;
     --sidebar-collapsed-width: 70px; /* Hide on toggle for full focus */
@@ -47,8 +47,11 @@ body {
     top: 0;
     left: 0;
     z-index: 1000;
-    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+    box-shadow: 2px 0 15px rgba(0, 0, 0, 0.04);
     overflow-y: auto;
+    padding: 0 !important; /* Brand full-width banner rules */
+    display: flex;
+    flex-direction: column;
 }
 
 .sidebar.collapsed {
@@ -70,17 +73,19 @@ body {
     align-items: center;
     padding: 12px 20px;
     text-decoration: none;
+    font-weight: 500;
 }
 
 .sidebar .nav-link:hover {
     background-color: var(--sidebar-hover);
-    color: #fff;
+    color: #ffffff;
 }
 
 .sidebar .nav-link.active {
-    background-color: rgba(255, 255, 255, 0.15);
+    background-color: var(--sidebar-active);
     border-left: 4px solid var(--sidebar-hover);
-    color: white;
+    color: #ffffff !important;
+    font-weight: 600;
 }
 
 .sidebar .nav-link i {
@@ -127,20 +132,21 @@ body {
 .mobile-sidebar-toggle {
     display: none;
     position: fixed;
-    top: 15px;
-    left: 15px;
+    top: max(10px, calc(8px + env(safe-area-inset-top, 0px)));
+    left: max(12px, calc(10px + env(safe-area-inset-left, 0px)));
     z-index: 1002;
     background-color: var(--sidebar-bg);
     color: #fff;
     border: none;
     border-radius: 8px;
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     align-items: center;
     justify-content: center;
-    font-size: 1.3rem;
+    font-size: 1.25rem;
     cursor: pointer;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    -webkit-tap-highlight-color: transparent;
 }
 
 /* Dark overlay shown behind the open mobile sidebar */
@@ -160,10 +166,13 @@ body {
 @media (max-width: 768px) {
     /* Reuse the same full sidebar as a slide-in panel instead of hiding it */
     .sidebar {
-        display: block;
-        width: var(--sidebar-width);
+        display: flex;
+        width: min(var(--sidebar-width), 85vw);
         transform: translateX(-100%);
         transition: transform 0.3s ease;
+        padding-top: env(safe-area-inset-top, 0px) !important;
+        padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+        -webkit-overflow-scrolling: touch;
     }
 
     .sidebar.mobile-open {
@@ -172,7 +181,7 @@ body {
 
     /* Ignore the desktop "collapsed" state on mobile - always show full menu */
     .sidebar.collapsed {
-        width: var(--sidebar-width);
+        width: min(var(--sidebar-width), 85vw);
     }
 
     .sidebar.collapsed .sidebar-text,
@@ -234,3 +243,89 @@ body {
 .sidebar.collapsed h6.sidebar-text {
     display: none;
 }
+
+/* Sidebar Custom Brand Wrapper */
+.sidebar-brand-wrapper {
+    background-color: #ffffff;
+    border-bottom: 1px solid #eef2f5;
+    padding: 1.25rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 80px;
+    margin-bottom: 1rem;
+    transition: all 0.3s ease;
+}
+
+.sidebar.collapsed:not(:hover) .sidebar-brand-wrapper {
+    padding: 1.25rem 0.5rem;
+}
+
+/* Sidebar Navigation Scroll Container */
+.sidebar-nav-container {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 0 1rem 1rem 1rem;
+}
+
+.sidebar.collapsed:not(:hover) .sidebar-nav-container {
+    padding: 0 0.5rem;
+}
+
+/* Sidebar Bottom Help Card */
+.sidebar-help-card {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 1rem;
+    margin: 1.5rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    transition: all 0.3s ease;
+}
+
+.sidebar.collapsed:not(:hover) .sidebar-help-card {
+    display: none; /* Hide when collapsed */
+}
+
+.sidebar-help-card i {
+    font-size: 1.35rem;
+    color: #e7e1cb;
+    background: rgba(255, 255, 255, 0.15);
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.sidebar-help-card .help-title {
+    font-weight: 600;
+    color: #ffffff;
+    font-size: 0.82rem;
+    margin-bottom: 1px;
+}
+
+.sidebar-help-card .help-subtitle {
+    font-size: 0.72rem;
+    color: #e7e1cb;
+    opacity: 0.85;
+    margin-bottom: 0;
+}
+
+.sidebar-help-card a {
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.sidebar.collapsed:not(:hover) .sidebar-brand-wrapper img {
+    width: 38px;
+    height: 38px;
+    object-position: left center;
+    object-fit: cover;
+}

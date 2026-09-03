@@ -1806,6 +1806,9 @@
         }
 
         calculateGrandTotal();
+        if (typeof savePosDraft === 'function') {
+            savePosDraft();
+        }
     }
 
     function handleQtyKeydown(event, index) {
@@ -2350,7 +2353,7 @@
         }
     }
 
-    // Multi-Bill State Management
+        // Multi-Bill State Management
 let bills = [{
     id: Date.now(),
     cart: [],
@@ -2359,8 +2362,75 @@ let bills = [{
 }];
 let activeBillIndex = 0;
 
+// ── POS Draft Auto-Save & Recovery ──
+function savePosDraft() {
+    if (typeof editData !== 'undefined' && editData) return;
+    try {
+        if (typeof saveCurrentState === 'function') {
+            saveCurrentState();
+        }
+        const hasData = bills.some(b => b.cart && b.cart.length > 0) ||
+                        bills.some(b => b.patient && (b.patient.name || b.patient.phone || b.patient.doctor));
+        if (hasData) {
+            const draft = {
+                bills: bills,
+                activeBillIndex: activeBillIndex,
+                timestamp: Date.now()
+            };
+            localStorage.setItem('easypharma_pos_draft_v1', JSON.stringify(draft));
+        } else {
+            localStorage.removeItem('easypharma_pos_draft_v1');
+        }
+    } catch (e) {
+        console.warn('Failed to save POS draft', e);
+    }
+}
+
+function clearPosDraft() {
+    try {
+        localStorage.removeItem('easypharma_pos_draft_v1');
+    } catch (e) {}
+}
+
+function restorePosDraft() {
+    if (typeof editData !== 'undefined' && editData) return;
+    try {
+        const raw = localStorage.getItem('easypharma_pos_draft_v1');
+        if (!raw) return;
+        const draft = JSON.parse(raw);
+        if (draft && Array.isArray(draft.bills) && draft.bills.length > 0) {
+            const hasData = draft.bills.some(b => b.cart && b.cart.length > 0) ||
+                            draft.bills.some(b => b.patient && (b.patient.name || b.patient.phone || b.patient.doctor));
+            if (hasData) {
+                bills = draft.bills;
+                activeBillIndex = typeof draft.activeBillIndex === 'number' && draft.activeBillIndex < bills.length ? draft.activeBillIndex : 0;
+                loadBillState(activeBillIndex);
+                updateBillTabsUI();
+                showToast('⚡ Restored unsaved bill from previous session! <button type="button" class="btn btn-sm btn-outline-light ms-2" onclick="clearPosDraftAndReset()" style="padding:1px 6px;font-size:11px;">Clear Draft</button>', 'info');
+            }
+        }
+    } catch (e) {
+        console.warn('Failed to restore POS draft', e);
+    }
+}
+
+window.clearPosDraftAndReset = function() {
+    clearPosDraft();
+    bills = [{
+        id: Date.now(),
+        cart: [],
+        patient: { name: '', address: '', phone: '', doctor: '' },
+        active: true
+    }];
+    activeBillIndex = 0;
+    loadBillState(0);
+    updateBillTabsUI();
+    showToast('Draft cleared', 'warning');
+};
+
 function updateBillTabsUI() {
     const container = document.getElementById('billTabsContainer');
+    if (!container) return;
     container.innerHTML = '';
     
     bills.forEach((bill, index) => {
@@ -2399,31 +2469,35 @@ function addNewBill() {
     
     loadBillState(activeBillIndex);
     updateBillTabsUI();
+    savePosDraft();
 }
 
     function saveCurrentState() {
-        bills[activeBillIndex].cart = [...cart]; // 'cart' aapka existing array hai
+        if (!bills[activeBillIndex]) return;
+        bills[activeBillIndex].cart = [...cart];
         bills[activeBillIndex].patient = {
-            name: document.getElementById('patientName').value,
-            address: document.getElementById('patientAddress').value,
-            phone: document.getElementById('patientPhone').value,
-            doctor: document.getElementById('doctorName').value
+            name: document.getElementById('patientName') ? document.getElementById('patientName').value : '',
+            address: document.getElementById('patientAddress') ? document.getElementById('patientAddress').value : '',
+            phone: document.getElementById('patientPhone') ? document.getElementById('patientPhone').value : '',
+            doctor: document.getElementById('doctorName') ? document.getElementById('doctorName').value : ''
         };
     }
 
     function loadBillState(index) {
+        if (!bills[index]) return;
         const bill = bills[index];
-        cart = [...bill.cart]; // UI update karne ke liye
-        document.getElementById('patientName').value = bill.patient.name;
-        document.getElementById('patientAddress').value = bill.patient.address;
-        document.getElementById('patientPhone').value = bill.patient.phone;
-        document.getElementById('doctorName').value = bill.patient.doctor || '';
+        cart = [...bill.cart];
+        if (document.getElementById('patientName')) document.getElementById('patientName').value = bill.patient.name || '';
+        if (document.getElementById('patientAddress')) document.getElementById('patientAddress').value = bill.patient.address || '';
+        if (document.getElementById('patientPhone')) document.getElementById('patientPhone').value = bill.patient.phone || '';
+        if (document.getElementById('doctorName')) document.getElementById('doctorName').value = bill.patient.doctor || '';
         
         renderCart(); 
     }
 
     function switchBill(index) {
         saveCurrentState();
+        savePosDraft();
         activeBillIndex = index;
         loadBillState(index);
         updateBillTabsUI();
@@ -2436,6 +2510,7 @@ function addNewBill() {
             if (activeBillIndex >= bills.length) activeBillIndex = bills.length - 1;
             loadBillState(activeBillIndex);
             updateBillTabsUI();
+            savePosDraft();
         }
     }
 
@@ -2447,10 +2522,45 @@ function addNewBill() {
         }
     });
 
+    // Auto-save listeners on patient input fields
+    document.addEventListener('DOMContentLoaded', function() {
+        ['patientName', 'patientAddress', 'patientPhone', 'doctorName', 'summaryDiscount', 'summaryDiscountPerc', 'billDate'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('input', () => {
+                    saveCurrentState();
+                    savePosDraft();
+                });
+                el.addEventListener('change', () => {
+                    saveCurrentState();
+                    savePosDraft();
+                });
+            }
+        });
+    });
+
     // Initialize
-    window.addEventListener('load', updateBillTabsUI);
+    window.addEventListener('load', () => {
+        if (!editData) {
+            restorePosDraft();
+        }
+        updateBillTabsUI();
+    });
+
+    // Warn on accidental refresh or close if bill has items
+    window.addEventListener('beforeunload', function(e) {
+        if (window.__isOrderSubmitting) return;
+        savePosDraft();
+        const hasUnsaved = bills.some(b => b.cart && b.cart.length > 0);
+        if (hasUnsaved) {
+            e.preventDefault();
+            e.returnValue = 'You have unsaved items in your bill. Are you sure you want to leave or refresh?';
+            return e.returnValue;
+        }
+    });
 
     function resetPOS(nextInvNum) {
+        clearPosDraft();
         if (typeof editData !== 'undefined' && editData) {
             window.location.href = '/pos/list/';
             return;
@@ -2462,6 +2572,14 @@ function addNewBill() {
 
         cart = [];
         mrpEditMode = false;
+        bills = [{
+            id: Date.now(),
+            cart: [],
+            patient: { name: '', address: '', phone: '', doctor: '' },
+            active: true
+        }];
+        activeBillIndex = 0;
+        updateBillTabsUI();
         renderCart();
         
         const billDateEl = document.getElementById('billDate');

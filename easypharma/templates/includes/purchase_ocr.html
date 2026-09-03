@@ -1,21 +1,52 @@
 <!-- ══════════════════════════════════════════
      Purchase Bill AI OCR Scan Modal
      ══════════════════════════════════════════ -->
+<style>
+@media (max-width: 768px) {
+    #ocrImportModal .modal-dialog {
+        margin: 0.4rem;
+        max-width: calc(100% - 0.8rem);
+    }
+    #ocrImportModal .modal-content {
+        max-height: 96vh !important;
+        border-radius: 16px !important;
+    }
+    #ocrImportModal > .modal-content > div:first-child {
+        padding: 14px 16px !important;
+    }
+    #ocrMetaBar {
+        padding: 12px 14px !important;
+    }
+    #ocrImportModal .modal-footer {
+        padding: 10px 14px !important;
+        flex-wrap: wrap;
+        gap: 8px !important;
+    }
+    #ocrSupplierSearchInput,
+    #ocrInvoiceNumber,
+    #ocrPurchaseDate,
+    #ocrPaymentMode {
+        font-size: 16px !important;
+        min-height: 40px;
+    }
+}
+</style>
+
 <div class="modal fade" id="ocrImportModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content border-0 shadow-lg" style="border-radius:20px; overflow:hidden; max-height:92vh;">
 
             <!-- ── Header ── -->
-            <div style="background:linear-gradient(135deg,#0d9488 0%,#0f766e 100%);padding:22px 28px 18px;flex-shrink:0;">
+            <div style="background:linear-gradient(135deg,#0d9488 0%,#0f766e 100%);padding:20px 24px 16px;flex-shrink:0;">
                 <div class="d-flex align-items-center justify-content-between">
                     <div class="d-flex align-items-center gap-3">
-                        <div style="width:46px;height:46px;background:rgba(255,255,255,0.18);border-radius:12px;display:flex;align-items:center;justify-content:center;">
-                            <i class="fas fa-magic" style="font-size:1.3rem;color:#fff;"></i>
+                        <div style="width:42px;height:42px;background:rgba(255,255,255,0.18);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <i class="fas fa-magic" style="font-size:1.2rem;color:#fff;"></i>
                         </div>
                         <div>
                             <h5 style="color:#fff;font-weight:700;margin:0;font-size:1.05rem;">AI Scan Purchase Bill</h5>
-                            <p style="color:rgba(255,255,255,0.72);margin:2px 0 0;font-size:0.78rem;">
-                                Upload bill photo — AI will read, extract & match items — verify and load
+                            <p style="color:rgba(255,255,255,0.78);margin:2px 0 0;font-size:0.76rem;">
+                                Upload bill photo — AI will read, extract & match items
                             </p>
                         </div>
                     </div>
@@ -42,10 +73,10 @@
             </div>
 
             <!-- ── Body ── -->
-            <div class="modal-body p-0" style="overflow-y:auto;">
+            <div class="modal-body p-0" style="overflow-y:auto; -webkit-overflow-scrolling:touch;">
 
                 <!-- ════ STEP 1: Upload ════ -->
-                <div id="ocrStep1" class="p-4">
+                <div id="ocrStep1" class="p-3 p-md-4">
 
                     <!-- Limit display -->
                     <div class="d-flex justify-content-between align-items-center mb-3 px-3 py-2" style="background:#f0fdfa; border-radius:10px; border:1px solid #ccfbf1;">
@@ -122,9 +153,9 @@
                 <div id="ocrStep2" class="d-none">
 
                     <!-- Invoice meta bar -->
-                    <div style="background:#f4fbfb;border-bottom:1px solid #ccfbf1;padding:14px 24px;" id="ocrMetaBar">
+                    <div style="background:#f4fbfb;border-bottom:1px solid #ccfbf1;padding:14px 20px;" id="ocrMetaBar">
                         <div class="row g-3 align-items-end">
-                            <div class="col-md-3">
+                            <div class="col-12 col-sm-6 col-lg-3">
                                 <label class="ep-label mb-1">Supplier / Vendor</label>
                                 <!-- Hidden real select -->
                                 <select id="ocrSupplierSelect" style="display:none;">
@@ -134,25 +165,25 @@
                                     {% endfor %}
                                 </select>
                                 <!-- Searchable input with Add button next to it -->
-                                <div class="d-flex gap-1 align-items-center">
-                                    <div class="position-relative flex-grow-1" id="ocrSupplierSearchWrap">
+                                <div class="d-flex gap-1 align-items-center w-100">
+                                    <div class="position-relative flex-grow-1" style="min-width: 0;" id="ocrSupplierSearchWrap">
                                         <input type="text" id="ocrSupplierSearchInput" class="ep-input" style="font-size:0.85rem;" placeholder="Search supplier..." autocomplete="off">
                                         <div id="ocrSupplierDropdown" style="display:none;position:absolute;background:white;width:100%;z-index:1055;border-radius:12px;border:1px solid #dee2e6;box-shadow:0 4px 12px rgba(0,0,0,0.1);max-height:200px;overflow-y:auto;"></div>
                                     </div>
-                                    <button type="button" class="btn btn-outline-teal" style="height:38px;border-radius:10px;padding:0 12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#0f766e;border-color:#0d9488;" onclick="openOcrSupplierModal()" title="Add New Supplier">
+                                    <button type="button" class="btn btn-outline-teal" style="height:38px;width:38px;border-radius:10px;padding:0;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#0f766e;border-color:#0d9488;" onclick="openOcrSupplierModal()" title="Add New Supplier">
                                         <i class="fas fa-plus"></i>
                                     </button>
                                 </div>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-12 col-sm-6 col-lg-3">
                                 <label class="ep-label mb-1">Invoice Number</label>
                                 <input type="text" id="ocrInvoiceNumber" class="ep-input" style="font-size:0.85rem;" placeholder="INV-001">
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-12 col-sm-6 col-lg-3">
                                 <label class="ep-label mb-1">Purchase Date</label>
                                 <input type="date" id="ocrPurchaseDate" class="ep-input" style="font-size:0.85rem;">
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-12 col-sm-6 col-lg-3">
                                 <label class="ep-label mb-1">Payment Mode</label>
                                 <select id="ocrPaymentMode" class="ep-input" style="font-size:0.85rem;">
                                     <option>Cash</option>
