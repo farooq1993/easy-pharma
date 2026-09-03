@@ -16,11 +16,21 @@ def normalize_name(name):
     return name.strip()
 
 
-def find_product(tenant, product_name):
+def build_product_cache(tenant):
     """
-    Smart product lookup — 4 strategies:
-    1. Exact match (iexact)
-    2. Contains match (icontains)
+    Load ALL products for a tenant once into memory.
+    Returns a list of (product_obj, normalized_name) tuples.
+    This avoids N×4 DB queries when processing a large invoice.
+    """
+    qs = Products.objects.filter(tenant=tenant).select_related('product_tax')
+    return [(p, normalize_name(p.product_name)) for p in qs]
+
+
+def find_product_in_cache(cache, product_name):
+    """
+    Smart product lookup against a pre-loaded cache — 4 strategies:
+    1. Exact match (case-insensitive)
+    2. Contains match (case-insensitive)
     3. Normalized exact match  (handles hyphen/slash differences)
     4. Normalized contains match
     """
@@ -28,17 +38,52 @@ def find_product(tenant, product_name):
     if not name:
         return None
 
-    # 1. Exact
+    name_upper = name.upper()
+    norm = normalize_name(name)
+    first_word = norm.split()[0] if norm.split() else ''
+
+    # Strategy 1: exact (case-insensitive)
+    for p, p_norm in cache:
+        if p.product_name.upper() == name_upper:
+            return p
+
+    # Strategy 2: icontains
+    for p, p_norm in cache:
+        if name_upper in p.product_name.upper():
+            return p
+
+    # Strategy 3: normalized exact
+    for p, p_norm in cache:
+        if p_norm == norm:
+            return p
+
+    # Strategy 4: normalized contains (first word filter for speed)
+    if first_word and len(first_word) >= 3:
+        for p, p_norm in cache:
+            if first_word in p_norm:
+                if norm in p_norm or p_norm in norm:
+                    return p
+
+    return None
+
+
+def find_product(tenant, product_name):
+    """
+    Legacy single-product lookup (kept for backward compatibility).
+    For bulk imports use build_product_cache() + find_product_in_cache().
+    """
+    name = product_name.strip()
+    if not name:
+        return None
+
     p = Products.objects.filter(tenant=tenant, product_name__iexact=name).first()
     if p:
         return p
 
-    # 2. Contains
     p = Products.objects.filter(tenant=tenant, product_name__icontains=name).first()
     if p:
         return p
 
-    # 3 & 4. Normalize then compare
     norm = normalize_name(name)
     first_word = norm.split()[0] if norm.split() else ''
     if first_word and len(first_word) >= 3:
@@ -202,6 +247,9 @@ def parse_marg_format(rows, request):
     items = []
     missing_products = []
 
+    # Build product cache ONCE — avoids N×4 DB queries for large invoices
+    product_cache = build_product_cache(request.tenant)
+
     for row_number, row in enumerate(rows[header_idx + 1:], start=header_idx + 2):
         if len(row) <= max(filter(None, [idx_product, idx_rate, idx_mrp])):
             continue
@@ -221,7 +269,7 @@ def parse_marg_format(rows, request):
         mrp            = parse_decimal_value(row[idx_mrp]  if idx_mrp  is not None and len(row) > idx_mrp  else 0)
         expiry_date    = parse_expiry(expiry_text)
 
-        product = find_product(request.tenant, product_name)
+        product = find_product_in_cache(product_cache, product_name)
 
         if not product:
             missing_products.append({'row': row_number, 'product': product_name})

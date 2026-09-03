@@ -2171,6 +2171,7 @@
                     if(phone.length === 10) phone = '91' + phone;
                     const firmName = (pharmacyInfo.name || 'EASY PHARMA').toUpperCase();
                     let msg = `*${firmName} - INVOICE (Offline)*\n`;
+                    msg += `Address: ${pharmacyInfo.address || '—'}\n`;
                     msg += `Patient: ${data.patient_name || 'Cash Customer'}\n\n`;
                     msg += `*ITEMS:*\n`;
                     cart.forEach(item => {
@@ -2258,6 +2259,7 @@
                         
                         const firmName = (pharmacyInfo.name || 'EASY PHARMA').toUpperCase();
                         let msg = `*${firmName} - INVOICE*\n`;
+                        msg += `Address: ${pharmacyInfo.address || '—'}\n`;
                         msg += `Invoice No: ${result.invoice_number}\n`;
                         msg += `Name: ${data.patient_name || 'Cash Customer'}\n\n`;
                         
