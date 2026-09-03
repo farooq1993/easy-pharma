@@ -2010,6 +2010,115 @@
 
         if (editData) {
             populateEditData(editData);
+        } else {
+            restorePurchaseDraft();
+        }
+
+        // Auto-save listeners on purchase input fields
+        ['supplierSelect', 'supplierSearchInput', 'invoiceNumber', 'purchaseDate', 'summaryDiscount', 'summaryDiscountPerc', 'summaryPaymentMode'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('input', savePurchaseDraft);
+                el.addEventListener('change', savePurchaseDraft);
+            }
+        });
+    });
+
+    // ── Purchase Draft Auto-Save & Recovery ──
+    function savePurchaseDraft() {
+        if (typeof editData !== 'undefined' && editData) return;
+        try {
+            const hasData = (items && items.length > 0) || 
+                            Boolean(document.getElementById('invoiceNumber')?.value?.trim()) || 
+                            Boolean(document.getElementById('supplierSelect')?.value);
+            if (hasData) {
+                const draft = {
+                    supplier_id: document.getElementById('supplierSelect')?.value || '',
+                    supplier_name: document.getElementById('supplierSearchInput')?.value || '',
+                    invoice_number: document.getElementById('invoiceNumber')?.value || '',
+                    purchase_date: document.getElementById('purchaseDate')?.value || '',
+                    discount_percentage: document.getElementById('summaryDiscountPerc')?.value || '0',
+                    discount_amount: document.getElementById('summaryDiscount')?.value || '0',
+                    payment_mode: document.getElementById('summaryPaymentMode')?.value || 'Cash',
+                    items: items,
+                    timestamp: Date.now()
+                };
+                localStorage.setItem('easypharma_purchase_draft_v1', JSON.stringify(draft));
+            } else {
+                localStorage.removeItem('easypharma_purchase_draft_v1');
+            }
+        } catch (e) {
+            console.warn('Failed to save purchase draft', e);
+        }
+    }
+
+    function clearPurchaseDraft() {
+        try {
+            localStorage.removeItem('easypharma_purchase_draft_v1');
+        } catch (e) {}
+    }
+
+    function restorePurchaseDraft() {
+        if (typeof editData !== 'undefined' && editData) return;
+        try {
+            const raw = localStorage.getItem('easypharma_purchase_draft_v1');
+            if (!raw) return;
+            const draft = JSON.parse(raw);
+            if (draft && (Array.isArray(draft.items) && draft.items.length > 0 || draft.invoice_number || draft.supplier_id)) {
+                if (draft.supplier_id && document.getElementById('supplierSelect')) {
+                    document.getElementById('supplierSelect').value = draft.supplier_id;
+                }
+                if (draft.supplier_name && document.getElementById('supplierSearchInput')) {
+                    document.getElementById('supplierSearchInput').value = draft.supplier_name;
+                }
+                if (draft.invoice_number && document.getElementById('invoiceNumber')) {
+                    document.getElementById('invoiceNumber').value = draft.invoice_number;
+                }
+                if (draft.purchase_date && document.getElementById('purchaseDate')) {
+                    document.getElementById('purchaseDate').value = draft.purchase_date;
+                }
+                if (draft.discount_percentage && document.getElementById('summaryDiscountPerc')) {
+                    document.getElementById('summaryDiscountPerc').value = draft.discount_percentage;
+                }
+                if (draft.discount_amount && document.getElementById('summaryDiscount')) {
+                    document.getElementById('summaryDiscount').value = draft.discount_amount;
+                }
+                if (draft.payment_mode && document.getElementById('summaryPaymentMode')) {
+                    document.getElementById('summaryPaymentMode').value = draft.payment_mode;
+                }
+                if (Array.isArray(draft.items) && draft.items.length > 0) {
+                    items = draft.items;
+                    renderTable();
+                } else {
+                    calculateSummary();
+                }
+                showToast('⚡ Restored unsaved purchase from previous session! <button type="button" class="btn btn-sm btn-outline-light ms-2" onclick="clearPurchaseDraftAndReset()" style="padding:1px 6px;font-size:11px;">Clear Draft</button>', 'success');
+            }
+        } catch (e) {
+            console.warn('Failed to restore purchase draft', e);
+        }
+    }
+
+    window.clearPurchaseDraftAndReset = function() {
+        clearPurchaseDraft();
+        items = [];
+        if (document.getElementById('invoiceNumber')) document.getElementById('invoiceNumber').value = '';
+        if (document.getElementById('supplierSelect')) document.getElementById('supplierSelect').value = '';
+        if (document.getElementById('supplierSearchInput')) document.getElementById('supplierSearchInput').value = '';
+        if (document.getElementById('summaryDiscount')) document.getElementById('summaryDiscount').value = '0';
+        if (document.getElementById('summaryDiscountPerc')) document.getElementById('summaryDiscountPerc').value = '0';
+        renderTable();
+        showToast('Draft cleared', 'error');
+    };
+
+    // Warn before reload/unload if purchase has items
+    window.addEventListener('beforeunload', function(e) {
+        if (window.__isPurchaseSubmitting) return;
+        savePurchaseDraft();
+        if (items && items.length > 0) {
+            e.preventDefault();
+            e.returnValue = 'You have unsaved purchase items. Are you sure you want to leave or refresh?';
+            return e.returnValue;
         }
     });
 
@@ -2161,6 +2270,9 @@
             tbody.appendChild(tr);
         });
         calculateSummary();
+        if (typeof savePurchaseDraft === 'function') {
+            savePurchaseDraft();
+        }
     }
 
     function removeItem(index) { items.splice(index,1); renderTable(); showToast('Item removed'); }
@@ -2411,6 +2523,14 @@
     }
 
     window.handleSaveProduct = function() {
+        // OCR quick add mode takes priority — always use saveQuickProduct
+        if (window._ocrQuickAddMode) {
+            // Reset readonly in case something set it
+            document.getElementById('quickName').readOnly = false;
+            document.getElementById('quickName').classList.remove('bg-light');
+            saveQuickProduct(true); // true = OCR mode (skip productSearch prefill)
+            return;
+        }
         // Check if this is from CSV import flow
         if (pendingMissingProducts && pendingMissingProducts.length > 0) {
             saveProductFromCsv();
@@ -2422,11 +2542,11 @@
             if (modalTitle) {
                 modalTitle.innerHTML = `<i class="fas fa-plus-circle me-2" style="color:var(--brand);"></i>Quick Add Medicine`;
             }
-            saveQuickProduct();
+            saveQuickProduct(false);
         }
     };
 
-    window.saveQuickProduct = async function() {
+    window.saveQuickProduct = async function(isOcrMode) {
         const name = document.getElementById('quickName').value.trim();
         if (!name) return showToast('Medicine name is required', 'error');
 
@@ -2459,9 +2579,11 @@
                     typeof qsReset === 'function' && qsReset(id);
                 });
                 showToast(`Medicine "${res.name}" added successfully`);
-                // Populate search so user can immediately add to invoice
-                document.getElementById('productSearch').value = res.name;
-                document.getElementById('productSearch').dispatchEvent(new Event('input'));
+                // Only prefill productSearch when NOT in OCR mode (would interfere with OCR modal)
+                if (!isOcrMode) {
+                    document.getElementById('productSearch').value = res.name;
+                    document.getElementById('productSearch').dispatchEvent(new Event('input'));
+                }
             } else {
                 showToast('Error: ' + (res.error || 'Could not save medicine'), 'error');
             }
@@ -3367,6 +3489,11 @@ async function saveEditProduct() {
             document.getElementById('summaryGrandTotal').innerText || '₹0.00';
 
         hideLoader();
+
+        window.__isPurchaseSubmitting = true;
+        if (typeof clearPurchaseDraft === 'function') {
+            clearPurchaseDraft();
+        }
 
         // Show modal
         const modalElement = document.getElementById('purchaseConfirmModal');

@@ -1667,33 +1667,39 @@ class PurchaseScanAPI(LoginRequiredMixin, View):
             if expiry_date and len(expiry_date) == 7:
                 expiry_date = expiry_date + '-01'
             
+            raw_qty = item.get('quantity')
+            if raw_qty is None:
+                raw_qty = item.get('qty') or item.get('quant') or 0
             try:
-                quantity = int(item.get('quantity') or item.get('qty') or item.get('quant') or 0)
+                quantity = int(round(float(str(raw_qty).replace(',', '').strip())))
             except (ValueError, TypeError):
                 quantity = 0
                 
+            raw_free = item.get('free_quantity')
+            if raw_free is None:
+                raw_free = item.get('free_qty') or item.get('freeQty') or item.get('free') or 0
             try:
-                free_quantity = int(item.get('free_quantity') or item.get('free_qty') or item.get('freeQty') or item.get('free') or 0)
+                free_quantity = int(round(float(str(raw_free).replace(',', '').strip())))
             except (ValueError, TypeError):
                 free_quantity = 0
                 
             try:
-                purchase_price = float(item.get('purchase_price') or item.get('price') or item.get('rate') or item.get('pur_rate') or 0.0)
+                purchase_price = float(str(item.get('purchase_price') or item.get('price') or item.get('rate') or item.get('pur_rate') or 0.0).replace(',', '').strip())
             except (ValueError, TypeError):
                 purchase_price = 0.0
                 
             try:
-                mrp = float(item.get('mrp') or 0.0)
+                mrp = float(str(item.get('mrp') or 0.0).replace(',', '').strip())
             except (ValueError, TypeError):
                 mrp = 0.0
                 
             try:
-                tax_percentage = float(item.get('tax_percentage') or 12.0)
+                tax_percentage = float(str(item.get('tax_percentage') or 12.0).replace('%', '').strip())
             except (ValueError, TypeError):
                 tax_percentage = 12.0
 
             try:
-                total = float(item.get('total') or (quantity * purchase_price))
+                total = float(str(item.get('total') or (quantity * purchase_price)).replace(',', '').strip())
             except (ValueError, TypeError):
                 total = quantity * purchase_price
 

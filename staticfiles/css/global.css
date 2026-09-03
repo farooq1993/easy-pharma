@@ -1,7 +1,22 @@
+:root {
+    --sat: env(safe-area-inset-top, 0px);
+    --sar: env(safe-area-inset-right, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+}
+
 body {
-    font-family: 'Inter', sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background-color: #f4f7f6;
     color: #333;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    overscroll-behavior-y: none;
 }
 
 .main-wrapper {
@@ -12,27 +27,16 @@ body {
 
 #content {
     width: calc(100% - 280px);
-    padding: 20px;
+    padding: 0;
     min-height: 100vh;
     transition: all 0.3s;
     margin-left: 280px;
+    padding-bottom: calc(20px + var(--sab));
 }
 
 #content.active {
-    width: 100%;
-    margin-left: 0;
-}
-
-@media (max-width: 768px) {
-    .main-wrapper {
-        flex-direction: column;
-    }
-    
-    #content {
-        width: 100%;
-        margin-left: 0;
-        padding: 10px;
-    }
+    width: calc(100% - 70px);
+    margin-left: 70px;
 }
 
 /* Chart and Card responsiveness */
@@ -50,4 +54,151 @@ body {
 /* Global Uppercase styling for standard text-based inputs and textareas */
 input[type="text"], input[type="search"], input:not([type]), textarea {
     text-transform: uppercase;
+}
+
+.no-uppercase, input[type="text"].no-uppercase, input.no-uppercase, textarea.no-uppercase {
+    text-transform: none !important;
+}
+
+/* Top Bar (Header) Styles */
+.topbar {
+    background-color: #ffffff;
+    border-bottom: 1px solid #eef2f5;
+    min-height: 70px;
+    padding: var(--sat) 2rem 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    position: sticky;
+    top: 0;
+    z-index: 998;
+}
+
+.search-wrapper {
+    position: relative;
+    width: 320px;
+}
+
+.search-wrapper i {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    font-size: 0.9rem;
+}
+
+.search-wrapper .search-input {
+    width: 100%;
+    padding: 10px 14px 10px 38px;
+    background-color: #f8f9fa;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    color: #334155;
+    transition: all 0.2s;
+}
+
+.search-wrapper .search-input:focus {
+    background-color: #ffffff;
+    border-color: #cbd5e1;
+    box-shadow: none;
+    outline: none;
+}
+
+.search-wrapper .search-badge {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.72rem;
+    color: #94a3b8;
+    background-color: #e2e8f0;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.notification-bell {
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    transition: background 0.2s;
+}
+
+.notification-bell:hover {
+    background-color: #f1f5f9;
+}
+
+.profile-section {
+    cursor: pointer;
+}
+
+.avatar-circle {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #ffffff;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
+}
+
+.leading-none {
+    line-height: 1.25;
+}
+
+/* Mobile & iOS PWA Responsiveness */
+@media (max-width: 768px) {
+    .main-wrapper {
+        flex-direction: column;
+    }
+    
+    #content {
+        width: 100%;
+        margin-left: 0;
+        padding: 0;
+    }
+
+    .topbar {
+        padding: calc(10px + var(--sat)) 1rem 10px calc(62px + var(--sal));
+        min-height: calc(58px + var(--sat));
+        gap: 0.5rem;
+    }
+
+    .search-wrapper {
+        width: 100%;
+        max-width: 100%;
+        flex: 1 1 auto;
+    }
+
+    .search-wrapper .search-badge {
+        display: none !important;
+    }
+
+    .search-wrapper .search-input {
+        padding: 8px 12px 8px 34px;
+        font-size: 16px !important; /* Prevents iOS auto-zoom on input focus */
+    }
+
+    /* Prevent auto-zoom on iOS when tapping any input field */
+    input[type="text"],
+    input[type="search"],
+    input[type="number"],
+    input[type="email"],
+    input[type="password"],
+    input[type="date"],
+    select,
+    textarea {
+        font-size: 16px !important;
+    }
+
+    .profile-section .d-none.d-sm-block {
+        display: none !important;
+    }
 }

@@ -3,7 +3,7 @@
 <head>
     {% load static %}
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>{% block title %}Easy Pharma{% endblock %}</title>
 
     <!-- SEO & Basic Meta -->
@@ -16,12 +16,15 @@
     <meta name="theme-color" content="#1a7a4a">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Easy Pharma">
+    <meta name="format-detection" content="telephone=no">
+    <!-- Apple Touch Icons -->
     <link rel="apple-touch-icon" href="{% static 'img/pwa-icon-192.png' %}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{% static 'img/pwa-icon-192.png' %}">
+    <link rel="apple-touch-icon" sizes="152x152" href="{% static 'img/pwa-icon-192.png' %}">
     <!-- Favicon -->
     <link rel="icon" href="{% static 'img/easyPharma.png' %}" type="image/png">
-    <link rel="apple-touch-icon" href="{% static 'img/easyPharma.png' %}">
 
     <!-- Bootstrap 5.3 -->
     <link href="{% static 'css/bootstrap.min.css' %}" rel="stylesheet">
@@ -100,7 +103,7 @@
     <div id="epNetworkBadge" style="
         display: none;
         position: fixed;
-        bottom: 18px;
+        bottom: calc(18px + env(safe-area-inset-bottom, 0px));
         left: 50%;
         transform: translateX(-50%);
         z-index: 9999;

@@ -326,10 +326,100 @@ function updateSummary() {
     });
     const grand = subTotal + taxTotal;
 
-    document.getElementById('summarySubTotal').textContent = '₹' + subTotal.toFixed(2);
-    document.getElementById('summaryTax').textContent = '₹' + taxTotal.toFixed(2);
-    document.getElementById('summaryGrandTotal').textContent = '₹' + grand.toFixed(2);
+    const subEl = document.getElementById('summarySubTotal');
+    const taxEl = document.getElementById('summaryTax');
+    const grandEl = document.getElementById('summaryGrandTotal');
+    if (subEl) subEl.textContent = '₹' + subTotal.toFixed(2);
+    if (taxEl) taxEl.textContent = '₹' + taxTotal.toFixed(2);
+    if (grandEl) grandEl.textContent = '₹' + grand.toFixed(2);
+
+    if (typeof saveOpeningStockDraft === 'function') {
+        saveOpeningStockDraft();
+    }
 }
+
+// ── Opening Stock Draft Auto-Save & Recovery ──
+function isOpeningStockEditMode() {
+    return Boolean(window.openingStockSaveUrl || window.openingStockId || document.getElementById('editVoucherNumber') || document.getElementById('editVoucherBadge'));
+}
+
+function saveOpeningStockDraft() {
+    if (isOpeningStockEditMode()) return;
+    try {
+        if (openingItems && openingItems.length > 0) {
+            const draft = {
+                opening_date: document.getElementById('opening_date')?.value || '',
+                items: openingItems,
+                timestamp: Date.now()
+            };
+            localStorage.setItem('easypharma_opening_stock_draft_v1', JSON.stringify(draft));
+        } else {
+            localStorage.removeItem('easypharma_opening_stock_draft_v1');
+        }
+    } catch (e) {
+        console.warn('Failed to save opening stock draft', e);
+    }
+}
+
+function clearOpeningStockDraft() {
+    try {
+        localStorage.removeItem('easypharma_opening_stock_draft_v1');
+    } catch (e) {}
+}
+
+function restoreOpeningStockDraft() {
+    if (isOpeningStockEditMode()) return;
+    try {
+        const raw = localStorage.getItem('easypharma_opening_stock_draft_v1');
+        if (!raw) return;
+        const draft = JSON.parse(raw);
+        if (draft && Array.isArray(draft.items) && draft.items.length > 0) {
+            openingItems = draft.items;
+            if (draft.opening_date && document.getElementById('opening_date')) {
+                document.getElementById('opening_date').value = draft.opening_date;
+            }
+            renderOpeningTable();
+            updateSummary();
+            showToast('⚡ Restored unsaved opening stock draft! <button type="button" class="btn btn-sm btn-outline-light ms-2" onclick="clearOpeningStockDraftAndReset()" style="padding:1px 6px;font-size:11px;">Clear Draft</button>', 'success');
+        }
+    } catch (e) {
+        console.warn('Failed to restore opening stock draft', e);
+    }
+}
+
+window.clearOpeningStockDraftAndReset = function() {
+    clearOpeningStockDraft();
+    openingItems = [];
+    renderOpeningTable();
+    updateSummary();
+    showToast('Draft cleared', 'warning');
+};
+
+// Auto-save on date change & initial restore
+document.addEventListener('DOMContentLoaded', function() {
+    const dateEl = document.getElementById('opening_date');
+    if (dateEl) {
+        dateEl.addEventListener('change', saveOpeningStockDraft);
+    }
+    // Delay slightly to let editData load if in edit mode
+    setTimeout(() => {
+        if (!isOpeningStockEditMode() && openingItems.length === 0) {
+            restoreOpeningStockDraft();
+        }
+    }, 100);
+});
+
+// Guard before unload
+window.addEventListener('beforeunload', function(e) {
+    if (window.__isOpeningStockSubmitting) return;
+    saveOpeningStockDraft();
+    if (openingItems && openingItems.length > 0) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved opening stock items. Are you sure you want to leave or refresh?';
+        return e.returnValue;
+    }
+});
+
 // ==================== CSRF TOKEN (Fixed) ====================
 function getCookie(name) {
     let cookieValue = null;
@@ -411,6 +501,8 @@ async function saveOpeningStock() {
         const result = await resp.json();
 
         if (result.success) {
+            window.__isOpeningStockSubmitting = true;
+            clearOpeningStockDraft();
             showToast(`✅ Saved! Voucher: ${result.voucher_number}`, 'success');
             setTimeout(() => window.location.href = "/opening/stock/list/", 1500);
         } else {

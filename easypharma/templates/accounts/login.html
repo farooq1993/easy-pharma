@@ -5,7 +5,17 @@
 <head>
     <meta charset="UTF-8">
     <title>Login | Easy Pharma</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    
+    <!-- PWA & iOS Meta Tags -->
+    <link rel="manifest" href="{% static 'manifest.json' %}">
+    <meta name="theme-color" content="#1a7a4a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Easy Pharma">
+    <link rel="apple-touch-icon" href="{% static 'img/pwa-icon-192.png' %}">
+    <link rel="icon" href="{% static 'img/easyPharma.png' %}" type="image/png">
     
     <!-- Bootstrap CSS -->
     <link href="{% static 'css/bootstrap.min.css' %}" rel="stylesheet">
@@ -21,6 +31,14 @@
             align-items: center;
             justify-content: center;
             font-family: 'Segoe UI', system-ui, sans-serif;
+            padding: env(safe-area-inset-top, 20px) env(safe-area-inset-right, 20px) env(safe-area-inset-bottom, 20px) env(safe-area-inset-left, 20px);
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        @media (max-width: 768px) {
+            .form-control {
+                font-size: 16px !important;
+            }
         }
 
         .login-box {

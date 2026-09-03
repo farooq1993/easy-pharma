@@ -830,7 +830,8 @@ function compressOcrImage(file, callback) {
         const img = new Image();
         img.src = event.target.result;
         img.onload = function() {
-            const maxDim = 1200;
+            // Use 2400px high-resolution for clear dot-matrix numbers & batch codes
+            const maxDim = 2400;
             let width = img.width;
             let height = img.height;
             
@@ -852,7 +853,7 @@ function compressOcrImage(file, callback) {
             
             canvas.toBlob(function(blob) {
                 callback(blob);
-            }, 'image/jpeg', 0.85);
+            }, 'image/jpeg', 0.92);
         };
     };
 }
@@ -1035,15 +1036,42 @@ function _ocrRenderMissingBar() {
 window.openOcrQuickAdd = function(name) {
     const qaModalEl = document.getElementById('quickAddModal');
     if (!qaModalEl) return;
+
+    // Set a flag so handleSaveProduct knows this is OCR context
+    window._ocrQuickAddMode = true;
+    window._ocrQuickAddName = name;
+
     const modal = bootstrap.Modal.getOrCreateInstance(qaModalEl);
-    document.getElementById('quickName').value = name;
+
+    // Pre-fill the name field (in case both inline & included modals exist)
+    const quickNameEl = document.getElementById('quickName');
+    if (quickNameEl) {
+        quickNameEl.value = name;
+        quickNameEl.readOnly = false;
+        quickNameEl.classList.remove('bg-light');
+    }
+
+    // Reset all other fields
+    const packEl = document.getElementById('quickPacking');
+    if (packEl) packEl.value = '';
+    const convEl = document.getElementById('quickConv');
+    if (convEl) convEl.value = 1;
+    ['quickTax','quickSchedule','quickContent','quickCompany','quickType'].forEach(function(id) {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+        if (typeof qsReset === 'function') qsReset(id);
+    });
+
     modal.show();
 
-    qaModalEl.addEventListener('hidden.bs.modal', async function onHide() {
-        qaModalEl.removeEventListener('hidden.bs.modal', onHide);
-        showToast('Rechecking database for matched products...', 'info');
-        await _ocrRecheckMissingProducts();
-    });
+    // Listen once: after modal closes, recheck (regardless of how it was closed)
+    function onOcrQuickAddHide() {
+        qaModalEl.removeEventListener('hidden.bs.modal', onOcrQuickAddHide);
+        window._ocrQuickAddMode = false;
+        showToast('Checking if product was added...', 'info');
+        _ocrRecheckMissingProducts();
+    }
+    qaModalEl.addEventListener('hidden.bs.modal', onOcrQuickAddHide);
 };
 
 async function _ocrRecheckMissingProducts() {
