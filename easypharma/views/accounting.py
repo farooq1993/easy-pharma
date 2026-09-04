@@ -304,12 +304,12 @@ class SupplierCreditBillsView(View):
         if not supplier_id:
             return JsonResponse([], safe=False)
             
-        # Get all invoices for this supplier where paid_amount < total_amount
-        # Django ORM can do F expressions
+        # Get all Credit invoices for this supplier where paid_amount < total_amount
         from django.db.models import F
         invoices = PurchaseInvoice.objects.filter(
             tenant=request.tenant,
             supplier_id=supplier_id,
+            payment_mode='Credit',
             total_amount__gt=F('paid_amount')
         ).order_by('purchase_date')
         
@@ -740,3 +740,334 @@ class PrintCustomerPaymentReceiptView(LoginRequiredMixin, View):
             'ps': ps,
             'adjusted_invoices': adjusted_invoices,
         })
+
+
+class SupplierOutstandingView(LoginRequiredMixin, View):
+    template_name = 'accounting/supplier_outstanding.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        from easypharma.permissions import has_module_permission
+        if not has_module_permission(request.user, 'accounting'):
+            messages.error(request, "Access denied. You do not have permission to access the Accounting module.")
+            return redirect('home')
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request):
+        from django.core.paginator import Paginator
+
+        supplier_id = request.GET.get('supplier_id', 'all').strip()
+        search_query = request.GET.get('q', '').strip()
+        view_type = request.GET.get('view_type', 'summary').strip().lower()
+        status_filter = request.GET.get('status', 'outstanding').strip().lower()
+        start_date = request.GET.get('start_date', '').strip()
+        end_date = request.GET.get('end_date', '').strip()
+        export = request.GET.get('export', '').strip().lower()
+
+        page = request.GET.get('page', 1)
+        page_size_str = request.GET.get('page_size', '25').strip()
+        try:
+            page_size = int(page_size_str)
+            if page_size not in [10, 25, 50, 100]:
+                page_size = 25
+        except (ValueError, TypeError):
+            page_size = 25
+
+        from django.db.models import F, Q
+
+        # Fetch only suppliers who have pending outstanding balance
+        outstanding_supplier_ids = PurchaseInvoice.objects.filter(
+            tenant=request.tenant,
+            payment_mode='Credit',
+            total_amount__gt=F('paid_amount')
+        ).values_list('supplier_id', flat=True).distinct()
+
+        all_pending_suppliers = Supplier.objects.filter(
+            tenant=request.tenant,
+            id__in=outstanding_supplier_ids
+        ).order_by('name')
+
+        suppliers = all_pending_suppliers
+        if search_query:
+            suppliers = suppliers.filter(
+                Q(name__icontains=search_query) |
+                Q(phone__icontains=search_query) |
+                Q(gst_number__icontains=search_query)
+            )
+
+        selected_supplier = None
+        if supplier_id and supplier_id != 'all':
+            if str(supplier_id).isdigit():
+                try:
+                    selected_supplier = Supplier.objects.get(id=int(supplier_id), tenant=request.tenant)
+                except (Supplier.DoesNotExist, ValueError):
+                    selected_supplier = None
+            else:
+                selected_supplier = Supplier.objects.filter(
+                    tenant=request.tenant,
+                    name__iexact=str(supplier_id).strip()
+                ).first()
+                if not selected_supplier:
+                    # partial search
+                    suppliers = suppliers.filter(
+                        Q(name__icontains=supplier_id) | Q(phone__icontains=supplier_id)
+                    )
+
+        if selected_supplier and not suppliers.filter(id=selected_supplier.id).exists():
+            suppliers = (suppliers | Supplier.objects.filter(id=selected_supplier.id)).order_by('name')
+
+        today = now().date()
+
+        if view_type == 'details':
+            # Detailed bill-wise breakdown
+            invoices_qs = PurchaseInvoice.objects.filter(tenant=request.tenant).select_related('supplier')
+            if selected_supplier:
+                invoices_qs = invoices_qs.filter(supplier=selected_supplier)
+            if search_query:
+                invoices_qs = invoices_qs.filter(
+                    Q(supplier__name__icontains=search_query) |
+                    Q(supplier__phone__icontains=search_query) |
+                    Q(invoice_number__icontains=search_query) |
+                    Q(voucher_number__icontains=search_query)
+                )
+            if start_date:
+                invoices_qs = invoices_qs.filter(purchase_date__gte=start_date)
+            if end_date:
+                invoices_qs = invoices_qs.filter(purchase_date__lte=end_date)
+            
+            from django.db.models import F
+            if status_filter == 'outstanding':
+                # Cash bills are fully paid upon purchase, so outstanding only applies to Credit bills with remaining balance
+                invoices_qs = invoices_qs.filter(payment_mode='Credit', total_amount__gt=F('paid_amount'))
+
+            invoices_qs = invoices_qs.order_by('-purchase_date', '-id')
+
+            bills = []
+            grand_total_amount = 0.0
+            grand_total_paid = 0.0
+            grand_total_outstanding = 0.0
+
+            for inv in invoices_qs:
+                tot = float(inv.total_amount or 0)
+                is_cash = (inv.payment_mode == 'Cash')
+
+                if is_cash:
+                    # Cash invoices are 100% paid at purchase
+                    paid = tot
+                    bal = 0.0
+                    status_text = 'Paid'
+                    status_badge = 'bg-success'
+                else:
+                    # Credit invoices
+                    paid = float(inv.paid_amount or 0)
+                    bal = max(0.0, float(tot - paid))
+                    if paid <= 0.001:
+                        status_text = 'Unpaid'
+                        status_badge = 'bg-danger'
+                    elif bal <= 0.001:
+                        status_text = 'Paid'
+                        status_badge = 'bg-success'
+                    else:
+                        status_text = 'Partially Paid'
+                        status_badge = 'bg-warning text-dark'
+
+                days = (today - inv.purchase_date).days if inv.purchase_date else 0
+
+                bills.append({
+                    'id': inv.id,
+                    'purchase_date': inv.purchase_date,
+                    'invoice_number': inv.invoice_number,
+                    'voucher_number': inv.voucher_number or '—',
+                    'supplier_id': inv.supplier.id if inv.supplier else None,
+                    'supplier_name': inv.supplier.name if inv.supplier else 'Unknown',
+                    'supplier_phone': inv.supplier.phone if inv.supplier else '',
+                    'payment_mode': inv.payment_mode,
+                    'total_amount': tot,
+                    'paid_amount': paid,
+                    'outstanding': bal,
+                    'days': days,
+                    'status_text': status_text,
+                    'status_badge': status_badge,
+                })
+                grand_total_amount += tot
+                grand_total_paid += paid
+                grand_total_outstanding += bal
+
+            # CSV Export
+            if export == 'csv':
+                import csv
+                from django.http import HttpResponse
+                response = HttpResponse(content_type='text/csv')
+                filename = f"Supplier_Outstanding_Details_{today.strftime('%Y%m%d')}.csv"
+                response['Content-Disposition'] = f'attachment; filename="{filename}"'
+                writer = csv.writer(response)
+                writer.writerow(['EasyPharma - Supplier Outstanding Details Report'])
+                writer.writerow([f'As on: {today.strftime("%d-%b-%Y")} | Supplier: {selected_supplier.name if selected_supplier else "All Suppliers"} | Status: {status_filter.capitalize()}'])
+                writer.writerow([])
+                writer.writerow(['#', 'Date', 'Supplier Name', 'Invoice No', 'Voucher No', 'Payment Mode', 'Total Amount (Rs.)', 'Paid Amount (Rs.)', 'Outstanding Balance (Rs.)', 'Ageing (Days)', 'Status'])
+                for idx, b in enumerate(bills, 1):
+                    writer.writerow([
+                        idx,
+                        b['purchase_date'].strftime('%Y-%m-%d') if b['purchase_date'] else '',
+                        b['supplier_name'],
+                        b['invoice_number'],
+                        b['voucher_number'],
+                        b['payment_mode'],
+                        f"{b['total_amount']:.2f}",
+                        f"{b['paid_amount']:.2f}",
+                        f"{b['outstanding']:.2f}",
+                        b['days'],
+                        b['status_text']
+                    ])
+                writer.writerow([])
+                writer.writerow(['Total', '', '', '', '', '', f"{grand_total_amount:.2f}", f"{grand_total_paid:.2f}", f"{grand_total_outstanding:.2f}", '', ''])
+                return response
+
+            # Pagination for Details
+            paginator = Paginator(bills, page_size)
+            page_obj = paginator.get_page(page)
+
+            context = {
+                'suppliers': suppliers,
+                'all_pending_suppliers': all_pending_suppliers,
+                'supplier_id': supplier_id,
+                'search_query': search_query,
+                'selected_supplier': selected_supplier,
+                'view_type': 'details',
+                'status_filter': status_filter,
+                'start_date': start_date,
+                'end_date': end_date,
+                'bills': page_obj,
+                'page_obj': page_obj,
+                'paginator': paginator,
+                'page_size': page_size,
+                'total_bills_count': len(bills),
+                'grand_total_amount': grand_total_amount,
+                'grand_total_paid': grand_total_paid,
+                'grand_total_outstanding': grand_total_outstanding,
+                'unique_suppliers_count': len(set(b['supplier_name'] for b in bills if b['outstanding'] > 0.001)),
+            }
+            return render(request, self.template_name, context)
+
+        else:
+            # Summary View - High performance single aggregated query
+            from django.db.models import Sum, Count, Q, F, DecimalField, Value
+            from django.db.models.functions import Coalesce
+
+            invoices_qs = PurchaseInvoice.objects.filter(tenant=request.tenant)
+            if start_date:
+                invoices_qs = invoices_qs.filter(purchase_date__gte=start_date)
+            if end_date:
+                invoices_qs = invoices_qs.filter(purchase_date__lte=end_date)
+            if selected_supplier:
+                invoices_qs = invoices_qs.filter(supplier=selected_supplier)
+
+            # Aggregate per supplier in ONE single query
+            # Cash invoices are 100% paid upon purchase; Credit invoices check remaining balance
+            supplier_stats = invoices_qs.values('supplier_id').annotate(
+                total_invoices=Count('id'),
+                pending_invoices=Count('id', filter=Q(payment_mode='Credit', total_amount__gt=F('paid_amount'))),
+                total_amt=Coalesce(Sum('total_amount'), Value(0, output_field=DecimalField())),
+                cash_paid=Coalesce(Sum('total_amount', filter=Q(payment_mode='Cash')), Value(0, output_field=DecimalField())),
+                credit_paid=Coalesce(Sum('paid_amount', filter=Q(payment_mode='Credit')), Value(0, output_field=DecimalField())),
+            )
+            stats_map = {item['supplier_id']: item for item in supplier_stats}
+
+            target_suppliers = [selected_supplier] if selected_supplier else list(suppliers)
+            summary_list = []
+            grand_total_invoices = 0
+            grand_total_pending_invoices = 0
+            grand_total_amount = 0.0
+            grand_total_paid = 0.0
+            grand_total_outstanding = 0.0
+            suppliers_with_balance_count = 0
+
+            for sup in target_suppliers:
+                if not sup:
+                    continue
+                stat = stats_map.get(sup.id)
+                inv_count = stat['total_invoices'] if stat else 0
+                pending_inv_count = stat['pending_invoices'] if stat else 0
+                tot_amt = float(stat['total_amt']) if stat else 0.0
+                cash_amt = float(stat['cash_paid']) if stat else 0.0
+                credit_amt = float(stat['credit_paid']) if stat else 0.0
+                paid_amt = cash_amt + credit_amt
+                bal_amt = max(0.0, tot_amt - paid_amt)
+
+                # Filter by status if requested
+                if status_filter == 'outstanding' and bal_amt <= 0.001 and not selected_supplier:
+                    continue
+                elif status_filter == 'all' and inv_count == 0 and not selected_supplier:
+                    continue
+
+                if bal_amt > 0.001:
+                    suppliers_with_balance_count += 1
+
+                summary_list.append({
+                    'supplier': sup,
+                    'total_invoices': inv_count,
+                    'pending_invoices': pending_inv_count,
+                    'total_amount': tot_amt,
+                    'paid_amount': paid_amt,
+                    'outstanding': bal_amt,
+                })
+
+                grand_total_invoices += inv_count
+                grand_total_pending_invoices += pending_inv_count
+                grand_total_amount += tot_amt
+                grand_total_paid += paid_amt
+                grand_total_outstanding += bal_amt
+
+            # CSV Export
+            if export == 'csv':
+                import csv
+                from django.http import HttpResponse
+                response = HttpResponse(content_type='text/csv')
+                filename = f"Supplier_Outstanding_Summary_{today.strftime('%Y%m%d')}.csv"
+                response['Content-Disposition'] = f'attachment; filename="{filename}"'
+                writer = csv.writer(response)
+                writer.writerow(['EasyPharma - Supplier Outstanding Summary Report'])
+                writer.writerow([f'As on: {today.strftime("%d-%b-%Y")} | Supplier: {selected_supplier.name if selected_supplier else "All Suppliers"} | Status: {status_filter.capitalize()}'])
+                writer.writerow([])
+                writer.writerow(['#', 'Supplier Name', 'Phone', 'GST Number', 'Total Bills', 'Pending Bills', 'Total Purchases (Rs.)', 'Total Paid (Rs.)', 'Net Outstanding (Rs.)'])
+                for idx, item in enumerate(summary_list, 1):
+                    writer.writerow([
+                        idx,
+                        item['supplier'].name,
+                        item['supplier'].phone or '',
+                        item['supplier'].gst_number or '',
+                        item['total_invoices'],
+                        item['pending_invoices'],
+                        f"{item['total_amount']:.2f}",
+                        f"{item['paid_amount']:.2f}",
+                        f"{item['outstanding']:.2f}"
+                    ])
+                writer.writerow([])
+                writer.writerow(['Total', '', '', '', grand_total_invoices, grand_total_pending_invoices, f"{grand_total_amount:.2f}", f"{grand_total_paid:.2f}", f"{grand_total_outstanding:.2f}"])
+                return response
+
+            # Pagination for Summary
+            paginator = Paginator(summary_list, page_size)
+            page_obj = paginator.get_page(page)
+
+            context = {
+                'suppliers': suppliers,
+                'all_pending_suppliers': all_pending_suppliers,
+                'supplier_id': supplier_id,
+                'search_query': search_query,
+                'selected_supplier': selected_supplier,
+                'view_type': 'summary',
+                'status_filter': status_filter,
+                'start_date': start_date,
+                'end_date': end_date,
+                'summary_list': page_obj,
+                'page_obj': page_obj,
+                'paginator': paginator,
+                'page_size': page_size,
+                'grand_total_invoices': grand_total_invoices,
+                'grand_total_pending_invoices': grand_total_pending_invoices,
+                'grand_total_amount': grand_total_amount,
+                'grand_total_paid': grand_total_paid,
+                'grand_total_outstanding': grand_total_outstanding,
+                'suppliers_with_balance_count': suppliers_with_balance_count,
+            }
+            return render(request, self.template_name, context)

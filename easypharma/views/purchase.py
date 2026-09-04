@@ -215,7 +215,10 @@ class PurchaseEntryView(LoginRequiredMixin,View):
                     SupplierLedger.objects.filter(tenant=request.tenant, reference_number=invoice.invoice_number, transaction_type='Purchase').delete()
                     
                     
-                invoice.paid_amount = invoice.paid_amount + total_credit_applied
+                if invoice.payment_mode == 'Cash':
+                    invoice.paid_amount = invoice.total_amount
+                else:
+                    invoice.paid_amount = invoice.paid_amount + total_credit_applied
                 invoice.save()
 
                 for ret in applied_returns:
