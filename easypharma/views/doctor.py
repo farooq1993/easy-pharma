@@ -1,5 +1,6 @@
 import json
 import logging
+from decimal import Decimal, InvalidOperation
 from django.utils.decorators import method_decorator
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -28,7 +29,7 @@ class DoctorListView(LoginRequiredMixin, ListView):
 class DoctorCreateView(LoginRequiredMixin, CreateView):
     model = DoctorModel
     template_name = 'doctor/doctor_form.html'
-    fields = ['name', 'phone', 'email', 'specialization', 'is_default']
+    fields = ['name', 'phone', 'email', 'specialization', 'doctor_commission', 'is_default']
     success_url = reverse_lazy('doctor_list')
     login_url = 'login/'
 
@@ -42,7 +43,7 @@ class DoctorCreateView(LoginRequiredMixin, CreateView):
 class DoctorUpdateView(LoginRequiredMixin, UpdateView):
     model = DoctorModel
     template_name = 'doctor/doctor_form.html'
-    fields = ['name', 'phone', 'email', 'specialization', 'is_default']
+    fields = ['name', 'phone', 'email', 'specialization', 'doctor_commission', 'is_default']
     success_url = reverse_lazy('doctor_list')
     login_url = 'login/'
 
@@ -71,9 +72,18 @@ class DoctorDeleteView(LoginRequiredMixin, DeleteView):
 # API View for AJAX operations
 @method_decorator(login_required(login_url='login/'), name='dispatch')
 class DoctorAPIView(ListView):
+    @staticmethod
+    def parse_commission(value):
+        if value in (None, ''):
+            return Decimal('0.00')
+        commission = Decimal(str(value))
+        if commission < 0 or commission > 100:
+            raise ValueError('Commission must be between 0 and 100 percent.')
+        return commission
+
     def get(self, request, *args, **kwargs):
         logger.debug('DoctorAPIView.get tenant=%s user=%s', request.tenant, request.user)
-        doctors = DoctorModel.objects.filter(tenant=request.tenant).values('id', 'name', 'phone', 'email', 'specialization')
+        doctors = DoctorModel.objects.filter(tenant=request.tenant).values('id', 'name', 'phone', 'email', 'specialization', 'doctor_commission')
         return JsonResponse(list(doctors), safe=False)
 
     def post(self, request, *args, **kwargs):
@@ -86,6 +96,7 @@ class DoctorAPIView(ListView):
                 phone=data.get('phone'),
                 email=data.get('email'),
                 specialization=data.get('specialization'),
+                doctor_commission=self.parse_commission(data.get('doctor_commission')),
                 is_default=data.get('is_default', False)
             )
             logger.info('Doctor created id=%s name=%s', doctor.id, doctor.name)
@@ -102,6 +113,8 @@ class DoctorAPIView(ListView):
             for field in ['name', 'phone', 'email', 'specialization', 'is_default']:
                 if field in data:
                     setattr(doctor, field, data[field])
+            if 'doctor_commission' in data:
+                doctor.doctor_commission = self.parse_commission(data['doctor_commission'])
             doctor.save()
             logger.info('Doctor updated id=%s', doctor.id)
             return JsonResponse({'success': True})

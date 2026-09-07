@@ -26,6 +26,9 @@ python3 -m venv /var/www/easypharma/venv
 echo "=== Collecting static files ==="
 /var/www/easypharma/venv/bin/python /var/www/easypharma/manage.py collectstatic --noinput
 
+echo "=== Running database migrations ==="
+/var/www/easypharma/venv/bin/python /var/www/easypharma/manage.py migrate --noinput
+
 echo "=== Configuring Gunicorn socket ==="
 cat <<EOT > /etc/systemd/system/gunicorn.socket
 [Unit]

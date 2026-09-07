@@ -2414,6 +2414,20 @@ function restorePosDraft() {
     }
 }
 
+function getCurrentBillDate() {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function setCurrentBillDate() {
+    if (typeof editData !== 'undefined' && editData) return;
+    const billDate = document.getElementById('billDate');
+    if (billDate) billDate.value = getCurrentBillDate();
+}
+
 window.clearPosDraftAndReset = function() {
     clearPosDraft();
     bills = [{
@@ -2541,6 +2555,7 @@ function addNewBill() {
 
     // Initialize
     window.addEventListener('load', () => {
+        setCurrentBillDate();
         if (!editData) {
             restorePosDraft();
         }
@@ -2584,7 +2599,7 @@ function addNewBill() {
         
         const billDateEl = document.getElementById('billDate');
         if (billDateEl) {
-            billDateEl.value = "{{ today_date }}";
+            billDateEl.value = getCurrentBillDate();
         }
         document.getElementById('patientName').value = '';
         const isCounterMode = !document.getElementById('counterSaleBanner').classList.contains('d-none');
