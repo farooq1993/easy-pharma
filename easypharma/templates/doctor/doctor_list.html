@@ -28,6 +28,7 @@
                             <th>Phone</th>
                             <th>Email</th>
                             <th>Specialization</th>
+                            <th>Commission</th>
                             <th>Default</th>
                             <th class="text-end pe-4">Actions</th>
                         </tr>
@@ -53,6 +54,10 @@
                                 <input type="text" class="form-control form-control-sm d-none doctor-specialization-input" value="{{ doctor.specialization }}">
                             </td>
                             <td>
+                                <span class="doctor-commission">{% if doctor.doctor_commission %}{{ doctor.doctor_commission|floatformat:2 }}%{% else %}-{% endif %}</span>
+                                <input type="number" min="0" max="100" step="0.01" class="form-control form-control-sm d-none doctor-commission-input" value="{{ doctor.doctor_commission }}">
+                            </td>
+                            <td>
                                 {% if doctor.is_default %}
                                     <span class="badge bg-success">Default</span>
                                 {% else %}
@@ -76,7 +81,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="7" class="text-center py-5 text-muted">
+                            <td colspan="8" class="text-center py-5 text-muted">
                                 No doctors found. Click "Add Doctor" to create one.
                             </td>
                         </tr>
@@ -116,6 +121,10 @@
                         <input type="text" name="specialization" class="form-control py-2">
                     </div>
                     <div class="mb-3">
+                        <label class="form-label small text-uppercase fw-bold">Commission (%)</label>
+                        <input type="number" name="doctor_commission" class="form-control py-2" min="0" max="100" step="0.01" value="0">
+                    </div>
+                    <div class="mb-3">
                         <div class="form-check">
                             <input type="checkbox" name="is_default" class="form-check-input" id="isDefault">
                             <label class="form-check-label" for="isDefault">Set as default doctor</label>
@@ -134,8 +143,8 @@
 <script>
 function toggleEdit(id) {
     const row = document.getElementById(`doctor-row-${id}`);
-    const displayElements = row.querySelectorAll('.doctor-name, .doctor-phone, .doctor-email, .doctor-specialization, .edit-btn, .save-btn');
-    const inputElements = row.querySelectorAll('.doctor-name-input, .doctor-phone-input, .doctor-email-input, .doctor-specialization-input, .doctor-default');
+    const displayElements = row.querySelectorAll('.doctor-name, .doctor-phone, .doctor-email, .doctor-specialization, .doctor-commission, .edit-btn, .save-btn');
+    const inputElements = row.querySelectorAll('.doctor-name-input, .doctor-phone-input, .doctor-email-input, .doctor-specialization-input, .doctor-commission-input, .doctor-default');
     const badgeElement = row.querySelector('.badge, .text-muted');
 
     displayElements.forEach(el => el.classList.toggle('d-none'));
@@ -151,6 +160,7 @@ async function saveDoctor(id) {
         phone: row.querySelector('.doctor-phone-input').value,
         email: row.querySelector('.doctor-email-input').value,
         specialization: row.querySelector('.doctor-specialization-input').value,
+        doctor_commission: row.querySelector('.doctor-commission-input').value,
         is_default: row.querySelector('.doctor-default').checked
     };
 
@@ -210,6 +220,7 @@ document.getElementById('addDoctorForm').addEventListener('submit', async functi
         phone: formData.get('phone'),
         email: formData.get('email'),
         specialization: formData.get('specialization'),
+        doctor_commission: formData.get('doctor_commission'),
         is_default: formData.get('is_default') === 'on'
     };
 

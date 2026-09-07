@@ -7,14 +7,17 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from decimal import Decimal
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.utils.decorators import method_decorator
 from easypharma.models.stock import StockBatch
 from easypharma.models.Items import Products, ProductSchedule
 from easypharma.models.purchase_invoice import PurchaseInvoice, PurchaseItem
 from easypharma.models.sales import SaleInvoice, SaleItem, SalesReturn
+from easypharma.models.doctor import DoctorModel
 from django.db.models import Sum, F, DecimalField, ExpressionWrapper, Q, Count, Avg, Max, Min
 from django.utils.timezone import now
 from datetime import datetime, timedelta,date
 from tenants.models import Tenant
+from easypharma.permissions import module_required
 
 logger = logging.getLogger('easypharma.reports')
 
@@ -2016,6 +2019,7 @@ class SalesReturnReportView(LoginRequiredMixin, View):
         return render(request, self.template_name, context)
 
 
+@method_decorator(module_required('reports'), name='dispatch')
 class DoctorSaleReportView(LoginRequiredMixin, View):
     template_name = 'reports/doctor_sale_report.html'
 
@@ -2058,6 +2062,15 @@ class DoctorSaleReportView(LoginRequiredMixin, View):
             tenant=request.tenant
         ).exclude(doctor_name__isnull=True).exclude(doctor_name__exact='').values_list('doctor_name', flat=True).distinct().order_by('doctor_name')
 
+        doctor_commissions = {
+            doctor['name'].casefold(): doctor['doctor_commission'] or Decimal('0.00')
+            for doctor in DoctorModel.objects.filter(tenant=request.tenant).values('name', 'doctor_commission')
+        }
+
+        def get_doctor_commission(doctor_name, sale_amount):
+            percentage = doctor_commissions.get((doctor_name or '').strip().casefold(), Decimal('0.00'))
+            return percentage, (sale_amount or Decimal('0.00')) * percentage / Decimal('100')
+
         doctor_summary = []
         doctor_stats_query = invoices.values('doctor_name').annotate(
             total_bills=Count('id'),
@@ -2069,10 +2082,13 @@ class DoctorSaleReportView(LoginRequiredMixin, View):
 
         for item in doctor_stats_query:
             doc_name = item['doctor_name'] if item['doctor_name'] else 'SELF / Unspecified'
+            commission_percentage, commission_amount = get_doctor_commission(item['doctor_name'], item['total_sales'])
             doctor_summary.append({
                 'doctor_name': doc_name,
                 'total_bills': item['total_bills'],
                 'total_sales': item['total_sales'] or Decimal('0.00'),
+                'commission_percentage': commission_percentage,
+                'commission_amount': commission_amount,
                 'total_discount': item['total_discount'] or Decimal('0.00'),
                 'avg_bill': item['avg_bill'] or Decimal('0.00'),
                 'unique_patients': item['unique_patients'] or 0
@@ -2081,6 +2097,11 @@ class DoctorSaleReportView(LoginRequiredMixin, View):
         total_revenue = invoices.aggregate(Sum('total_amount'))['total_amount__sum'] or Decimal('0.00')
         total_bills_count = invoices.count()
         total_discount_amount = invoices.aggregate(Sum('discount_amount'))['discount_amount__sum'] or Decimal('0.00')
+        total_commission_amount = sum(
+            (row['commission_amount'] for row in doctor_summary),
+            Decimal('0.00')
+        )
+        has_commission = any(row['commission_percentage'] > 0 for row in doctor_summary)
         total_unique_patients = invoices.exclude(patient_name__isnull=True).exclude(patient_name__exact='').values('patient_name').distinct().count()
         total_doctors_count = len([d for d in doctor_summary if d['doctor_name'] != 'SELF / Unspecified'])
 
@@ -2092,22 +2113,40 @@ class DoctorSaleReportView(LoginRequiredMixin, View):
             total_revenue=Sum('total_amount')
         ).order_by('-total_qty')[:10]
 
-        invoice_list = invoices.select_related('customer', 'user').order_by('-created_at')[:100]
+        invoice_list = list(invoices.select_related('customer', 'user').order_by('-created_at')[:100])
+        invoice_total_amount = sum(
+            (invoice.total_amount or Decimal('0.00') for invoice in invoice_list),
+            Decimal('0.00')
+        )
+        invoice_total_commission = Decimal('0.00')
+        for invoice in invoice_list:
+            invoice.commission_percentage, invoice.commission_amount = get_doctor_commission(
+                invoice.doctor_name, invoice.total_amount
+            )
+            invoice_total_commission += invoice.commission_amount
 
         if export_type == 'csv':
             response = HttpResponse(content_type='text/csv')
             response['Content-Disposition'] = f'attachment; filename="doctor_sales_report_{start_date}_to_{end_date}.csv"'
             writer = csv.writer(response)
-            writer.writerow(['Doctor Name', 'Total Bills', 'Unique Patients', 'Total Discount (Rs)', 'Total Sales Revenue (Rs)', 'Average Bill Value (Rs)'])
+            headers = ['Doctor Name', 'Total Bills', 'Unique Patients', 'Total Discount (Rs)', 'Total Sales Revenue (Rs)', 'Average Bill Value (Rs)']
+            if has_commission:
+                headers[1:1] = ['Commission (%)']
+                headers.insert(-1, 'Commission (Rs)')
+            writer.writerow(headers)
             for row in doctor_summary:
-                writer.writerow([
+                csv_row = [
                     row['doctor_name'],
                     row['total_bills'],
                     row['unique_patients'],
                     f"{row['total_discount']:.2f}",
                     f"{row['total_sales']:.2f}",
                     f"{row['avg_bill']:.2f}"
-                ])
+                ]
+                if has_commission:
+                    csv_row[1:1] = [f"{row['commission_percentage']:.2f}"]
+                    csv_row.insert(-1, f"{row['commission_amount']:.2f}")
+                writer.writerow(csv_row)
             return response
 
         context = {
@@ -2119,10 +2158,14 @@ class DoctorSaleReportView(LoginRequiredMixin, View):
             'total_revenue': total_revenue,
             'total_bills_count': total_bills_count,
             'total_discount_amount': total_discount_amount,
+            'total_commission_amount': total_commission_amount,
+            'has_commission': has_commission,
             'total_unique_patients': total_unique_patients,
             'total_doctors_count': total_doctors_count,
             'top_medicines': top_medicines,
             'invoice_list': invoice_list,
+            'invoice_total_amount': invoice_total_amount,
+            'invoice_total_commission': invoice_total_commission,
         }
 
         return render(request, self.template_name, context)

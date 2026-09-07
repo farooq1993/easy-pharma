@@ -5,13 +5,15 @@ from easypharma.views.accounting import (
     DeleteSupplierPaymentView, DeleteExpiryReturnView,
     SupplierUnadjustedReturnsView,
     CustomerPaymentView, DeleteCustomerPaymentView, CustomerCreditBillsView,
-    PrintCustomerPaymentReceiptView
+    PrintCustomerPaymentReceiptView,
+    SupplierOutstandingView
 )
 
 urlpatterns = [
     path('accounting/supplier-ledger/', SupplierLedgerView.as_view(), name='supplier_ledger'),
     path('accounting/supplier-payment/', SupplierPaymentView.as_view(), name='supplier_payment'),
     path('accounting/supplier-payment/<int:pk>/delete/', DeleteSupplierPaymentView.as_view(), name='delete_supplier_payment'),
+    path('accounting/supplier-outstanding/', SupplierOutstandingView.as_view(), name='supplier_outstanding'),
     path('accounting/expiry-return/', ExpiryReturnView.as_view(), name='expiry_return'),
     path('accounting/expiry-return/<int:pk>/delete/', DeleteExpiryReturnView.as_view(), name='delete_expiry_return'),
     path('api/stock-batches/', StockBatchAutocomplete.as_view(), name='stock_batch_autocomplete'),
@@ -24,3 +26,4 @@ urlpatterns = [
     path('accounting/customer-payment/<int:pk>/print/', PrintCustomerPaymentReceiptView.as_view(), name='print_customer_payment_receipt'),
     path('api/customer-credit-bills/', CustomerCreditBillsView.as_view(), name='customer_credit_bills'),
 ]
+

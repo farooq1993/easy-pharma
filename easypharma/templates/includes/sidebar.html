@@ -172,7 +172,9 @@
                     </a>
                     <ul class="collapse nav flex-column ms-3" id="dailyReportMenu">
                         <li><a href="{% url 'daily_sale_report' %}" class="nav-link small">Daily Report</a></li>
+                        {% if user.user_type == 'admin' or user.user_type == 'tenant_owner' or user_perms.can_access_reports %}
                         <li><a href="{% url 'doctor_sale_report' %}" class="nav-link small"><i class="bi bi-person-badge me-1 text-primary"></i>Doctor-wise Sale Report</a></li>
+                        {% endif %}
                         <li><a href="{% url 'profit_report' %}" class="nav-link small">Profit Report</a></li>
                         <li><a href="{% url 'bill_wise_profit_report' %}" class="nav-link small">Bill-wise Profit Report</a></li>
                         <li><a href="{% url 'half_yearly_report' %}?schedule=H1" class="nav-link small">H1 Sale Report</a></li>
@@ -227,6 +229,7 @@
                 <i class="bi bi-caret-down-fill ms-auto"></i>
             </a>
             <ul class="collapse nav flex-column ms-3" id="accountingMenu">
+                <li><a href="{% url 'supplier_outstanding' %}" class="nav-link small">Supplier Outstanding</a></li>
                 <li><a href="{% url 'supplier_payment' %}" class="nav-link small">Supplier Payment</a></li>
                 <li><a href="{% url 'customer_payment' %}" class="nav-link small">Customer Payment (In)</a></li>
                 <li><a href="{% url 'supplier_ledger' %}" class="nav-link small">Ledger</a></li>

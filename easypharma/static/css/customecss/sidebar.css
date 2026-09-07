@@ -39,7 +39,7 @@ body {
 }
 
 .sidebar {
-    height: 100vh;
+    height: 100dvh;
     background-color: var(--sidebar-bg);
     width: var(--sidebar-width);
     transition: all 0.3s ease;
@@ -205,7 +205,7 @@ body {
     }
 
     .sidebar.collapsed:not(:hover) .collapse {
-        display: block !important;
+        display: none;
     }
 
     .sidebar-toggle {
@@ -328,4 +328,4 @@ body {
     height: 38px;
     object-position: left center;
     object-fit: cover;
-}
+}

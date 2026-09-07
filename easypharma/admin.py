@@ -1,6 +1,8 @@
 from django.contrib import admin
 from .models import User
 from easypharma.models.Items import *
+from easypharma.models.doctor import DoctorModel
+
 from easypharma.models.purchase_invoice import (PurchaseInvoice, Supplier,
                                                 PurchaseItem,OpeningStock,OpeningStockItem)
 from easypharma.models.sales import SaleInvoice,PrescriptionReminder
@@ -23,6 +25,7 @@ admin.site.register(PrescriptionReminder)
 admin.site.register(PurchaseItem)
 admin.site.register(OpeningStock)
 admin.site.register(OpeningStockItem)
+admin.site.register(DoctorModel)
 
 from easypharma.models.purchase_scan_log import PurchaseScanLog
 admin.site.register(PurchaseScanLog)

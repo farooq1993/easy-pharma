@@ -8,6 +8,7 @@
 
 html {
     -webkit-text-size-adjust: 100%;
+    min-height: 100%;
 }
 
 body {
@@ -17,12 +18,15 @@ body {
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
     overscroll-behavior-y: none;
+    min-width: 320px;
+    min-height: 100%;
 }
 
 .main-wrapper {
     display: flex;
     width: 100%;
     align-items: stretch;
+    min-height: 100dvh;
 }
 
 #content {
@@ -32,6 +36,13 @@ body {
     transition: all 0.3s;
     margin-left: 280px;
     padding-bottom: calc(20px + var(--sab));
+}
+
+@supports not (height: 100dvh) {
+    .main-wrapper,
+    #content {
+        min-height: 100vh;
+    }
 }
 
 #content.active {
@@ -163,6 +174,14 @@ input[type="text"], input[type="search"], input:not([type]), textarea {
         width: 100%;
         margin-left: 0;
         padding: 0;
+        min-height: 100dvh;
+    }
+
+    .page-content-inner {
+        min-height: calc(100dvh - 68px) !important;
+        padding-right: max(1rem, var(--sar)) !important;
+        padding-bottom: calc(1.5rem + var(--sab)) !important;
+        padding-left: max(1rem, var(--sal)) !important;
     }
 
     .topbar {
@@ -200,5 +219,18 @@ input[type="text"], input[type="search"], input:not([type]), textarea {
 
     .profile-section .d-none.d-sm-block {
         display: none !important;
+    }
+}
+
+@media (display-mode: standalone) and (max-width: 768px),
+       (-webkit-display-mode: standalone) and (max-width: 768px) {
+    html,
+    body {
+        width: 100%;
+        overflow-x: hidden;
+    }
+
+    .topbar {
+        padding-top: calc(10px + var(--sat));
     }
 }
