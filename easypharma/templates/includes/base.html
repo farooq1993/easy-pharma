@@ -3,7 +3,8 @@
 <head>
     {% load static %}
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <!-- Use a fixed width viewport to force desktop layout on mobile devices as requested by user -->
+    <meta name="viewport" content="width=1200, initial-scale=0.1, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
     <title>{% block title %}Easy Pharma{% endblock %}</title>
 
     <!-- SEO & Basic Meta -->
