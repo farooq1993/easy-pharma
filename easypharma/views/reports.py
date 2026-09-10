@@ -124,18 +124,20 @@ class StockReportView(LoginRequiredMixin,View):
         is_pdf = request.GET.get('pdf') == '1'
         schedule_filter = request.GET.get('schedule_filter', '')
         filter_param = request.GET.get('filter', '')
+        search_query = request.GET.get('search', '')
+        page_number = request.GET.get('page', 1)
         
         base_cache_key = _stock_report_cache_key(request.tenant.id)
-        cache_key = f"{base_cache_key}:{schedule_filter}:{filter_param}"
+        cache_key = f"{base_cache_key}:{schedule_filter}:{filter_param}:{search_query}:{page_number}"
 
         # ── Try cache first (skip for PDF to always get fresh data) ──
         if not is_pdf:
             cached_ctx = cache.get(cache_key)
             if cached_ctx is not None:
-                logger.debug('StockReportView cache HIT tenant=%s filter=%s', request.tenant.id, schedule_filter)
+                logger.debug('StockReportView cache HIT tenant=%s filter=%s search=%s', request.tenant.id, schedule_filter, search_query)
                 return render(request, self.template_name, cached_ctx)
 
-        logger.debug('StockReportView cache MISS tenant=%s filter=%s', request.tenant.id, schedule_filter)
+        logger.debug('StockReportView cache MISS tenant=%s filter=%s search=%s', request.tenant.id, schedule_filter, search_query)
         
         # Aggregate stock by product
         stocks = StockBatch.objects.filter(tenant=request.tenant, current_quantity__gt=0).select_related('product', 'product__product_schedule')
@@ -145,13 +147,20 @@ class StockReportView(LoginRequiredMixin,View):
             stocks = stocks.filter(expiry_date__lte=expiry_limit, expiry_date__gte=date.today()).order_by('expiry_date')
         elif schedule_filter == 'H1':
             stocks = stocks.filter(product__product_schedule__schedule_name__iexact='Schedule H1')
+
+        if search_query:
+            stocks = stocks.filter(product__product_name__icontains=search_query)
+            
+        stocks = stocks.order_by('product__product_name', 'expiry_date')
             
         # Also group by product for a summary
         from django.db.models import ExpressionWrapper, DecimalField
-        product_summary = StockBatch.objects.filter(tenant=request.tenant).select_related('product', 'product__product_schedule')
+        product_summary = StockBatch.objects.filter(tenant=request.tenant, current_quantity__gt=0).select_related('product', 'product__product_schedule')
         
         if schedule_filter == 'H1':
             product_summary = product_summary.filter(product__product_schedule__schedule_name__iexact='Schedule H1')
+        if search_query:
+            product_summary = product_summary.filter(product__product_name__icontains=search_query)
 
         product_summary = product_summary.values(
             'product__product_name', 'product__product_packing', 'product__conversion_factor'
@@ -162,27 +171,82 @@ class StockReportView(LoginRequiredMixin,View):
                     F('current_quantity') * (F('purchase_price') / F('product__conversion_factor')),
                     output_field=DecimalField(max_digits=12, decimal_places=2)
                 )
+            ),
+            total_mrp_value=Sum(
+                ExpressionWrapper(
+                    F('current_quantity') * (F('mrp') / F('product__conversion_factor')),
+                    output_field=DecimalField(max_digits=12, decimal_places=2)
+                )
             )
         ).order_by('product__product_name')
 
         # Force evaluation before caching (QuerySets are lazy)
-        stocks_list = list(stocks)
         summary_list = list(product_summary)
+        
+        # Add pagination
+        from django.core.paginator import Paginator
+        paginator = Paginator(stocks, 50)
+        page_obj = paginator.get_page(page_number)
+        
+        stocks_list = list(page_obj.object_list)
         
         # Calculate stock value for each batch
         for s in stocks_list:
             cf = s.product.conversion_factor or 1
             s.purchase_rate_per_unit = float(s.purchase_price or 0) / cf
+            s.mrp_rate_per_unit = float(s.mrp or 0) / cf
             s.stock_value = s.current_quantity * s.purchase_rate_per_unit
+            s.mrp_stock_value = s.current_quantity * s.mrp_rate_per_unit
 
         total_value = sum(item['total_value'] or 0 for item in summary_list)
+        total_mrp_value = sum(item['total_mrp_value'] or 0 for item in summary_list)
         
+        is_csv = request.GET.get('csv') == '1'
+
+        all_stocks = list(stocks)
+        for stock in all_stocks:
+            cf = stock.product.conversion_factor or 1
+            stock.purchase_rate_per_unit = float(stock.purchase_price or 0) / cf
+            stock.mrp_rate_per_unit = float(stock.mrp or 0) / cf
+            
+        if is_csv:
+            response = HttpResponse(content_type='text/csv')
+            response['Content-Disposition'] = 'attachment; filename="stock_report.csv"'
+            writer = csv.writer(response)
+            
+            writer.writerow([
+                'Medicine Name', 'Packing', 'Batch No.', 'Expiry', 
+                'Current Stock (Units)', 'Purchase Rate (Unit)', 'MRP Rate (Unit)',
+                'Status'
+            ])
+            
+            # Export all matching stocks, not just the paginated page
+            for stock in all_stocks:
+                status = 'Low Stock' if stock.current_quantity <= stock.product.conversion_factor else 'Available'
+                exp = stock.expiry_date.strftime('%m/%Y') if stock.expiry_date else ''
+                
+                writer.writerow([
+                    stock.product.product_name,
+                    stock.product.product_packing,
+                    stock.batch_number,
+                    exp,
+                    stock.current_quantity,
+                    f"{stock.purchase_rate_per_unit:.2f}",
+                    f"{stock.mrp_rate_per_unit:.2f}",
+                    status
+                ])
+                
+            return response
+
         context = {
-            'stocks': stocks_list,
-            'summary': summary_list,
+            'stocks': stocks_list if not is_pdf else all_stocks, # Render all in PDF with calculated values
+            'page_obj': page_obj,
+            'summary_count': len(summary_list),
             'total_value': total_value,
+            'total_mrp_value': total_mrp_value,
             'schedule_filter': schedule_filter,
             'filter_param': filter_param,
+            'search_query': search_query,
         }
 
         if not is_pdf:

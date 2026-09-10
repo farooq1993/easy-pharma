@@ -8,6 +8,7 @@ from django.db import transaction
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import F, Q
 from django.core.cache import cache
+from easypharma.models.general_setup import GeneralSetup
 from easypharma.models.stock import StockBatch
 from easypharma.models.Items import Products
 from easypharma.models.print_setup import PrintSetup
@@ -166,6 +167,11 @@ class POSView(LoginRequiredMixin,View):
             
             with transaction.atomic():
                 invoice_id = data.get('invoice_id')
+                
+                # Get sale_type configuration
+                setup = GeneralSetup.objects.filter(tenant=request.tenant).first()
+                sale_type = setup.sale_type if setup else 'unit'
+
                 if invoice_id:
                     invoice = SaleInvoice.objects.get(id=invoice_id, tenant=request.tenant)
                     # Check if original invoice date is in a locked FY
@@ -299,7 +305,8 @@ class POSView(LoginRequiredMixin,View):
                     )
                     
                     # Update stock batch
-                    batch.current_quantity -= quantity
+                    qty_to_deduct = quantity * product.conversion_factor if sale_type == 'strip' else quantity
+                    batch.current_quantity -= qty_to_deduct
                     if batch.current_quantity < 0:
                         raise Exception(f"Insufficient stock for {product.product_name}")
                     batch.save()
@@ -761,6 +768,9 @@ class ProductSearchAPI(LoginRequiredMixin,View):
         # Include limit in cache key if preloading/limiting
         cache_key = f"{self._cache_key(tenant_id, query)}:lim{limit}"
 
+
+        setup = GeneralSetup.objects.filter(tenant_id=tenant_id).first()
+        sale_type = setup.sale_type if setup else 'unit'
         nocache = request.GET.get('nocache') == '1'
         if not nocache:
             # ── Cache hit: return instantly without touching DB ──
@@ -811,7 +821,7 @@ class ProductSearchAPI(LoginRequiredMixin,View):
                     'content': p.product_content.content_name if p.product_content else None,
                     'company': p.compny_name.company_name if p.compny_name else None,
                     'tax_rate': p.product_tax.tax_rate if p.product_tax else 0,
-                    'conversion_factor': p.conversion_factor,
+                    'conversion_factor': 1 if sale_type == 'strip' else p.conversion_factor,
                     'out_of_stock': True,
                     'batches': []
                 })
@@ -819,17 +829,23 @@ class ProductSearchAPI(LoginRequiredMixin,View):
                 
             batch_list = []
             for batch in batches:
-                unit_price = float(batch.sale_price) if batch.sale_price is not None else 0.0
-                if p.conversion_factor > 1:
-                    unit_price = float(batch.mrp) / p.conversion_factor
-                elif unit_price == 0 and batch.mrp:
-                    unit_price = float(batch.mrp)
+                unit_price = float(batch.sale_price) if batch.sale_price else 0.0
+                if sale_type == 'strip':
+                    if p.conversion_factor > 1 and unit_price > 0:
+                        unit_price = unit_price * p.conversion_factor
+                    elif batch.mrp:
+                        unit_price = float(batch.mrp)
+                else:
+                    if p.conversion_factor > 1 and batch.mrp:
+                        unit_price = float(batch.mrp) / p.conversion_factor
+                    elif unit_price == 0 and batch.mrp:
+                        unit_price = float(batch.mrp)
                 
                 batch_list.append({
                     'batch_id': batch.id,
                     'batch_no': batch.batch_number,
                     'expiry': batch.expiry_date.strftime('%m/%y'),
-                    'stock': batch.current_quantity,
+                    'stock': int(batch.current_quantity / (p.conversion_factor or 1)) if sale_type == 'strip' else batch.current_quantity,
                     'price': unit_price,
                     'mrp_pack': float(batch.mrp)
                 })
@@ -842,7 +858,7 @@ class ProductSearchAPI(LoginRequiredMixin,View):
                 'schedule': p.product_schedule.schedule_name if p.product_schedule else None,
                 'company': p.compny_name.company_name if p.compny_name else None,
                 'tax_rate': p.product_tax.tax_rate if p.product_tax else 0,
-                'conversion_factor': p.conversion_factor,
+                'conversion_factor': 1 if sale_type == 'strip' else p.conversion_factor,
                 'out_of_stock': False,
                 'batches': batch_list
             })
@@ -987,16 +1003,22 @@ class SubstituteSearchAPI(LoginRequiredMixin,View):
 
             batch_list = []
             for batch in batches:
-                unit_price = float(batch.sale_price) if batch.sale_price is not None else 0.0
-                if p.conversion_factor > 1:
-                    unit_price = float(batch.mrp) / p.conversion_factor
-                elif unit_price == 0 and batch.mrp:
-                    unit_price = float(batch.mrp)
+                unit_price = float(batch.sale_price) if batch.sale_price else 0.0
+                if sale_type == 'strip':
+                    if p.conversion_factor > 1 and unit_price > 0:
+                        unit_price = unit_price * p.conversion_factor
+                    elif batch.mrp:
+                        unit_price = float(batch.mrp)
+                else:
+                    if p.conversion_factor > 1 and batch.mrp:
+                        unit_price = float(batch.mrp) / p.conversion_factor
+                    elif unit_price == 0 and batch.mrp:
+                        unit_price = float(batch.mrp)
                 batch_list.append({
                     'batch_id': batch.id,
                     'batch_no': batch.batch_number,
                     'expiry': batch.expiry_date.strftime('%m/%y'),
-                    'stock': batch.current_quantity,
+                    'stock': int(batch.current_quantity / (p.conversion_factor or 1)) if sale_type == 'strip' else batch.current_quantity,
                     'price': unit_price,
                 })
             
@@ -1007,7 +1029,7 @@ class SubstituteSearchAPI(LoginRequiredMixin,View):
                 'company': p.compny_name.company_name if p.compny_name else '—',
                 'content': p.product_content.content_name if p.product_content else '—',
                 'tax_rate': p.product_tax.tax_rate if p.product_tax else 0,
-                'conversion_factor': p.conversion_factor,
+                'conversion_factor': 1 if sale_type == 'strip' else p.conversion_factor,
                 'similarity_score': score,
                 'match_label': match_label,
                 'margin': round(margin, 1),
@@ -1019,6 +1041,68 @@ class SubstituteSearchAPI(LoginRequiredMixin,View):
         
         return JsonResponse(data, safe=False)
 
+
+
+from django.core.cache import cache
+import hashlib
+
+class SalesReturnListView(LoginRequiredMixin, View):
+    template_name = 'sales/sales_return_list.html'
+
+    def get(self, request):
+        search_query = request.GET.get('search', '').strip()
+        start_date = request.GET.get('start_date', '')
+        end_date = request.GET.get('end_date', '')
+        page_number = request.GET.get('page', '1')
+
+        # Build a cache key using tenant, search, date, and page
+        cache_key_raw = f"sales_returns_{request.tenant.id}_{search_query}_{start_date}_{end_date}_{page_number}"
+        cache_key = hashlib.md5(cache_key_raw.encode('utf-8')).hexdigest()
+
+        # Try to get from cache (cache page object for 5 minutes)
+        # However, Django paginator object_list shouldn't be fully cached if we edit things often.
+        # But per the request "redis cache bhi implement karo", we will cache it.
+        # To avoid caching complex models, we can cache the template directly using django's cache_page,
+        # but manual cache is safer for multi-tenant. We'll cache the queryset evaluation.
+        
+        # Actually, let's cache the page_obj and the return context
+        cached_context = cache.get(cache_key)
+        if cached_context is not None:
+            return render(request, self.template_name, cached_context)
+
+        returns_qs = SalesReturn.objects.filter(tenant=request.tenant).select_related('sale_invoice', 'sale_invoice__customer')
+        
+        if search_query:
+            returns_qs = returns_qs.filter(
+                Q(return_inv_no__icontains=search_query) |
+                Q(sale_invoice__patient_name__icontains=search_query) |
+                Q(sale_invoice__patient_phone__icontains=search_query) |
+                Q(sale_invoice__invoice_number__icontains=search_query)
+            )
+            
+        if start_date:
+            returns_qs = returns_qs.filter(return_at__date__gte=start_date)
+        if end_date:
+            returns_qs = returns_qs.filter(return_at__date__lte=end_date)
+            
+        returns_qs = returns_qs.order_by('-return_at')
+        
+        from django.core.paginator import Paginator
+        paginator = Paginator(returns_qs, 10)
+        page_obj = paginator.get_page(page_number)
+        
+        context = {
+            'returns': page_obj,
+            'page_obj': page_obj,
+            'search_query': search_query,
+            'start_date': start_date,
+            'end_date': end_date,
+        }
+        
+        # Cache for 60 seconds to balance freshness and performance
+        cache.set(cache_key, context, timeout=60)
+
+        return render(request, self.template_name, context)
 
 class SalesReturnView(LoginRequiredMixin,View):
     template_name = 'sales/sales_return.html'
@@ -1032,35 +1116,6 @@ class SalesReturnView(LoginRequiredMixin,View):
         selected_return = None
         selected_return_items = []
 
-        # Filter returns
-        returns_qs = SalesReturn.objects.filter(tenant=request.tenant)
-        
-        # Search filter
-        search_query = request.GET.get('search', '').strip()
-        if search_query:
-            returns_qs = returns_qs.filter(
-                Q(return_inv_no__icontains=search_query) |
-                Q(sale_invoice__patient_name__icontains=search_query) |
-                Q(sale_invoice__patient_phone__icontains=search_query) |
-                Q(sale_invoice__invoice_number__icontains=search_query)
-            )
-            
-        # Date filters
-        start_date = request.GET.get('start_date')
-        end_date = request.GET.get('end_date')
-        if start_date:
-            returns_qs = returns_qs.filter(return_at__date__gte=start_date)
-        if end_date:
-            returns_qs = returns_qs.filter(return_at__date__lte=end_date)
-            
-        returns_qs = returns_qs.order_by('-return_at')
-        
-        # Pagination
-        from django.core.paginator import Paginator
-        paginator = Paginator(returns_qs, 10)
-        page_number = request.GET.get('page')
-        page_obj = paginator.get_page(page_number)
-        
         context = {
             'customers': customers,
             'selected_customer': None,
@@ -1068,13 +1123,8 @@ class SalesReturnView(LoginRequiredMixin,View):
             'invoices': [],
             'selected_invoice': None,
             'sale_items': [],
-            'returns': page_obj,
-            'page_obj': page_obj,
             'selected_return': None,
             'selected_return_items': [],
-            'search_query': search_query,
-            'start_date': start_date,
-            'end_date': end_date,
         }
         
         if customer_id:
@@ -1127,7 +1177,12 @@ class SalesReturnView(LoginRequiredMixin,View):
         return render(request, self.template_name, context)
 
     def post(self, request):
+
         action = request.POST.get('action')
+        
+        setup = GeneralSetup.objects.filter(tenant=request.tenant).first()
+        sale_type = setup.sale_type if setup else 'unit'
+
         
         if action == 'select_customer':
             customer_id = request.POST.get('customer_id')
@@ -1233,6 +1288,105 @@ class SalesReturnView(LoginRequiredMixin,View):
                 traceback.print_exc()
                 messages.error(request, f"Unable to process return: {e}")
             
+            return redirect('pos_returns')
+
+        elif action == 'quick_return':
+            product_ids = request.POST.getlist('product_id[]')
+            batch_numbers = request.POST.getlist('batch_number[]')
+            return_qtys = request.POST.getlist('return_qty[]')
+            patient_name = request.POST.get('patient_name', '').strip()
+
+            if not product_ids:
+                messages.error(request, 'No items provided.')
+                return redirect('pos_returns')
+
+            try:
+                with transaction.atomic():
+                    invoice_map = {}
+                    
+                    for i, prod_id in enumerate(product_ids):
+                        qty = int(return_qtys[i])
+                        batch = batch_numbers[i] if i < len(batch_numbers) else ''
+                        
+                        sale_items = SaleItem.objects.filter(
+                            sale_invoice__tenant=request.tenant,
+                            product_id=prod_id,
+                            quantity__gte=qty
+                        ).select_related('sale_invoice', 'product').order_by('-sale_invoice__created_at')
+                        
+                        if batch:
+                            sale_items = sale_items.filter(batch_number=batch)
+                            
+                        if patient_name:
+                            sale_items = sale_items.filter(
+                                Q(sale_invoice__patient_name__icontains=patient_name) |
+                                Q(sale_invoice__customer__name__icontains=patient_name)
+                            )
+                            
+                        sale_item = sale_items.first()
+                        if not sale_item:
+                            raise ValueError(f"No matching sale found for one of the products.")
+                            
+                        inv = sale_item.sale_invoice
+                        if inv not in invoice_map:
+                            invoice_map[inv] = []
+                        invoice_map[inv].append({'sale_item': sale_item, 'qty': qty})
+                    
+                    total_amount_returned = Decimal('0')
+                    returns_created = 0
+                    
+                    for inv, items in invoice_map.items():
+                        return_record = SalesReturn.objects.create(
+                            tenant=request.tenant,
+                            sale_invoice=inv,
+                            return_qty=0,
+                            return_amount=Decimal('0')
+                        )
+                        
+                        inv_return_qty = 0
+                        inv_return_amount = Decimal('0')
+                        
+                        for item_data in items:
+                            sale_item = item_data['sale_item']
+                            qty = item_data['qty']
+                            
+                            SalesReturnItem.objects.create(
+                                tenant=request.tenant,
+                                sales_return=return_record,
+                                sale_item=sale_item,
+                                returned_quantity=qty,
+                                return_reason='Quick POS Return'
+                            )
+                            
+                            StockBatch.objects.filter(
+                                tenant=request.tenant,
+                                product=sale_item.product,
+                                batch_number=sale_item.batch_number
+                            ).update(current_quantity=F('current_quantity') + qty)
+                            
+                            inv_return_qty += qty
+                            item_refund = Decimal(str(qty)) * sale_item.unit_price
+                            inv_return_amount += item_refund
+                            total_amount_returned += item_refund
+                            
+                        return_record.return_qty = inv_return_qty
+                        return_record.return_amount = inv_return_amount
+                        return_record.save()
+                        returns_created += 1
+                        
+                        try:
+                            from easypharma.views.reports import invalidate_daily_sale_cache
+                            invalidate_daily_sale_cache(request.tenant.id, date_str=str(return_record.return_at.date()))
+                        except Exception:
+                            pass
+                            
+                    messages.success(request, f"Processed returns successfully. Total refunded: ?{total_amount_returned}")
+            except ValueError as ve:
+                messages.error(request, str(ve))
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                messages.error(request, f"Unable to process quick return: {e}")
             return redirect('pos_returns')
 
         elif action == 'update_return':
@@ -1611,8 +1765,9 @@ class PrescriptionScanAPI(LoginRequiredMixin, View):
                 batch_list = []
                 for batch in batches:
                     unit_price = float(batch.sale_price) if batch.sale_price else 0.0
-                    if p.conversion_factor > 1 and batch.mrp:
-                        unit_price = float(batch.mrp) / p.conversion_factor
+                    eff_cf = 1 if sale_type == "strip" else p.conversion_factor
+                    if eff_cf > 1 and batch.mrp:
+                        unit_price = float(batch.mrp) / eff_cf
                     elif unit_price == 0 and batch.mrp:
                         unit_price = float(batch.mrp)
                         
@@ -1620,7 +1775,7 @@ class PrescriptionScanAPI(LoginRequiredMixin, View):
                         'batch_id': batch.id,
                         'batch_no': batch.batch_number,
                         'expiry': batch.expiry_date.strftime('%m/%y') if batch.expiry_date else '',
-                        'stock': batch.current_quantity,
+                        'stock': int(batch.current_quantity / (p.conversion_factor or 1)) if sale_type == 'strip' else batch.current_quantity,
                         'price': unit_price,
                         'mrp_pack': float(batch.mrp) if batch.mrp else 0.0
                     })
@@ -1632,7 +1787,7 @@ class PrescriptionScanAPI(LoginRequiredMixin, View):
                     'content': p.product_content.content_name if p.product_content else None,
                     'company': p.compny_name.company_name if p.compny_name else None,
                     'tax_rate': p.product_tax.tax_rate if p.product_tax else 0,
-                    'conversion_factor': p.conversion_factor,
+                    'conversion_factor': 1 if sale_type == 'strip' else p.conversion_factor,
                     'batches': batch_list
                 })
                 

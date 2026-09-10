@@ -193,6 +193,22 @@
                 
                 <!-- SALE SETUP TAB -->
                 <div class="tab-pane fade show active" id="sale" role="tabpanel" aria-labelledby="sale-tab">
+
+                    <!-- Sale Type -->
+                    <div class="setting-group">
+                        <div class="row align-items-start">
+                            <div class="col-md-7">
+                                <div class="setting-title">Sale Type</div>
+                                <div class="setting-desc">Choose how products are priced during sales/returns (Unit vs Strip).</div>
+                            </div>
+                            <div class="col-md-5">
+                                <select class="form-select custom-select" name="sale_type">
+                                    <option value="unit" {% if setup.sale_type == 'unit' %}selected{% endif %}>Unit (Tablets)</option>
+                                    <option value="strip" {% if setup.sale_type == 'strip' %}selected{% endif %}>Strip / Pack</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
                     
                     <!-- Default Payment Mode -->
                     <div class="setting-group">

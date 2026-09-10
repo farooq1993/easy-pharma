@@ -688,11 +688,15 @@ class ProductBatchHistoryView(LoginRequiredMixin,View):
         if not product_id:
             return JsonResponse([], safe=False)
         
+        from easypharma.models.general_setup import GeneralSetup
+        setup = GeneralSetup.objects.filter(tenant=request.tenant).first()
+        sale_type = setup.sale_type if setup else 'unit'
+        
         batches = (
             StockBatch.objects
             .filter(tenant=request.tenant, product_id=product_id)
             .order_by('-expiry_date')
-            .values('batch_number', 'expiry_date', 'mrp', 'purchase_price', 'current_quantity')[:10]
+            .values('batch_number', 'expiry_date', 'mrp', 'purchase_price', 'current_quantity', 'product__conversion_factor')[:10]
         )
         result = [
             {
@@ -700,7 +704,8 @@ class ProductBatchHistoryView(LoginRequiredMixin,View):
                 'expiry_date':  b['expiry_date'].strftime('%Y-%m') if b['expiry_date'] else '',
                 'mrp':          float(b['mrp'] or 0),
                 'purchase_price': float(b['purchase_price'] or 0),
-                'stock_quantity': b['current_quantity'],
+                'stock_quantity': int(b['current_quantity'] / (b.get('product__conversion_factor') or 1)) if sale_type == 'strip' else b['current_quantity'],
+                'conversion_factor': 1 if sale_type == 'strip' else (b.get('product__conversion_factor') or 1),
             }
             for b in batches
         ]

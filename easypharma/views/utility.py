@@ -40,7 +40,11 @@ class UtilityHomeView(View):
     def post(self, request):
         setup, _ = GeneralSetup.objects.get_or_create(tenant=request.tenant)
         
+        # Check if sale_type changed
+        old_sale_type = setup.sale_type
+        
         # Sale Setup
+        setup.sale_type = request.POST.get('sale_type', 'unit')
         setup.default_payment_mode = request.POST.get('default_payment_mode', 'cash')
         setup.require_customer_phone = request.POST.get('require_customer_phone') == 'on'
         setup.print_invoice_after_save = request.POST.get('print_invoice_after_save') == 'on'
