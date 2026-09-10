@@ -11,6 +11,10 @@ class GeneralSetup(TenantAwareModel):
     tenant = models.OneToOneField(Tenant, on_delete=models.CASCADE, related_name='general_setup')
 
     # Sale Setup options
+    sale_type = models.CharField(max_length=20, default='unit', choices=[
+        ('unit', 'Unit (Tablets)'),
+        ('strip', 'Strip / Pack')
+    ])
     default_payment_mode = models.CharField(max_length=20, default='cash', choices=[
         ('cash', 'Cash'),
         ('card', 'Card'),
