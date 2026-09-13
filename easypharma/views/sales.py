@@ -20,7 +20,7 @@ from datetime import datetime, date
 from urllib.parse import quote_plus
 
 from easypharma.models.Items import Products, ProductTax
-from easypharma.models.doctor import DoctorModel
+from easypharma.models.doctor import DoctorModel #DoctorModel
 
 # ── POS cache helpers ──────────────────────────────────────────
 POS_CACHE_TIMEOUT = 180  # 3 minutes
@@ -214,7 +214,7 @@ class POSView(LoginRequiredMixin,View):
                 if doc_name_input:
                     doc_name_clean = str(doc_name_input).strip()
                     if doc_name_clean:
-                        from easypharma.models.users import DoctorModel
+                        # from easypharma.models.users import DoctorModel
                         doctor_exists = DoctorModel.objects.filter(
                             tenant=request.tenant,
                             name__iexact=doc_name_clean
