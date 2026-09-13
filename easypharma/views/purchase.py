@@ -152,7 +152,6 @@ class PurchaseEntryView(LoginRequiredMixin,View):
                         if batch:
                             total_units = (item.quantity + item.free_quantity) * item.product.conversion_factor
                             batch.current_quantity -= total_units
-                            if batch.current_quantity < 0: batch.current_quantity = 0
                             batch.save()
                     invoice.items.all().delete()
                 else:
@@ -453,7 +452,6 @@ class PurchaseListView(LoginRequiredMixin,View):
                     if batch:
                         total_units = (item.quantity + item.free_quantity) * item.product.conversion_factor
                         batch.current_quantity -= total_units
-                        if batch.current_quantity < 0: batch.current_quantity = 0
                         batch.save()
                 
                 invoice.delete()

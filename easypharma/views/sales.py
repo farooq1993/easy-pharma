@@ -187,7 +187,9 @@ class POSView(LoginRequiredMixin,View):
                             batch_number=old_item.batch_number
                         ).first()
                         if batch:
-                            batch.current_quantity += old_item.quantity
+                            cf = old_item.product.conversion_factor or 1
+                            qty_to_restore = old_item.quantity * cf if sale_type == 'strip' else old_item.quantity
+                            batch.current_quantity += qty_to_restore
                             batch.save()
                     invoice.items.all().delete()
                     from easypharma.models.accounting import CustomerLedger
@@ -205,7 +207,24 @@ class POSView(LoginRequiredMixin,View):
                 invoice.patient_name = data.get('patient_name')
                 invoice.patient_address = data.get('patient_address')
                 invoice.patient_phone = data.get('patient_phone')
-                invoice.doctor_name = data.get('doctor_name')
+                doc_name_input = data.get('doctor_name')
+                invoice.doctor_name = doc_name_input
+                
+                # Auto-save new doctor to DoctorModel if it doesn't exist (case-insensitive)
+                if doc_name_input:
+                    doc_name_clean = str(doc_name_input).strip()
+                    if doc_name_clean:
+                        from easypharma.models.users import DoctorModel
+                        doctor_exists = DoctorModel.objects.filter(
+                            tenant=request.tenant,
+                            name__iexact=doc_name_clean
+                        ).exists()
+                        if not doctor_exists:
+                            DoctorModel.objects.create(
+                                tenant=request.tenant,
+                                name=doc_name_clean.upper()
+                            )
+
                 invoice.sub_total = data['sub_total']
                 invoice.tax_amount = data['tax_amount']
                 invoice.discount_amount = data['discount_amount']
