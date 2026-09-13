@@ -328,6 +328,11 @@ class DailySaleReportView(LoginRequiredMixin,View):
 
         report_schedules = ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('schedule_name')
 
+        doctor_commissions = {
+            doctor['name'].casefold(): Decimal(str(doctor['doctor_commission'])) if doctor['doctor_commission'] else Decimal('0.00')
+            for doctor in DoctorModel.objects.filter(tenant=request.tenant).values('name', 'doctor_commission')
+        }
+
         bill_profit_data = {}
         sales_with_items = sales.prefetch_related(
             Prefetch('items', queryset=SaleItem.objects.select_related('product'))
@@ -348,6 +353,13 @@ class DailySaleReportView(LoginRequiredMixin,View):
                         batch_cost = unit_cost * Decimal(str(item.quantity))
                 bill_cost += batch_cost
             revenue = invoice.total_amount or Decimal('0')
+            
+            # Deduct doctor commission
+            doc_name = (invoice.doctor_name or '').strip().casefold()
+            pct = doctor_commissions.get(doc_name, Decimal('0.00'))
+            comm = revenue * pct / Decimal('100')
+            bill_cost += comm
+            
             profit = revenue - bill_cost
             margin = round(float(profit / revenue * 100), 1) if revenue > 0 else 0.0
             bill_profit_data[invoice.pk] = {
@@ -665,6 +677,11 @@ class ProfitReportView(LoginRequiredMixin,View):
             sale_invoice__created_at__date__lte=end_date
         ).select_related('sale_invoice', 'product')
 
+        doctor_commissions = {
+            doctor['name'].casefold(): Decimal(str(doctor['doctor_commission'])) if doctor['doctor_commission'] else Decimal('0.00')
+            for doctor in DoctorModel.objects.filter(tenant=request.tenant).values('name', 'doctor_commission')
+        }
+
         cost_by_date = {}
         profit_by_date = {}
         for item in sale_items:
@@ -686,8 +703,16 @@ class ProfitReportView(LoginRequiredMixin,View):
             conv_factor = Decimal(str(item.product.conversion_factor or 1))
             unit_cost = batch_cost / conv_factor
             item_cost = unit_cost * item.quantity
-            cost_by_date[sale_date] = cost_by_date.get(sale_date, Decimal('0')) + item_cost
+            
+            # Deduct commission per item proportional to total_amount
+            doc_name = (item.sale_invoice.doctor_name or '').strip().casefold()
+            pct = doctor_commissions.get(doc_name, Decimal('0.00'))
             sale_value = item.total_amount or Decimal('0')
+            comm = sale_value * pct / Decimal('100')
+            
+            item_cost += comm
+            
+            cost_by_date[sale_date] = cost_by_date.get(sale_date, Decimal('0')) + item_cost
             profit_by_date[sale_date] = (
                             profit_by_date.get(sale_date, Decimal('0'))
                             + (sale_value - item_cost)
@@ -1943,6 +1968,11 @@ class SaleBillWiseProfit(LoginRequiredMixin,View):
             )
         ).order_by('created_at')
 
+        doctor_commissions = {
+            doctor['name'].casefold(): Decimal(str(doctor['doctor_commission'])) if doctor['doctor_commission'] else Decimal('0.00')
+            for doctor in DoctorModel.objects.filter(tenant=request.tenant).values('name', 'doctor_commission')
+        }
+
         bill_rows = []
         for invoice in sales:
             total_sale = Decimal('0')
@@ -1968,6 +1998,12 @@ class SaleBillWiseProfit(LoginRequiredMixin,View):
                 conversion = Decimal(str(item.product.conversion_factor or 1))
                 unit_purchase_price = purchase_price / conversion
                 total_cost += unit_purchase_price * Decimal(str(item.quantity))
+
+            # Deduct doctor commission
+            doc_name = (invoice.doctor_name or '').strip().casefold()
+            pct = doctor_commissions.get(doc_name, Decimal('0.00'))
+            comm = total_sale * pct / Decimal('100')
+            total_cost += comm
 
             profit = total_sale - total_cost
 
@@ -2122,39 +2158,46 @@ class DoctorSaleReportView(LoginRequiredMixin, View):
         if selected_doctor:
             invoices = invoices.filter(doctor_name__icontains=selected_doctor)
 
-        available_doctors = SaleInvoice.objects.filter(
+        available_doctors = DoctorModel.objects.filter(
             tenant=request.tenant
-        ).exclude(doctor_name__isnull=True).exclude(doctor_name__exact='').values_list('doctor_name', flat=True).distinct().order_by('doctor_name')
+        ).values_list('name', flat=True).order_by('name')
 
         doctor_commissions = {
-            doctor['name'].casefold(): doctor['doctor_commission'] or Decimal('0.00')
+            doctor['name'].casefold(): Decimal(str(doctor['doctor_commission'])) if doctor['doctor_commission'] else Decimal('0.00')
             for doctor in DoctorModel.objects.filter(tenant=request.tenant).values('name', 'doctor_commission')
         }
 
         def get_doctor_commission(doctor_name, sale_amount):
             percentage = doctor_commissions.get((doctor_name or '').strip().casefold(), Decimal('0.00'))
-            return percentage, (sale_amount or Decimal('0.00')) * percentage / Decimal('100')
+            # Ensure percentage is a Decimal to avoid TypeError with Decimal * float
+            percentage_decimal = Decimal(str(percentage))
+            return percentage_decimal, (sale_amount or Decimal('0.00')) * percentage_decimal / Decimal('100')
 
+        from django.db.models.functions import Upper
         doctor_summary = []
-        doctor_stats_query = invoices.values('doctor_name').annotate(
+        doctor_stats_query = invoices.annotate(
+            doc_name_upper=Upper('doctor_name')
+        ).values('doc_name_upper').annotate(
             total_bills=Count('id'),
             total_sales=Sum('total_amount'),
             total_discount=Sum('discount_amount'),
-            avg_bill=Avg('total_amount'),
             unique_patients=Count('patient_name', distinct=True)
         ).order_by('-total_sales')
 
         for item in doctor_stats_query:
-            doc_name = item['doctor_name'] if item['doctor_name'] else 'SELF / Unspecified'
-            commission_percentage, commission_amount = get_doctor_commission(item['doctor_name'], item['total_sales'])
+            doc_name = item['doc_name_upper'] if item['doc_name_upper'] else 'SELF / UNSPECIFIED'
+            total_sales = item['total_sales'] or Decimal('0.00')
+            commission_percentage, commission_amount = get_doctor_commission(doc_name, total_sales)
+            avg_bill = total_sales / Decimal(item['total_bills']) if item['total_bills'] else Decimal('0.00')
+
             doctor_summary.append({
                 'doctor_name': doc_name,
                 'total_bills': item['total_bills'],
-                'total_sales': item['total_sales'] or Decimal('0.00'),
+                'total_sales': total_sales,
                 'commission_percentage': commission_percentage,
                 'commission_amount': commission_amount,
                 'total_discount': item['total_discount'] or Decimal('0.00'),
-                'avg_bill': item['avg_bill'] or Decimal('0.00'),
+                'avg_bill': avg_bill,
                 'unique_patients': item['unique_patients'] or 0
             })
 
