@@ -1126,17 +1126,17 @@ function _ocrRenderPreviewTable(items) {
     items.forEach((item, idx) => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td class="text-muted" style="padding:6px;">${idx + 1}</td>
-            <td><div class="fw-bold text-dark">${_esc(item.name)}</div></td>
-            <td contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'batch_number', this.textContent)" style="background:#fffbeb; cursor:text;">${_esc(item.batch_number)}</td>
-            <td contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'expiry_date', this.textContent)" style="background:#fffbeb; cursor:text;" placeholder="YYYY-MM-DD">${_esc(item.expiry_date || '')}</td>
-            <td class="text-center" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'quantity', this.textContent)" style="background:#fffbeb; cursor:text; font-weight:bold;">${item.quantity}</td>
-            <td class="text-center text-success" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'free_quantity', this.textContent)" style="background:#fffbeb; cursor:text;">${item.free_quantity}</td>
-            <td class="text-end" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'purchase_price', this.textContent)" style="background:#fffbeb; cursor:text;">${Number(item.purchase_price).toFixed(2)}</td>
-            <td class="text-end" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'mrp', this.textContent)" style="background:#fffbeb; cursor:text;">${Number(item.mrp).toFixed(2)}</td>
-            <td class="text-center" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'tax_percentage', this.textContent)" style="background:#fffbeb; cursor:text;">${item.tax_percentage}</td>
-            <td class="text-end fw-bold text-teal" id="ocrRowTotal-${idx}">₹${Number(item.total).toFixed(2)}</td>
-            <td class="text-center">
+            <td data-label="#" class="text-muted" style="padding:6px;">${idx + 1}</td>
+            <td data-label="Medicine Name"><div class="fw-bold text-dark">${_esc(item.name)}</div></td>
+            <td data-label="Batch No" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'batch_number', this.textContent)" style="background:#fffbeb; cursor:text;">${_esc(item.batch_number)}</td>
+            <td data-label="Expiry" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'expiry_date', this.textContent)" style="background:#fffbeb; cursor:text;" placeholder="YYYY-MM-DD">${_esc(item.expiry_date || '')}</td>
+            <td data-label="Qty" class="text-center" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'quantity', this.textContent)" style="background:#fffbeb; cursor:text; font-weight:bold;">${item.quantity}</td>
+            <td data-label="Free" class="text-center text-success" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'free_quantity', this.textContent)" style="background:#fffbeb; cursor:text;">${item.free_quantity}</td>
+            <td data-label="Pur. Rate" class="text-end" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'purchase_price', this.textContent)" style="background:#fffbeb; cursor:text;">${Number(item.purchase_price).toFixed(2)}</td>
+            <td data-label="MRP" class="text-end" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'mrp', this.textContent)" style="background:#fffbeb; cursor:text;">${Number(item.mrp).toFixed(2)}</td>
+            <td data-label="GST%" class="text-center" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'tax_percentage', this.textContent)" style="background:#fffbeb; cursor:text;">${item.tax_percentage}</td>
+            <td data-label="Total" class="text-end fw-bold text-teal" id="ocrRowTotal-${idx}">₹${Number(item.total).toFixed(2)}</td>
+            <td data-label="Action" class="text-center">
                 <button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="window._ocrRemoveRow(${idx})" title="Remove item">
                     <i class="fas fa-trash-alt"></i>
                 </button>
