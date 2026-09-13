@@ -132,9 +132,24 @@ body {
 /* ADD ROW GRID - IMPROVED ALIGNMENT & RESPONSIVE */
 .add-row-grid {
     display: grid;
-    grid-template-columns: minmax(130px, 2.2fr) minmax(85px, 1fr) minmax(120px, 1.2fr) minmax(65px, 0.7fr) minmax(50px, 0.6fr) minmax(80px, 0.9fr) minmax(60px, 0.7fr) minmax(75px, 0.8fr) minmax(55px, 0.6fr) minmax(85px, 0.9fr) minmax(90px, 1fr) auto;
+    grid-template-columns: minmax(180px, 2.8fr) minmax(80px, 0.9fr) minmax(105px, 1fr) minmax(75px, 0.7fr) minmax(55px, 0.5fr) minmax(80px, 0.8fr) minmax(60px, 0.6fr) minmax(80px, 0.8fr) minmax(55px, 0.5fr) minmax(85px, 0.8fr) minmax(90px, 0.9fr) auto;
     gap: 8px;
     align-items: end;
+}
+
+.add-row-grid .ep-input {
+    padding: 9px 6px;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.add-row-grid input[type="number"]::-webkit-inner-spin-button,
+.add-row-grid input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.add-row-grid input[type="number"] {
+    -moz-appearance: textfield;
 }
 
 @media (min-width: 769px) and (max-width: 1250px) {
@@ -310,12 +325,12 @@ body {
 .items-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.82rem;
+    font-size: 0.95rem; /* Increased font size */
 }
 
 .items-table thead th {
-    padding: 10px 12px;
-    font-size: 0.68rem;
+    padding: 12px;
+    font-size: 0.8rem; /* Increased header font size */
     font-weight: 700;
     text-transform: uppercase;
     color: var(--muted);
@@ -323,7 +338,7 @@ body {
 }
 
 .items-table tbody td {
-    padding: 10px 12px;
+    padding: 12px;
     vertical-align: middle;
 }
 
