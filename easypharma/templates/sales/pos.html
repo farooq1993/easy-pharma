@@ -670,6 +670,13 @@
                                         <td colspan="7" class="text-center py-4 text-muted">No sale entries found.</td>
                                     </tr>
                                 </tbody>
+                                <tfoot class="bg-light fw-bold" id="inlineSalesFoot" style="display: none;">
+                                    <tr>
+                                        <td colspan="4" class="text-end">Total Quantity Sold:</td>
+                                        <td id="inlineTotalSalesQty" class="text-primary fs-5">0</td>
+                                        <td colspan="2"></td>
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
                     </div>
@@ -694,6 +701,13 @@
                                         <td colspan="7" class="text-center py-4 text-muted">No purchase entries found.</td>
                                     </tr>
                                 </tbody>
+                                <tfoot class="bg-light fw-bold" id="inlinePurchasesFoot" style="display: none;">
+                                    <tr>
+                                        <td colspan="4" class="text-end">Total Quantity Purchased:</td>
+                                        <td id="inlineTotalPurchasesQty" class="text-success fs-5">0</td>
+                                        <td colspan="2"></td>
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
                     </div>
@@ -1590,10 +1604,13 @@
 
             // Render Sales
             salesTbody.innerHTML = '';
+            let totalSalesQty = 0;
             if (!data.sales || data.sales.length === 0) {
                 salesTbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">No sales entries recorded for this medicine.</td></tr>';
+                document.getElementById('inlineSalesFoot').style.display = 'none';
             } else {
                 data.sales.forEach(s => {
+                    totalSalesQty += (Number(s.quantity) || 0);
                     const row = document.createElement('tr');
                     row.innerHTML = `
                         <td>${s.date}</td>
@@ -1606,14 +1623,19 @@
                     `;
                     salesTbody.appendChild(row);
                 });
+                document.getElementById('inlineTotalSalesQty').textContent = totalSalesQty;
+                document.getElementById('inlineSalesFoot').style.display = 'table-footer-group';
             }
 
             // Render Purchases
             purchasesTbody.innerHTML = '';
+            let totalPurchasesQty = 0;
             if (!data.purchases || data.purchases.length === 0) {
                 purchasesTbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">No purchase entries recorded for this medicine.</td></tr>';
+                document.getElementById('inlinePurchasesFoot').style.display = 'none';
             } else {
                 data.purchases.forEach(p => {
+                    totalPurchasesQty += (Number(p.quantity) || 0);
                     const row = document.createElement('tr');
                     row.innerHTML = `
                         <td>${p.date}</td>
@@ -1626,6 +1648,8 @@
                     `;
                     purchasesTbody.appendChild(row);
                 });
+                document.getElementById('inlineTotalPurchasesQty').textContent = totalPurchasesQty;
+                document.getElementById('inlinePurchasesFoot').style.display = 'table-footer-group';
             }
         } catch (error) {
             console.error('Error fetching product history inline:', error);
