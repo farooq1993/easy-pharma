@@ -1413,8 +1413,8 @@
                     <div class="d-flex flex-column align-items-end gap-1">
                         <span class="badge bg-info-soft text-info x-small">${product.batches.length} Batch(es)</span>
                         <div class="d-flex gap-1 mt-1">
-                            ${product.content ? `<button class="btn btn-outline-secondary btn-sm rounded-pill x-small px-2" onclick="openSubstitutes(${product.id}, '${product.name.replace(/'/g,"\\'")}')"><i class="fas fa-exchange-alt me-1"></i>Alt</button>` : ''}
-                            <button class="btn btn-outline-primary btn-sm rounded-pill x-small px-2" onclick="openProductHistoryInline(${product.id}, '${product.name.replace(/'/g,"\\'")}')"><i class="fas fa-history me-1"></i>History</button>
+                            ${product.content ? `<button class="btn btn-outline-secondary btn-sm rounded-pill x-small px-2" onclick="openSubstitutes(${product.id}, '${product.name.replace(/'/g,"\\'").replace(/"/g,"&quot;")}')"><i class="fas fa-exchange-alt me-1"></i>Alt</button>` : ''}
+                            <button class="btn btn-outline-primary btn-sm rounded-pill x-small px-2" onclick="openProductHistoryInline(${product.id}, '${product.name.replace(/'/g,"\\'").replace(/"/g,"&quot;")}')"><i class="fas fa-history me-1"></i>History</button>
                         </div>
                     </div>
                 </div>

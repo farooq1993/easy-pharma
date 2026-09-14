@@ -175,6 +175,19 @@
                                 </tr>
                                 {% endfor %}
                             </tbody>
+                            <tfoot class="table-light fw-bold border-top border-2">
+                                <tr>
+                                    <td class="ps-4 text-end text-muted">TOTAL</td>
+                                    <td class="text-center text-dark">{{ total_bills_count }}</td>
+                                    <td class="text-center text-info">{{ total_unique_patients }}</td>
+                                    {% if has_commission %}
+                                    <td class="text-end text-danger">₹{{ total_commission_amount|floatformat:2 }}</td>
+                                    {% endif %}
+                                    <td class="text-end text-muted">₹{{ total_discount_amount|default:"0.00"|floatformat:2 }}</td>
+                                    <td class="text-end text-success">₹{{ total_revenue|floatformat:2 }}</td>
+                                    <td class="text-end pe-4"></td>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
                 </div>
