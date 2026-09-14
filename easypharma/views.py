@@ -31,39 +31,36 @@ def home_view(request):
     from easypharma.models.accounting import SupplierLedger, SupplierPayment
 
     # ── Top 5 Suppliers with Credit Balance & Last Payment Details ──
-    suppliers = Supplier.objects.filter(tenant=request.tenant)
+    from django.db.models import Sum, F, DecimalField
+    from django.db.models.functions import Coalesce
+
+    # Get top 5 suppliers with positive balance directly via DB aggregation
+    top_suppliers_qs = Supplier.objects.filter(tenant=request.tenant).annotate(
+        total_credit=Coalesce(Sum('ledger_entries__credit'), 0.0, output_field=DecimalField()),
+        total_debit=Coalesce(Sum('ledger_entries__debit'), 0.0, output_field=DecimalField())
+    ).annotate(
+        balance=F('total_credit') - F('total_debit')
+    ).filter(balance__gt=0).order_by('-balance')[:5]
+
     supplier_balances = []
     
-    for s in suppliers:
-        ledger_stats = SupplierLedger.objects.filter(
+    for s in top_suppliers_qs:
+        last_payment = SupplierPayment.objects.filter(
             tenant=request.tenant,
             supplier=s
-        ).aggregate(
-            total_credit=Sum('credit'),
-            total_debit=Sum('debit')
-        )
+        ).order_by('-payment_date', '-id').first()
         
-        credit = ledger_stats['total_credit'] or 0
-        debit = ledger_stats['total_debit'] or 0
-        balance = credit - debit
+        last_payment_date = last_payment.payment_date.strftime('%d/%m/%Y') if last_payment else "--"
+        last_payment_amount = float(last_payment.amount) if last_payment else 0.0
         
-        if balance > 0:
-            last_payment = SupplierPayment.objects.filter(
-                tenant=request.tenant,
-                supplier=s
-            ).order_by('-payment_date', '-id').first()
+        supplier_balances.append({
+            'name': s.name,
+            'balance': float(s.balance),
+            'last_payment_date': last_payment_date,
+            'last_payment_amount': last_payment_amount
+        })
             
-            last_payment_date = last_payment.payment_date.strftime('%d/%m/%Y') if last_payment else "—"
-            last_payment_amount = float(last_payment.amount) if last_payment else 0.0
-            
-            supplier_balances.append({
-                'name': s.name,
-                'balance': float(balance),
-                'last_payment_date': last_payment_date,
-                'last_payment_amount': last_payment_amount
-            })
-            
-    top_suppliers = sorted(supplier_balances, key=lambda x: -x['balance'])[:5]
+    top_suppliers = supplier_balances
 
     context = {
         'today_revenue':        today_revenue,

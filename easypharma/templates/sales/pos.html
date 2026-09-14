@@ -263,10 +263,20 @@
                             </div>
                         </div>
 
-                        <button class="btn btn-success btn-lg w-100 py-3 fw-bold rounded-4 shadow-sm"
-                            onclick="completeOrder()">
-                            <i class="fas fa-check-circle me-2"></i> COMPLETE & PRINT
-                        </button>
+                        <div class="d-flex gap-2">
+                            {% if edit_data %}
+                            <a href="{% url 'pos_list' %}" class="btn btn-secondary py-3 fw-bold rounded-4 shadow-sm d-flex align-items-center justify-content-center" style="flex: 1; text-decoration: none;" onclick="window.__isOrderSubmitting = true;">
+                                <i class="fas fa-arrow-left me-1"></i> Back
+                            </a>
+                            {% else %}
+                            <button type="button" class="btn btn-secondary py-3 fw-bold rounded-4 shadow-sm" style="flex: 1;" onclick="window.__isOrderSubmitting = true; clearPosDraft(); window.location.reload();">
+                                <i class="fas fa-eraser me-1"></i> Clear
+                            </button>
+                            {% endif %}
+                            <button class="btn btn-success btn-lg py-3 fw-bold rounded-4 shadow-sm m-0" style="flex: 2;" onclick="completeOrder()">
+                                <i class="fas fa-check-circle me-2"></i> COMPLETE & PRINT
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1078,7 +1088,7 @@
         cart = data.items.map(item => ({
             id: item.product_id,
             batch_id: item.batch_id,
-            batch_number: item.batch_number,
+            batch_no: item.batch_number,
             expiry: item.expiry_date ? item.expiry_date.substring(0, 7) : '',
             name: item.product_name,
             price: item.price,

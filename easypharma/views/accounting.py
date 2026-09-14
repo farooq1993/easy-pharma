@@ -219,7 +219,7 @@ class SupplierPaymentView(View):
 
     def get(self, request):
         suppliers = Supplier.objects.filter(tenant=request.tenant)
-        payments = SupplierPayment.objects.filter(tenant=request.tenant).order_by('-payment_date')
+        payments = SupplierPayment.objects.filter(tenant=request.tenant).select_related('supplier').order_by('-payment_date')
         return render(request, self.template_name, {
             'suppliers': suppliers,
             'payments': payments,
@@ -564,15 +564,18 @@ class CustomerPaymentView(View):
     template_name = 'accounting/customer_payment.html'
 
     def get(self, request):
-        customers = Customer.objects.filter(tenant=request.tenant).order_by('name')
-        payments = CustomerPayment.objects.filter(tenant=request.tenant).order_by('-payment_date')
+        from django.db.models import Sum
+        from django.db.models.functions import Coalesce
+
+        payments = CustomerPayment.objects.filter(tenant=request.tenant).select_related('customer').order_by('-payment_date')
         
-        # Calculate current receivable balance for each customer
+        customers = Customer.objects.filter(tenant=request.tenant).annotate(
+            total_debit=Coalesce(Sum('ledger_entries__debit'), 0.0, output_field=models.DecimalField()),
+            total_credit=Coalesce(Sum('ledger_entries__credit'), 0.0, output_field=models.DecimalField())
+        ).order_by('name')
+        
         for c in customers:
-            ledger = CustomerLedger.objects.filter(tenant=request.tenant, customer=c)
-            total_debit = sum(item.debit for item in ledger)
-            total_credit = sum(item.credit for item in ledger)
-            c.current_balance = float(total_debit - total_credit)
+            c.current_balance = float(c.total_debit - c.total_credit)
 
         return render(request, self.template_name, {
             'customers': customers,

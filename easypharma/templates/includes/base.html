@@ -78,15 +78,21 @@
                         </span>
                     </div>
                     
-                    <!-- User Profile -->
-                    <div class="d-flex align-items-center gap-2 border-start ps-3 profile-section" style="border-color: #e2e8f0 !important;">
-                        <div class="avatar-circle">
-                            {{ request.user.username|slice:":1"|upper }}
-                        </div>
-                        <div class="d-none d-sm-block">
-                            <div class="fw-bold text-dark leading-none" style="font-size: 0.85rem;">{{ request.user.username|capfirst }}</div>
-                            <div class="text-muted leading-none mt-1" style="font-size: 0.72rem;">{{ request.user.get_user_type_display|default:request.user.user_type|capfirst }}</div>
-                        </div>
+                    <!-- User Profile Dropdown -->
+                    <div class="dropdown">
+                        <a href="#" class="d-flex align-items-center gap-2 border-start ps-3 profile-section text-decoration-none" data-bs-toggle="dropdown" aria-expanded="false" style="border-color: #e2e8f0 !important; cursor: pointer;">
+                            <div class="avatar-circle">
+                                {{ request.user.username|slice:":1"|upper }}
+                            </div>
+                            <div class="d-none d-sm-block">
+                                <div class="fw-bold text-dark leading-none" style="font-size: 0.85rem;">{{ request.user.username|capfirst }}</div>
+                                <div class="text-muted leading-none mt-1" style="font-size: 0.72rem;">{{ request.user.get_user_type_display|default:request.user.user_type|capfirst }}</div>
+                            </div>
+                            <i class="fas fa-chevron-down ms-1 text-muted d-none d-sm-block" style="font-size: 0.7rem;"></i>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2 rounded-3">
+                            <li><a class="dropdown-item text-danger fw-bold py-2" href="{% url 'logout' %}"><i class="fas fa-sign-out-alt me-2"></i> Logout</a></li>
+                        </ul>
                     </div>
                 </div>
             </header>
