@@ -743,6 +743,9 @@ class SaleListView(LoginRequiredMixin, View):
             with transaction.atomic():
                 invoice = SaleInvoice.objects.get(id=invoice_id, tenant=request.tenant)
                 
+                setup = GeneralSetup.objects.filter(tenant=request.tenant).first()
+                sale_type = setup.sale_type if setup else 'unit'
+                
                 # REVERT STOCK: Add back the sold quantities
                 for item in invoice.items.all():
                     from easypharma.models.stock import StockBatch
@@ -753,7 +756,9 @@ class SaleListView(LoginRequiredMixin, View):
                     ).first()
                     
                     if batch:
-                        batch.current_quantity += item.quantity
+                        cf = item.product.conversion_factor or 1
+                        qty_to_restore = item.quantity * cf if sale_type == 'strip' else item.quantity
+                        batch.current_quantity += qty_to_restore
                         batch.save()
                 
                 invoice.delete()

@@ -72,7 +72,16 @@ class Command(BaseCommand):
                 )
                 total_returns = sum(item.returned_quantity for item in return_items)
 
-                expected_quantity = total_opening + total_purchase - total_sale + total_returns
+                # 5. Expiry Returns / Purchase Returns
+                from easypharma.models.accounting import ExpiryReturnItem
+                expiry_items = ExpiryReturnItem.objects.filter(
+                    tenant=tenant,
+                    product=product,
+                    batch_number=batch.batch_number
+                )
+                total_expiry_return = sum(item.quantity * conversion_factor for item in expiry_items)
+
+                expected_quantity = total_opening + total_purchase - total_sale + total_returns - total_expiry_return
 
                 if expected_quantity != batch.current_quantity:
                     mismatch_count += 1

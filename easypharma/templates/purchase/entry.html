@@ -250,7 +250,14 @@
                         <span>Balance Due:</span>
                         <span id="summaryBalanceDue">₹0.00</span>
                     </div>
-                    <button class="btn-complete mt-2" onclick="savePurchase()"><i class="fas fa-check-circle"></i> Save Purchase</button>
+                    <div class="d-flex gap-2 mt-3">
+                        {% if edit_data %}
+                            <a href="{% url 'purchase_list' %}" onclick="window.__isPurchaseSubmitting = true;" class="btn btn-secondary w-100 fw-bold rounded-3 d-flex align-items-center justify-content-center" style="text-decoration: none;"><i class="fas fa-arrow-left me-2"></i> Back</a>
+                        {% else %}
+                            <button type="button" class="btn btn-secondary w-100 fw-bold rounded-3 d-flex align-items-center justify-content-center" onclick="window.__isPurchaseSubmitting = true; localStorage.removeItem('easypharma_purchase_draft_v1'); window.location.reload();" style="text-decoration: none;"><i class="fas fa-eraser me-2"></i> Clear</button>
+                        {% endif %}
+                        <button class="btn-complete w-100 m-0" onclick="savePurchase()"><i class="fas fa-check-circle"></i> Save Purchase</button>
+                    </div>
                 </div>
             </div>
         </div>

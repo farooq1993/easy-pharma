@@ -85,7 +85,7 @@ LOGGING = {
     'disable_existing_loggers': False,
     'formatters': {
         'default': {
-            'format': '%(asctime)s %(levelname)s %(name)s %(message)s',
+            'format': '%(asctime)s %(levelname)s [%(name)s] %(message)s',
         },
     },
     'handlers': {
@@ -93,19 +93,24 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'default',
         },
+        'weekly_file': {
+            'class': 'easypharma.utils.logging_handlers.WeeklyMonthFileHandler',
+            'base_dir': os.path.join(BASE_DIR, 'logs'),
+            'formatter': 'default',
+        },
     },
     'loggers': {
         'easypharma': {
-            'handlers': ['console'],
+            'handlers': ['console', 'weekly_file'],
             'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': False,
         },
         'django.request': {
-            'handlers': ['console'],
+            'handlers': ['console', 'weekly_file'],
             'level': 'ERROR',
             'propagate': False,
         },
-    },
+    }
 }
 
 ROOT_URLCONF = 'pharmaProject.urls'
