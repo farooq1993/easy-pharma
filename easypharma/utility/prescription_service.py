@@ -68,7 +68,16 @@ def extract_prescription_data(image_file):
         "Return ONLY the raw JSON block. Do not include markdown code fence formatting (like ```json ... ```) or any other text."
     )
 
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-3.1-flash-lite:generateContent?key={api_key}"
+    models_to_try = [
+        "gemini-3.6-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-flash-lite-latest",
+        "gemini-flash-latest",
+        "gemini-3.5-flash",
+        "gemini-3.1-flash-lite",
+        "gemini-2.5-flash"
+    ]
+
     headers = {'Content-Type': 'application/json'}
     payload = {
         "contents": [
@@ -86,17 +95,32 @@ def extract_prescription_data(image_file):
         ]
     }
 
-    max_retries = 3
-    for attempt in range(max_retries):
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
-        # If Gemini is busy (503) or rate-limited (429), retry after a short delay
-        if response.status_code in [429, 503] and attempt < max_retries - 1:
-            time.sleep(1.5)
-            continue
-        break
+    last_error = None
+    response = None
 
-    if response.status_code != 200:
-        raise Exception(f"Gemini API request failed with status code {response.status_code}: {response.text}")
+    for model_name in models_to_try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                res = requests.post(url, headers=headers, json=payload, timeout=30)
+                if res.status_code == 200:
+                    response = res
+                    break
+                elif res.status_code in [429, 503] and attempt < max_retries - 1:
+                    time.sleep(1.5)
+                    continue
+                else:
+                    last_error = f"{model_name} failed with status {res.status_code}: {res.text}"
+                    break
+            except Exception as e:
+                last_error = f"{model_name} exception: {str(e)}"
+                break
+        if response and response.status_code == 200:
+            break
+
+    if not response or response.status_code != 200:
+        raise Exception(f"Gemini API request failed. Last error: {last_error}")
 
     resp_json = response.json()
     try:
