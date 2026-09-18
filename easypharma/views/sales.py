@@ -1712,6 +1712,9 @@ class PrescriptionScanAPI(LoginRequiredMixin, View):
         )
         
         # 5. Match extracted medicines with database Products and Stock batches
+        setup = GeneralSetup.objects.filter(tenant=request.tenant).first()
+        sale_type = setup.sale_type if setup else 'unit'
+        
         extracted_items = parsed_data.get('medicines', [])
         matched_results = []
         
