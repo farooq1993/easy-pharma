@@ -101,7 +101,7 @@ class PurchaseItem(TenantAwareModel):
         return f"{self.purchase_invoice.supplier.name} {self.purchase_invoice.invoice_number}"
 
     def save(self, *args, **kwargs):
-        # When a purchase item is saved, we update the stock
+        # When a purchase item is saved, we initialize or update batch metadata
         from easypharma.models.stock import StockBatch
         with transaction.atomic():
             super().save(*args, **kwargs)
@@ -122,7 +122,6 @@ class PurchaseItem(TenantAwareModel):
                 }
             )
             if not created:
-                batch.current_quantity += total_units
                 batch.purchase_price = self.purchase_price
                 batch.mrp = self.mrp
                 batch.sale_price = self.sale_price
