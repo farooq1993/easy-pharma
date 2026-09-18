@@ -46,6 +46,32 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         ['quickTax', 'quickSchedule', 'quickContent', 'quickCompany', 'quickType'].forEach(initQuickSelect);
+
+        // Stacked Modal Fix for nested modals (Quick Add, Master Add, Edit Item) over OCR Modal
+        ['quickAddModal', 'masterAddModal', 'editItemModal'].forEach(id => {
+            const modalEl = document.getElementById(id);
+            if (!modalEl) return;
+
+            modalEl.addEventListener('show.bs.modal', function() {
+                const openBackdrops = document.querySelectorAll('.modal-backdrop').length;
+                const baseZ = 1060 + (openBackdrops * 20);
+
+                modalEl.style.zIndex = baseZ + 10;
+
+                setTimeout(() => {
+                    const backdrops = document.querySelectorAll('.modal-backdrop');
+                    const thisBackdrop = backdrops[backdrops.length - 1];
+                    if (thisBackdrop) thisBackdrop.style.zIndex = baseZ;
+                }, 0);
+            });
+
+            modalEl.addEventListener('hidden.bs.modal', function() {
+                modalEl.style.zIndex = '';
+                if (document.querySelectorAll('.modal.show').length > 0) {
+                    document.body.classList.add('modal-open');
+                }
+            });
+        });
     });
 })();
 
@@ -86,6 +112,31 @@ async function handleSaveQuickProduct() {
             
             const modal = bootstrap.Modal.getInstance(document.getElementById('quickAddModal'));
             if (modal) modal.hide();
+
+            // If triggered from OCR Quick Add
+            if (window._openingOcrQuickAddMissingIndex !== undefined && window._openingOcrQuickAddMissingIndex !== null) {
+                const missingIdx = window._openingOcrQuickAddMissingIndex;
+                window._openingOcrQuickAddMissingIndex = null;
+                
+                if (typeof _openingOcrMissingProducts !== 'undefined' && _openingOcrMissingProducts[missingIdx]) {
+                    const missingItem = _openingOcrMissingProducts[missingIdx];
+                    _openingOcrMissingProducts.splice(missingIdx, 1);
+                    _openingOcrParsedItems.push({
+                        product_id: result.id,
+                        name: result.name,
+                        batch_number: missingItem.batch_number || 'OPENING',
+                        expiry_date: missingItem.expiry_date || '',
+                        quantity: missingItem.quantity || 1,
+                        purchase_price: missingItem.purchase_price || 0,
+                        mrp: missingItem.mrp || 0,
+                        tax_percentage: missingItem.tax_percentage || 5,
+                        total: missingItem.total || (missingItem.quantity * missingItem.purchase_price)
+                    });
+                    
+                    _openingOcrRenderMissingProducts(_openingOcrMissingProducts);
+                    _openingOcrRenderPreviewTable(_openingOcrParsedItems);
+                }
+            }
 
             // Clear modal fields
             document.getElementById('quickName').value = '';
@@ -962,3 +1013,457 @@ window.submitMasterAdd = async function() {
         saveBtn.innerHTML = '<i class="fas fa-save me-1"></i> Save';
     }
 };
+
+// ==================== OPENING STOCK AI OCR SCAN ====================
+let _openingOcrSelectedFiles = [];
+let _openingOcrParsedItems = [];
+let _openingOcrMissingProducts = [];
+
+function openingOcrDragOver(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const dropZone = document.getElementById('openingOcrDropZone');
+    if (dropZone) dropZone.style.background = '#e6fffa';
+}
+
+function openingOcrDragLeave(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const dropZone = document.getElementById('openingOcrDropZone');
+    if (dropZone) dropZone.style.background = '#f0fdf9';
+}
+
+function openingOcrDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    openingOcrDragLeave(e);
+    if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+        _openingOcrProcessFiles(Array.from(e.dataTransfer.files));
+    }
+}
+
+function openingOcrFileSelected(input) {
+    if (input && input.files && input.files.length > 0) {
+        _openingOcrProcessFiles(Array.from(input.files));
+    }
+}
+
+function _openingOcrProcessFiles(files) {
+    _openingOcrSelectedFiles = files.filter(f => f.type.startsWith('image/'));
+    if (_openingOcrSelectedFiles.length === 0) {
+        showToast('Please select valid image files (JPG, PNG, etc.)', 'error');
+        return;
+    }
+
+    const container = document.getElementById('openingOcrSelectedFile');
+    if (container) {
+        let html = '<div class="d-flex flex-wrap gap-2">';
+        _openingOcrSelectedFiles.forEach((file) => {
+            const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+            html += `
+                <div class="d-flex align-items-center gap-2 px-3 py-2" style="background:#f0fdfa;border:1px solid #ccfbf1;border-radius:10px;font-size:0.83rem;">
+                    <i class="fas fa-file-image text-teal" style="color:#0d9488;"></i>
+                    <span class="fw-bold text-dark">${file.name}</span>
+                    <span class="text-muted">(${sizeMB} MB)</span>
+                </div>
+            `;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+        container.classList.remove('d-none');
+    }
+
+    const parseBtn = document.getElementById('openingOcrParseBtn');
+    if (parseBtn) parseBtn.disabled = false;
+}
+
+async function submitOpeningOcrParse() {
+    if (_openingOcrSelectedFiles.length === 0) return;
+
+    const parseBtn = document.getElementById('openingOcrParseBtn');
+    const progress = document.getElementById('openingOcrParseProgress');
+    const errDiv = document.getElementById('openingOcrParseError');
+    const statusText = document.getElementById('openingOcrProgressStatusText');
+
+    if (parseBtn) parseBtn.disabled = true;
+    if (progress) progress.classList.remove('d-none');
+    if (errDiv) errDiv.classList.add('d-none');
+    if (statusText) statusText.textContent = `AI OCR engine is reading ${_openingOcrSelectedFiles.length} page(s)...`;
+
+    const formData = new FormData();
+    _openingOcrSelectedFiles.forEach(file => {
+        formData.append('stock_images', file);
+    });
+
+    try {
+        const response = await fetch('/opening/stock/import/ocr/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken
+            },
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to scan opening stock image.');
+        }
+
+        const scansTodayEl = document.getElementById('openingOcrScansToday');
+        const maxScansEl = document.getElementById('openingOcrMaxScans');
+        if (scansTodayEl && data.scans_today !== undefined) scansTodayEl.textContent = data.scans_today;
+        if (maxScansEl && data.max_scans !== undefined) maxScansEl.textContent = data.max_scans;
+
+        _openingOcrParsedItems = data.items || [];
+        _openingOcrMissingProducts = data.missing_products || [];
+
+        _openingOcrRenderMissingProducts(_openingOcrMissingProducts);
+        _openingOcrRenderPreviewTable(_openingOcrParsedItems);
+
+        // Switch to Step 2
+        document.getElementById('openingOcrStep1').classList.add('d-none');
+        document.getElementById('openingOcrStep2').classList.remove('d-none');
+        document.getElementById('openingOcrBackBtn').style.display = 'block';
+        document.getElementById('openingOcrParseBtn').classList.add('d-none');
+        document.getElementById('openingOcrConfirmBtn').classList.remove('d-none');
+
+        document.getElementById('openingOcrStep1Ind').classList.remove('active');
+        document.getElementById('openingOcrStep2Ind').classList.add('active');
+
+    } catch (err) {
+        if (errDiv) {
+            document.getElementById('openingOcrParseErrorMsg').textContent = err.message || 'Scanning failed';
+            errDiv.classList.remove('d-none');
+        }
+    } finally {
+        if (progress) progress.classList.add('d-none');
+        if (parseBtn) parseBtn.disabled = false;
+    }
+}
+
+function _openingOcrRenderMissingProducts(missing) {
+    const bar = document.getElementById('openingOcrMissingProductsBar');
+    const list = document.getElementById('openingOcrMissingProductsList');
+    if (!bar || !list) return;
+
+    if (!missing || missing.length === 0) {
+        bar.classList.add('d-none');
+        list.innerHTML = '';
+        return;
+    }
+
+    let html = '';
+    missing.forEach((m, idx) => {
+        html += `
+            <div class="d-flex align-items-center justify-content-between p-2 rounded" style="background:#fff; border:1px solid #fef3c7;">
+                <div>
+                    <span class="fw-bold text-dark">${m.product}</span>
+                    <span class="text-muted ms-2" style="font-size:0.75rem;">(Qty: ${m.quantity}, MRP: ₹${m.mrp})</span>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-warning rounded-pill px-3 py-1" style="font-size:0.78rem; font-weight:600;" onclick="openingOcrQuickAddProduct(${idx})">
+                    <i class="fas fa-plus me-1"></i> Quick Add
+                </button>
+            </div>
+        `;
+    });
+
+    list.innerHTML = html;
+    bar.classList.remove('d-none');
+}
+
+function openingOcrQuickAddProduct(missingIdx) {
+    const missingItem = _openingOcrMissingProducts[missingIdx];
+    if (!missingItem) return;
+
+    const nameInput = document.getElementById('quickName');
+    if (nameInput) nameInput.value = missingItem.product;
+
+    window._openingOcrQuickAddMissingIndex = missingIdx;
+
+    const modalEl = document.getElementById('quickAddModal');
+    if (modalEl) {
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+}
+
+function _openingOcrRenderPreviewTable(items) {
+    const tbody = document.getElementById('openingOcrPreviewTbody');
+    const countEl = document.getElementById('openingOcrItemCount');
+    if (!tbody) return;
+
+    tbody.innerHTML = '';
+    if (countEl) countEl.textContent = items.length;
+
+    if (items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted">No items to preview.</td></tr>';
+        _openingOcrRefreshTotals();
+        return;
+    }
+
+    items.forEach((item, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td data-label="#" style="padding:6px;">${idx + 1}</td>
+            <td data-label="Medicine Name">
+                <input type="text" class="form-control form-control-sm border-0 bg-transparent fw-bold" value="${item.name || ''}" onchange="_openingOcrUpdateItem(${idx}, 'name', this.value)">
+            </td>
+            <td data-label="Batch No">
+                <input type="text" class="form-control form-control-sm text-uppercase" style="width:110px;" value="${item.batch_number || 'OPENING'}" onchange="_openingOcrUpdateItem(${idx}, 'batch_number', this.value)">
+            </td>
+            <td data-label="Expiry">
+                <input type="text" class="form-control form-control-sm" style="width:90px;" placeholder="MM/YY" value="${item.expiry_date || ''}" onchange="_openingOcrUpdateItem(${idx}, 'expiry_date', this.value)">
+            </td>
+            <td data-label="Qty">
+                <input type="number" class="form-control form-control-sm text-center" style="width:70px;" value="${item.quantity || 1}" min="1" onchange="_openingOcrUpdateItem(${idx}, 'quantity', this.value)">
+            </td>
+            <td data-label="Pur Rate">
+                <input type="number" step="0.01" class="form-control form-control-sm text-end" style="width:90px;" value="${item.purchase_price || 0}" onchange="_openingOcrUpdateItem(${idx}, 'purchase_price', this.value)">
+            </td>
+            <td data-label="MRP">
+                <input type="number" step="0.01" class="form-control form-control-sm text-end" style="width:80px;" value="${item.mrp || 0}" onchange="_openingOcrUpdateItem(${idx}, 'mrp', this.value)">
+            </td>
+            <td data-label="GST%">
+                <input type="number" step="0.01" class="form-control form-control-sm text-center" style="width:60px;" value="${item.tax_percentage || 5}" onchange="_openingOcrUpdateItem(${idx}, 'tax_percentage', this.value)">
+            </td>
+            <td data-label="Total" class="text-end fw-bold text-teal" id="openingOcrRowTotal-${idx}">
+                ₹${(item.total || 0).toFixed(2)}
+            </td>
+            <td>
+                <button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="_openingOcrRemoveRow(${idx})" title="Remove item">
+                    <i class="fas fa-times"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    _openingOcrRefreshTotals();
+}
+
+function _openingOcrUpdateItem(idx, field, value) {
+    const item = _openingOcrParsedItems[idx];
+    if (!item) return;
+
+    if (field === 'quantity') {
+        item[field] = parseInt(value) || 0;
+    } else if (field === 'purchase_price' || field === 'mrp' || field === 'tax_percentage') {
+        item[field] = parseFloat(value) || 0.0;
+    } else {
+        item[field] = value.trim();
+    }
+
+    _openingOcrRecalcRow(idx);
+    _openingOcrRefreshTotals();
+}
+
+function _openingOcrRecalcRow(idx) {
+    const item = _openingOcrParsedItems[idx];
+    if (!item) return;
+
+    const qty = item.quantity || 0;
+    const price = item.purchase_price || 0.0;
+    const taxRate = item.tax_percentage || 0.0;
+
+    const subtotal = qty * price;
+    const taxAmt = subtotal * (taxRate / 100.0);
+    item.total = subtotal + taxAmt;
+
+    const cell = document.getElementById(`openingOcrRowTotal-${idx}`);
+    if (cell) {
+        cell.textContent = '₹' + item.total.toFixed(2);
+    }
+}
+
+function _openingOcrRefreshTotals() {
+    const totalQty = _openingOcrParsedItems.reduce((s, i) => s + (i.quantity || 0), 0);
+    const totalAmt = _openingOcrParsedItems.reduce((s, i) => s + (i.total || 0), 0);
+    const totalQtyEl = document.getElementById('openingOcrTotalQty');
+    if (totalQtyEl) totalQtyEl.textContent = totalQty;
+    const totalAmtEl = document.getElementById('openingOcrTotalAmount');
+    if (totalAmtEl) totalAmtEl.textContent = '₹' + totalAmt.toFixed(2);
+
+    const confirmBtn = document.getElementById('openingOcrConfirmBtn');
+    if (confirmBtn) {
+        confirmBtn.disabled = (_openingOcrParsedItems.length === 0);
+    }
+}
+
+function _openingOcrRemoveRow(idx) {
+    _openingOcrParsedItems.splice(idx, 1);
+    _openingOcrRenderPreviewTable(_openingOcrParsedItems);
+}
+
+function openingOcrClearAll() {
+    if (!confirm('Remove all extracted opening stock items?')) return;
+    _openingOcrParsedItems = [];
+    _openingOcrRenderPreviewTable([]);
+}
+
+function openingOcrGoToStep1() {
+    document.getElementById('openingOcrStep2').classList.add('d-none');
+    document.getElementById('openingOcrStep1').classList.remove('d-none');
+    document.getElementById('openingOcrBackBtn').style.display = 'none';
+    document.getElementById('openingOcrConfirmBtn').classList.add('d-none');
+    document.getElementById('openingOcrParseBtn').classList.remove('d-none');
+
+    document.getElementById('openingOcrStep2Ind').classList.remove('active');
+    document.getElementById('openingOcrStep1Ind').classList.add('active');
+}
+
+function ocrConfirmAndLoadOpening() {
+    if (_openingOcrParsedItems.length === 0) {
+        showToast('No items to load', 'error');
+        return;
+    }
+
+    _openingOcrParsedItems.forEach(item => {
+        openingItems.push({
+            product_id: item.product_id || null,
+            product_name: item.name,
+            batch_number: item.batch_number || 'OPENING',
+            expiry_date: item.expiry_date || '',
+            quantity: item.quantity || 1,
+            mrp: item.mrp || 0,
+            purchase_price: item.purchase_price || 0,
+            tax_percentage: item.tax_percentage || 5,
+            total: item.total || (item.quantity * item.purchase_price)
+        });
+    });
+
+    renderOpeningTable();
+    updateSummary();
+
+    const modalEl = document.getElementById('openingOcrImportModal');
+    if (modalEl) {
+        const instance = bootstrap.Modal.getInstance(modalEl);
+        if (instance) instance.hide();
+    }
+
+    showToast(`Loaded ${_openingOcrParsedItems.length} items into Opening Stock!`, 'success');
+}
+
+function resetOpeningOcrModal() {
+    _openingOcrSelectedFiles = [];
+    _openingOcrParsedItems = [];
+    _openingOcrMissingProducts = [];
+
+    const fileInput = document.getElementById('openingStockFile');
+    const cameraInput = document.getElementById('openingStockCamera');
+    if (fileInput) fileInput.value = '';
+    if (cameraInput) cameraInput.value = '';
+
+    const selFileDiv = document.getElementById('openingOcrSelectedFile');
+    if (selFileDiv) {
+        selFileDiv.innerHTML = '';
+        selFileDiv.classList.add('d-none');
+    }
+
+    const parseBtn = document.getElementById('openingOcrParseBtn');
+    if (parseBtn) parseBtn.disabled = true;
+
+    openingOcrGoToStep1();
+}
+
+// Global window mappings
+window.openingOcrDragOver = openingOcrDragOver;
+window.openingOcrDragLeave = openingOcrDragLeave;
+window.openingOcrDrop = openingOcrDrop;
+window.openingOcrFileSelected = openingOcrFileSelected;
+window.submitOpeningOcrParse = submitOpeningOcrParse;
+window.openingOcrQuickAddProduct = openingOcrQuickAddProduct;
+window._openingOcrUpdateItem = _openingOcrUpdateItem;
+window._openingOcrRemoveRow = _openingOcrRemoveRow;
+window.openingOcrClearAll = openingOcrClearAll;
+window.openingOcrGoToStep1 = openingOcrGoToStep1;
+window.ocrConfirmAndLoadOpening = ocrConfirmAndLoadOpening;
+window.resetOpeningOcrModal = resetOpeningOcrModal;
+
+// ==================== AI AUTO-FILL PRODUCT DETAILS ====================
+async function aiAutoFillProductDetails() {
+    const nameInput = document.getElementById('quickName');
+    const name = nameInput ? nameInput.value.trim() : '';
+
+    if (!name) {
+        showToast('Please type a medicine name first.', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('btnAiAutoFill');
+    const statusDiv = document.getElementById('aiAutoFillStatus');
+
+    if (btn) btn.disabled = true;
+    if (statusDiv) statusDiv.classList.remove('d-none');
+
+    try {
+        const response = await fetch('/api/products/ai-autofill/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ product_name: name })
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to auto-fill details.');
+        }
+
+        const data = result.data;
+
+        // 1. Fill basic fields
+        if (data.product_name && nameInput) nameInput.value = data.product_name;
+        if (data.packing) document.getElementById('quickPacking').value = data.packing;
+        if (data.conversion_factor) document.getElementById('quickConv').value = data.conversion_factor;
+        if (data.hsn_code) document.getElementById('quickHsn').value = data.hsn_code;
+
+        // Helper to update custom QuickSelect dropdown
+        function updateQuickSelectOption(selectId, valueId, textName) {
+            const selectEl = document.getElementById(selectId);
+            if (!selectEl || !valueId) return;
+
+            let optionExists = false;
+            for (let i = 0; i < selectEl.options.length; i++) {
+                if (selectEl.options[i].value == valueId) {
+                    optionExists = true;
+                    break;
+                }
+            }
+
+            if (!optionExists && textName) {
+                const opt = document.createElement('option');
+                opt.value = valueId;
+                opt.textContent = textName;
+                selectEl.appendChild(opt);
+            }
+
+            selectEl.value = valueId;
+
+            const visualInput = document.getElementById('qs-input-' + selectId);
+            if (visualInput && textName) {
+                visualInput.value = textName;
+            }
+            const clearBtn = document.getElementById('qs-clear-' + selectId);
+            if (clearBtn) {
+                clearBtn.style.display = 'inline-block';
+            }
+        }
+
+        updateQuickSelectOption('quickType', data.type_id, data.type_name);
+        updateQuickSelectOption('quickTax', data.tax_id, data.tax_name);
+        updateQuickSelectOption('quickSchedule', data.schedule_id, data.schedule_name);
+        updateQuickSelectOption('quickContent', data.content_id, data.content_name);
+        updateQuickSelectOption('quickCompany', data.company_id, data.company_name);
+
+        showToast('Medicine details auto-filled by AI!', 'success');
+    } catch (err) {
+        showToast(err.message || 'Error auto-filling details', 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+        if (statusDiv) statusDiv.classList.add('d-none');
+    }
+}
+window.aiAutoFillProductDetails = aiAutoFillProductDetails;
+

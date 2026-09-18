@@ -1527,4 +1527,92 @@ window.openOcrSupplierModal    = openOcrSupplierModal;
 window.closeOcrSupplierModal   = closeOcrSupplierModal;
 window.saveOcrSupplier         = saveOcrSupplier;
 
+// ==================== AI AUTO-FILL PRODUCT DETAILS ====================
+async function aiAutoFillProductDetails() {
+    const nameInput = document.getElementById('quickName');
+    const name = nameInput ? nameInput.value.trim() : '';
+
+    if (!name) {
+        showToast('Please type a medicine name first.', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('btnAiAutoFill');
+    const statusDiv = document.getElementById('aiAutoFillStatus');
+
+    if (btn) btn.disabled = true;
+    if (statusDiv) statusDiv.classList.remove('d-none');
+
+    try {
+        const response = await fetch('/api/products/ai-autofill/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ product_name: name })
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to auto-fill details.');
+        }
+
+        const data = result.data;
+
+        // 1. Fill basic fields
+        if (data.product_name && nameInput) nameInput.value = data.product_name;
+        if (data.packing) document.getElementById('quickPacking').value = data.packing;
+        if (data.conversion_factor) document.getElementById('quickConv').value = data.conversion_factor;
+        if (data.hsn_code) document.getElementById('quickHsn').value = data.hsn_code;
+
+        // Helper to update custom QuickSelect dropdown
+        function updateQuickSelectOption(selectId, valueId, textName) {
+            const selectEl = document.getElementById(selectId);
+            if (!selectEl || !valueId) return;
+
+            let optionExists = false;
+            for (let i = 0; i < selectEl.options.length; i++) {
+                if (selectEl.options[i].value == valueId) {
+                    optionExists = true;
+                    break;
+                }
+            }
+
+            if (!optionExists && textName) {
+                const opt = document.createElement('option');
+                opt.value = valueId;
+                opt.textContent = textName;
+                selectEl.appendChild(opt);
+            }
+
+            selectEl.value = valueId;
+
+            const visualInput = document.getElementById('qs-input-' + selectId);
+            if (visualInput && textName) {
+                visualInput.value = textName;
+            }
+            const clearBtn = document.getElementById('qs-clear-' + selectId);
+            if (clearBtn) {
+                clearBtn.style.display = 'inline-block';
+            }
+        }
+
+        updateQuickSelectOption('quickType', data.type_id, data.type_name);
+        updateQuickSelectOption('quickTax', data.tax_id, data.tax_name);
+        updateQuickSelectOption('quickSchedule', data.schedule_id, data.schedule_name);
+        updateQuickSelectOption('quickContent', data.content_id, data.content_name);
+        updateQuickSelectOption('quickCompany', data.company_id, data.company_name);
+
+        showToast('Medicine details auto-filled by AI!', 'success');
+    } catch (err) {
+        showToast(err.message || 'Error auto-filling details', 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+        if (statusDiv) statusDiv.classList.add('d-none');
+    }
+}
+window.aiAutoFillProductDetails = aiAutoFillProductDetails;
+
 })(); // ← closes the top-level IIFE opened at the start of this file

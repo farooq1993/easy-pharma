@@ -1,0 +1,193 @@
+2026-09-15 22:39:31,537 INFO [easypharma] ✓ Database migrations completed successfully
+2026-09-15 22:39:50,189 INFO [easypharma.middleware] Request to view=easypharma.views.accounts.login_view method=GET path=/ user= tenant=None
+2026-09-15 22:39:52,354 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user= tenant=None
+2026-09-15 22:39:52,568 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/offline/ user= tenant=None
+2026-09-15 22:39:52,582 INFO [easypharma.middleware] Request to view=easypharma.views.sales.view method=GET path=/pos/ user= tenant=None
+2026-09-15 22:39:52,902 INFO [easypharma.middleware] Request to view=easypharma.views.accounts.login_view method=GET path=/ user= tenant=None
+2026-09-15 22:39:52,908 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=GET path=/entry/ user= tenant=None
+2026-09-15 22:39:52,910 INFO [easypharma.middleware] Request to view=easypharma.views.accounts.home_view method=GET path=/home user= tenant=None
+2026-09-15 22:39:52,917 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=GET path=/entry/ user= tenant=None
+2026-09-15 22:39:52,925 INFO [easypharma.middleware] Request to view=easypharma.views.accounts.login_view method=GET path=/ user= tenant=None
+2026-09-15 22:39:52,943 INFO [easypharma.middleware] Request to view=easypharma.views.accounts.login_view method=GET path=/ user= tenant=None
+2026-09-15 22:39:52,963 INFO [easypharma.middleware] Request to view=easypharma.views.accounts.login_view method=GET path=/ user= tenant=None
+2026-09-15 22:39:55,915 INFO [easypharma.middleware] Request to view=easypharma.views.accounts.login_view method=GET path=/ user= tenant=None
+2026-09-15 22:39:56,056 INFO [easypharma.middleware] Request to view=easypharma.views.accounts.login_view method=GET path=/ user= tenant=None
+2026-09-15 22:40:08,848 INFO [easypharma.middleware] Request to view=easypharma.views.accounts.login_view method=POST path=/ user= tenant=None
+2026-09-15 22:40:08,849 DEBUG [easypharma.middleware] Request body: csrfmiddlewaretoken=Lr5yDTdQ9HviRxK37gVHov7uHlGbG9oMSxLZx2BQc2SBEgVl9g9o34CY8t3MKHuY&username=pharmacy&password=pharmacy%40123
+2026-09-15 22:40:10,231 INFO [easypharma.middleware] Request to view=easypharma.views.accounts.login_view method=GET path=/ user= tenant=None
+2026-09-15 22:40:12,185 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user= tenant=None
+2026-09-15 22:40:17,654 INFO [easypharma.middleware] Request to view=easypharma.views.accounts.login_view method=POST path=/ user= tenant=None
+2026-09-15 22:40:17,655 DEBUG [easypharma.middleware] Request body: csrfmiddlewaretoken=puv0YYPbL5hkQKfUt4ZEPciSGhTshs6BwAbrS7dbOqEDDtqcv4dluLNm7pg3l0cN&username=pharmacy&password=pharmacy123
+2026-09-15 22:40:19,243 INFO [easypharma.middleware] Request to view=easypharma.views.accounts.org_admin_dashboard method=GET path=/admin/dashboard user=pharmacy tenant=unique_med_pusad
+2026-09-15 22:40:19,994 INFO [easypharma.middleware] Request to view=easypharma.views.sales.view method=GET path=/api/products/search/ user=pharmacy tenant=unique_med_pusad
+2026-09-15 22:40:20,018 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=GET path=/api/suppliers/search/ user=pharmacy tenant=unique_med_pusad
+2026-09-15 22:40:21,302 INFO [easypharma.middleware] Request to view=easypharma.views.master.view method=GET path=/api/products/master-search/ user=pharmacy tenant=unique_med_pusad
+2026-09-15 22:40:21,655 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-15 22:40:25,091 INFO [easypharma.middleware] Request to view=easypharma.views.accounts.org_admin_dashboard method=GET path=/admin/dashboard user=pharmacy tenant=unique_med_pusad
+2026-09-15 22:40:26,925 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-15 22:40:28,530 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=GET path=/entry/ user=pharmacy tenant=unique_med_pusad
+2026-09-15 22:40:29,235 INFO [easypharma.middleware] Request to view=easypharma.views.master.view method=GET path=/api/products/master-search/ user=pharmacy tenant=unique_med_pusad
+2026-09-15 22:40:30,742 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-15 22:40:42,644 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=POST path=/import/ocr/ user=pharmacy tenant=unique_med_pusad
+2026-09-15 22:40:42,666 DEBUG [easypharma.middleware] Request body: <unreadable body>
+2026-09-15 22:41:29,001 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-15 22:42:29,478 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-15 22:43:29,459 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-15 22:44:29,731 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-15 22:45:12,486 INFO [easypharma] ✓ Database migrations completed successfully
+2026-09-15 22:45:29,060 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-15 22:46:29,522 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-15 22:47:05,392 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=GET path=/entry/ user=pharmacy tenant=unique_med_pusad
+2026-09-15 22:47:08,844 INFO [easypharma.middleware] Request to view=easypharma.views.master.view method=GET path=/api/products/master-search/ user=pharmacy tenant=unique_med_pusad
+2026-09-15 22:47:31,011 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=POST path=/import/ocr/ user=pharmacy tenant=unique_med_pusad
+2026-09-15 22:47:31,032 DEBUG [easypharma.middleware] Request body: <unreadable body>
+2026-09-18 09:01:53,568 INFO [easypharma] ✓ Database migrations completed successfully
+2026-09-18 09:01:57,065 INFO [easypharma.middleware] Request to view=easypharma.views.accounts.login_view method=GET path=/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:01:59,116 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:02:17,110 INFO [easypharma.middleware] Request to view=easypharma.views.accounts.login_view method=POST path=/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:02:17,111 DEBUG [easypharma.middleware] Request body: csrfmiddlewaretoken=mypa19YMXd8wn4NlLxobCx8pAK7nFhqUS2KQgg1PHjWXnMpwTha3t8PNm1zfYVSp&username=pharmacy&password=pharmcy123
+2026-09-18 09:02:18,552 INFO [easypharma.middleware] Request to view=easypharma.views.accounts.login_view method=GET path=/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:02:20,575 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:02:26,639 INFO [easypharma.middleware] Request to view=easypharma.views.accounts.login_view method=POST path=/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:02:26,639 DEBUG [easypharma.middleware] Request body: csrfmiddlewaretoken=vHrsrHXq2TGr2dYGnYygH47w7Oumhym21bM8GO0tMZuS2VARvIk8yFOUT5WeAcOx&username=pharmacy&password=pharmcy123
+2026-09-18 09:02:28,083 INFO [easypharma.middleware] Request to view=easypharma.views.accounts.login_view method=GET path=/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:02:30,105 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:03:02,219 INFO [easypharma.middleware] Request to view=easypharma.views.accounts.login_view method=POST path=/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:03:02,221 DEBUG [easypharma.middleware] Request body: csrfmiddlewaretoken=EwupyAHlqV8neS0PCVDxpDUjkM9QGhZsa0P5NHKoa1WOeAC0KFppgeBH63BIZVrX&username=pharmacy&password=pharmacy123
+2026-09-18 09:03:03,587 INFO [easypharma.middleware] Request to view=easypharma.views.accounts.org_admin_dashboard method=GET path=/admin/dashboard user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:03:04,321 INFO [easypharma.middleware] Request to view=easypharma.views.sales.view method=GET path=/api/products/search/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:03:04,322 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=GET path=/api/suppliers/search/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:03:05,434 INFO [easypharma.middleware] Request to view=easypharma.views.master.view method=GET path=/api/products/master-search/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:03:05,984 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:03:11,571 INFO [easypharma.middleware] Request to view=easypharma.views.sales.view method=GET path=/pos/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:03:12,159 INFO [easypharma.middleware] Request to view=easypharma.views.sales.view method=GET path=/api/products/search/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:03:13,826 INFO [easypharma.middleware] Request to view=easypharma.views.sales.view method=GET path=/pos/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:03:14,071 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:03:15,950 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:03:28,380 INFO [easypharma.middleware] Request to view=easypharma.views.sales.view method=POST path=/api/pos/scan-prescription/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:03:28,382 DEBUG [easypharma.middleware] Request body: <unreadable body>
+2026-09-18 09:04:14,053 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:04:30,911 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:05:14,896 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:06:14,901 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:07:14,886 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:08:14,882 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:09:14,892 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:10:15,902 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:11:58,904 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:12:58,921 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:13:58,904 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:14:58,892 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:15:45,086 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:16:14,888 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:17:03,939 INFO [easypharma] ✓ Database migrations completed successfully
+2026-09-18 09:17:45,941 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:18:46,893 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:19:47,892 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:35:43,618 INFO [easypharma] ✓ Database migrations completed successfully
+2026-09-18 09:35:43,787 INFO [easypharma.middleware] Request to view=easypharma.views.sales.view method=GET path=/pos/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:35:43,789 INFO [easypharma.middleware] Request to view=easypharma.views.sales.view method=GET path=/api/products/search/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:35:44,738 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:35:48,095 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=GET path=/entry/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:35:49,102 INFO [easypharma.middleware] Request to view=easypharma.views.master.view method=GET path=/api/products/master-search/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:35:50,681 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:35:51,172 INFO [easypharma.middleware] Request to view=easypharma.views.financial_year.view method=GET path=/financial-years/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:35:52,935 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:35:58,367 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=GET path=/opening/stock/list/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:36:00,345 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:36:00,953 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=GET path=/opening/stock/entry/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:36:04,598 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:37:03,895 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:38:03,921 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:39:03,900 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:40:03,901 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:41:03,890 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:42:03,885 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:43:58,889 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:44:58,910 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:45:58,897 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:46:58,900 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:47:59,165 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:48:59,037 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:49:58,890 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:50:58,923 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:51:58,899 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:52:58,893 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:53:58,893 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:54:58,899 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:55:46,747 INFO [easypharma] ✓ Database migrations completed successfully
+2026-09-18 09:55:47,230 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:56:03,883 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:56:29,416 INFO [easypharma] ✓ Database migrations completed successfully
+2026-09-18 09:57:03,909 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:57:09,305 INFO [easypharma] ✓ Database migrations completed successfully
+2026-09-18 09:58:49,894 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 09:59:50,892 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:00:51,917 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:01:52,891 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:02:02,942 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:02:03,304 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=GET path=/opening/stock/entry/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:02:25,396 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=POST path=/opening/stock/import/ocr/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:02:25,397 DEBUG [easypharma.middleware] Request body: <unreadable body>
+2026-09-18 10:03:05,560 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:04:05,917 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:04:20,915 INFO [easypharma.middleware] Request to view=easypharma.views.sales.view method=GET path=/api/products/search/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:04:21,902 INFO [easypharma.middleware] Request to view=easypharma.views.master.view method=GET path=/api/products/master-search/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:05:05,894 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:06:05,895 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:07:05,876 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:08:05,889 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:08:45,424 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=GET path=/opening/stock/entry/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:08:48,393 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=GET path=/api/suppliers/search/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:08:59,068 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=POST path=/opening/stock/import/ocr/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:08:59,077 DEBUG [easypharma.middleware] Request body: <unreadable body>
+2026-09-18 10:09:48,886 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:10:48,892 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:11:48,905 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:12:48,885 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:13:48,896 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:14:48,908 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:15:58,894 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:16:58,905 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:17:58,895 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:24:48,323 INFO [easypharma] ✓ Database migrations completed successfully
+2026-09-18 10:24:48,407 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:25:39,482 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=GET path=/opening/stock/entry/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:25:50,798 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=POST path=/opening/stock/import/ocr/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:25:50,799 DEBUG [easypharma.middleware] Request body: <unreadable body>
+2026-09-18 10:26:04,631 INFO [easypharma.middleware] Request to view=easypharma.views.master.view method=POST path=/api/products/ai-autofill/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:26:04,631 DEBUG [easypharma.middleware] Request body: {"product_name":"ZERODOL SP"}
+2026-09-18 10:26:21,850 INFO [easypharma.middleware] Request to view=easypharma.views.master.view method=POST path=/api/products/quick-add/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:26:21,850 DEBUG [easypharma.middleware] Request body: {"name":"ZERODOL SP TABLET","packing":"10 TABLETS / STRIP","conversion_factor":10,"tax_id":"8","schedule_id":"5","content_id":"8512","company_id":"30343","type_id":"2","hsn_code":"30049099"}
+2026-09-18 10:26:21,945 INFO [easypharma.middleware] Request to view=easypharma.views.sales.view method=GET path=/api/products/search/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:26:31,650 INFO [easypharma.middleware] Request to view=easypharma.views.master.view method=POST path=/api/products/ai-autofill/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:26:31,651 DEBUG [easypharma.middleware] Request body: {"product_name":"LUMERAX 20DT"}
+2026-09-18 10:26:41,278 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:26:46,953 INFO [easypharma.middleware] Request to view=easypharma.views.master.view method=POST path=/api/products/quick-add/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:26:46,954 DEBUG [easypharma.middleware] Request body: {"name":"LUMERAX 20DT TABLET","packing":"6 TABLETS / STRIP","conversion_factor":6,"tax_id":"8","schedule_id":"5","content_id":"8513","company_id":"30343","type_id":"2","hsn_code":"30049099"}
+2026-09-18 10:26:47,022 INFO [easypharma.middleware] Request to view=easypharma.views.sales.view method=GET path=/api/products/search/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:26:52,278 INFO [easypharma.middleware] Request to view=easypharma.views.master.view method=POST path=/api/products/ai-autofill/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:26:52,278 DEBUG [easypharma.middleware] Request body: {"product_name":"GUTRITE SACHETS"}
+2026-09-18 10:27:04,003 INFO [easypharma.middleware] Request to view=easypharma.views.master.view method=POST path=/api/products/quick-add/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:27:04,004 DEBUG [easypharma.middleware] Request body: {"name":"GUTRITE SACHET","packing":"1 SACHET","conversion_factor":1,"tax_id":"8","schedule_id":"39","content_id":"8514","company_id":"31011","type_id":"208","hsn_code":"30049099"}
+2026-09-18 10:27:04,068 INFO [easypharma.middleware] Request to view=easypharma.views.sales.view method=GET path=/api/products/search/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:27:17,886 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=GET path=/opening/stock/entry/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:27:42,024 INFO [easypharma.middleware] Request to view=easypharma.views.sales.view method=GET path=/api/products/search/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:27:55,191 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=POST path=/opening/stock/import/ocr/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:27:55,192 DEBUG [easypharma.middleware] Request body: <unreadable body>
+2026-09-18 10:28:19,358 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:28:42,449 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=POST path=/opening/stock/entry/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:28:42,449 DEBUG [easypharma.middleware] Request body: {"opening_stock_date":"2026-09-18","sub_total":784.44,"tax_amount":0,"total_amount":784.44,"items":[{"product_id":388661,"batch_number":"CEM082500AS","expiry_date":"2027-09-01","quantity":5,"purchase_price":61.76,"mrp":61.77,"tax_percentage":5,"total":324.24},{"product_id":388662,"batch_number":"5626E002","expiry_date":"2027-10-01","quantity":20,"purchase_price":13.14,"mrp":13.14,"tax_percentage":5,"total":275.94},{"product_id":388660,"batch_number":"FND00526001AS","expiry_date":"2028-11-01","quantity":2,"purchase_price":106.42,"mrp":106.42,"tax_percentage":5,"total":223.482}]}
+2026-09-18 10:28:44,043 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=GET path=/opening/stock/list/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:28:45,842 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:28:47,084 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=GET path=/opening/stock/list/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:28:48,678 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=GET path=/opening/stock/list/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:28:48,792 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:28:48,900 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=GET path=/opening/stock/list/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:28:50,198 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=GET path=/opening/stock/list/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:28:50,688 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:28:51,918 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:28:54,820 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=GET path=/opening/stock/edit/11/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:28:57,821 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:29:04,151 INFO [easypharma.middleware] Request to view=easypharma.views.purchase.view method=GET path=/opening/stock/list/ user=pharmacy tenant=unique_med_pusad
+2026-09-18 10:29:06,006 INFO [easypharma.middleware] Request to view=easypharma.views.utility.view method=GET path=/sw.js user=pharmacy tenant=unique_med_pusad

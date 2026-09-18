@@ -1,6 +1,6 @@
 from django.urls import path
 from easypharma.views.master import (
-    MasterCRUDView, ProductCreate, ProductListView, QuickProductAPI, ProductMasterSearchAPI)
+    MasterCRUDView, ProductCreate, ProductListView, QuickProductAPI, ProductMasterSearchAPI, AIProductAutoFillAPI)
 
 urlpatterns = [ 
     # Generic CRUD for masters
@@ -13,6 +13,7 @@ urlpatterns = [
     path('api/products/quick-add/', QuickProductAPI.as_view(), name='quick_product_api'),
     path('api/products/quick-add/<int:pk>/', QuickProductAPI.as_view(), name='quick_product_api_detail'),
     path('api/products/master-search/', ProductMasterSearchAPI.as_view(), name='product_master_search_api'),
+    path('api/products/ai-autofill/', AIProductAutoFillAPI.as_view(), name='ai_product_autofill_api'),
     
     
     # Legacy URL redirects/compatibility
