@@ -157,3 +157,129 @@ def extract_purchase_bill_data(image_file):
         return parsed_data
     except json.JSONDecodeError as e:
         raise Exception(f"Failed to parse Gemini output as JSON: {cleaned_text}. Error: {str(e)}")
+
+
+def extract_opening_stock_data(image_file):
+    """
+    Sends an opening stock image (handwritten or printed list) to Gemini API to extract details.
+    image_file: file-like object or bytes
+    """
+    api_key = GEMINI_API_KEY
+    if api_key:
+        api_key = api_key.split('#')[0].strip().split()[0]
+    
+    if not api_key:
+        raise ValueError("Gemini API key is not configured. Please set GEMINI_API_KEY in environment variables.")
+
+    # Read image bytes
+    if hasattr(image_file, 'read'):
+        image_data = image_file.read()
+    else:
+        image_data = image_file
+
+    base64_image = base64.b64encode(image_data).decode('utf-8')
+
+    prompt = (
+        "You are an expert pharmacy inventory OCR AI specializing in reading handwritten notes, stock registers, and printed inventory lists for Indian pharmacies.\n"
+        "Carefully parse this opening stock document/image and extract all items with extreme precision:\n\n"
+        "For each item line/row:\n"
+        "   - name: Medicine or product name with brand & strength/dosage (e.g. 'Pantocid 40mg', 'Augmentin 625 Duo', 'Telma 40'). Remove leading serial numbers (e.g., '1.', '2.') or stray bullet points.\n"
+        "   - batch_number: Exact batch number for this item (e.g. 'B2401', 'BT24110', 'T-5421', 'OPENING'). Maintain strict row alignment. Default to 'OPENING' if not specified.\n"
+        "   - expiry_date: Expiry date (convert to MM/YYYY format e.g. '06/27' -> '06/2027', '04-28' -> '04/2028', '01/27' -> '01/2027'). Default to null if not specified.\n"
+        "   - quantity: Exact quantity in units/packs. Read digits carefully without dropping numbers.\n"
+        "   - mrp: Maximum Retail Price (MRP) per pack/unit.\n"
+        "   - purchase_price: Purchase rate per unit (if specified. Default to mrp or 0.0 if not listed).\n"
+        "   - tax_percentage: GST percentage (e.g. 5, 12, 18. Default to 5 if not explicitly stated).\n"
+        "   - total: Calculated total amount for this row (quantity * purchase_price, or listed total).\n\n"
+        "Output MUST be a valid JSON object matching this schema:\n"
+        "{\n"
+        "  \"items\": [\n"
+        "    {\n"
+        "      \"name\": \"string\",\n"
+        "      \"batch_number\": \"string or null\",\n"
+        "      \"expiry_date\": \"string format MM/YYYY or YYYY-MM-DD or null\",\n"
+        "      \"quantity\": integer,\n"
+        "      \"mrp\": float,\n"
+        "      \"purchase_price\": float,\n"
+        "      \"tax_percentage\": float,\n"
+        "      \"total\": float\n"
+        "    }\n"
+        "  ]\n"
+        "}\n\n"
+        "Return ONLY the raw JSON block without markdown formatting or code blocks."
+    )
+
+    models_to_try = [
+        "gemini-3.6-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-flash-lite-latest",
+        "gemini-flash-latest",
+        "gemini-3.5-flash",
+        "gemini-3.1-flash-lite",
+        "gemini-2.5-flash"
+    ]
+
+    headers = {'Content-Type': 'application/json'}
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {"text": prompt},
+                    {
+                        "inlineData": {
+                            "mimeType": "image/jpeg",
+                            "data": base64_image
+                        }
+                    }
+                ]
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.1
+        }
+    }
+
+    last_error = None
+    response = None
+
+    for model_name in models_to_try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                res = requests.post(url, headers=headers, json=payload, timeout=45)
+                if res.status_code == 200:
+                    response = res
+                    break
+                elif res.status_code in [429, 503] and attempt < max_retries - 1:
+                    time.sleep(1.5)
+                    continue
+                else:
+                    last_error = f"{model_name} failed with status {res.status_code}: {res.text}"
+                    break
+            except Exception as e:
+                last_error = f"{model_name} exception: {str(e)}"
+                break
+        if response and response.status_code == 200:
+            break
+
+    if not response or response.status_code != 200:
+        raise Exception(f"Gemini API request failed. Last error: {last_error}")
+
+    resp_json = response.json()
+    try:
+        raw_text = resp_json['candidates'][0]['content']['parts'][0]['text']
+    except (KeyError, IndexError):
+        raise Exception(f"Invalid response format from Gemini API: {resp_json}")
+
+    cleaned_text = raw_text.strip()
+    match = re.search(r'```(?:json)?\s*(.*?)\s*```', cleaned_text, re.DOTALL)
+    if match:
+        cleaned_text = match.group(1)
+
+    try:
+        parsed_data = json.loads(cleaned_text.strip())
+        return parsed_data
+    except json.JSONDecodeError as e:
+        raise Exception(f"Failed to parse Gemini output as JSON: {cleaned_text}. Error: {str(e)}")
+

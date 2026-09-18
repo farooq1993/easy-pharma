@@ -48,12 +48,17 @@
 
             <!-- Add Items Section -->
             <div class="ep-card">
-                <div class="ep-card-header">
+                <div class="ep-card-header d-flex flex-wrap align-items-center gap-2">
                     <div class="step-badge">2</div>
                     <h6>Add Opening Stock Items</h6>
-                    <button class="btn-quick-add ms-auto" data-bs-toggle="modal" data-bs-target="#quickAddModal">
-                        <i class="fas fa-plus-circle"></i> Quick Add Medicine
-                    </button>
+                    <div class="ms-auto d-flex gap-2">
+                        <button class="btn btn-sm btn-teal text-white rounded-pill px-3 shadow-sm" style="background-color:#0d9488; border-color:#0d9488; font-size:0.83rem; font-weight:600;" data-bs-toggle="modal" data-bs-target="#openingOcrImportModal">
+                            <i class="fas fa-magic me-1"></i> AI Scan Stock (Handwritten/Bill)
+                        </button>
+                        <button class="btn-quick-add" data-bs-toggle="modal" data-bs-target="#quickAddModal">
+                            <i class="fas fa-plus-circle"></i> Quick Add Medicine
+                        </button>
+                    </div>
                 </div>
                 <div class="ep-card-body">
                     <!-- Inline Add Form -->
@@ -112,6 +117,8 @@
 {% include "purchase/edit_product_modal.html" %}
 
 {% include "purchase/master_add_modal.html" %}
+
+{% include "includes/opening_stock_ocr.html" %}
 
 <div class="ep-toast" id="epToast"></div>
 

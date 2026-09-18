@@ -445,3 +445,177 @@ class ProductListView(LoginRequiredMixin,View):
             return JsonResponse({'success': True})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
+
+
+import os
+import re
+import requests
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+
+@method_decorator(csrf_exempt, name='dispatch')
+class AIProductAutoFillAPI(LoginRequiredMixin, View):
+    def post(self, request):
+        if not request.tenant:
+            return JsonResponse({'success': False, 'error': 'No Pharmacy detected!'})
+
+        try:
+            data = json.loads(request.body)
+            product_name = (data.get('product_name') or '').strip()
+
+            if not product_name:
+                return JsonResponse({'success': False, 'error': 'Medicine name is required.'})
+
+            from easypharma.utility.purchase_ocr_service import GEMINI_API_KEY
+            api_key = GEMINI_API_KEY
+            if api_key:
+                api_key = api_key.split('#')[0].strip().split()[0]
+            
+            if not api_key:
+                return JsonResponse({'success': False, 'error': 'Gemini API key is not configured.'})
+
+            prompt = (
+                f"You are an expert Indian pharmacy database AI.\n"
+                f"Given the medicine name: '{product_name}', look up and return accurate specifications and master details used in Indian pharmacy inventory:\n\n"
+                f"1. product_name: Full clean brand name with strength/dosage (e.g. 'Zerodol SP Tablet')\n"
+                f"2. packing: Standard packaging string (e.g. '10 Tablets / Strip', '100ml Bottle', '1 Injection')\n"
+                f"3. conversion_factor: Integer units per box/strip (e.g. 10 for a strip of 10 tablets, 1 for syrup/injection/creams)\n"
+                f"4. product_type: Product category (e.g. 'Tablet', 'Capsule', 'Syrup', 'Injection', 'Ointment', 'Gel', 'Drops', 'Sachet')\n"
+                f"5. tax_rate: Standard GST percentage as number (e.g. 5.0, 12.0, 18.0. Default to 12.0 for standard medicines, 5.0 for essentials)\n"
+                f"6. schedule: Drug schedule classification (e.g. 'Schedule H', 'Schedule H1', 'Schedule C', 'Schedule X', 'OTC', 'General')\n"
+                f"7. content: Active chemical composition / salt formula (e.g. 'Aceclofenac 100mg + Paracetamol 325mg + Serratiopeptidase 15mg')\n"
+                f"8. company: Pharmaceutical manufacturer / brand company (e.g. 'Ipca Laboratories Ltd', 'Cipla Ltd', 'Sun Pharmaceutical', 'Mankind Pharma')\n"
+                f"9. hsn_code: Standard 4 or 8 digit HSN code for medicines (e.g. '30049099' or '3004')\n\n"
+                f"Output MUST be a valid JSON object matching this schema:\n"
+                f"{{\n"
+                f"  \"product_name\": \"string\",\n"
+                f"  \"packing\": \"string\",\n"
+                f"  \"conversion_factor\": integer,\n"
+                f"  \"product_type\": \"string\",\n"
+                f"  \"tax_rate\": float,\n"
+                f"  \"schedule\": \"string\",\n"
+                f"  \"content\": \"string\",\n"
+                f"  \"company\": \"string\",\n"
+                f"  \"hsn_code\": \"string\"\n"
+                f"}}\n\n"
+                f"Return ONLY the raw JSON block without markdown code fences."
+            )
+
+            models_to_try = [
+                "gemini-3.6-flash",
+                "gemini-3.5-flash-lite",
+                "gemini-flash-lite-latest",
+                "gemini-flash-latest",
+                "gemini-3.5-flash",
+                "gemini-3.1-flash-lite",
+                "gemini-2.5-flash"
+            ]
+
+            headers = {'Content-Type': 'application/json'}
+            payload = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {"temperature": 0.1}
+            }
+
+            response = None
+            last_error = None
+            for model_name in models_to_try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+                try:
+                    res = requests.post(url, headers=headers, json=payload, timeout=25)
+                    if res.status_code == 200:
+                        response = res
+                        break
+                    else:
+                        last_error = f"{model_name} status {res.status_code}"
+                except Exception as e:
+                    last_error = f"{model_name} exception: {str(e)}"
+
+            if not response or response.status_code != 200:
+                return JsonResponse({'success': False, 'error': f'AI Auto-Fill failed: {last_error}'})
+
+            resp_json = response.json()
+            raw_text = resp_json['candidates'][0]['content']['parts'][0]['text'].strip()
+            match = re.search(r'```(?:json)?\s*(.*?)\s*```', raw_text, re.DOTALL)
+            if match:
+                raw_text = match.group(1)
+
+            ai_data = json.loads(raw_text.strip())
+
+            # ── 1. Match or Create ProductType ──
+            type_name = (ai_data.get('product_type') or 'Tablet').strip()
+            ptype = ProductType.objects.filter(
+                Q(tenant=request.tenant) | Q(tenant__isnull=True),
+                name__iexact=type_name
+            ).first()
+            if not ptype and type_name:
+                ptype = ProductType.objects.create(tenant=request.tenant, name=type_name.capitalize())
+
+            # ── 2. Match or Create ProductTax ──
+            try:
+                tax_rate_val = float(ai_data.get('tax_rate') or 12.0)
+            except (ValueError, TypeError):
+                tax_rate_val = 12.0
+            ptax = ProductTax.objects.filter(
+                Q(tenant=request.tenant) | Q(tenant__isnull=True),
+                tax_rate=tax_rate_val
+            ).first()
+            if not ptax:
+                ptax = ProductTax.objects.create(
+                    tenant=request.tenant,
+                    tax_name=f"GST {int(tax_rate_val) if tax_rate_val.is_integer() else tax_rate_val}%",
+                    tax_rate=tax_rate_val
+                )
+
+            # ── 3. Match or Create ProductSchedule ──
+            sched_name = (ai_data.get('schedule') or 'General').strip()
+            psched = ProductSchedule.objects.filter(
+                Q(tenant=request.tenant) | Q(tenant__isnull=True),
+                schedule_name__iexact=sched_name
+            ).first()
+            if not psched and sched_name:
+                psched = ProductSchedule.objects.create(tenant=request.tenant, schedule_name=sched_name)
+
+            # ── 4. Match or Create ProductContent (Composition / Salt) ──
+            content_name = (ai_data.get('content') or '').strip()
+            pcontent = None
+            if content_name:
+                pcontent = ProductContent.objects.filter(
+                    Q(tenant=request.tenant) | Q(tenant__isnull=True),
+                    content_name__iexact=content_name
+                ).first()
+                if not pcontent:
+                    pcontent = ProductContent.objects.create(tenant=request.tenant, content_name=content_name)
+
+            # ── 5. Match or Create DrugCompany ──
+            company_name = (ai_data.get('company') or '').strip()
+            pcomp = None
+            if company_name:
+                pcomp = DrugCompany.objects.filter(
+                    Q(tenant=request.tenant) | Q(tenant__isnull=True),
+                    company_name__iexact=company_name
+                ).first()
+                if not pcomp:
+                    pcomp = DrugCompany.objects.create(tenant=request.tenant, company_name=company_name)
+
+            return JsonResponse({
+                'success': True,
+                'data': {
+                    'product_name': ai_data.get('product_name') or product_name,
+                    'packing': ai_data.get('packing') or '10 Tablets / Strip',
+                    'conversion_factor': int(ai_data.get('conversion_factor') or 1),
+                    'hsn_code': ai_data.get('hsn_code') or '30049099',
+                    'type_id': ptype.id if ptype else None,
+                    'type_name': ptype.name if ptype else '',
+                    'tax_id': ptax.id if ptax else None,
+                    'tax_name': f"{ptax.tax_name} ({ptax.tax_rate}%)" if ptax else '',
+                    'schedule_id': psched.id if psched else None,
+                    'schedule_name': psched.schedule_name if psched else '',
+                    'content_id': pcontent.id if pcontent else None,
+                    'content_name': pcontent.content_name if pcontent else '',
+                    'company_id': pcomp.id if pcomp else None,
+                    'company_name': pcomp.company_name if pcomp else '',
+                }
+            })
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)

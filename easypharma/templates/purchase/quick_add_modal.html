@@ -12,8 +12,18 @@
             <div class="modal-body">
 
                 <div class="mb-3">
-                    <label class="ep-label">Medicine Name<span class="text-danger">*</span></label>
-                    <input type="text" id="quickName" class="ep-input" placeholder="e.g. Paracetamol 500mg">
+                    <label class="ep-label d-flex justify-content-between align-items-center">
+                        <span>Medicine Name <span class="text-danger">*</span></span>
+                        <button type="button" class="btn btn-sm text-white rounded-pill px-3 py-1 shadow-sm" id="btnAiAutoFill" style="background-color:#0d9488; border-color:#0d9488; font-size:0.78rem; font-weight:600;" onclick="aiAutoFillProductDetails()">
+                            <i class="fas fa-magic me-1"></i> Auto-Fill with AI
+                        </button>
+                    </label>
+                    <div class="position-relative">
+                        <input type="text" id="quickName" class="ep-input" placeholder="e.g. Zerodol SP or Calpol 650">
+                        <div id="aiAutoFillStatus" class="mt-1 d-none" style="font-size:0.78rem; font-weight:600; color:#0d9488;">
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span> AI is fetching medicine details & matching masters...
+                        </div>
+                    </div>
                 </div>
 
                 <div class="row g-3 mb-3">

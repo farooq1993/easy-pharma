@@ -1837,3 +1837,140 @@ class UpdateStockBatchView(LoginRequiredMixin, View):
             return JsonResponse({'success': True, 'message': 'Batch details updated successfully'})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+
+from easypharma.utility.purchase_ocr_service import extract_opening_stock_data
+
+@method_decorator(csrf_exempt, name='dispatch')
+class OpeningStockScanAPI(LoginRequiredMixin, View):
+    def post(self, request):
+        if not request.tenant:
+            return JsonResponse({'success': False, 'error': 'No Pharmacy detected!'})
+            
+        # 1. Check daily limit
+        today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        scans_today = PurchaseScanLog.objects.filter(
+            tenant=request.tenant,
+            created_at__gte=today_start
+        ).count()
+        
+        limit = request.tenant.max_daily_scans
+        if scans_today >= limit:
+            return JsonResponse({
+                'success': False, 
+                'error': f'Daily scan limit of {limit} reached! Please upgrade your subscription plan.'
+            })
+            
+        # 2. Get uploaded file(s)
+        stock_files = request.FILES.getlist('stock_images')
+        if not stock_files:
+            single_file = request.FILES.get('stock_image')
+            if single_file:
+                stock_files = [single_file]
+                
+        if not stock_files:
+            return JsonResponse({'success': False, 'error': 'No image file uploaded.'})
+            
+        # 3. Call AI service to parse each image page
+        parsed_items_combined = []
+
+        try:
+            for idx, file in enumerate(stock_files):
+                parsed_page = extract_opening_stock_data(file)
+                page_items = parsed_page.get('items', [])
+                parsed_items_combined.extend(page_items)
+            
+            parsed_data = {
+                'items': parsed_items_combined
+            }
+        except ValueError as ve:
+            return JsonResponse({'success': False, 'error': str(ve)})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': f'AI Scanning failed: {str(e)}'})
+            
+        # 4. Success: Log the scan
+        PurchaseScanLog.objects.create(
+            tenant=request.tenant,
+            user=request.user
+        )
+        
+        # 5. Match extracted medicines with database Products
+        extracted_items = parsed_data.get('items', [])
+        matched_items = []
+        missing_products = []
+        
+        for idx, item in enumerate(extracted_items, start=1):
+            name = (item.get('name') or '').strip()
+            batch_number = (item.get('batch_number') or 'OPENING').strip().upper()
+            expiry_raw = (item.get('expiry_date') or '').strip()
+            
+            # Expiry date parsing
+            expiry_date = parse_expiry(expiry_raw)
+            if expiry_date and len(expiry_date) == 7:
+                expiry_date = expiry_date + '-01'
+            
+            raw_qty = item.get('quantity')
+            if raw_qty is None:
+                raw_qty = item.get('qty') or 0
+            try:
+                quantity = int(round(float(str(raw_qty).replace(',', '').strip())))
+            except (ValueError, TypeError):
+                quantity = 0
+                
+            try:
+                mrp = float(str(item.get('mrp') or 0.0).replace(',', '').strip())
+            except (ValueError, TypeError):
+                mrp = 0.0
+
+            try:
+                purchase_price = float(str(item.get('purchase_price') or mrp).replace(',', '').strip())
+            except (ValueError, TypeError):
+                purchase_price = mrp
+                
+            try:
+                tax_percentage = float(str(item.get('tax_percentage') or 5.0).replace('%', '').strip())
+            except (ValueError, TypeError):
+                tax_percentage = 5.0
+
+            subtotal = quantity * purchase_price
+            tax_amount = subtotal * (tax_percentage / 100.0)
+            total = subtotal + tax_amount
+
+            # Find product in db
+            product = find_product(request.tenant, name)
+            if product:
+                tax_rate = getattr(getattr(product, 'product_tax', None), 'tax_rate', tax_percentage)
+                matched_items.append({
+                    'product_id': product.id,
+                    'name': product.product_name,
+                    'packing': getattr(product, 'product_packing', ''),
+                    'conversion_factor': getattr(product, 'conversion_factor', 1),
+                    'batch_number': batch_number,
+                    'expiry_date': expiry_date,
+                    'quantity': quantity,
+                    'purchase_price': purchase_price,
+                    'tax_percentage': float(tax_rate),
+                    'tax_amount': (purchase_price * quantity) * float(tax_rate) / 100.0,
+                    'mrp': mrp,
+                    'total': total,
+                })
+            else:
+                missing_products.append({
+                    'row': idx,
+                    'product': name,
+                    'batch_number': batch_number,
+                    'expiry_date': expiry_date,
+                    'quantity': quantity,
+                    'purchase_price': purchase_price,
+                    'mrp': mrp,
+                    'tax_percentage': tax_percentage,
+                    'total': total,
+                })
+
+        return JsonResponse({
+            'success': True,
+            'scans_today': scans_today + 1,
+            'max_scans': limit,
+            'items': matched_items,
+            'missing_products': missing_products
+        })
