@@ -111,11 +111,18 @@ class PurchaseEntryView(LoginRequiredMixin,View):
                 except ValueError:
                     pass
 
+            invoice_id = invoice_id or data.get('id') or data.get('invoice_id')
             with transaction.atomic():
-                # If editing, revert old stock first
+                old_batch_units = {}
                 if invoice_id:
                     invoice = PurchaseInvoice.objects.get(id=invoice_id, tenant=request.tenant)
                     
+                    # Store previous batch units per (product_id, batch_number)
+                    for old_item in invoice.items.all():
+                        key = (old_item.product.id, old_item.batch_number)
+                        units = (old_item.quantity + old_item.free_quantity) * old_item.product.conversion_factor
+                        old_batch_units[key] = old_batch_units.get(key, 0) + units
+
                     # Validation: Check if any item has been removed or had its quantity reduced when there are sales
                     for old_item in invoice.items.all():
                         batch = StockBatch.objects.filter(
@@ -145,14 +152,6 @@ class PurchaseEntryView(LoginRequiredMixin,View):
                                     'error': f"Cannot reduce quantity of '{old_item.product.product_name}' (Batch {old_item.batch_number}) because some quantity has already been sold."
                                 }, status=400)
 
-                    for item in invoice.items.all():
-                        batch = StockBatch.objects.filter(
-                            tenant=request.tenant, product=item.product, batch_number=item.batch_number
-                        ).first()
-                        if batch:
-                            total_units = (item.quantity + item.free_quantity) * item.product.conversion_factor
-                            batch.current_quantity -= total_units
-                            batch.save()
                     invoice.items.all().delete()
                 else:
                     invoice = PurchaseInvoice(tenant=request.tenant, user=request.user)
@@ -188,7 +187,13 @@ class PurchaseEntryView(LoginRequiredMixin,View):
                 
                 for item in data['items']:
                     product = Products.objects.get(id=item['product_id'], tenant=request.tenant)
-                    # Note: PurchaseItem.save() handles stock addition
+                    total_units = (int(item['quantity']) + int(item.get('free_quantity', 0))) * product.conversion_factor
+                    
+                    key = (product.id, item['batch_number'])
+                    prev_units = old_batch_units.pop(key, 0)
+                    net_delta = total_units - prev_units
+
+                    # Create PurchaseItem record
                     PurchaseItem.objects.create(
                         tenant=request.tenant,
                         purchase_invoice=invoice,
@@ -204,6 +209,37 @@ class PurchaseEntryView(LoginRequiredMixin,View):
                         discount_percentage=item.get('discount_percentage', 0),
                         total_amount=item['total']
                     )
+
+                    # Update StockBatch with net_delta difference
+                    batch, created = StockBatch.objects.get_or_create(
+                        tenant=request.tenant,
+                        product=product,
+                        batch_number=item['batch_number'],
+                        defaults={
+                            'expiry_date': item['expiry_date'] if '-' in item['expiry_date'] and len(item['expiry_date']) > 7 else item['expiry_date'] + "-01",
+                            'purchase_price': item['purchase_price'],
+                            'mrp': item['mrp'],
+                            'sale_price': item['sale_price'],
+                            'initial_quantity': total_units,
+                            'current_quantity': total_units
+                        }
+                    )
+                    if not created:
+                        batch.current_quantity += net_delta
+                        batch.initial_quantity += net_delta
+                        batch.purchase_price = item['purchase_price']
+                        batch.mrp = item['mrp']
+                        batch.sale_price = item['sale_price']
+                        batch.expiry_date = item['expiry_date'] if '-' in item['expiry_date'] and len(item['expiry_date']) > 7 else item['expiry_date'] + "-01"
+                        batch.save()
+
+                # Revert stock for any batches completely removed from the invoice
+                for (prod_id, b_num), prev_units in old_batch_units.items():
+                    batch = StockBatch.objects.filter(tenant=request.tenant, product_id=prod_id, batch_number=b_num).first()
+                    if batch:
+                        batch.current_quantity -= prev_units
+                        batch.initial_quantity -= prev_units
+                        batch.save()
                 
                 from easypharma.models.accounting import SupplierLedger, ExpiryReturn
                 
