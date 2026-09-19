@@ -1807,10 +1807,14 @@ class UpdateStockBatchView(LoginRequiredMixin, View):
     def post(self, request):
         try:
             import json
+            from decimal import Decimal
             data = json.loads(request.body)
             batch_id = data.get('batch_id')
             new_batch_number = data.get('batch_number', '').strip()
             new_expiry_raw = data.get('expiry_date', '').strip()
+            new_mrp = data.get('mrp')
+            new_sale_price = data.get('sale_price')
+            new_quantity = data.get('current_quantity')
             
             if not batch_id or not new_batch_number or not new_expiry_raw:
                 return JsonResponse({'success': False, 'error': 'Missing required fields'}, status=400)
@@ -1834,14 +1838,61 @@ class UpdateStockBatchView(LoginRequiredMixin, View):
                 old_batch_number = batch.batch_number
                 old_expiry_date = batch.expiry_date
                 
-                # Check uniqueness of new batch number for the same product
+                # Check if new batch number exists for the same product in another record
                 if old_batch_number != new_batch_number:
-                    if StockBatch.objects.filter(tenant=request.tenant, product=batch.product, batch_number=new_batch_number).exists():
-                        return JsonResponse({'success': False, 'error': f'Batch number {new_batch_number} already exists for this product'}, status=400)
-                
-                # Update StockBatch
+                    existing_batch = StockBatch.objects.filter(
+                        tenant=request.tenant,
+                        product=batch.product,
+                        batch_number=new_batch_number
+                    ).exclude(id=batch.id).first()
+
+                    if existing_batch:
+                        # Merge quantities and update references
+                        if new_quantity is not None and str(new_quantity).strip() != '':
+                            existing_batch.current_quantity = int(new_quantity)
+                        else:
+                            existing_batch.current_quantity += batch.current_quantity
+                        existing_batch.expiry_date = new_expiry_date
+                        if new_mrp is not None and str(new_mrp).strip() != '':
+                            existing_batch.mrp = Decimal(str(new_mrp))
+                        if new_sale_price is not None and str(new_sale_price).strip() != '':
+                            existing_batch.sale_price = Decimal(str(new_sale_price))
+                        existing_batch.save()
+
+                        # Update PurchaseItem & SaleItem records
+                        PurchaseItem.objects.filter(
+                            purchase_invoice__tenant=request.tenant,
+                            product=batch.product,
+                            batch_number=old_batch_number,
+                            expiry_date=old_expiry_date
+                        ).update(
+                            batch_number=new_batch_number,
+                            expiry_date=new_expiry_date
+                        )
+                        SaleItem.objects.filter(
+                            sale_invoice__tenant=request.tenant,
+                            product=batch.product,
+                            batch_number=old_batch_number,
+                            expiry_date=old_expiry_date
+                        ).update(
+                            batch_number=new_batch_number,
+                            expiry_date=new_expiry_date
+                        )
+
+                        batch.delete()
+                        invalidate_stock_cache(request.tenant.id)
+                        invalidate_daily_sale_cache(request.tenant.id)
+                        return JsonResponse({'success': True, 'message': 'Batch merged and updated successfully'})
+
+                # Normal update of StockBatch
                 batch.batch_number = new_batch_number
                 batch.expiry_date = new_expiry_date
+                if new_mrp is not None and str(new_mrp).strip() != '':
+                    batch.mrp = Decimal(str(new_mrp))
+                if new_sale_price is not None and str(new_sale_price).strip() != '':
+                    batch.sale_price = Decimal(str(new_sale_price))
+                if new_quantity is not None and str(new_quantity).strip() != '':
+                    batch.current_quantity = int(new_quantity)
                 batch.save()
                 
                 # Update PurchaseItem records matching this product, old batch, and old expiry
@@ -1873,6 +1924,12 @@ class UpdateStockBatchView(LoginRequiredMixin, View):
             return JsonResponse({'success': True, 'message': 'Batch details updated successfully'})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+    def put(self, request):
+        return self.post(request)
+
+    def patch(self, request):
+        return self.post(request)
 
 
 from easypharma.utility.purchase_ocr_service import extract_opening_stock_data

@@ -52,12 +52,12 @@
                                 <tr>
                                     <td><span class="badge bg-secondary">{{ ret.return_inv_no }}</span></td>
                                     <td>#{{ ret.sale_invoice.invoice_number }}</td>
-                                    <td>{{ ret.sale_invoice.customer.name|default:"Walk-in" }}</td>
+                                    <td>{{ ret.sale_invoice.customer.name|default:ret.sale_invoice.patient_name|default:"Walk-in" }}</td>
                                     <td>{{ ret.return_qty }}</td>
                                     <td>₹{{ ret.return_amount }}</td>
                                     <td>{{ ret.return_at|date:"M d, Y H:i" }}</td>
                                     <td>
-                                        <a href="{% url 'pos_returns_create' %}?return_id={{ ret.id }}" class="btn btn-sm btn-outline-primary">Edit</a>
+                                        <a href="{% url 'pos_returns_edit' ret.id %}" class="btn btn-sm btn-outline-primary">Edit</a>
                                     </td>
                                 </tr>
                                 {% empty %}

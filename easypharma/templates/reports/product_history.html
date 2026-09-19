@@ -328,7 +328,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <td><span class="badge bg-secondary-soft text-secondary">${p.batch_number}</span></td>
                         <td>${p.expiry_date}</td>
                         <td class="fw-bold">${p.quantity}</td>
-                        <td class="text-success">+ ${p.free_quantity}</td>
+                        <td class="${(p.free_quantity || 0) > 0 ? 'text-success fw-bold' : 'text-muted'}">${p.free_quantity || 0}</td>
                         <td>₹${p.purchase_price.toFixed(2)}</td>
                         <td class="text-end pe-4 fw-bold">₹${p.total.toFixed(2)}</td>
                     `;

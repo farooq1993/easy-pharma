@@ -1388,29 +1388,47 @@ class MigrationRollbackView(LoginRequiredMixin, OrganizationRequiredMixin, View)
             dependencies = metadata.get('created_dependencies', {})
             
             with transaction.atomic():
-                # 1. Delete direct created records
-                if log.import_type == 'company':
-                    DrugCompany.objects.filter(id__in=created_ids, tenant=tenant).delete()
-                elif log.import_type == 'supplier':
-                    Supplier.objects.filter(id__in=created_ids, tenant=tenant).delete()
-                elif log.import_type in ('product', 'product_seed'):
-                    Products.objects.filter(id__in=created_ids, tenant=tenant).delete()
-                elif log.import_type == 'stock':
-                    # Delete stock batches first
-                    StockBatch.objects.filter(id__in=created_ids, tenant=tenant).delete()
-                    
-                # 2. Delete auto-created product dependencies (if any) to prevent orphaned junk data
-                for model_name, ids in dependencies.items():
-                    if not ids:
-                        continue
-                    if model_name == 'Products':
-                        Products.objects.filter(id__in=ids, tenant=tenant).delete()
-                    elif model_name == 'DrugCompany':
-                        DrugCompany.objects.filter(id__in=ids, tenant=tenant).delete()
-                    elif model_name == 'ProductType':
-                        ProductType.objects.filter(id__in=ids, tenant=tenant).delete()
-                    elif model_name == 'ProductContent':
-                        ProductContent.objects.filter(id__in=ids, tenant=tenant).delete()
+                # Helper for batch deletion to avoid "too many SQL variables"
+                def batch_delete(queryset, ids, batch_size=500):
+                    for i in range(0, len(ids), batch_size):
+                        queryset.filter(id__in=ids[i:i+batch_size]).delete()
+
+                # Mute signals to prevent timeouts (avoid 50k cache invalidations)
+                from django.db.models.signals import post_delete
+                from easypharma.signals import _invalidate_on_product
+                post_delete.disconnect(_invalidate_on_product, sender=Products)
+                
+                try:
+                    # 1. Delete direct created records
+                    if log.import_type == 'company':
+                        batch_delete(DrugCompany.objects.filter(tenant=tenant), created_ids)
+                    elif log.import_type == 'supplier':
+                        batch_delete(Supplier.objects.filter(tenant=tenant), created_ids)
+                    elif log.import_type in ('product', 'product_seed'):
+                        batch_delete(Products.objects.filter(tenant=tenant), created_ids)
+                    elif log.import_type == 'stock':
+                        # Delete stock batches first
+                        batch_delete(StockBatch.objects.filter(tenant=tenant), created_ids)
+                        
+                    # 2. Delete auto-created product dependencies (if any) to prevent orphaned junk data
+                    for model_name, ids in dependencies.items():
+                        if not ids:
+                            continue
+                        if model_name == 'Products':
+                            batch_delete(Products.objects.filter(tenant=tenant), ids)
+                        elif model_name == 'DrugCompany':
+                            batch_delete(DrugCompany.objects.filter(tenant=tenant), ids)
+                        elif model_name == 'ProductType':
+                            batch_delete(ProductType.objects.filter(tenant=tenant), ids)
+                        elif model_name == 'ProductContent':
+                            batch_delete(ProductContent.objects.filter(tenant=tenant), ids)
+                            
+                finally:
+                    # Reconnect signals and invalidate cache once
+                    post_delete.connect(_invalidate_on_product, sender=Products, weak=False)
+                    from easypharma.views.reports import invalidate_stock_cache, invalidate_daily_sale_cache
+                    invalidate_stock_cache(tenant.id)
+                    invalidate_daily_sale_cache(tenant.id)
                         
                 # 3. Mark log as Rolled Back
                 log.status = 'ROLLED_BACK'

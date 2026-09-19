@@ -1596,6 +1596,26 @@
             }
         });
 
+        // Filter or hide batch suggestions on typing
+        batchInput.addEventListener('input', (e) => {
+            const val = e.target.value.trim().toUpperCase();
+            batchSelectedIndex = -1;
+            if (!val) {
+                renderBatchSuggestions(currentBatchHistory);
+                return;
+            }
+            if (!currentBatchHistory || currentBatchHistory.length === 0) {
+                suggestionsDiv.classList.remove('show');
+                return;
+            }
+            const filtered = currentBatchHistory.filter(b => (b.batch_number || '').toUpperCase().includes(val));
+            if (filtered.length > 0) {
+                renderBatchSuggestions(filtered);
+            } else {
+                suggestionsDiv.classList.remove('show');
+            }
+        });
+
         // Keydown listener on batchInput for keyboard batch suggestions navigation
         batchInput.addEventListener('keydown', (e) => {
             const items = suggestionsDiv.querySelectorAll('.batch-suggestion-item');
@@ -2135,7 +2155,7 @@
             return; 
         }
         
-        const batch = document.getElementById('itemBatch').value.trim();
+        const batch = document.getElementById('itemBatch').value.trim().toUpperCase();
         let expiry = document.getElementById('itemExpiry').value;
         const qty = parseFloat(document.getElementById('itemQty').value) || 0;
         const freeQty = parseFloat(document.getElementById('itemFreeQty').value) || 0;
