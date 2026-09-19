@@ -178,16 +178,16 @@
                     <div class="row g-3 mb-3">
                         <div class="col-md-6">
                             <label for="editMRP" class="form-label text-muted small fw-bold">MRP (per pack)</label>
-                            <input type="number" step="0.01" class="form-control rounded-3 bg-light" id="editMRP" name="mrp" readonly style="border-radius:10px;">
+                            <input type="number" step="0.01" class="form-control rounded-3" id="editMRP" name="mrp" style="border-radius:10px;">
                         </div>
                         <div class="col-md-6">
                             <label for="editSalePrice" class="form-label text-muted small fw-bold">Sale Price (per pack)</label>
-                            <input type="number" step="0.01" class="form-control rounded-3 bg-light" id="editSalePrice" name="sale_price" readonly style="border-radius:10px;">
+                            <input type="number" step="0.01" class="form-control rounded-3" id="editSalePrice" name="sale_price" style="border-radius:10px;">
                         </div>
                     </div>
                     <div class="mb-3">
                         <label for="editCurrentQuantity" class="form-label text-muted small fw-bold">Current Stock Quantity (in units)</label>
-                        <input type="number" class="form-control rounded-3 bg-light" id="editCurrentQuantity" name="current_quantity" readonly style="border-radius:10px;">
+                        <input type="number" class="form-control rounded-3" id="editCurrentQuantity" name="current_quantity" style="border-radius:10px;">
                     </div>
                 </div>
                 <div class="modal-footer border-0 px-4 pb-4 pt-0">
@@ -222,7 +222,10 @@ document.getElementById('editBatchForm').addEventListener('submit', function(e) 
     const payload = {
         batch_id: document.getElementById('editBatchId').value,
         batch_number: document.getElementById('editBatchNumber').value,
-        expiry_date: document.getElementById('editExpiryDate').value
+        expiry_date: document.getElementById('editExpiryDate').value,
+        mrp: document.getElementById('editMRP').value,
+        sale_price: document.getElementById('editSalePrice').value,
+        current_quantity: document.getElementById('editCurrentQuantity').value
     };
 
     fetch('/api/stock/update-batch/', {

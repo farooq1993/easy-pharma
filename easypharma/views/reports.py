@@ -988,7 +988,7 @@ class ProductHistoryView(LoginRequiredMixin,View):
         total_free_qty = 0
         total_purchase_val = Decimal('0')
         for item in purchases:
-            total_purchased_qty += item.quantity
+            total_purchased_qty += item.quantity + (item.free_quantity or 0)
             total_free_qty += item.free_quantity or 0
             total_purchase_val += Decimal(str(item.quantity)) * Decimal(str(item.purchase_price))
             purchase_list.append({

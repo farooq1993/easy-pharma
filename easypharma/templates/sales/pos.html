@@ -702,19 +702,20 @@
                                         <th>Supplier</th>
                                         <th>Batch</th>
                                         <th>Qty</th>
+                                        <th>Free Qty</th>
                                         <th>Cost Price</th>
                                         <th class="text-end">Total</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr>
-                                        <td colspan="7" class="text-center py-4 text-muted">No purchase entries found.</td>
+                                        <td colspan="8" class="text-center py-4 text-muted">No purchase entries found.</td>
                                     </tr>
                                 </tbody>
                                 <tfoot class="bg-light fw-bold" id="inlinePurchasesFoot" style="display: none;">
                                     <tr>
                                         <td colspan="4" class="text-end">Total Quantity Purchased:</td>
-                                        <td id="inlineTotalPurchasesQty" class="text-success fs-5">0</td>
+                                        <td id="inlineTotalPurchasesQty" class="text-success fs-5" colspan="2">0</td>
                                         <td colspan="2"></td>
                                     </tr>
                                 </tfoot>
@@ -1640,31 +1641,41 @@
             // Render Purchases
             purchasesTbody.innerHTML = '';
             let totalPurchasesQty = 0;
+            let totalFreeQty = 0;
             if (!data.purchases || data.purchases.length === 0) {
-                purchasesTbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">No purchase entries recorded for this medicine.</td></tr>';
+                purchasesTbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-muted">No purchase entries recorded for this medicine.</td></tr>';
                 document.getElementById('inlinePurchasesFoot').style.display = 'none';
             } else {
                 data.purchases.forEach(p => {
-                    totalPurchasesQty += (Number(p.quantity) || 0);
+                    const qty = Number(p.quantity) || 0;
+                    const freeQty = Number(p.free_quantity) || 0;
+                    totalPurchasesQty += (qty + freeQty);
+                    totalFreeQty += freeQty;
                     const row = document.createElement('tr');
                     row.innerHTML = `
                         <td>${p.date}</td>
                         <td><span class="badge bg-light text-dark border">${p.invoice_number}</span></td>
                         <td class="fw-bold text-dark">${p.supplier_name}</td>
                         <td><span class="badge bg-secondary-soft text-secondary px-2 py-1">${p.batch_number}</span></td>
-                        <td class="fw-bold">${p.quantity}</td>
+                        <td class="fw-bold">${qty}</td>
+                        <td class="fw-bold ${freeQty > 0 ? 'text-success' : 'text-muted'}">${freeQty}</td>
                         <td>₹${p.purchase_price.toFixed(2)}</td>
                         <td class="text-end fw-bold text-primary">₹${p.total.toFixed(2)}</td>
                     `;
                     purchasesTbody.appendChild(row);
                 });
-                document.getElementById('inlineTotalPurchasesQty').textContent = totalPurchasesQty;
+                const totalEl = document.getElementById('inlineTotalPurchasesQty');
+                if (totalFreeQty > 0) {
+                    totalEl.innerHTML = `${totalPurchasesQty} <span class="fs-6 text-muted fw-normal">(${totalPurchasesQty - totalFreeQty} + ${totalFreeQty} free)</span>`;
+                } else {
+                    totalEl.textContent = totalPurchasesQty;
+                }
                 document.getElementById('inlinePurchasesFoot').style.display = 'table-footer-group';
             }
         } catch (error) {
             console.error('Error fetching product history inline:', error);
             salesTbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-danger">Error loading sales history</td></tr>';
-            purchasesTbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-danger">Error loading purchase history</td></tr>';
+            purchasesTbody.innerHTML = '<tr><td colspan="8" class="text-center py-4 text-danger">Error loading purchase history</td></tr>';
         }
     }
 

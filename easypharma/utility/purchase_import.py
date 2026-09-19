@@ -162,10 +162,12 @@ def parse_expiry(value):
         if len(year) == 4 and 1 <= int(month) <= 12:
             return f'{year}-{month.zfill(2)}-{day.zfill(2)}'
 
-    # 4. MM-YYYY or MM/YYYY
-    if re.match(r'^\d{1,2}-\d{4}$', text_clean):
+    # 4. MM-YYYY or MM/YYYY or MM-YY or MM/YY
+    if re.match(r'^\d{1,2}-\d{2,4}$', text_clean):
         parts = text_clean.split('-')
         month, year = parts[0], parts[1]
+        if len(year) == 2:
+            year = '20' + year
         if 1 <= int(month) <= 12:
             return f'{year}-{month.zfill(2)}-01'
 
