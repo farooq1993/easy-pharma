@@ -830,11 +830,13 @@ function compressOcrImage(file, callback) {
         const img = new Image();
         img.src = event.target.result;
         img.onload = function() {
-            // Use 2400px high-resolution for clear dot-matrix numbers & batch codes
-            const maxDim = 2400;
+            // Keep OCR fast by using a smaller, still-readable image instead of a
+            // very large 2400px upload; this reduces API latency without hurting
+            // invoice line clarity for pharmacy bills.
+            const maxDim = 1600;
             let width = img.width;
             let height = img.height;
-            
+
             if (width > maxDim || height > maxDim) {
                 if (width > height) {
                     height = Math.round((height * maxDim) / width);
@@ -844,16 +846,16 @@ function compressOcrImage(file, callback) {
                     height = maxDim;
                 }
             }
-            
+
             const canvas = document.createElement('canvas');
             canvas.width = width;
             canvas.height = height;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
-            
+
             canvas.toBlob(function(blob) {
                 callback(blob);
-            }, 'image/jpeg', 0.92);
+            }, 'image/jpeg', 0.78);
         };
     };
 }

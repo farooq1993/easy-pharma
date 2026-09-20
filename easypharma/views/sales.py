@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from django.views import View
 from django.utils import timezone
 from django.shortcuts import render, redirect, get_object_or_404
@@ -24,6 +24,36 @@ from easypharma.models.doctor import DoctorModel #DoctorModel
 
 # ── POS cache helpers ──────────────────────────────────────────
 POS_CACHE_TIMEOUT = 180  # 3 minutes
+
+
+def calculate_sale_summary(sub_total, tax_amount, discount_amount=0):
+    """Return exact money breakdown without forcing whole-rupee rounding.
+
+    The POS UI was rounding the grand total via Math.round(), which caused a
+    mismatch between the displayed subtotal + GST and the final invoice total.
+    For GST invoices we must keep the exact decimal total and store any tiny
+    round-off separately when required.
+    """
+    sub_total = Decimal(str(sub_total or 0))
+    tax_amount = Decimal(str(tax_amount or 0))
+    discount_amount = Decimal(str(discount_amount or 0))
+
+    gross = sub_total + tax_amount
+    if gross > 0 and discount_amount > 0:
+        discount_ratio = discount_amount / gross
+        sub_total = sub_total * (Decimal('1') - discount_ratio)
+        tax_amount = tax_amount * (Decimal('1') - discount_ratio)
+
+    exact_total = (sub_total + tax_amount).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    round_off = (exact_total - (sub_total + tax_amount)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    return {
+        'sub_total': sub_total.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP),
+        'tax_amount': tax_amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP),
+        'total_amount': exact_total,
+        'round_off': round_off,
+    }
+
 
 def _pos_search_version(tenant_id):
     """Return current search-cache version for this tenant (create if absent)."""

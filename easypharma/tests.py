@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from easypharma.models.sales import SaleInvoice, SalesReturn
 from easypharma.views.reports import DailySaleReportView
+from easypharma.views.sales import calculate_sale_summary
 from tenants.models import Tenant
 
 
@@ -28,6 +29,14 @@ class DailySaleReportViewTests(TestCase):
             owner=self.user,
         )
         self.factory = RequestFactory()
+
+    def test_invoice_summary_keeps_exact_total_without_forced_rupee_rounding(self):
+        summary = calculate_sale_summary(2634.75, 131.74, 0)
+
+        self.assertEqual(summary['sub_total'], Decimal('2634.75'))
+        self.assertEqual(summary['tax_amount'], Decimal('131.74'))
+        self.assertEqual(summary['total_amount'], Decimal('2766.49'))
+        self.assertEqual(summary['round_off'], Decimal('0.00'))
 
     def test_daily_sale_report_subtracts_returns_from_total_amount(self):
         sale = SaleInvoice.objects.create(

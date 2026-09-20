@@ -238,12 +238,15 @@
                     </div>
 
                     <!-- Round Off row -->
-                    <div class="summary-row d-flex justify-content-between align-items-center" id="roundOffRow" style="display:none !important;">
-                        <span class="text-muted small">
+                    <div class="summary-row d-flex justify-content-between align-items-center" id="roundOffRow" style="display:flex; gap:12px;">
+                        <label for="summaryRoundOff" class="text-muted small mb-0">
                             Round Off
                             <span id="roundOffSign" class="ms-1 text-muted small"></span>
-                        </span>
-                        <span id="summaryRoundOff" class="small text-muted">₹0.00</span>
+                        </label>
+                        <div class="input-group input-group-sm" style="width:112px;">
+                            <span class="input-group-text bg-white border-end-0 text-muted px-2">₹</span>
+                            <input id="summaryRoundOff" type="number" inputmode="decimal" step="0.01" min="-5" max="5" value="0.00" aria-label="Round off amount" class="form-control text-end fw-semibold border-start-0 px-2" style="height:32px; box-shadow:none;" />
+                        </div>
                     </div>
                     <div class="summary-total-row"><span class="fw-bold">Grand Total</span><span class="fw-bold fs-5" id="summaryGrandTotal">₹0.00</span></div>
                     <div class="d-flex justify-content-between text-danger fw-bold d-none mt-2" id="summaryBalanceDueRow">
@@ -2021,6 +2024,8 @@
 
         document.getElementById('summaryDiscount').addEventListener('input', () => calculateDiscount('amt'));
         document.getElementById('summaryDiscountPerc').addEventListener('input', () => calculateDiscount('perc'));
+        document.getElementById('summaryRoundOff').addEventListener('input', () => calculateSummary());
+        document.getElementById('summaryRoundOff').addEventListener('change', () => calculateSummary());
 
         // Discount % → Discount ₹ on Enter
         document.getElementById('summaryDiscountPerc').addEventListener('keydown', function(e) {
@@ -2190,8 +2195,8 @@
         const subTotal = qty * price;
         const discAmount = (subTotal * discPerc) / 100;
         const taxable = subTotal - discAmount;
-        const taxAmount = (taxable * taxPerc) / 100;
-        const totalWithTax = taxable + taxAmount;
+        const taxAmount = Math.round(((taxable * taxPerc) / 100) * 100) / 100;
+        const totalWithTax = Math.round((taxable + taxAmount) * 100) / 100;
         const totalUnits = (qty + freeQty) * (selectedProduct.conversion_factor || 1);
 
         items.push({
@@ -2330,93 +2335,92 @@
     }
 
     function calculateSummary() {
-    // Safe Sub Total
+        const roundOffInput = document.getElementById('summaryRoundOff');
+        const safeMoney = (value) => Number(Math.round((Number(value) || 0) * 100) / 100);
+        const toCents = (value) => Math.round((Number(value) || 0) * 100);
+        const sumMoney = (values) => values.reduce((total, value) => total + toCents(value), 0) / 100;
+
+        const manualRoundOff = roundOffInput ? (parseFloat(roundOffInput.value) || 0) : 0;
+
         const originalSub = items.reduce((s, i) => {
             const qty = parseFloat(i.quantity) || 0;
             const price = parseFloat(i.purchase_price) || 0;
             const itemDisc = parseFloat(i.discount_percentage) || 0;
-            const itemSub = qty * price;
-            const itemDiscAmt = (itemSub * itemDisc) / 100;
-            return s + (itemSub - itemDiscAmt);
+            const itemSub = safeMoney(qty * price);
+            const itemDiscAmt = safeMoney((itemSub * itemDisc) / 100);
+            return safeMoney(s + (itemSub - itemDiscAmt));
         }, 0);
 
-        // Safe Tax Sum
-        const taxSum = items.reduce((s, i) => {
-            return s + (parseFloat(i.tax_amount) || 0);
-        }, 0);
+        const taxSum = sumMoney(items.map(i => parseFloat(i.tax_amount) || 0));
 
-        let discAmt  = parseFloat(document.getElementById('summaryDiscount').value) || 0;
+        let discAmt = parseFloat(document.getElementById('summaryDiscount').value) || 0;
         let discPerc = parseFloat(document.getElementById('summaryDiscountPerc').value) || 0;
 
-        // GST discount is calculated based on Sub Total (Basic Price) discount ratio
         const discountRatio = originalSub > 0 ? discAmt / originalSub : 0;
+        const effectiveSub = safeMoney(originalSub * (1 - discountRatio));
+        const effectiveTax = safeMoney(taxSum * (1 - discountRatio));
 
-        const effectiveSub = originalSub * (1 - discountRatio);
-        const effectiveTax = taxSum * (1 - discountRatio);
-
-        // ==================== GST BIFURCATION ====================
         const gstMap = {};
         items.forEach(i => {
             const rate = parseFloat(i.tax_percentage) || 0;
-            const adjustedTax = (parseFloat(i.tax_amount) || 0) * (1 - discountRatio);
-            const cgst = adjustedTax / 2;
-            const sgst = adjustedTax / 2;
+            const adjustedTax = safeMoney((parseFloat(i.tax_amount) || 0) * (1 - discountRatio));
+            const cgst = safeMoney(adjustedTax / 2);
+            const sgst = safeMoney(adjustedTax / 2);
 
             if (!gstMap[rate]) {
                 gstMap[rate] = { total: 0, cgst: 0, sgst: 0 };
             }
             gstMap[rate].total += adjustedTax;
-            gstMap[rate].cgst  += cgst;
-            gstMap[rate].sgst  += sgst;
+            gstMap[rate].cgst += cgst;
+            gstMap[rate].sgst += sgst;
         });
 
-        // Render GST Bifurcation
         const gstDiv = document.getElementById('gstBifurcationSection');
         if (Object.keys(gstMap).length === 0) {
             gstDiv.innerHTML = '';
         } else {
             let html = '';
-            Object.keys(gstMap).sort((a,b) => parseFloat(a) - parseFloat(b)).forEach(rate => {
+            Object.keys(gstMap).sort((a, b) => parseFloat(a) - parseFloat(b)).forEach(rate => {
                 const g = gstMap[rate];
+                g.total = safeMoney(g.total);
+                g.cgst = safeMoney(g.total / 2);
+                g.sgst = safeMoney(g.total - g.cgst);
                 const cgstR = parseFloat(rate) / 2;
                 const sgstR = parseFloat(rate) / 2;
                 html += `
                 <div style="background:#f8f9ff; border-radius:8px; padding:6px 10px; margin-bottom:6px; border-left:3px solid #6366f1;">
                     <div class="d-flex justify-content-between fw-semibold" style="font-size:0.78rem; color:#4338ca;">
                         <span>GST @ ${rate}%</span>
-                        <span>₹${g.total.toFixed(2)}</span>
+                        <span>₹${Number(g.total).toFixed(2)}</span>
                     </div>
                     <div class="d-flex justify-content-between" style="font-size:0.72rem; color:#6b7280; padding-left:8px;">
                         <span>CGST @ ${cgstR}%</span>
-                        <span>₹${g.cgst.toFixed(2)}</span>
+                        <span>₹${Number(g.cgst).toFixed(2)}</span>
                     </div>
                     <div class="d-flex justify-content-between" style="font-size:0.72rem; color:#6b7280; padding-left:8px;">
                         <span>SGST @ ${sgstR}%</span>
-                        <span>₹${g.sgst.toFixed(2)}</span>
+                        <span>₹${Number(g.sgst).toFixed(2)}</span>
                     </div>
                 </div>`;
             });
             gstDiv.innerHTML = html;
         }
-        // ==================== GST BIFURCATION END ====================
 
-        const grandRaw = effectiveSub + effectiveTax;
-        const grandRounded = Math.round(grandRaw);
+        const grandRaw = safeMoney(effectiveSub + effectiveTax + manualRoundOff);
+        const grandRounded = safeMoney(grandRaw);
 
-        // Update Summary Values
-        document.getElementById('summarySubTotal').innerHTML = `₹${originalSub.toFixed(2)}`;
-        document.getElementById('summaryTax').innerHTML = `₹${effectiveTax.toFixed(2)}`;
+        document.getElementById('summarySubTotal').innerHTML = `₹${Number(originalSub).toFixed(2)}`;
+        document.getElementById('summaryTax').innerHTML = `₹${Number(effectiveTax).toFixed(2)}`;
         document.getElementById('summaryGrandTotal').innerHTML = `₹${grandRounded.toFixed(2)}`;
 
-        // Round Off
-        const roundOff = grandRounded - grandRaw;
+        const roundOff = safeMoney(grandRounded - (effectiveSub + effectiveTax));
         const roundOffRow = document.getElementById('roundOffRow');
         if (roundOffRow) {
-            if (Math.abs(roundOff) >= 0.005) {
-                roundOffRow.style.display = 'flex';
-                document.getElementById('summaryRoundOff').innerHTML = `₹${roundOff.toFixed(2)}`;
-            } else {
-                roundOffRow.style.display = 'none';
+            roundOffRow.style.display = 'flex';
+            const roundOffSign = document.getElementById('roundOffSign');
+            if (roundOffSign) {
+                roundOffSign.textContent = roundOff > 0 ? '(increase)' : roundOff < 0 ? '(decrease)' : '';
+                roundOffSign.className = `ms-1 small ${roundOff < 0 ? 'text-danger' : 'text-success'}`;
             }
         }
     }
@@ -2490,7 +2494,7 @@
             discount_amount: parseFloat(document.getElementById('summaryDiscount').value) || 0,
             payment_mode: document.getElementById('summaryPaymentMode').value || 'Cash',
             total_amount: parseFloat(document.getElementById('summaryGrandTotal').innerText.replace(/[^0-9.-]+/g, '')) || 0,
-            round_off: parseFloat(document.getElementById('summaryRoundOff').innerText.replace(/[^0-9.-]+/g, '')) || 0,
+            round_off: parseFloat(document.getElementById('summaryRoundOff').value) || 0,
             applied_returns: applied_returns
         };
 
@@ -3163,8 +3167,8 @@
         const subTotal = qty * price;
         const discAmount = (subTotal * discPerc) / 100;
         const taxable = subTotal - discAmount;
-        const taxAmount = (taxable * taxPerc) / 100;
-        const totalWithTax = taxable + taxAmount;
+        const taxAmount = Math.round(((taxable * taxPerc) / 100) * 100) / 100;
+        const totalWithTax = Math.round((taxable + taxAmount) * 100) / 100;
         const totalUnits = (qty + freeQty) * (item.conversion_factor || 1);
 
         items[idx] = {
