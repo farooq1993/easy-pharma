@@ -386,3 +386,248 @@ class ServiceWorkerView(View):
         response['Service-Worker-Allowed'] = '/'
         return response
 
+
+class StockMismatchView(LoginRequiredMixin, View):
+    template_name = 'utility/stock_mismatch.html'
+
+    def _get_mismatches(self, tenant):
+        from easypharma.models.stock import StockBatch
+        from easypharma.models.purchase_invoice import PurchaseItem, OpeningStockItem
+        from easypharma.models.sales import SaleItem, SalesReturnItem
+        from easypharma.models.general_setup import GeneralSetup
+        from django.db.models import Sum
+
+        setup = GeneralSetup.objects.filter(tenant=tenant).first()
+        sale_type = setup.sale_type if setup else 'unit'
+
+        batches = StockBatch.objects.filter(tenant=tenant).select_related('product').order_by('product__product_name', 'batch_number')
+
+        opening_qs = OpeningStockItem.objects.filter(tenant=tenant).values('product_id', 'batch_number').annotate(total=Sum('quantity'))
+        opening_dict = {(item['product_id'], item['batch_number']): item['total'] for item in opening_qs}
+
+        purchases_qs = PurchaseItem.objects.filter(tenant=tenant).values('product_id', 'batch_number').annotate(
+            total_qty=Sum('quantity'),
+            total_free=Sum('free_quantity')
+        )
+        purchases_dict = {(item['product_id'], item['batch_number']): (item['total_qty'] or 0) + (item['total_free'] or 0) for item in purchases_qs}
+
+        sales_qs = SaleItem.objects.filter(tenant=tenant).values('product_id', 'batch_number').annotate(total=Sum('quantity'))
+        sales_dict = {(item['product_id'], item['batch_number']): item['total'] for item in sales_qs}
+
+        returns_qs = SalesReturnItem.objects.filter(tenant=tenant).values('sale_item__product_id', 'sale_item__batch_number').annotate(total=Sum('returned_quantity'))
+        returns_dict = {(item['sale_item__product_id'], item['sale_item__batch_number']): item['total'] for item in returns_qs}
+
+        try:
+            from easypharma.models.accounting import ExpiryReturnItem
+            expiry_qs = ExpiryReturnItem.objects.filter(tenant=tenant).values('product_id', 'batch_number').annotate(total=Sum('quantity'))
+            expiry_dict = {(item['product_id'], item['batch_number']): item['total'] for item in expiry_qs}
+        except Exception:
+            expiry_dict = {}
+
+        mismatches = []
+        for batch in batches:
+            key = (batch.product_id, batch.batch_number)
+            cf = batch.product.conversion_factor or 1
+            
+            total_opening = opening_dict.get(key, 0) or 0
+            total_purchase = (purchases_dict.get(key, 0) or 0) * cf
+            
+            raw_sale = sales_dict.get(key, 0) or 0
+            total_sale = (raw_sale * cf) if sale_type == 'strip' else raw_sale
+            
+            total_returns = returns_dict.get(key, 0) or 0
+            total_expiry = (expiry_dict.get(key, 0) or 0) * cf
+
+            expected_quantity = total_opening + total_purchase - total_sale + total_returns - total_expiry
+
+            if expected_quantity != batch.current_quantity:
+                diff = expected_quantity - batch.current_quantity
+                mismatches.append({
+                    'batch_id': batch.id,
+                    'product_id': batch.product.id,
+                    'product_name': batch.product.product_name,
+                    'packing': batch.product.product_packing or '',
+                    'conversion_factor': cf,
+                    'batch_number': batch.batch_number,
+                    'expiry_date': batch.expiry_date.strftime('%m/%Y') if batch.expiry_date else '-',
+                    'current_quantity': batch.current_quantity,
+                    'expected_quantity': expected_quantity,
+                    'opening': total_opening,
+                    'purchase': total_purchase,
+                    'sale': total_sale,
+                    'returns': total_returns,
+                    'expiry': total_expiry,
+                    'diff': diff,
+                    'diff_formatted': f"+{diff}" if diff > 0 else f"{diff}",
+                })
+        return mismatches
+
+    def get(self, request):
+        if not (request.user.is_superuser or request.user.user_type in ('admin', 'tenant_owner') or getattr(request.user, 'can_access_utility', False)):
+            messages.error(request, "Access denied. You do not have permission to access Utility settings.")
+            return redirect('home')
+
+        mismatches = self._get_mismatches(request.tenant)
+        return render(request, self.template_name, {
+            'mismatches': mismatches,
+            'total_mismatches': len(mismatches),
+        })
+
+    def post(self, request):
+        if not (request.user.is_superuser or request.user.user_type in ('admin', 'tenant_owner') or getattr(request.user, 'can_access_utility', False)):
+            return JsonResponse({'success': False, 'error': 'Permission denied'}, status=403)
+
+        from easypharma.models.stock import StockBatch
+        from easypharma.models.purchase_invoice import OpeningStock, OpeningStockItem
+        from easypharma.views.reports import invalidate_stock_cache
+        from django.utils.timezone import now
+
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json'
+        
+        data = {}
+        if request.content_type == 'application/json':
+            try:
+                data = json.loads(request.body)
+            except Exception:
+                pass
+        else:
+            data = request.POST
+
+        action = data.get('action', 'fix_one')
+
+        if action == 'fix_one':
+            batch_id = data.get('batch_id')
+            if not batch_id:
+                return JsonResponse({'success': False, 'error': 'Batch ID is required'}, status=400)
+            
+            try:
+                batch = StockBatch.objects.get(id=batch_id, tenant=request.tenant)
+                mismatches = self._get_mismatches(request.tenant)
+                matching = [m for m in mismatches if m['batch_id'] == batch.id]
+                expected_qty = matching[0]['expected_quantity'] if matching else batch.current_quantity
+
+                new_quantity_raw = data.get('new_quantity')
+                if new_quantity_raw is not None and str(new_quantity_raw).strip() != '':
+                    try:
+                        new_qty = max(0, int(new_quantity_raw))
+                    except ValueError:
+                        new_qty = max(0, expected_qty)
+                else:
+                    new_qty = max(0, expected_qty)
+
+                # Bridge difference in OpeningStock so calculation history aligns with physical stock
+                delta = new_qty - expected_qty
+                if delta != 0:
+                    os_obj = OpeningStock.objects.filter(tenant=request.tenant).order_by('-id').first()
+                    if not os_obj:
+                        os_obj = OpeningStock.objects.create(
+                            tenant=request.tenant,
+                            voucher_number=OpeningStock.generate_voucher_number(request.tenant),
+                            opening_stock_date=now().date()
+                        )
+                    
+                    os_item = OpeningStockItem.objects.filter(
+                        tenant=request.tenant,
+                        product=batch.product,
+                        batch_number=batch.batch_number
+                    ).first()
+                    
+                    if os_item:
+                        new_os_qty = os_item.quantity + delta
+                        if new_os_qty < 0:
+                            new_os_qty = 0
+                        OpeningStockItem.objects.filter(id=os_item.id).update(quantity=new_os_qty)
+                    else:
+                        if delta > 0:
+                            # Create opening stock item for the deficit/adjustment
+                            OpeningStockItem.objects.create(
+                                tenant=request.tenant,
+                                opening_stock=os_obj,
+                                product=batch.product,
+                                batch_number=batch.batch_number,
+                                expiry_date=batch.expiry_date,
+                                quantity=delta,
+                                purchase_price=batch.purchase_price or 0,
+                                mrp=batch.mrp or 0,
+                                tax_percentage=0,
+                                total_amount=0
+                            )
+
+                # Set batch current_quantity
+                StockBatch.objects.filter(id=batch.id, tenant=request.tenant).update(
+                    current_quantity=new_qty,
+                    initial_quantity=max(batch.initial_quantity, new_qty)
+                )
+                invalidate_stock_cache(request.tenant.id)
+
+                msg = f"Stock for {batch.product.product_name} (Batch {batch.batch_number}) updated to {new_qty}."
+                if is_ajax:
+                    return JsonResponse({'success': True, 'message': msg, 'new_quantity': new_qty})
+                messages.success(request, msg)
+                return redirect('stock_mismatch')
+            except StockBatch.DoesNotExist:
+                return JsonResponse({'success': False, 'error': 'Batch not found'}, status=404)
+            except Exception as e:
+                return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+        elif action == 'fix_all':
+            try:
+                mismatches = self._get_mismatches(request.tenant)
+                fixed_count = 0
+                os_obj = None
+
+                for item in mismatches:
+                    expected = item['expected_quantity']
+                    target_qty = max(0, expected)
+                    delta = target_qty - expected
+
+                    if delta > 0:
+                        if not os_obj:
+                            os_obj = OpeningStock.objects.filter(tenant=request.tenant).order_by('-id').first()
+                            if not os_obj:
+                                os_obj = OpeningStock.objects.create(
+                                    tenant=request.tenant,
+                                    voucher_number=OpeningStock.generate_voucher_number(request.tenant),
+                                    opening_stock_date=now().date()
+                                )
+                        
+                        os_item = OpeningStockItem.objects.filter(
+                            tenant=request.tenant,
+                            product_id=item['product_id'],
+                            batch_number=item['batch_number']
+                        ).first()
+                        if os_item:
+                            OpeningStockItem.objects.filter(id=os_item.id).update(quantity=os_item.quantity + delta)
+                        else:
+                            OpeningStockItem.objects.create(
+                                tenant=request.tenant,
+                                opening_stock=os_obj,
+                                product_id=item['product_id'],
+                                batch_number=item['batch_number'],
+                                expiry_date=now().date(),
+                                quantity=delta,
+                                purchase_price=0,
+                                mrp=0,
+                                tax_percentage=0,
+                                total_amount=0
+                            )
+
+                    StockBatch.objects.filter(id=item['batch_id'], tenant=request.tenant).update(
+                        current_quantity=target_qty
+                    )
+                    fixed_count += 1
+
+                invalidate_stock_cache(request.tenant.id)
+                msg = f"Successfully reconciled {fixed_count} stock mismatches!"
+                if is_ajax:
+                    return JsonResponse({'success': True, 'message': msg, 'fixed_count': fixed_count})
+                messages.success(request, msg)
+                return redirect('stock_mismatch')
+            except Exception as e:
+                if is_ajax:
+                    return JsonResponse({'success': False, 'error': str(e)}, status=500)
+                messages.error(request, f"Error fixing stock: {str(e)}")
+                return redirect('stock_mismatch')
+
+        return JsonResponse({'success': False, 'error': 'Unknown action'}, status=400)
+
