@@ -9,5 +9,9 @@
 __pycache__/
 */__pycache__/
 *.py[cod]
+
+# Application logs
+/logs/
+
 *sqlite3
 pharmaProject/.env

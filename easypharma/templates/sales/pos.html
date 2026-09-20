@@ -2054,9 +2054,10 @@
             
             let grandTotal = gross - discount;
 
-            // ── Round Off ──
-            const roundedTotal = Math.round(grandTotal);
-            const roundOff = roundedTotal - grandTotal;
+            // Keep exact decimal total; do not force whole-rupee rounding because
+            // it creates mismatches between subtotal + GST and final invoice total.
+            const roundedTotal = Number(grandTotal.toFixed(2));
+            const roundOff = Number((roundedTotal - grandTotal).toFixed(2));
             grandTotal = roundedTotal;
 
             document.getElementById('summarySubTotal').innerText = discountedSubTotal.toFixed(2);
