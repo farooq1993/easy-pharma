@@ -81,7 +81,7 @@ class Command(BaseCommand):
                 )
                 total_expiry_return = sum(item.quantity * conversion_factor for item in expiry_items)
 
-                expected_quantity = total_opening + total_purchase - total_sale + total_returns - total_expiry_return
+                expected_quantity = max(0, total_opening + total_purchase - total_sale + total_returns - total_expiry_return)
 
                 if expected_quantity != batch.current_quantity:
                     mismatch_count += 1

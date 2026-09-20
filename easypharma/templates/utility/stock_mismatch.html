@@ -1,0 +1,515 @@
+{% extends "includes/base.html" %}
+{% block title %}Stock Mismatch Audit & Correction - Easy Pharma{% endblock %}
+
+{% block content %}
+<style>
+    /* ── Main Layout & Cards ── */
+    .mismatch-header-card {
+        background: linear-gradient(135deg, #2d3048 0%, #1e2033 100%);
+        color: #ffffff;
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    }
+    .premium-card {
+        background: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+        margin-bottom: 24px;
+        border: 1px solid #eef0f6;
+        overflow: hidden;
+    }
+    .premium-card-head {
+        padding: 16px 24px;
+        background: #fcfdfe;
+        border-bottom: 1px solid #eef0f6;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .premium-card-body {
+        padding: 24px;
+    }
+
+    /* ── Table Styling ── */
+    .table-mismatch th {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #6c757d;
+        font-weight: 700;
+        background-color: #f8f9fa;
+        border-bottom: 2px solid #e9ecef;
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+    .table-mismatch td {
+        vertical-align: middle;
+        font-size: 13px;
+        padding: 12px 14px;
+    }
+    .table-mismatch tr.fade-out {
+        transition: all 0.5s ease-out;
+        opacity: 0;
+        transform: translateX(30px);
+    }
+    .table-mismatch tr:hover td {
+        background-color: #fbfcfe;
+    }
+
+    /* ── Diff Badges ── */
+    .badge-diff-plus {
+        background-color: #e8f5e9;
+        color: #2e7d32;
+        font-weight: 600;
+        border: 1px solid #c8e6c9;
+    }
+    .badge-diff-minus {
+        background-color: #ffebee;
+        color: #c62828;
+        font-weight: 600;
+        border: 1px solid #ffcdd2;
+    }
+    .badge-stock {
+        font-size: 13px;
+        padding: 6px 10px;
+        border-radius: 8px;
+    }
+
+    /* ── Empty State ── */
+    .empty-state-card {
+        padding: 60px 20px;
+        text-align: center;
+    }
+    .empty-icon {
+        width: 80px;
+        height: 80px;
+        background: #e8f5e9;
+        color: #2e7d32;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 40px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 15px rgba(46, 125, 50, 0.15);
+    }
+
+    /* ── Input Styling ── */
+    .qty-input {
+        width: 85px;
+        text-align: center;
+        font-weight: 600;
+        border-radius: 8px;
+        height: 36px;
+        font-size: 13px;
+    }
+    .btn-update-stock {
+        height: 36px;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 12px;
+        padding: 0 14px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+</style>
+
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark">Stock Mismatch Audit &amp; Correction</h4>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0">
+                    <li class="breadcrumb-item"><a href="{% url 'home' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'utility_home' %}">Utility</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Stock Mismatch</li>
+                </ol>
+            </nav>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm rounded-3 px-3 shadow-sm" onclick="location.reload();">
+                <i class="bi bi-arrow-clockwise me-1"></i> Refresh
+            </button>
+            {% if total_mismatches > 0 %}
+            <button type="button" class="btn btn-success btn-sm rounded-3 px-3 shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#fixAllModal">
+                <i class="bi bi-check-all me-1"></i> Fix All to Expected Stock
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Overview Banner -->
+    <div class="mismatch-header-card">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <div class="d-flex align-items-center gap-3 mb-2">
+                    <span class="badge bg-light text-dark px-3 py-2 rounded-pill fw-bold">
+                        <i class="bi bi-shield-check text-success me-1"></i> Inventory Reconciliation
+                    </span>
+                    <span class="badge {% if total_mismatches > 0 %}bg-warning text-dark{% else %}bg-success text-white{% endif %} px-3 py-2 rounded-pill fw-bold" id="mismatchCountBadge">
+                        {{ total_mismatches }} Mismatch{% if total_mismatches != 1 %}es{% endif %} Found
+                    </span>
+                </div>
+                <h5 class="fw-bold mb-1">Transaction History vs Database Stock Audit</h5>
+                <p class="mb-0 text-white-50 small">
+                    This tool cross-references every batch against its transaction history: 
+                    <strong>Expected Stock = Opening + Purchases - Sales + Sales Returns - Expiry Returns</strong>.
+                    Any batch with duplicate or missing stock is detected below for one-click correction.
+                </p>
+            </div>
+            <div class="col-lg-4 text-lg-end mt-3 mt-lg-0">
+                <div class="bg-white bg-opacity-10 p-3 rounded-3 d-inline-block text-start" style="min-width: 220px;">
+                    <div class="text-white-50 small">Total Mismatched Items</div>
+                    <div class="fs-3 fw-bold text-white" id="mismatchCountText">{{ total_mismatches }}</div>
+                    <div class="text-white-50 small" style="font-size: 11px;">Updated in real-time on correction</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Empty State (Shown when no mismatches exist) -->
+    <div class="premium-card {% if total_mismatches > 0 %}d-none{% endif %}" id="emptyStateCard">
+        <div class="empty-state-card">
+            <div class="empty-icon">
+                <i class="bi bi-check2"></i>
+            </div>
+            <h4 class="fw-bold text-dark mb-2">No stock mismatch found</h4>
+            <p class="text-muted mb-4" style="max-width: 500px; margin: 0 auto;">
+                All medicine stock batches in your database match the transaction history 
+                (Opening Stock + Purchases - Sales) perfectly with zero discrepancies.
+            </p>
+            <button class="btn btn-outline-primary btn-sm rounded-pill px-4" onclick="location.reload();">
+                <i class="bi bi-arrow-repeat me-1"></i> Check Again
+            </button>
+        </div>
+    </div>
+
+    <!-- Mismatches Table Card (Shown when mismatches exist) -->
+    <div class="premium-card {% if total_mismatches == 0 %}d-none{% endif %}" id="tableCard">
+        <div class="premium-card-head">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-exclamation-triangle-fill text-warning fs-5"></i>
+                <span class="fw-bold text-dark">Detected Stock Discrepancies</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <div class="input-group input-group-sm" style="width: 240px;">
+                    <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" id="searchInput" class="form-control border-start-0" placeholder="Search medicine/batch...">
+                </div>
+        </div>
+        <div class="px-3 pt-3">
+            <div class="alert alert-info border-0 rounded-3 shadow-sm d-flex align-items-center py-2 px-3 mb-3">
+                <i class="bi bi-info-circle-fill text-primary fs-5 me-2"></i>
+                <div style="font-size: 13px;">
+                    <strong>Guide:</strong> 
+                    <span class="badge me-1" style="background:#e8f0fe; color:#1a73e8; border:1px solid #c2e7ff;">Calculated Stock</span> = Expected quantity based on Purchase &amp; Sale history &nbsp;|&nbsp;
+                    <span class="badge me-1" style="background:#f1f3f4; color:#3c4043; border:1px solid #dadce0;">Current Stock (Software)</span> = Currently recorded quantity in the system &nbsp;|&nbsp;
+                    <strong class="text-dark">Physical Stock (Rack)</strong> = Enter actual count from your shelf/rack and click <strong>Update</strong>.
+                </div>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-mismatch align-middle mb-0" id="mismatchTable">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Medicine Name</th>
+                        <th>Batch &amp; Expiry</th>
+                        <th class="text-center">Opening</th>
+                        <th class="text-center">Purchases</th>
+                        <th class="text-center">Sales</th>
+                        <th class="text-center">Returns</th>
+                        <th class="text-center bg-light" style="min-width: 140px;">
+                            <div>Calculated Stock</div>
+                            <small class="text-primary fw-normal" style="font-size: 10px;">(From Bill History)</small>
+                        </th>
+                        <th class="text-center" style="min-width: 150px;">
+                            <div>Current Stock (Software)</div>
+                            <small class="text-muted fw-normal" style="font-size: 10px;">(Recorded in System)</small>
+                        </th>
+                        <th class="text-center">
+                            <div>Difference</div>
+                            <small class="text-muted fw-normal" style="font-size: 10px;">(Variance +/-)</small>
+                        </th>
+                        <th class="text-center" style="min-width: 180px;">
+                            <div>Physical Stock (Rack)</div>
+                            <small class="text-success fw-normal" style="font-size: 10px;">(Actual Shelf Count)</small>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in mismatches %}
+                    <tr id="row-{{ m.batch_id }}" data-search="{{ m.product_name }} {{ m.batch_number }}">
+                        <td class="text-muted fw-bold">{{ forloop.counter }}</td>
+                        <td>
+                            <div class="fw-bold text-dark">{{ m.product_name }}</div>
+                            {% if m.packing %}
+                            <small class="text-muted"><i class="bi bi-box-seam me-1"></i>Pack: {{ m.packing }}</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="badge bg-light text-dark border fw-bold">{{ m.batch_number }}</div>
+                            <div class="text-muted" style="font-size: 11px;">Exp: {{ m.expiry_date }}</div>
+                        </td>
+                        <td class="text-center text-muted">{{ m.opening }}</td>
+                        <td class="text-center text-primary fw-semibold">+{{ m.purchase }}</td>
+                        <td class="text-center text-danger fw-semibold">-{{ m.sale }}</td>
+                        <td class="text-center text-success">
+                            {% if m.returns %}+{{ m.returns }}{% else %}0{% endif %}
+                        </td>
+                        <td class="text-center bg-light">
+                            <span class="badge badge-stock fw-bold fs-6" style="background-color: #e8f0fe; color: #1a73e8; border: 1px solid #c2e7ff;">
+                                {{ m.expected_quantity }}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            <span class="badge badge-stock fw-bold fs-6" id="db-stock-{{ m.batch_id }}" style="background-color: #f1f3f4; color: #3c4043; border: 1px solid #dadce0;">
+                                {{ m.current_quantity }}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            {% if m.diff > 0 %}
+                            <span class="badge badge-diff-plus px-2 py-1 rounded-pill">
+                                <i class="bi bi-arrow-up-short"></i>{{ m.diff_formatted }}
+                            </span>
+                            {% else %}
+                            <span class="badge badge-diff-minus px-2 py-1 rounded-pill">
+                                <i class="bi bi-arrow-down-short"></i>{{ m.diff_formatted }}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center gap-1 justify-content-center">
+                                <input type="number" 
+                                       class="form-control qty-input shadow-none" 
+                                       id="input-{{ m.batch_id }}" 
+                                       value="{% if m.expected_quantity < 0 %}0{% else %}{{ m.expected_quantity }}{% endif %}" 
+                                       placeholder="Rack Qty"
+                                       title="Enter actual physical quantity present in rack and click Update">
+                                <button type="button" 
+                                        class="btn btn-sm btn-primary btn-update-stock shadow-sm" 
+                                        id="btn-{{ m.batch_id }}" 
+                                        onclick="updateBatchStock('{{ m.batch_id }}', '{{ m.product_name|escapejs }}', '{{ m.batch_number|escapejs }}')">
+                                    <i class="bi bi-check-lg"></i> Update
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Fix All Mismatches Confirmation -->
+<div class="modal fade" id="fixAllModal" tabindex="-1" aria-labelledby="fixAllModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-bottom-0 pb-0">
+                <h5 class="modal-title fw-bold text-dark" id="fixAllModalLabel">
+                    <i class="bi bi-shield-check text-success me-2"></i>Fix All Stock Mismatches
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body py-4">
+                <p class="text-muted mb-3">
+                    Are you sure you want to automatically reconcile 
+                    <strong class="text-dark">{{ total_mismatches }} mismatched batches</strong>?
+                </p>
+                <div class="bg-light p-3 rounded-3 text-muted small">
+                    <i class="bi bi-info-circle text-primary me-1"></i>
+                    Each batch will be updated to match its true formula:
+                    <strong>Opening + Purchases - Sales + Returns</strong>.
+                    Physical batch stock will instantly sync across POS, Stock Reports, and Invoices.
+                </div>
+            </div>
+            <div class="modal-footer border-top-0 pt-0">
+                <button type="button" class="btn btn-outline-secondary rounded-3 px-3" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success rounded-3 px-4 fw-bold" id="confirmFixAllBtn" onclick="fixAllMismatches()">
+                    Yes, Reconcile All
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container for Notifications -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1090;">
+    <div id="actionToast" class="toast align-items-center text-white bg-dark border-0 rounded-3 shadow" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+            <div class="toast-body d-flex align-items-center gap-2">
+                <i class="bi bi-check-circle-fill text-success fs-5" id="toastIcon"></i>
+                <span id="toastMsg">Stock updated successfully!</span>
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let remainingMismatches = parseInt("{{ total_mismatches|default:0 }}");
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    const csrftoken = getCookie('csrftoken');
+
+    function showToast(message, isError = false) {
+        const toastEl = document.getElementById('actionToast');
+        const msgEl = document.getElementById('toastMsg');
+        const iconEl = document.getElementById('toastIcon');
+
+        msgEl.innerText = message;
+        if (isError) {
+            toastEl.className = 'toast align-items-center text-white bg-danger border-0 rounded-3 shadow';
+            iconEl.className = 'bi bi-exclamation-triangle-fill text-white fs-5';
+        } else {
+            toastEl.className = 'toast align-items-center text-white bg-dark border-0 rounded-3 shadow';
+            iconEl.className = 'bi bi-check-circle-fill text-success fs-5';
+        }
+        const toast = new bootstrap.Toast(toastEl, { delay: 3500 });
+        toast.show();
+    }
+
+    // Quick client-side search filter
+    document.getElementById('searchInput').addEventListener('input', function(e) {
+        const query = e.target.value.toLowerCase().trim();
+        const rows = document.querySelectorAll('#mismatchTable tbody tr');
+        rows.forEach(row => {
+            const text = (row.dataset.search || '').toLowerCase();
+            row.style.display = text.includes(query) ? '' : 'none';
+        });
+    });
+
+    // Update single batch stock
+    async function updateBatchStock(batchId, productName, batchNumber) {
+        const inputEl = document.getElementById(`input-${batchId}`);
+        const btnEl = document.getElementById(`btn-${batchId}`);
+        const newQty = inputEl.value;
+
+        if (newQty === '') {
+            showToast('Please enter a valid stock quantity', true);
+            return;
+        }
+
+        btnEl.disabled = true;
+        btnEl.innerHTML = `<span class="spinner-border spinner-border-sm" role="status"></span> Updating...`;
+
+        try {
+            const response = await fetch("{% url 'stock_mismatch' %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({
+                    action: 'fix_one',
+                    batch_id: batchId,
+                    new_quantity: newQty
+                })
+            });
+
+            const result = await response.json();
+            if (response.ok && result.success) {
+                showToast(result.message || `Stock updated to ${newQty}!`);
+                
+                // Fade out row
+                const row = document.getElementById(`row-${batchId}`);
+                if (row) {
+                    row.classList.add('fade-out');
+                    setTimeout(() => {
+                        row.remove();
+                        remainingMismatches--;
+                        updateCounter();
+                    }, 400);
+                }
+            } else {
+                showToast(result.error || 'Failed to update stock', true);
+                btnEl.disabled = false;
+                btnEl.innerHTML = `<i class="bi bi-check-lg"></i> Update`;
+            }
+        } catch (err) {
+            console.error(err);
+            showToast('Network error while updating stock', true);
+            btnEl.disabled = false;
+            btnEl.innerHTML = `<i class="bi bi-check-lg"></i> Update`;
+        }
+    }
+
+    // Fix all mismatches
+    async function fixAllMismatches() {
+        const confirmBtn = document.getElementById('confirmFixAllBtn');
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status"></span> Fixing All...`;
+
+        try {
+            const response = await fetch("{% url 'stock_mismatch' %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ action: 'fix_all' })
+            });
+
+            const result = await response.json();
+            const modalEl = document.getElementById('fixAllModal');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+
+            if (response.ok && result.success) {
+                showToast(result.message || 'All stock mismatches corrected successfully!');
+                remainingMismatches = 0;
+                updateCounter();
+            } else {
+                showToast(result.error || 'Failed to reconcile stock', true);
+                confirmBtn.disabled = false;
+                confirmBtn.innerHTML = `Yes, Reconcile All`;
+            }
+        } catch (err) {
+            console.error(err);
+            showToast('Network error while updating stock', true);
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = `Yes, Reconcile All`;
+        }
+    }
+
+    function updateCounter() {
+        document.getElementById('mismatchCountText').innerText = remainingMismatches;
+        const badge = document.getElementById('mismatchCountBadge');
+        if (badge) {
+            badge.innerText = `${remainingMismatches} Mismatch${remainingMismatches !== 1 ? 'es' : ''} Found`;
+            if (remainingMismatches === 0) {
+                badge.className = 'badge bg-success text-white px-3 py-2 rounded-pill fw-bold';
+            }
+        }
+
+        if (remainingMismatches <= 0) {
+            const tableCard = document.getElementById('tableCard');
+            const emptyCard = document.getElementById('emptyStateCard');
+            if (tableCard) tableCard.classList.add('d-none');
+            if (emptyCard) emptyCard.classList.remove('d-none');
+        }
+    }
+</script>
+{% endblock %}
