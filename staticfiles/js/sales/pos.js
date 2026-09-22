@@ -468,12 +468,67 @@
         });
     }
 
-    // Product Search — with Debounce (300ms) + In-Memory Cache
+    // Product Search — In-Memory Cache with Real-time Stock Mutation
     const searchInput = document.getElementById('productSearch');
     const resultsDiv = document.getElementById('searchResults');
 
-    const _posSearchCache = {};       // query → API data
-    let   _posDebounceTimer = null;   // debounce handle
+    let _posSearchCache = {};       // query → API data
+    let _posDebounceTimer = null;   // debounce handle
+
+    function deductSoldItemsFromPosCache(soldItems) {
+        if (!soldItems || !Array.isArray(soldItems) || soldItems.length === 0) return;
+
+        // 1. Mutate in-memory search cache without hitting DB (0ms response)
+        Object.keys(_posSearchCache).forEach(query => {
+            const productList = _posSearchCache[query]?.results || _posSearchCache[query]?.products || _posSearchCache[query] || [];
+            if (Array.isArray(productList)) {
+                productList.forEach(prod => {
+                    if (Array.isArray(prod.batches)) {
+                        prod.batches.forEach(b => {
+                            soldItems.forEach(sold => {
+                                if (Number(b.batch_id) === Number(sold.batch_id)) {
+                                    b.stock = Math.max(0, (Number(b.stock) || 0) - (Number(sold.quantity) || 0));
+                                }
+                            });
+                        });
+                        const totalRemaining = prod.batches.reduce((sum, b) => sum + (Number(b.stock) || 0), 0);
+                        if (totalRemaining <= 0) {
+                            prod.out_of_stock = true;
+                        }
+                    }
+                });
+            }
+        });
+
+        // 2. Mutate LocalForage offline product cache
+        if (typeof localforage !== 'undefined') {
+            try {
+                const store = localforage.createInstance({ name: 'ep_product_cache' });
+                store.getItem('pos_products').then(cachedProducts => {
+                    if (Array.isArray(cachedProducts)) {
+                        cachedProducts.forEach(prod => {
+                            if (Array.isArray(prod.batches)) {
+                                prod.batches.forEach(b => {
+                                    soldItems.forEach(sold => {
+                                        if (Number(b.batch_id) === Number(sold.batch_id)) {
+                                            b.stock = Math.max(0, (Number(b.stock) || 0) - (Number(sold.quantity) || 0));
+                                        }
+                                    });
+                                });
+                            }
+                        });
+                        store.setItem('pos_products', cachedProducts);
+                    }
+                }).catch(() => {});
+            } catch (e) {}
+        }
+    }
+    window.deductSoldItemsFromPosCache = deductSoldItemsFromPosCache;
+
+    function clearPosSearchCache() {
+        _posSearchCache = {};
+    }
+    window.clearPosSearchCache = clearPosSearchCache;
 
     async function showDefaultProducts() {
         try {
@@ -510,9 +565,6 @@
         // Safe data extraction
         const products = data?.results || data?.products || data || [];
 
-        // if (data.length === 0) {
-        //     resultsDiv.innerHTML = '<div class="p-3 text-center text-muted small">No items found. <button class="btn btn-link btn-sm" data-bs-toggle="modal" data-bs-target="#quickAddModal">Add New?</button></div>';
-        // }
         if (products.length === 0) {
             resultsDiv.innerHTML = `
                 <div class="p-3 text-center text-muted small">
@@ -600,7 +652,7 @@
                         
                         <!-- Stock Qty Badge -->
                         <div class="px-2">
-                            <span class="badge ${expired ? 'bg-danger' : (b.stock <= 5 ? 'bg-warning text-dark' : 'bg-success')} text-white px-3 py-2 fw-bold" style="font-size: 0.88rem; font-family: 'JetBrains Mono', monospace;">
+                            <span class="badge ${expired ? 'bg-danger' : (b.stock <= 0 ? 'bg-secondary' : (b.stock <= 5 ? 'bg-warning text-dark' : 'bg-success'))} text-white px-3 py-2 fw-bold" style="font-size: 0.88rem; font-family: 'JetBrains Mono', monospace;">
                                 ${expired ? 'Expired' : b.stock + ' left'}
                             </span>
                         </div>
@@ -628,7 +680,6 @@
                 </div>
                 <div class="batch-list">${batchesHtml}</div>
             `;
-            resultsDiv.appendChild(productGroup);
         });
         resultsDiv.classList.remove('d-none');
     }
@@ -1396,7 +1447,8 @@
 
         try {
             if (!navigator.onLine && typeof OfflineSync !== 'undefined') {
-                // Save offline
+                // Save offline & deduct stock directly from cache
+                deductSoldItemsFromPosCache(data.items);
                 const fakeInvoiceId = 'OFFLINE_' + Date.now();
                 await OfflineSync.queueRequest(OfflineSync.salesStore, '/pos/', data, 'Sale saved offline!');
                 
@@ -1467,6 +1519,8 @@
                 const response = await fetch('/pos/', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') }, body: JSON.stringify(data) });
                 const result = await response.json();
                 if (result.success) {
+                    // Update in-memory & offline cache with remaining stock immediately
+                    deductSoldItemsFromPosCache(data.items);
                     if (typeof OfflineSync !== 'undefined') {
                         OfflineSync.preloadProductCache();
                     }
@@ -1550,7 +1604,8 @@
                         }
                     }, { once: true });
                 } else if (result.queued) {
-                    // Service Worker queued it offline
+                    // Service Worker queued it offline & update cache stock
+                    deductSoldItemsFromPosCache(data.items);
                     document.getElementById('successInvoiceNum').textContent = "Pending Sync";
                     document.getElementById('btnSuccessPrint').style.display = 'inline-block';
                     document.getElementById('btnSuccessPrint').onclick = () => {
