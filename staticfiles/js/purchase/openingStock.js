@@ -83,92 +83,143 @@ async function handleSaveQuickProduct() {
         return;
     }
 
+    const packing = (document.getElementById('quickPacking') || {}).value?.trim() || '';
+    const conv = parseInt((document.getElementById('quickConv') || {}).value) || 1;
+    const tax_id = (document.getElementById('quickTax') || {}).value || null;
+    const schedule_id = (document.getElementById('quickSchedule') || {}).value || null;
+    const content_id = (document.getElementById('quickContent') || {}).value || null;
+    const company_id = (document.getElementById('quickCompany') || {}).value || null;
+    const type_id = (document.getElementById('quickType') || {}).value || null;
+    const hsn_code = (document.getElementById('quickHsn') || {}).value?.trim() || null;
+
+    // Get Tax Rate
+    const taxSelect = document.getElementById('quickTax');
+    let taxRate = 0;
+    if (taxSelect && taxSelect.selectedIndex >= 0) {
+        const opt = taxSelect.options[taxSelect.selectedIndex];
+        const m = (opt.text || '').match(/(\d+(\.\d+)?)/);
+        if (m) taxRate = parseFloat(m[1]) || 0;
+    }
+
     const data = {
         name: name,
-        packing: (document.getElementById('quickPacking') || {}).value?.trim() || '',
-        conversion_factor: parseInt((document.getElementById('quickConv') || {}).value) || 1,
-        tax_id: (document.getElementById('quickTax') || {}).value || null,
-        schedule_id: (document.getElementById('quickSchedule') || {}).value || null,
-        content_id: (document.getElementById('quickContent') || {}).value || null,
-        company_id: (document.getElementById('quickCompany') || {}).value || null,
-        type_id: (document.getElementById('quickType') || {}).value || null,
-        hsn_code: (document.getElementById('quickHsn') || {}).value?.trim() || null
+        packing: packing,
+        conversion_factor: conv,
+        tax_id: tax_id,
+        schedule_id: schedule_id,
+        content_id: content_id,
+        company_id: company_id,
+        type_id: type_id,
+        hsn_code: hsn_code
     };
+
+    const clearFormAndModal = () => {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('quickAddModal'));
+        if (modal) modal.hide();
+
+        document.getElementById('quickName').value = '';
+        document.getElementById('quickPacking').value = '';
+        document.getElementById('quickHsn').value = '';
+        const convEl = document.getElementById('quickConv');
+        if (convEl) convEl.value = 1;
+        ['quickTax','quickSchedule','quickContent','quickCompany','quickType'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+            typeof qsClear === 'function' && qsClear(id);
+        });
+    };
+
+    const handleOffline = async () => {
+        const offlineId = 'offline_prod_' + Date.now();
+        const offlineProd = {
+            id: offlineId,
+            name: name,
+            product_name: name,
+            packing: packing,
+            product_packing: packing,
+            conversion_factor: conv,
+            tax_rate: taxRate,
+            tax_id: tax_id,
+            schedule_id: schedule_id,
+            content_id: content_id,
+            company_id: company_id,
+            type_id: type_id,
+            hsn_code: hsn_code,
+            is_offline: true,
+            batches: []
+        };
+
+        if (typeof OfflineSync !== 'undefined') {
+            await OfflineSync.cacheNewProduct(offlineProd);
+            await OfflineSync.queueRequest(
+                OfflineSync.masterStore,
+                '/api/products/quick-add/',
+                data,
+                `Medicine "${name}" saved locally (Offline mode ✓)`
+            );
+        }
+
+        clearFormAndModal();
+        showToast(`Medicine "${name}" added locally (Offline ✓)`);
+
+        const searchInput = document.getElementById('newProductSearch');
+        if (searchInput) {
+            searchInput.value = name;
+            selectProductForOpening(offlineProd);
+        }
+    };
+
+    if (!navigator.onLine) {
+        await handleOffline();
+        return;
+    }
 
     try {
         const res = await fetch("/api/products/quick-add/", {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
             },
             body: JSON.stringify(data)
         });
 
-        const result = await res.json();
+        const result = await res.json().catch(() => ({}));
 
-        if (result.success) {
+        if (res.ok && result.success) {
             showToast('Medicine added successfully!', 'success');
             
-            const modal = bootstrap.Modal.getInstance(document.getElementById('quickAddModal'));
-            if (modal) modal.hide();
+            const onlineProd = {
+                id: result.id,
+                name: result.name || name,
+                product_name: result.name || name,
+                packing: packing,
+                product_packing: packing,
+                conversion_factor: conv,
+                tax_rate: taxRate,
+                tax_id: tax_id,
+                batches: []
+            };
 
-            // If triggered from OCR Quick Add
-            if (window._openingOcrQuickAddMissingIndex !== undefined && window._openingOcrQuickAddMissingIndex !== null) {
-                const missingIdx = window._openingOcrQuickAddMissingIndex;
-                window._openingOcrQuickAddMissingIndex = null;
-                
-                if (typeof _openingOcrMissingProducts !== 'undefined' && _openingOcrMissingProducts[missingIdx]) {
-                    const missingItem = _openingOcrMissingProducts[missingIdx];
-                    _openingOcrMissingProducts.splice(missingIdx, 1);
-                    _openingOcrParsedItems.push({
-                        product_id: result.id,
-                        name: result.name,
-                        batch_number: missingItem.batch_number || 'OPENING',
-                        expiry_date: missingItem.expiry_date || '',
-                        quantity: missingItem.quantity || 1,
-                        purchase_price: missingItem.purchase_price || 0,
-                        mrp: missingItem.mrp || 0,
-                        tax_percentage: missingItem.tax_percentage || 5,
-                        total: missingItem.total || (missingItem.quantity * missingItem.purchase_price)
-                    });
-                    
-                    _openingOcrRenderMissingProducts(_openingOcrMissingProducts);
-                    _openingOcrRenderPreviewTable(_openingOcrParsedItems);
-                }
+            if (typeof OfflineSync !== 'undefined') {
+                OfflineSync.cacheNewProduct(onlineProd);
             }
 
-            // Clear modal fields
-            document.getElementById('quickName').value = '';
-            document.getElementById('quickPacking').value = '';
-            document.getElementById('quickHsn').value = '';
-            ['quickTax','quickSchedule','quickContent','quickCompany','quickType'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.value = '';
-                typeof qsClear === 'function' && qsClear(id);
-            });
+            clearFormAndModal();
 
             // Auto-select the newly created product
             const searchInput = document.getElementById('newProductSearch');
             if (searchInput) {
                 searchInput.value = result.name;
-                try {
-                    const resp = await fetch(`/api/products/search/?q=${encodeURIComponent(result.name)}`);
-                    const products = await resp.json();
-                    const matched = products.find(p => p.id === result.id) || products[0];
-                    if (matched) {
-                        selectProductForOpening(matched);
-                    }
-                } catch (err) {
-                    console.error('Failed to auto-select quick added product', err);
-                }
+                selectProductForOpening(onlineProd);
             }
         } else {
             showToast(result.error || 'Failed to save medicine', 'error');
         }
     } catch (e) {
-        console.error(e);
-        showToast('Error saving product. Check console.', 'error');
+        console.warn('Network failed for opening stock quick add, saving offline:', e);
+        await handleOffline();
     }
 }
 
@@ -1104,7 +1155,16 @@ async function submitOpeningOcrParse() {
             body: formData
         });
 
-        const data = await response.json();
+        const text = await response.text();
+        let data = {};
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            if (response.status === 504) {
+                throw new Error('Scan request timed out on server (504). Please try uploading a single page or clearer image.');
+            }
+            throw new Error(`Server error (${response.status}): Could not process OCR.`);
+        }
 
         if (!data.success) {
             throw new Error(data.error || 'Failed to scan opening stock image.');

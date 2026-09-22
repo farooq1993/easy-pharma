@@ -16,6 +16,31 @@ window.pendingCsvData = null;
 window.pendingMissingProducts = [];
 window.__isPurchaseSubmitting = false;
 
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+window.getCookie = getCookie;
+
+function getCsrfToken() {
+    let token = getCookie('csrftoken');
+    if (!token) token = document.querySelector('input[name="csrfmiddlewaretoken"]')?.value;
+    if (!token) token = window.EP_CONFIG?.csrfToken;
+    if (!token) token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    return token || '';
+}
+window.getCsrfToken = getCsrfToken;
+
 /**
  * ══════════════════════════════════════════════════════════════════════
  * 1. UI FEEDBACK UTILITIES (Toast & Loader)
@@ -392,7 +417,7 @@ async function submitMasterAdd() {
 
     const formData = new FormData();
     formData.append(fieldName, value);
-    formData.append('csrfmiddlewaretoken', window.EP_CONFIG?.csrfToken || '');
+    formData.append('csrfmiddlewaretoken', getCsrfToken());
 
     if (masterType === 'product-tax') {
         formData.append('tax_rate', extraValue || value);
@@ -408,7 +433,10 @@ async function submitMasterAdd() {
     try {
         const response = await fetch(`/type/${masterType}/`, {
             method: 'POST',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            headers: { 
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': getCsrfToken()
+            },
             body: formData
         });
         const data = await response.json();
@@ -674,9 +702,10 @@ async function addItem() {
         total: totalWithTax
     });
 
+    const addedProdName = selectedProduct ? selectedProduct.name : 'Item';
     renderTable();
     resetAddForm();
-    showToast(`${selectedProduct.name} added (Batch: ${batch})`);
+    showToast(`${addedProdName} added (Batch: ${batch})`);
 }
 window.addItem = addItem;
 
@@ -1211,7 +1240,7 @@ async function savePurchase() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': window.EP_CONFIG?.csrfToken || '',
+                    'X-CSRFToken': getCsrfToken(),
                     'X-Requested-With': 'XMLHttpRequest'
                 },
                 body: JSON.stringify(data)
@@ -1469,7 +1498,11 @@ async function saveEditProduct() {
     try {
         const resp = await fetch(`/api/products/quick-add/${id}/`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': window.EP_CONFIG?.csrfToken || '' },
+            headers: { 
+                'Content-Type': 'application/json', 
+                'X-CSRFToken': getCsrfToken(),
+                'X-Requested-With': 'XMLHttpRequest'
+            },
             body: JSON.stringify({
                 packing,
                 conversion_factor: conv,
@@ -1573,7 +1606,7 @@ window.saveSupplier = async function() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'X-CSRFToken': window.EP_CONFIG?.csrfToken || '',
+                'X-CSRFToken': getCsrfToken(),
                 'X-Requested-With': 'XMLHttpRequest'
             },
             body: payload.toString()
@@ -1605,43 +1638,192 @@ window.saveQuickProduct = async function(isOcrMode) {
     const name = document.getElementById('quickName').value.trim();
     if (!name) return showToast('Medicine name is required', 'error');
 
+    const packing = document.getElementById('quickPacking').value.trim() || '1';
+    const conv = parseInt(document.getElementById('quickConv').value) || 1;
+    const type_id = document.getElementById('quickType').value || null;
+    const tax_id = document.getElementById('quickTax').value || null;
+    const schedule_id = document.getElementById('quickSchedule').value || null;
+    const company_id = document.getElementById('quickCompany').value || null;
+    const content_id = document.getElementById('quickContent').value || null;
+    const hsn_code = document.getElementById('quickHsn').value.trim() || null;
+
+    // Get Tax Rate value
+    const taxSelect = document.getElementById('quickTax');
+    let taxRate = 0;
+    if (taxSelect && taxSelect.selectedIndex >= 0) {
+        const selectedTaxOption = taxSelect.options[taxSelect.selectedIndex];
+        if (selectedTaxOption && selectedTaxOption.dataset && selectedTaxOption.dataset.rate) {
+            taxRate = parseFloat(selectedTaxOption.dataset.rate) || 0;
+        } else if (selectedTaxOption && selectedTaxOption.text) {
+            const m = selectedTaxOption.text.match(/(\d+(\.\d+)?)/);
+            if (m) taxRate = parseFloat(m[1]) || 0;
+        }
+    }
+
+    const schedSelect = document.getElementById('quickSchedule');
+    const scheduleName = (schedSelect && schedSelect.selectedIndex >= 0) ? schedSelect.options[schedSelect.selectedIndex].text : '';
+
+    const compSelect = document.getElementById('quickCompany');
+    const companyName = (compSelect && compSelect.selectedIndex >= 0) ? compSelect.options[compSelect.selectedIndex].text : '';
+
     const data = {
         name: name,
-        packing: document.getElementById('quickPacking').value.trim(),
-        conversion_factor: document.getElementById('quickConv').value || 1,
-        type_id: document.getElementById('quickType').value || null,
-        tax_id: document.getElementById('quickTax').value || null,
-        schedule_id: document.getElementById('quickSchedule').value || null,
-        company_id: document.getElementById('quickCompany').value || null,
-        content_id: document.getElementById('quickContent').value || null,
-        hsn_code: document.getElementById('quickHsn').value.trim() || null,
+        packing: packing,
+        conversion_factor: conv,
+        type_id: type_id,
+        tax_id: tax_id,
+        schedule_id: schedule_id,
+        company_id: company_id,
+        content_id: content_id,
+        hsn_code: hsn_code,
     };
 
+    const clearQuickAddForm = () => {
+        const modalEl = document.getElementById('quickAddModal');
+        if (modalEl) {
+            const instance = bootstrap.Modal.getInstance(modalEl) || bootstrap.Modal.getOrCreateInstance(modalEl);
+            instance.hide();
+        }
+        ['quickName', 'quickPacking', 'quickHsn'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        const convEl = document.getElementById('quickConv');
+        if (convEl) convEl.value = 1;
+        ['quickTax', 'quickSchedule', 'quickContent', 'quickCompany', 'quickType'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+            typeof qsClear === 'function' && qsClear(id);
+        });
+    };
+
+    const applySelectedProductToPurchase = (prod) => {
+        selectedProduct = prod;
+        const searchInput = document.getElementById('productSearch');
+        if (searchInput) searchInput.value = prod.name;
+        
+        renderSelectedProductBanner(prod);
+        
+        const searchResultsDiv = document.getElementById('searchResults');
+        if (searchResultsDiv) {
+            searchResultsDiv.style.display = 'none';
+            searchResultsDiv.classList.remove('open');
+        }
+        const suggestionsDiv = document.getElementById('batchSuggestions');
+        if (suggestionsDiv) {
+            suggestionsDiv.innerHTML = '';
+            suggestionsDiv.classList.remove('show');
+        }
+        if (prod.id && typeof prod.id === 'number') {
+            fetchBatchHistory(prod.id);
+            loadInlinePreviousPurchases(prod.id, prod.name);
+        }
+        const batchInput = document.getElementById('itemBatch');
+        if (batchInput) {
+            batchInput.focus();
+            batchInput.select();
+        }
+    };
+
+    // Offline Handler
+    const handleSaveOffline = async () => {
+        const offlineId = 'offline_prod_' + Date.now();
+        const offlineProd = {
+            id: offlineId,
+            name: name,
+            product_name: name,
+            packing: packing,
+            product_packing: packing,
+            conversion_factor: conv,
+            tax_rate: taxRate,
+            tax_id: tax_id,
+            schedule_id: schedule_id,
+            schedule_name: scheduleName,
+            company_id: company_id,
+            company_name: companyName,
+            content_id: content_id,
+            hsn_code: hsn_code,
+            is_offline: true,
+            batches: []
+        };
+
+        if (typeof OfflineSync !== 'undefined') {
+            await OfflineSync.cacheNewProduct(offlineProd);
+            await OfflineSync.queueRequest(
+                OfflineSync.masterStore,
+                '/api/products/quick-add/',
+                data,
+                `Medicine "${name}" saved locally (Offline mode ✓)`
+            );
+        }
+
+        clearQuickAddForm();
+        showToast(`Medicine "${name}" added locally (Offline ✓)`);
+
+        if (!isOcrMode) {
+            applySelectedProductToPurchase(offlineProd);
+        } else if (typeof onQuickProductSavedOCR === 'function') {
+            onQuickProductSavedOCR(offlineProd);
+        }
+    };
+
+    // If device is offline, directly save locally
+    if (!navigator.onLine) {
+        await handleSaveOffline();
+        return;
+    }
+
+    // When online, attempt server POST with automatic offline fallback on network failure
     try {
         const resp = await fetch('/api/products/quick-add/', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': window.EP_CONFIG?.csrfToken || '' },
+            headers: { 
+                'Content-Type': 'application/json', 
+                'X-CSRFToken': getCsrfToken(),
+                'X-Requested-With': 'XMLHttpRequest'
+            },
             body: JSON.stringify(data)
         });
-        const res = await resp.json();
-        if (res.success) {
-            bootstrap.Modal.getInstance(document.getElementById('quickAddModal')).hide();
-            ['quickName','quickPacking','quickHsn'].forEach(id => document.getElementById(id).value = '');
-            document.getElementById('quickConv').value = 1;
-            ['quickTax','quickSchedule','quickContent','quickCompany'].forEach(id => {
-                document.getElementById(id).value = '';
-                typeof qsReset === 'function' && qsReset(id);
-            });
-            showToast(`Medicine "${res.name}" added successfully`);
+
+        const res = await resp.json().catch(() => ({}));
+        if (resp.ok && res.success) {
+            const onlineProd = {
+                id: res.id,
+                name: res.name || name,
+                product_name: res.name || name,
+                packing: packing,
+                product_packing: packing,
+                conversion_factor: conv,
+                tax_rate: res.tax_rate !== undefined && res.tax_rate !== null ? parseFloat(res.tax_rate) : taxRate,
+                tax_id: tax_id,
+                schedule_id: schedule_id,
+                schedule_name: scheduleName,
+                company_id: company_id,
+                company_name: companyName,
+                content_id: content_id,
+                hsn_code: hsn_code,
+                batches: []
+            };
+
+            if (typeof OfflineSync !== 'undefined') {
+                OfflineSync.cacheNewProduct(onlineProd);
+            }
+
+            clearQuickAddForm();
+            showToast(`Medicine "${res.name || name}" added successfully`);
+
             if (!isOcrMode) {
-                document.getElementById('productSearch').value = res.name;
-                document.getElementById('productSearch').dispatchEvent(new Event('input'));
+                applySelectedProductToPurchase(onlineProd);
+            } else if (typeof onQuickProductSavedOCR === 'function') {
+                onQuickProductSavedOCR(onlineProd);
             }
         } else {
             showToast('Error: ' + (res.error || 'Could not save medicine'), 'error');
         }
     } catch (err) {
-        showToast('Error: ' + err.message, 'error');
+        // Fallback to offline storage if network fails
+        console.warn('Network request failed for quick-add, saving offline:', err);
+        await handleSaveOffline();
     }
 };
 
@@ -1652,7 +1834,7 @@ window.handleSaveProduct = function() {
         saveQuickProduct(true);
         return;
     }
-    if (pendingMissingProducts && pendingMissingProducts.length > 0) {
+    if (typeof pendingMissingProducts !== 'undefined' && pendingMissingProducts && pendingMissingProducts.length > 0 && typeof saveProductFromCsv === 'function') {
         saveProductFromCsv();
     } else {
         document.getElementById('quickName').readOnly = false;
@@ -1660,6 +1842,7 @@ window.handleSaveProduct = function() {
         saveQuickProduct(false);
     }
 };
+window.handleSaveQuickProduct = window.handleSaveProduct;
 
 /**
  * ══════════════════════════════════════════════════════════════════════

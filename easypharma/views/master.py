@@ -282,6 +282,10 @@ class ProductCreate(LoginRequiredMixin,View):
             messages.error(request, f"Error: {str(e)}")
         return redirect('all-products')
 
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils.decorators import method_decorator
+
+@method_decorator(ensure_csrf_cookie, name='dispatch')
 class QuickProductAPI(LoginRequiredMixin,View):
     # Your purchase entry view (wherever it renders entry.html)
     def get(self, request):

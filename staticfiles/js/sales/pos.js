@@ -1217,36 +1217,141 @@
     }
 
     async function saveQuickProduct() {
-        const data = {
-            name: document.getElementById('quickName').value,
-            packing: document.getElementById('quickPacking').value,
-            conversion_factor: document.getElementById('quickConv').value,
-            tax_id: document.getElementById('quickTax').value
-        };
-        if (!data.name) return alert('Name is required');
+        const name = (document.getElementById('quickName')?.value || '').trim();
+        const packing = (document.getElementById('quickPacking')?.value || '').trim();
+        const conv = parseInt(document.getElementById('quickConv')?.value) || 1;
+        const tax_id = document.getElementById('quickTax')?.value || null;
 
-        if (!navigator.onLine && typeof OfflineSync !== 'undefined') {
-            await OfflineSync.queueRequest(OfflineSync.masterStore, '/api/products/quick-add/', data, 'Product queued offline!');
-            bootstrap.Modal.getInstance(document.getElementById('quickAddModal')).hide();
-            document.getElementById('productSearch').value = data.name;
-            // Note: Since it's offline, the actual search won't return it yet, but we inform the user.
-            alert('Product saved offline. It will be available for search once internet reconnects and syncs.');
-        } else {
+        if (!name) return showToast('Medicine name is required', 'error');
+
+        // Extract Tax Rate
+        const taxSelect = document.getElementById('quickTax');
+        let taxRate = 0;
+        if (taxSelect && taxSelect.selectedIndex >= 0) {
+            const opt = taxSelect.options[taxSelect.selectedIndex];
+            const m = (opt.text || '').match(/(\d+(\.\d+)?)/);
+            if (m) taxRate = parseFloat(m[1]) || 0;
+        }
+
+        const data = {
+            name: name,
+            packing: packing,
+            conversion_factor: conv,
+            tax_id: tax_id
+        };
+
+        const handleOfflineSave = async () => {
+            const offlineId = 'offline_prod_' + Date.now();
+            const offlineProd = {
+                id: offlineId,
+                name: name,
+                product_name: name,
+                packing: packing,
+                product_packing: packing,
+                conversion_factor: conv,
+                tax_rate: taxRate,
+                tax_id: tax_id,
+                is_offline: true,
+                batches: []
+            };
+
+            if (typeof OfflineSync !== 'undefined') {
+                await OfflineSync.cacheNewProduct(offlineProd);
+                await OfflineSync.queueRequest(
+                    OfflineSync.masterStore, 
+                    '/api/products/quick-add/', 
+                    data, 
+                    `Medicine "${name}" saved locally (Offline mode ✓)`
+                );
+            }
+
+            // Clear in-memory search cache so newly added product is found immediately
+            clearPosSearchCache();
+
+            const modalEl = document.getElementById('quickAddModal');
+            if (modalEl) {
+                const modal = bootstrap.Modal.getInstance(modalEl) || bootstrap.Modal.getOrCreateInstance(modalEl);
+                modal.hide();
+            }
+
+            // Reset inputs
+            ['quickName', 'quickPacking'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+            if (document.getElementById('quickConv')) document.getElementById('quickConv').value = 1;
+
+            showToast(`Medicine "${name}" added locally (Offline ✓)`);
+
+            const searchInput = document.getElementById('productSearch');
+            if (searchInput) {
+                searchInput.value = name;
+                searchInput.dispatchEvent(new Event('input'));
+            }
+        };
+
+        if (!navigator.onLine) {
+            await handleOfflineSave();
+            return;
+        }
+
+        try {
             const response = await fetch('/api/products/quick-add/', {
-                method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
                 body: JSON.stringify(data)
             });
-            const result = await response.json();
-            if (result.success) {
+            const result = await response.json().catch(() => ({}));
+            if (response.ok && result.success) {
+                const onlineProd = {
+                    id: result.id,
+                    name: result.name || name,
+                    product_name: result.name || name,
+                    packing: packing,
+                    product_packing: packing,
+                    conversion_factor: conv,
+                    tax_rate: taxRate,
+                    tax_id: tax_id,
+                    batches: []
+                };
+
                 if (typeof OfflineSync !== 'undefined') {
-                    OfflineSync.preloadProductCache();
+                    OfflineSync.cacheNewProduct(onlineProd);
                 }
-                bootstrap.Modal.getInstance(document.getElementById('quickAddModal')).hide();
-                document.getElementById('productSearch').value = result.name;
-                document.getElementById('productSearch').dispatchEvent(new Event('input'));
-            } else { alert('Error: ' + result.error); }
+                clearPosSearchCache();
+
+                const modalEl = document.getElementById('quickAddModal');
+                if (modalEl) {
+                    const modal = bootstrap.Modal.getInstance(modalEl) || bootstrap.Modal.getOrCreateInstance(modalEl);
+                    modal.hide();
+                }
+
+                ['quickName', 'quickPacking'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.value = '';
+                });
+                if (document.getElementById('quickConv')) document.getElementById('quickConv').value = 1;
+
+                showToast(`Medicine "${result.name || name}" added successfully`);
+
+                const searchInput = document.getElementById('productSearch');
+                if (searchInput) {
+                    searchInput.value = result.name || name;
+                    searchInput.dispatchEvent(new Event('input'));
+                }
+            } else {
+                showToast('Error: ' + (result.error || 'Could not save medicine'), 'error');
+            }
+        } catch (err) {
+            console.warn('POS Quick Add network error, saving offline:', err);
+            await handleOfflineSave();
         }
     }
+    window.saveQuickProduct = saveQuickProduct;
 
     function updateQty(index, val) {
         const item = cart[index]; const newQty = parseInt(val) || 0;

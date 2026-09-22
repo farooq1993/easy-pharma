@@ -22,18 +22,15 @@ if os.path.exists(inner_env_path):
 
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', default='')
 
-def _call_ai_vision_api(api_key, payload, timeout=15):
+def _call_ai_vision_api(api_key, payload, timeout=30):
     """
-    Calls the AI Vision endpoints with ultra-fast model fallbacks.
+    Calls the AI Vision endpoints with active, verified Gemini models.
     """
     models_to_try = [
-        ("v1beta", "gemini-3.6-flash"),
-        ("v1beta", "gemini-3.5-flash-lite"),
-        ("v1beta", "gemini-flash-lite-latest"),
-        ("v1beta", "gemini-flash-latest"),
-        ("v1beta", "gemini-3.5-flash"),
-        ("v1beta", "gemini-3.1-flash-lite"),
-        ("v1beta", "gemini-2.5-flash"),
+        ("v1beta", "gemini-2.0-flash"),
+        ("v1beta", "gemini-1.5-flash"),
+        ("v1beta", "gemini-1.5-flash-8b"),
+        ("v1beta", "gemini-1.5-pro"),
     ]
 
     headers = {'Content-Type': 'application/json'}
@@ -149,7 +146,7 @@ def extract_purchase_bill_data(image_file):
         }
     }
 
-    response = _call_ai_vision_api(api_key, payload, timeout=15)
+    response = _call_ai_vision_api(api_key, payload, timeout=30)
 
     resp_json = response.json()
     try:
@@ -243,7 +240,7 @@ def extract_opening_stock_data(image_file):
         }
     }
 
-    response = _call_ai_vision_api(api_key, payload, timeout=20)
+    response = _call_ai_vision_api(api_key, payload, timeout=30)
 
     resp_json = response.json()
     try:

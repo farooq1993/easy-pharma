@@ -909,7 +909,17 @@ function submitOcrParse() {
                 'X-CSRFToken': getCsrfToken()
             }
         })
-        .then(response => response.json())
+        .then(async response => {
+            const text = await response.text();
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                if (response.status === 504) {
+                    throw new Error('Scan request timed out on server (504). Please try uploading a single page or clearer image.');
+                }
+                throw new Error(`Server error (${response.status}): Could not process OCR.`);
+            }
+        })
         .then(data => {
             progress.classList.add('d-none');
             parseBtn.disabled = false;
