@@ -472,7 +472,7 @@ class AIProductAutoFillAPI(LoginRequiredMixin, View):
                 api_key = api_key.split('#')[0].strip().split()[0]
             
             if not api_key:
-                return JsonResponse({'success': False, 'error': 'Gemini API key is not configured.'})
+                return JsonResponse({'success': False, 'error': 'AI Auto-Fill service is not configured. Please contact administrator.'})
 
             prompt = (
                 f"You are an expert Indian pharmacy database AI.\n"
@@ -502,27 +502,27 @@ class AIProductAutoFillAPI(LoginRequiredMixin, View):
             )
 
             models_to_try = [
-                "gemini-3.6-flash",
-                "gemini-3.5-flash-lite",
-                "gemini-flash-lite-latest",
-                "gemini-flash-latest",
-                "gemini-3.5-flash",
-                "gemini-3.1-flash-lite",
-                "gemini-2.5-flash"
+                ("v1beta", "gemini-3.6-flash"),
+                ("v1beta", "gemini-3.5-flash-lite"),
+                ("v1beta", "gemini-flash-lite-latest"),
+                ("v1beta", "gemini-flash-latest"),
+                ("v1beta", "gemini-3.5-flash"),
+                ("v1beta", "gemini-3.1-flash-lite"),
+                ("v1beta", "gemini-2.5-flash"),
             ]
 
             headers = {'Content-Type': 'application/json'}
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {"temperature": 0.1}
+                "generationConfig": {"temperature": 0.1, "response_mime_type": "application/json"}
             }
 
             response = None
             last_error = None
-            for model_name in models_to_try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+            for api_version, model_name in models_to_try:
+                url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model_name}:generateContent?key={api_key}"
                 try:
-                    res = requests.post(url, headers=headers, json=payload, timeout=25)
+                    res = requests.post(url, headers=headers, json=payload, timeout=15)
                     if res.status_code == 200:
                         response = res
                         break
@@ -532,7 +532,7 @@ class AIProductAutoFillAPI(LoginRequiredMixin, View):
                     last_error = f"{model_name} exception: {str(e)}"
 
             if not response or response.status_code != 200:
-                return JsonResponse({'success': False, 'error': f'AI Auto-Fill failed: {last_error}'})
+                return JsonResponse({'success': False, 'error': 'AI Auto-Fill could not retrieve details for this product. Please enter details manually.'})
 
             resp_json = response.json()
             raw_text = resp_json['candidates'][0]['content']['parts'][0]['text'].strip()

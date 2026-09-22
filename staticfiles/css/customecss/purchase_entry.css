@@ -402,19 +402,28 @@ body {
     position: fixed;
     top: 24px;
     right: 24px;
-    background: var(--green);
+    background: #059669;
     color: #fff;
-    padding: 12px 20px;
+    padding: 12px 22px;
     border-radius: 10px;
-    z-index: 9999;
-    transition: all 0.3s;
-    transform: translateY(80px);
+    z-index: 999999;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    transform: translateY(-20px);
     opacity: 0;
+    pointer-events: none;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.88rem;
+    font-weight: 500;
+    max-width: 480px;
 }
 
 .ep-toast.show {
     transform: translateY(0);
     opacity: 1;
+    pointer-events: auto;
 }
 
 /* Batch number input — uppercase mono */
@@ -473,7 +482,9 @@ body {
 }
 
 .ep-toast.error {
-    background: var(--red);
+    background: #dc2626 !important;
+    border-left: 5px solid #7f1d1d !important;
+    box-shadow: 0 10px 30px rgba(220, 38, 38, 0.4) !important;
 }
 
 /* ── CSV Import Modal Styles ── */
@@ -520,3 +531,171 @@ body {
     transition: background .15s;
 }
 .csv-remove-btn:hover { background: #fee2e2; }
+
+/* ── Dropdown High-Contrast Highlight Styles ── */
+.supplier-item {
+    padding: 10px 14px;
+    font-size: 0.88rem;
+    cursor: pointer;
+    border-left: 4px solid transparent;
+    transition: background 0.12s, border-left-color 0.12s;
+}
+.supplier-item:hover, .supplier-item.supplier-item-active {
+    background: #e0e7ff !important;
+    border-left-color: #4338ca !important;
+    color: #1e1b4b !important;
+}
+.supplier-item.supplier-item-active div:first-child,
+.supplier-item:hover div:first-child {
+    color: #312e81 !important;
+    font-weight: 700 !important;
+}
+
+.search-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    border-left: 4px solid transparent;
+    transition: background 0.12s, border-left-color 0.12s;
+    border-bottom: 1px solid #f1f5f9;
+}
+.search-item:last-child {
+    border-bottom: none;
+}
+.search-item:hover, .search-item.selected-item {
+    background: #e0e7ff !important;
+    border-left-color: #4338ca !important;
+}
+.search-item.selected-item span {
+    color: #1e1b4b !important;
+}
+
+.batch-suggestion-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-left: 4px solid transparent;
+    transition: background 0.12s, border-left-color 0.12s;
+    border-bottom: 1px solid #f1f5f9;
+}
+.batch-suggestion-item:last-child {
+    border-bottom: none;
+}
+.batch-suggestion-item:hover, .batch-suggestion-item.selected-item {
+    background: #e0e7ff !important;
+    border-left-color: #4338ca !important;
+}
+
+/* ── Quick Select Dropdown Styles (For Modals) ── */
+.qs-wrap {
+    position: relative;
+    width: 100%;
+}
+
+.qs-input-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.qs-input {
+    width: 100%;
+    padding-right: 32px !important;
+    background: #FAFAFA !important;
+    border: 1.5px solid var(--border) !important;
+    border-radius: 9px !important;
+    font-size: 0.85rem !important;
+    font-weight: 500 !important;
+    height: 38px !important;
+}
+
+.qs-input:focus {
+    border-color: var(--brand) !important;
+    background: #fff !important;
+    box-shadow: 0 0 0 3px rgba(92, 61, 153, 0.12) !important;
+}
+
+.qs-clear-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 0.95rem;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    line-height: 1;
+    z-index: 5;
+    transition: color 0.15s;
+}
+
+.qs-clear-btn:hover {
+    color: #ef4444;
+}
+
+.qs-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    border: 1.5px solid #c7d2fe;
+    border-radius: 10px;
+    box-shadow: 0 10px 25px rgba(99, 102, 241, 0.18), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: 1070;
+    padding: 4px 0;
+}
+
+.qs-item {
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 0.86rem;
+    font-weight: 500;
+    color: #1e293b;
+    border-left: 3px solid transparent;
+    border-bottom: 1px solid #f1f5f9;
+    transition: all 0.12s ease;
+}
+
+.qs-item:last-child {
+    border-bottom: none;
+}
+
+.qs-item:hover,
+.qs-item.qs-active {
+    background: #e0e7ff !important;
+    border-left-color: #4338ca !important;
+    color: #312e81 !important;
+    font-weight: 600;
+}
+
+.qs-empty {
+    padding: 12px;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.82rem;
+    font-style: italic;
+}
+
+/* Specific styling for long salt/product composition */
+#qs-input-quickContent {
+    height: 42px !important;
+    font-size: 0.9rem !important;
+    font-weight: 500 !important;
+}
+
+#qs-drop-quickContent {
+    max-height: 260px;
+}
+
+#qs-drop-quickContent .qs-item {
+    font-size: 0.88rem;
+    line-height: 1.4;
+    word-break: break-word;
+    padding: 10px 14px;
+}
+

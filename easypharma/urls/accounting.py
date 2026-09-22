@@ -6,7 +6,9 @@ from easypharma.views.accounting import (
     SupplierUnadjustedReturnsView,
     CustomerPaymentView, DeleteCustomerPaymentView, CustomerCreditBillsView,
     PrintCustomerPaymentReceiptView,
-    SupplierOutstandingView
+    SupplierOutstandingView,
+    ExpenseListView, ExpenseCreateView, ExpenseUpdateView, ExpenseDeleteView,
+    ExpenseCategoryCreateView, ExpenseExportCSVView
 )
 
 urlpatterns = [
@@ -25,5 +27,13 @@ urlpatterns = [
     path('accounting/customer-payment/<int:pk>/delete/', DeleteCustomerPaymentView.as_view(), name='delete_customer_payment'),
     path('accounting/customer-payment/<int:pk>/print/', PrintCustomerPaymentReceiptView.as_view(), name='print_customer_payment_receipt'),
     path('api/customer-credit-bills/', CustomerCreditBillsView.as_view(), name='customer_credit_bills'),
+
+    # Expense Management
+    path('accounting/expenses/', ExpenseListView.as_view(), name='expense_list'),
+    path('accounting/expenses/add/', ExpenseCreateView.as_view(), name='expense_create'),
+    path('accounting/expenses/<int:pk>/edit/', ExpenseUpdateView.as_view(), name='expense_update'),
+    path('accounting/expenses/<int:pk>/delete/', ExpenseDeleteView.as_view(), name='expense_delete'),
+    path('accounting/expenses/categories/add/', ExpenseCategoryCreateView.as_view(), name='expense_category_create'),
+    path('accounting/expenses/export/csv/', ExpenseExportCSVView.as_view(), name='expense_export_csv'),
 ]
 

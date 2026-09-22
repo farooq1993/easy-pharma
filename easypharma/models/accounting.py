@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils.timezone import now
 from tenants.models import TenantAwareModel
 from .purchase_invoice import Supplier, PurchaseInvoice
 from .Items import Products
@@ -76,3 +77,67 @@ class CustomerPayment(TenantAwareModel):
 
     def __str__(self):
         return f"Payment from {self.customer.name} on {self.payment_date} - {self.amount}"
+
+
+class ExpenseCategory(TenantAwareModel):
+    name = models.CharField(max_length=100)
+    description = models.CharField(max_length=255, null=True, blank=True)
+    icon = models.CharField(max_length=50, default='fa-receipt')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Expense Category'
+        verbose_name_plural = 'Expense Categories'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class Expense(TenantAwareModel):
+    PAYMENT_MODES = [
+        ('Cash', 'Cash'),
+        ('UPI', 'UPI / GPay / PhonePe'),
+        ('Bank', 'Bank Transfer / NEFT'),
+        ('Cheque', 'Cheque'),
+        ('Card', 'Card'),
+        ('Other', 'Other'),
+    ]
+
+    expense_number = models.CharField(max_length=50, null=True, blank=True)
+    category = models.ForeignKey(ExpenseCategory, on_delete=models.SET_NULL, null=True, blank=True, related_name='expenses')
+    title = models.CharField(max_length=200)
+    expense_date = models.DateField()
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    payment_mode = models.CharField(max_length=50, choices=PAYMENT_MODES, default='Cash')
+    paid_to = models.CharField(max_length=200, null=True, blank=True)
+    reference_number = models.CharField(max_length=100, null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Expense'
+        verbose_name_plural = 'Expenses'
+        ordering = ['-expense_date', '-created_at']
+
+    def save(self, *args, **kwargs):
+        if not self.expense_number:
+            year = now().year
+            if self.expense_date:
+                if hasattr(self.expense_date, 'year'):
+                    year = self.expense_date.year
+                elif isinstance(self.expense_date, str) and len(self.expense_date) >= 4:
+                    try:
+                        year = int(self.expense_date.split('-')[0])
+                    except ValueError:
+                        year = now().year
+            last_exp = Expense.objects.filter(tenant=self.tenant).order_by('-id').first()
+            next_num = (last_exp.id + 1) if last_exp else 1
+            self.expense_number = f"EXP-{year}-{next_num:05d}"
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.expense_number or 'EXP'} - {self.title} (₹{self.amount})"
+

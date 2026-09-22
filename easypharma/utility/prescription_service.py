@@ -3,10 +3,13 @@ import time
 import requests
 import json
 import re
+import logging
 from django.conf import settings
 from decouple import config
 import os
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 # Try standard dotenv load
 load_dotenv()
@@ -21,7 +24,7 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', default='')
 
 def extract_prescription_data(image_file):
     """
-    Sends the prescription image to Gemini API to extract details.
+    Sends the prescription image to AI Vision API to extract details.
     image_file: file-like object or bytes
     """
     api_key = GEMINI_API_KEY
@@ -29,7 +32,8 @@ def extract_prescription_data(image_file):
         api_key = api_key.split('#')[0].strip().split()[0]
 
     if not api_key:
-        raise ValueError("Gemini API key is not configured. Please set GEMINI_API_KEY in environment variables.")
+        logger.error("AI API key is missing in environment variables.")
+        raise ValueError("AI Prescription Scanner is not configured. Please contact administrator.")
 
     # Read image bytes
     if hasattr(image_file, 'read'):
@@ -65,17 +69,17 @@ def extract_prescription_data(image_file):
         "    }\n"
         "  ]\n"
         "}\n\n"
-        "Return ONLY the raw JSON block. Do not include markdown code fence formatting (like ```json ... ```) or any other text."
+        "Return ONLY the raw JSON block without markdown formatting or code blocks."
     )
 
     models_to_try = [
-        "gemini-3.6-flash",
-        "gemini-3.5-flash-lite",
-        "gemini-flash-lite-latest",
-        "gemini-flash-latest",
-        "gemini-3.5-flash",
-        "gemini-3.1-flash-lite",
-        "gemini-2.5-flash"
+        ("v1beta", "gemini-3.6-flash"),
+        ("v1beta", "gemini-3.5-flash-lite"),
+        ("v1beta", "gemini-flash-lite-latest"),
+        ("v1beta", "gemini-flash-latest"),
+        ("v1beta", "gemini-3.5-flash"),
+        ("v1beta", "gemini-3.1-flash-lite"),
+        ("v1beta", "gemini-2.5-flash"),
     ]
 
     headers = {'Content-Type': 'application/json'}
@@ -92,41 +96,43 @@ def extract_prescription_data(image_file):
                     }
                 ]
             }
-        ]
+        ],
+        "generationConfig": {
+            "temperature": 0.1,
+            "response_mime_type": "application/json"
+        }
     }
 
     last_error = None
     response = None
 
-    for model_name in models_to_try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-        max_retries = 2
-        for attempt in range(max_retries):
-            try:
-                res = requests.post(url, headers=headers, json=payload, timeout=30)
-                if res.status_code == 200:
-                    response = res
-                    break
-                elif res.status_code in [429, 503] and attempt < max_retries - 1:
-                    time.sleep(1.5)
-                    continue
-                else:
-                    last_error = f"{model_name} failed with status {res.status_code}: {res.text}"
-                    break
-            except Exception as e:
-                last_error = f"{model_name} exception: {str(e)}"
+    for api_version, model_name in models_to_try:
+        url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model_name}:generateContent?key={api_key}"
+        try:
+            res = requests.post(url, headers=headers, json=payload, timeout=20)
+            if res.status_code == 200:
+                response = res
                 break
-        if response and response.status_code == 200:
-            break
+            elif res.status_code in [429, 503]:
+                time.sleep(0.5)
+                continue
+            else:
+                last_error = f"{model_name} ({api_version}) status {res.status_code}: {res.text}"
+                logger.warning(f"Prescription OCR model attempt error: {last_error}")
+        except Exception as e:
+            last_error = f"{model_name} exception: {str(e)}"
+            logger.warning(f"Prescription OCR request exception: {last_error}")
 
     if not response or response.status_code != 200:
-        raise Exception(f"Gemini API request failed. Last error: {last_error}")
+        logger.error(f"Prescription OCR failed across all models. Last details: {last_error}")
+        raise Exception("AI Prescription Scanner is currently busy or unable to process this document. Please ensure the image is clear and try again.")
 
     resp_json = response.json()
     try:
         raw_text = resp_json['candidates'][0]['content']['parts'][0]['text']
     except (KeyError, IndexError):
-        raise Exception(f"Invalid response format from Gemini API: {resp_json}")
+        logger.error(f"Invalid AI response structure for prescription: {resp_json}")
+        raise Exception("Unable to parse prescription details. Please ensure the image is clear.")
 
     # Parse and clean JSON
     cleaned_text = raw_text.strip()
@@ -138,4 +144,5 @@ def extract_prescription_data(image_file):
         parsed_data = json.loads(cleaned_text.strip())
         return parsed_data
     except json.JSONDecodeError as e:
-        raise Exception(f"Failed to parse Gemini output as JSON: {cleaned_text}. Error: {str(e)}")
+        logger.error(f"Failed to parse prescription output as JSON: {cleaned_text}. Error: {e}")
+        raise Exception("Could not extract structured prescription details from this image.")

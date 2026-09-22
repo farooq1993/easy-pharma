@@ -1,95 +1,164 @@
 <!-- ══════════════════════════════════════════
-     Opening Stock AI OCR Scan Modal
+     Opening Stock AI OCR Scan Modal (Mobile-Friendly & Modern UI/UX)
      ══════════════════════════════════════════ -->
 <style>
+/* Base Opening Stock OCR Modal */
+#openingOcrImportModal .modal-dialog {
+    max-width: 1080px;
+    margin: 1.25rem auto;
+    transition: all 0.25s ease-out;
+}
+#openingOcrImportModal .modal-content {
+    border-radius: 20px;
+    overflow: hidden;
+    max-height: 92vh;
+    border: none;
+    box-shadow: 0 25px 50px -12px rgba(15, 118, 110, 0.25), 0 0 0 1px rgba(13, 148, 136, 0.1);
+    background: #ffffff;
+}
+
 @media (max-width: 768px) {
     #openingOcrImportModal .modal-dialog {
-        margin: 0.4rem;
-        max-width: calc(100% - 0.8rem);
+        margin: 0.35rem;
+        max-width: calc(100% - 0.7rem);
     }
     #openingOcrImportModal .modal-content {
         max-height: 96vh !important;
         border-radius: 16px !important;
     }
-    #openingOcrPreviewTable, #openingOcrPreviewTable thead, #openingOcrPreviewTable tbody, #openingOcrPreviewTable th, #openingOcrPreviewTable td, #openingOcrPreviewTable tr {
+    #openingOcrPreviewTable, 
+    #openingOcrPreviewTable thead, 
+    #openingOcrPreviewTable tbody, 
+    #openingOcrPreviewTable th, 
+    #openingOcrPreviewTable tr {
         display: block;
+        width: 100% !important;
+        min-width: 100% !important;
     }
-    #openingOcrPreviewTable thead tr {
-        position: absolute;
-        top: -9999px;
-        left: -9999px;
+    #openingOcrPreviewTable thead {
+        display: none !important;
+    }
+    #openingOcrPreviewTable tbody {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 4px 0 12px;
     }
     #openingOcrPreviewTable tr {
-        border: 1px solid #dee2e6;
-        border-radius: 12px;
-        margin-bottom: 15px;
-        background: #fff;
-        padding: 8px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        display: grid !important;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        background: #ffffff;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 12px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+        position: relative;
     }
     #openingOcrPreviewTable td {
-        border: none !important;
-        border-bottom: 1px solid #f1f5f9 !important;
-        position: relative;
-        padding-left: 45% !important;
-        text-align: right !important;
-        min-height: 38px;
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        justify-content: center !important;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 10px;
+        padding: 6px 10px !important;
+        min-height: 52px;
+        text-align: left !important;
     }
     #openingOcrPreviewTable td:before {
         content: attr(data-label);
-        position: absolute;
-        left: 10px;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 40%;
-        white-space: nowrap;
-        font-weight: 600;
-        text-align: left;
+        font-size: 0.68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
         color: #64748b;
-        font-size: 0.8rem;
+        margin-bottom: 2px;
+        display: block;
+        width: 100%;
+    }
+    #openingOcrPreviewTable tfoot {
+        display: block;
+        background: #f0fdfa;
+        border: 1.5px solid #ccfbf1;
+        border-radius: 14px;
+        padding: 12px 14px;
+        margin-top: 6px;
+    }
+    #openingOcrPreviewTable tfoot tr {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    #openingOcrPreviewTable tfoot td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 4px 0 !important;
+        border: none !important;
+        font-size: 0.88rem;
+    }
+    #openingOcrPreviewTable tfoot td:empty {
+        display: none !important;
+    }
+    #openingOcrImportModal .modal-footer {
+        padding: 10px 14px !important;
+        flex-direction: column-reverse;
+        gap: 8px !important;
+    }
+    #openingOcrImportModal .modal-footer > div {
+        width: 100%;
+        display: flex;
+        justify-content: stretch;
+    }
+    #openingOcrImportModal .modal-footer button {
+        flex: 1;
+        padding: 10px 16px !important;
+        font-size: 0.9rem !important;
     }
 }
 </style>
 
 <div class="modal fade" id="openingOcrImportModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content border-0 shadow-lg" style="border-radius:20px; overflow:hidden; max-height:92vh;">
+        <div class="modal-content">
 
             <!-- ── Header ── -->
-            <div style="background:linear-gradient(135deg,#0d9488 0%,#0f766e 100%);padding:20px 24px 16px;flex-shrink:0;">
+            <div class="ocr-modal-header" style="background:linear-gradient(135deg,#0f766e 0%,#0d9488 55%,#14b8a6 100%);padding:18px 24px 14px;color:#fff;flex-shrink:0;">
                 <div class="d-flex align-items-center justify-content-between">
                     <div class="d-flex align-items-center gap-3">
-                        <div style="width:42px;height:42px;background:rgba(255,255,255,0.18);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                            <i class="fas fa-magic" style="font-size:1.2rem;color:#fff;"></i>
+                        <div style="width:44px;height:44px;background:rgba(255,255,255,0.18);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <i class="fas fa-magic" style="font-size:1.3rem;color:#fff;"></i>
                         </div>
                         <div>
-                            <h5 style="color:#fff;font-weight:700;margin:0;font-size:1.05rem;">AI Scan Opening Stock</h5>
-                            <p style="color:rgba(255,255,255,0.78);margin:2px 0 0;font-size:0.76rem;">
-                                Upload handwritten note or document photo — AI will read, extract & match stock items
+                            <h5 style="color:#fff;font-weight:700;margin:0;font-size:1.1rem;letter-spacing:-0.2px;">AI Scan Opening Stock</h5>
+                            <p style="color:rgba(255,255,255,0.85);margin:2px 0 0;font-size:0.78rem;">
+                                Upload handwritten note or document photo — AI reads & extracts stock items
                             </p>
                         </div>
                     </div>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="resetOpeningOcrModal()"></button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="resetOpeningOcrModal()" aria-label="Close"></button>
                 </div>
 
                 <!-- Step indicator -->
-                <div class="d-flex align-items-center gap-2 mt-3" id="openingOcrStepIndicator">
-                    <div class="csv-step active" id="openingOcrStep1Ind">
-                        <span class="csv-step-num">1</span>
-                        <span class="csv-step-label">Upload Photo</span>
+                <div class="ocr-stepper-wrap" id="openingOcrStepIndicator">
+                    <div class="ocr-step-pill active" id="openingOcrStep1Ind">
+                        <span class="ocr-step-num-badge">1</span>
+                        <span class="ocr-step-label-full">Upload Stock Photo</span>
+                        <span class="ocr-step-label-short d-none">Upload</span>
                     </div>
-                    <div class="csv-step-line"></div>
-                    <div class="csv-step" id="openingOcrStep2Ind">
-                        <span class="csv-step-num">2</span>
-                        <span class="csv-step-label">AI Preview</span>
+                    <div class="ocr-step-connector"></div>
+                    <div class="ocr-step-pill" id="openingOcrStep2Ind">
+                        <span class="ocr-step-num-badge">2</span>
+                        <span class="ocr-step-label-full">AI Preview & Edit</span>
+                        <span class="ocr-step-label-short d-none">Review</span>
                     </div>
-                    <div class="csv-step-line"></div>
-                    <div class="csv-step" id="openingOcrStep3Ind">
-                        <span class="csv-step-num">3</span>
-                        <span class="csv-step-label">Load Stock</span>
+                    <div class="ocr-step-connector"></div>
+                    <div class="ocr-step-pill" id="openingOcrStep3Ind">
+                        <span class="ocr-step-num-badge">3</span>
+                        <span class="ocr-step-label-full">Load Stock</span>
+                        <span class="ocr-step-label-short d-none">Load</span>
                     </div>
                 </div>
             </div>
@@ -101,34 +170,51 @@
                 <div id="openingOcrStep1" class="p-3 p-md-4">
 
                     <!-- Limit display -->
-                    <div class="d-flex justify-content-between align-items-center mb-3 px-3 py-2" style="background:#f0fdfa; border-radius:10px; border:1px solid #ccfbf1;">
-                        <span style="font-size:0.82rem; color:#0f766e; font-weight: 500;">
-                            <i class="fas fa-chart-line me-1"></i> Today's Scans Used:
-                        </span>
-                        <span style="font-size:0.82rem; color:#0f766e; font-weight:700;">
+                    <div class="d-flex justify-content-between align-items-center mb-3 px-3 py-2" style="background:#f0fdfa; border-radius:12px; border:1px solid #ccfbf1;">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-teal text-white rounded-pill px-2 py-1" style="background-color:#0d9488; font-size:0.75rem;">
+                                <i class="fas fa-bolt me-1"></i> AI Vision
+                            </span>
+                            <span style="font-size:0.83rem; color:#0f766e; font-weight:600;">Today's Scans Used:</span>
+                        </div>
+                        <span style="font-size:0.85rem; color:#0f766e; font-weight:700;">
                             <span id="openingOcrScansToday">0</span> / <span id="openingOcrMaxScans">100</span>
                         </span>
                     </div>
 
                     <!-- Upload zone -->
-                    <div id="openingOcrDropZone"
-                         style="border:2.5px dashed #0d9488;border-radius:16px;padding:35px 24px;text-align:center;transition:all .2s;background:#f0fdf9;"
+                    <div id="openingOcrDropZone" class="ocr-drop-box"
                          ondragover="openingOcrDragOver(event)"
                          ondragleave="openingOcrDragLeave(event)"
                          ondrop="openingOcrDrop(event)">
-                        <div onclick="document.getElementById('openingStockFile').click()" style="cursor:pointer;">
-                            <i class="fas fa-file-signature" style="font-size:2.6rem;color:#0d9488;"></i>
-                            <div class="mt-3 fw-bold" style="color:#0f766e;font-size:1rem;">Drop handwritten list or stock photo here or choose:</div>
+                        <div onclick="document.getElementById('openingStockFile').click()">
+                            <div style="width:64px;height:64px;margin:0 auto 12px;background:#ccfbf1;border-radius:18px;display:flex;align-items:center;justify-content:center;">
+                                <i class="fas fa-file-signature" style="font-size:2rem;color:#0d9488;"></i>
+                            </div>
+                            <h6 class="fw-bold mb-1" style="color:#0f766e;font-size:1.05rem;">
+                                Drop handwritten stock note or list here or choose:
+                            </h6>
+                            <p class="text-muted mb-0" style="font-size:0.82rem;">Supports JPG, JPEG, PNG, PDF photos of stock papers</p>
                         </div>
-                        <div class="d-flex flex-wrap justify-content-center gap-3 mt-3">
-                            <button type="button" class="btn btn-teal text-white rounded-pill px-3" style="background-color:#0d9488; border-color:#0d9488; font-size:0.85rem;" onclick="document.getElementById('openingStockCamera').click()">
-                                <i class="fas fa-camera me-1"></i> Take Photo (Camera)
-                            </button>
-                            <button type="button" class="btn btn-outline-teal rounded-pill px-3" style="color:#0d9488; border-color:#0d9488; font-size:0.85rem;" onclick="document.getElementById('openingStockFile').click()">
-                                <i class="fas fa-image me-1"></i> Choose from Gallery
-                            </button>
+                        <div class="ocr-touch-actions">
+                            <div class="ocr-action-btn-card primary-card" onclick="document.getElementById('openingStockCamera').click()">
+                                <div style="font-size:1.5rem;"><i class="fas fa-camera"></i></div>
+                                <div>
+                                    <div class="fw-bold" style="font-size:0.9rem;">Take Photo (Camera)</div>
+                                    <div style="font-size:0.75rem;opacity:0.9;">Direct snapshot</div>
+                                </div>
+                            </div>
+                            <div class="ocr-action-btn-card" onclick="document.getElementById('openingStockFile').click()">
+                                <div style="font-size:1.5rem;color:#0d9488;"><i class="fas fa-images"></i></div>
+                                <div>
+                                    <div class="fw-bold text-dark" style="font-size:0.9rem;">Choose from Gallery</div>
+                                    <div class="text-muted" style="font-size:0.75rem;">Select image or PDF</div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="mt-2 text-muted" style="font-size:0.78rem;">Supported: JPG, JPEG, PNG formats</div>
+                        <div class="mt-3 text-muted" style="font-size:0.78rem;">
+                            <i class="fas fa-check-circle text-success me-1"></i> Multi-page support available
+                        </div>
                         <input type="file" id="openingStockFile" accept="image/*" style="display:none;" multiple onchange="openingOcrFileSelected(this)">
                         <input type="file" id="openingStockCamera" accept="image/*" capture="environment" style="display:none;" onchange="openingOcrFileSelected(this)">
                     </div>
@@ -136,34 +222,51 @@
                     <!-- Selected file info -->
                     <div id="openingOcrSelectedFile" class="mt-3 d-none"></div>
 
-                    <!-- Instructions -->
-                    <div style="background:#f4fbfb;border-radius:12px;padding:14px 18px;margin-top:16px;border:1px solid #ccfbf1;">
-                        <div class="fw-bold mb-2" style="font-size:0.84rem;color:#0f766e;">
-                            <i class="fas fa-info-circle me-1"></i> Tips for best handwritten OCR results
-                        </div>
-                        <div style="font-size:0.8rem;color:#374151;line-height:1.8;">
-                            <strong>Legible text:</strong> Ensure medicine names, batch numbers, expiry dates, quantities, and MRPs are written clearly.<br>
-                            <strong>Good lighting:</strong> Capture the page directly from above with no strong shadows.<br>
-                            <strong>Automatic matching:</strong> Found products will be mapped automatically. Missing medicines can be added instantly using Quick Add.
-                        </div>
-                    </div>
-
                     <!-- Scan progress loader -->
                     <div id="openingOcrParseProgress" class="mt-3 d-none">
-                        <div class="d-flex align-items-center gap-2 mb-2">
-                            <div class="spinner-border spinner-border-sm text-teal" style="color:#0d9488;"></div>
-                            <span style="font-size:0.85rem;color:#374151;font-weight:600;" id="openingOcrProgressStatusText">AI OCR engine is reading stock list...</span>
-                        </div>
-                        <div class="progress" style="height:6px;border-radius:6px;">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-teal" style="width:100%; background-color:#0d9488;"></div>
+                        <div class="ocr-scanning-box">
+                            <div class="d-flex align-items-center justify-content-center gap-2 mb-2">
+                                <div class="spinner-border spinner-border-sm text-teal" style="color:#0d9488;"></div>
+                                <span style="font-size:0.92rem;color:#0f766e;font-weight:700;" id="openingOcrProgressStatusText">AI OCR engine is reading stock list...</span>
+                            </div>
+                            <div class="progress" style="height:8px;border-radius:8px;background:#ccfbf1;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated bg-teal" style="width:100%; background-color:#0d9488;"></div>
+                            </div>
                         </div>
                     </div>
 
                     <!-- Parse error alert -->
                     <div id="openingOcrParseError" class="mt-3 d-none">
-                        <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:12px 16px;color:#991b1b;font-size:0.85rem;">
-                            <i class="fas fa-exclamation-circle me-2"></i>
-                            <span id="openingOcrParseErrorMsg"></span>
+                        <div style="background:#fef2f2;border:1.5px solid #fca5a5;border-radius:12px;padding:14px 16px;color:#991b1b;font-size:0.86rem;" class="d-flex align-items-start gap-2">
+                            <i class="fas fa-exclamation-circle mt-1" style="font-size:1.1rem;"></i>
+                            <div>
+                                <div class="fw-bold mb-1">OCR Scan Notice</div>
+                                <span id="openingOcrParseErrorMsg"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tips for best results -->
+                    <div style="background:#f8fafc;border-radius:14px;padding:16px 18px;margin-top:16px;border:1px solid #e2e8f0;">
+                        <div class="fw-bold mb-2 d-flex align-items-center gap-2" style="font-size:0.86rem;color:#0f766e;">
+                            <i class="fas fa-lightbulb text-warning"></i> Tips for best handwritten OCR results:
+                        </div>
+                        <div class="row g-2 mt-1">
+                            <div class="col-12 col-md-4">
+                                <div class="p-2 rounded-3" style="background:#ffffff;border:1px solid #e2e8f0;font-size:0.78rem;color:#475569;">
+                                    <strong>✍️ Legible Text:</strong> Clear medicine names, batch numbers, expiry dates & quantities.
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <div class="p-2 rounded-3" style="background:#ffffff;border:1px solid #e2e8f0;font-size:0.78rem;color:#475569;">
+                                    <strong>💡 Top-Down Photo:</strong> Capture the page directly from above with no glare.
+                                </div>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <div class="p-2 rounded-3" style="background:#ffffff;border:1px solid #e2e8f0;font-size:0.78rem;color:#475569;">
+                                    <strong>⚡ Quick Add:</strong> Unmatched medicines can be added instantly in one click.
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -172,10 +275,10 @@
                 <div id="openingOcrStep2" class="d-none">
 
                     <!-- Missing products alert -->
-                    <div id="openingOcrMissingProductsBar" class="d-none" style="background:#fffbeb;border-bottom:1px solid #fde68a;padding:12px 24px;">
+                    <div id="openingOcrMissingProductsBar" class="d-none" style="background:#fffbeb;border-bottom:1px solid #fde68a;padding:12px 20px;">
                         <div class="d-flex align-items-start gap-2">
-                            <i class="fas fa-exclamation-triangle text-warning mt-1" style="font-size:1rem;"></i>
-                            <div style="font-size:0.83rem;color:#92400e; width:100%;">
+                            <i class="fas fa-exclamation-triangle text-warning mt-1" style="font-size:1.1rem;"></i>
+                            <div style="font-size:0.84rem;color:#92400e; width:100%;">
                                 <strong>Some medicines were not found in product master DB:</strong>
                                 <div id="openingOcrMissingProductsList" class="mt-2 d-flex flex-column gap-2"></div>
                             </div>
@@ -183,27 +286,28 @@
                     </div>
 
                     <!-- Items count bar -->
-                    <div class="d-flex align-items-center justify-content-between px-4 py-2" style="background:#fff;border-bottom:1px solid #f3f4f6;">
-                        <div style="font-size:0.83rem;color:#374151;">
-                            <i class="fas fa-list me-1 text-teal" style="color:#0d9488;"></i>
-                            <span id="openingOcrItemCount" class="fw-bold">0</span> stock items extracted
+                    <div class="d-flex align-items-center justify-content-between px-3 px-md-4 py-2" style="background:#ffffff;border-bottom:1px solid #f1f5f9;">
+                        <div class="d-flex align-items-center gap-2" style="font-size:0.85rem;color:#334151;">
+                            <span class="badge bg-teal text-white rounded-pill px-2.5 py-1" style="background-color:#0d9488; font-size:0.75rem;">
+                                <i class="fas fa-list me-1"></i> <span id="openingOcrItemCount">0</span> Items
+                            </span>
                         </div>
                         <div class="d-flex gap-2">
-                            <span style="font-size:0.75rem;color:#6b7280;padding-top:2px;">
-                                <i class="fas fa-pencil-alt me-1"></i> Edit cells directly to correct values
+                            <span class="text-muted d-none d-md-inline" style="font-size:0.76rem;">
+                                <i class="fas fa-pencil-alt me-1 text-teal"></i> Tap on any cell to edit
                             </span>
-                            <button type="button" class="btn btn-sm btn-outline-danger" style="font-size:0.75rem;border-radius:6px;" onclick="openingOcrClearAll()">
+                            <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-3" style="font-size:0.75rem;" onclick="openingOcrClearAll()">
                                 <i class="fas fa-trash me-1"></i> Clear All
                             </button>
                         </div>
                     </div>
 
                     <!-- Preview table -->
-                    <div style="padding:0 16px 16px;overflow-x:auto;">
-                        <table class="table table-sm table-hover align-middle mt-2" id="openingOcrPreviewTable" style="font-size:0.82rem;min-width:850px;">
-                            <thead style="background:#f1f5f9;position:sticky;top:0;z-index:10;">
+                    <div style="padding:10px 16px 16px;overflow-x:auto;">
+                        <table class="table table-sm table-hover align-middle mb-0" id="openingOcrPreviewTable">
+                            <thead>
                                 <tr>
-                                    <th style="width:32px;padding:8px 6px;">#</th>
+                                    <th style="width:36px;text-align:center;">#</th>
                                     <th style="min-width:180px;">Medicine Name</th>
                                     <th style="min-width:100px;">Batch No</th>
                                     <th style="min-width:90px;">Expiry</th>
@@ -212,18 +316,18 @@
                                     <th style="min-width:80px;text-align:right;">MRP</th>
                                     <th style="min-width:60px;text-align:center;">GST%</th>
                                     <th style="min-width:90px;text-align:right;color:#0d9488;">Total</th>
-                                    <th style="width:36px;"></th>
+                                    <th style="width:36px;text-align:center;"></th>
                                 </tr>
                             </thead>
                             <tbody id="openingOcrPreviewTbody"></tbody>
                             <tfoot>
                                 <tr style="background:#f0fdfa;border-top:2px solid #ccfbf1;">
-                                    <td colspan="4" class="fw-bold" style="padding:8px 10px;font-size:0.82rem;">TOTAL OPENING STOCK AMOUNT</td>
-                                    <td id="openingOcrTotalQty" class="fw-bold text-center" style="padding:8px 6px;"></td>
+                                    <td colspan="4" class="fw-bold" style="padding:10px;font-size:0.85rem;color:#0f766e;">TOTAL OPENING STOCK AMOUNT</td>
+                                    <td id="openingOcrTotalQty" class="fw-bold text-center" style="padding:10px 6px;"></td>
                                     <td></td>
                                     <td></td>
                                     <td></td>
-                                    <td id="openingOcrTotalAmount" class="fw-bold text-end text-teal" style="padding:8px 6px;color:#0f766e;"></td>
+                                    <td id="openingOcrTotalAmount" class="fw-bold text-end text-teal" style="padding:10px 8px;font-size:0.95rem;color:#0f766e;"></td>
                                     <td></td>
                                 </tr>
                             </tfoot>
@@ -234,13 +338,13 @@
             </div>
 
             <!-- ── Footer ── -->
-            <div class="modal-footer border-top px-4 py-3 gap-2" style="flex-shrink:0;justify-content:space-between;">
+            <div class="modal-footer border-top px-3 px-md-4 py-3 gap-2" style="flex-shrink:0;justify-content:space-between;background:#f8fafc;">
 
                 <!-- Left: back button -->
                 <div>
                     <button type="button" class="btn btn-outline-secondary rounded-pill px-3" id="openingOcrBackBtn"
                             style="font-size:0.85rem;display:none;" onclick="openingOcrGoToStep1()">
-                        <i class="fas fa-arrow-left me-1"></i> Back
+                        <i class="fas fa-arrow-left me-1"></i> Back to Upload
                     </button>
                 </div>
 
@@ -251,14 +355,14 @@
                         Cancel
                     </button>
                     <!-- Step 1: Scan button -->
-                    <button type="button" class="btn btn-teal text-white rounded-pill px-4 fw-bold" id="openingOcrParseBtn"
+                    <button type="button" class="btn btn-teal text-white rounded-pill px-4 fw-bold shadow-sm" id="openingOcrParseBtn"
                             style="font-size:0.85rem; background-color:#0d9488; border-color:#0d9488;" onclick="submitOpeningOcrParse()" disabled>
                         <i class="fas fa-magic me-1"></i> Scan Stock (AI)
                     </button>
                     <!-- Step 2: Confirm button -->
-                    <button type="button" class="btn btn-success rounded-pill px-4 fw-bold d-none" id="openingOcrConfirmBtn"
+                    <button type="button" class="btn btn-success rounded-pill px-4 fw-bold shadow-sm d-none" id="openingOcrConfirmBtn"
                             style="font-size:0.85rem;" onclick="ocrConfirmAndLoadOpening()">
-                        <i class="fas fa-check-circle me-1"></i> Confirm & Load to Opening Stock
+                        <i class="fas fa-check-circle me-1"></i> Confirm & Load to Stock
                     </button>
                 </div>
             </div>
