@@ -956,10 +956,31 @@ function submitOcrParse() {
                 }
 
                 const dupWarning = document.getElementById('ocrDuplicateInvoiceWarning');
+                const dupText = document.getElementById('ocrDuplicateInvoiceText');
+                const ocrInvInput = document.getElementById('ocrInvoiceNumber');
+
                 if (data.is_duplicate) {
-                    dupWarning.classList.remove('d-none');
+                    _ocrDuplicateExists = true;
+                    if (ocrInvInput) ocrInvInput.classList.add('is-invalid');
+                    if (dupWarning) {
+                        if (data.duplicate_details) {
+                            const d = data.duplicate_details;
+                            const sName = d.supplier_name || 'this supplier';
+                            const vNum = d.voucher_number ? ` (Voucher: ${d.voucher_number})` : '';
+                            const pDate = d.purchase_date ? ` dated ${d.purchase_date}` : '';
+                            const pAmt = d.total_amount ? ` for ₹${Number(d.total_amount).toLocaleString('en-IN', {minimumFractionDigits: 2})}` : '';
+                            if (dupText) dupText.textContent = `Invoice #${d.invoice_number || data.invoice_number} already exists for ${sName}${vNum}${pDate}${pAmt}! Duplicate entries are not allowed.`;
+                        }
+                        dupWarning.classList.remove('d-none');
+                    }
                 } else {
-                    dupWarning.classList.add('d-none');
+                    _ocrDuplicateExists = false;
+                    if (ocrInvInput) ocrInvInput.classList.remove('is-invalid');
+                    if (dupWarning) dupWarning.classList.add('d-none');
+                    // Also trigger check against live supplier in select
+                    if (typeof checkOcrDuplicateInvoice === 'function') {
+                        checkOcrDuplicateInvoice(false);
+                    }
                 }
 
                 _ocrParsedItems = data.items || [];
@@ -1039,7 +1060,11 @@ function resetOcrImportModal() {
     document.getElementById('ocrPreviewTbody').innerHTML = '';
     document.getElementById('ocrTotalQty').textContent = '';
     document.getElementById('ocrTotalAmount').textContent = '';
-    document.getElementById('ocrDuplicateInvoiceWarning').classList.add('d-none');
+    const dupWarning = document.getElementById('ocrDuplicateInvoiceWarning');
+    if (dupWarning) dupWarning.classList.add('d-none');
+    const invInput = document.getElementById('ocrInvoiceNumber');
+    if (invInput) invInput.classList.remove('is-invalid');
+    _ocrDuplicateExists = false;
     document.getElementById('ocrMissingProductsBar').classList.add('d-none');
 }
 
@@ -1272,6 +1297,18 @@ function ocrConfirmAndLoad() {
         return;
     }
 
+    // Prevent loading duplicate invoice
+    if (_ocrDuplicateExists) {
+        const warnText = document.getElementById('ocrDuplicateInvoiceText')?.textContent;
+        showToast(warnText || `Invoice #${invNum} already exists for this supplier! Duplicate entries are not allowed.`, 'error');
+        const invInput = document.getElementById('ocrInvoiceNumber');
+        if (invInput) {
+            invInput.focus();
+            invInput.classList.add('is-invalid');
+        }
+        return;
+    }
+
     const mainSupplierSel = document.getElementById('supplierSelect');
     mainSupplierSel.value = suppVal;
     mainSupplierSel.dispatchEvent(new Event('change'));
@@ -1401,6 +1438,10 @@ function ocrConfirmAndLoad() {
         input.value  = opt.text;
         dropdown.style.display = 'none';
         activeIdx = -1;
+        sel.dispatchEvent(new Event('change'));
+        if (typeof checkOcrDuplicateInvoice === 'function') {
+            checkOcrDuplicateInvoice(false);
+        }
     }
 
     input.addEventListener('focus', () => {
@@ -1410,8 +1451,14 @@ function ocrConfirmAndLoad() {
 
     input.addEventListener('input', () => {
         const q = input.value.trim().toLowerCase();
-        if (!q) sel.value = '';
+        if (!q) {
+            sel.value = '';
+            sel.dispatchEvent(new Event('change'));
+        }
         renderDrop(q ? getOptions().filter(o => o.text.toLowerCase().includes(q)) : getOptions());
+        if (typeof debouncedCheckOcrDuplicateInvoice === 'function') {
+            debouncedCheckOcrDuplicateInvoice(false);
+        }
     });
 
     input.addEventListener('keydown', e => {
@@ -1443,6 +1490,104 @@ function ocrConfirmAndLoad() {
         dropdown.style.display = 'none';
     };
 })();
+
+// ── Live OCR Duplicate Invoice Checker ──
+let _ocrDuplicateExists = false;
+let _ocrCheckTimeout = null;
+
+async function checkOcrDuplicateInvoice(showToastNotification = false) {
+    const invInput = document.getElementById('ocrInvoiceNumber');
+    const suppSelect = document.getElementById('ocrSupplierSelect');
+    const suppSearchInput = document.getElementById('ocrSupplierSearchInput');
+    const warnBox = document.getElementById('ocrDuplicateInvoiceWarning');
+    const warnText = document.getElementById('ocrDuplicateInvoiceText');
+
+    if (!invInput) return;
+
+    const invoice_number = invInput.value.trim();
+    let supplier_id = suppSelect ? suppSelect.value : '';
+
+    if (!supplier_id && suppSearchInput && suppSearchInput.value.trim() && suppSelect) {
+        const rawText = suppSearchInput.value.trim().toLowerCase();
+        const opt = Array.from(suppSelect.options).find(o => 
+            o.value && (
+                o.text.toLowerCase().split(' | ')[0].trim() === rawText ||
+                o.text.toLowerCase().startsWith(rawText) ||
+                rawText.startsWith(o.text.toLowerCase().split(' | ')[0].trim())
+            )
+        );
+        if (opt) {
+            supplier_id = opt.value;
+            suppSelect.value = opt.value;
+        }
+    }
+
+    if (!invoice_number || (!supplier_id && !supplier_name)) {
+        _ocrDuplicateExists = false;
+        if (warnBox) warnBox.classList.add('d-none');
+        invInput.classList.remove('is-invalid');
+        return;
+    }
+
+    try {
+        let url = `/purchase/check-invoice-number/?invoice_number=${encodeURIComponent(invoice_number)}`;
+        if (supplier_id) {
+            url += `&supplier_id=${encodeURIComponent(supplier_id)}`;
+        } else if (supplier_name) {
+            url += `&supplier_name=${encodeURIComponent(supplier_name)}`;
+        }
+
+        const resp = await fetch(url, { silent: true });
+        const res = await resp.json();
+
+        if (res.exists) {
+            _ocrDuplicateExists = true;
+            const sName = res.supplier_name || 'this supplier';
+            const vNum = res.voucher_number ? ` (Voucher: ${res.voucher_number})` : '';
+            const pDate = res.purchase_date ? ` dated ${res.purchase_date}` : '';
+            const pAmt = res.total_amount ? ` for ₹${Number(res.total_amount).toLocaleString('en-IN', {minimumFractionDigits: 2})}` : '';
+            const msg = `Invoice #${res.invoice_number || invoice_number} already exists for ${sName}${vNum}${pDate}${pAmt}! Duplicate entries are not allowed.`;
+
+            if (warnBox) {
+                if (warnText) warnText.textContent = msg;
+                warnBox.classList.remove('d-none');
+            }
+            invInput.classList.add('is-invalid');
+
+            if (showToastNotification) {
+                showToast(msg, 'error');
+            }
+        } else {
+            _ocrDuplicateExists = false;
+            if (warnBox) warnBox.classList.add('d-none');
+            invInput.classList.remove('is-invalid');
+        }
+    } catch (err) {
+        console.error('OCR invoice check failed:', err);
+    }
+}
+window.checkOcrDuplicateInvoice = checkOcrDuplicateInvoice;
+
+function debouncedCheckOcrDuplicateInvoice(showToastNotification = false) {
+    clearTimeout(_ocrCheckTimeout);
+    _ocrCheckTimeout = setTimeout(() => {
+        checkOcrDuplicateInvoice(showToastNotification);
+    }, 250);
+}
+window.debouncedCheckOcrDuplicateInvoice = debouncedCheckOcrDuplicateInvoice;
+
+// Bind event listeners for OCR invoice input and supplier select
+document.addEventListener('DOMContentLoaded', () => {
+    const ocrInv = document.getElementById('ocrInvoiceNumber');
+    if (ocrInv) {
+        ocrInv.addEventListener('input', () => debouncedCheckOcrDuplicateInvoice(false));
+        ocrInv.addEventListener('blur', () => checkOcrDuplicateInvoice(false));
+    }
+    const ocrSupp = document.getElementById('ocrSupplierSelect');
+    if (ocrSupp) {
+        ocrSupp.addEventListener('change', () => checkOcrDuplicateInvoice(false));
+    }
+});
 
 // Supplier Modal helper functions for OCR
 function openOcrSupplierModal() {
@@ -1522,6 +1667,9 @@ async function saveOcrSupplier() {
 
         closeOcrSupplierModal();
         showToast(`Supplier "${res.name}" added successfully`, 'success');
+        if (typeof checkOcrDuplicateInvoice === 'function') {
+            checkOcrDuplicateInvoice(false);
+        }
     } catch (err) {
         showToast('Error: ' + err.message, 'error');
     }
