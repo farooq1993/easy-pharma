@@ -1105,7 +1105,7 @@ async function checkDuplicateInvoice(showToastNotification = true) {
     const invoice_number = invInput.value.trim();
     const editId = window.EP_CONFIG?.editData?.id || '';
 
-    if (!invoice_number) {
+    if (!invoice_number || !supplier_id) {
         duplicateInvoiceExists = false;
         if (warnBox) warnBox.classList.add('d-none');
         if (spinner) spinner.classList.add('d-none');

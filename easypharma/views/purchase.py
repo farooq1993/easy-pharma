@@ -343,28 +343,58 @@ class PurchaseImportCSVView(View):
                 'error': str(e)
             })
 
+def find_duplicate_purchase_invoice(tenant, invoice_number, supplier_id=None, invoice_id=None, supplier_name=None):
+    """
+    Reusable helper (DRY) to look up duplicate purchase invoice by number AND supplier.
+    In retail and wholesale pharmacy, different suppliers can use the same invoice number (e.g. #3289).
+    An invoice is ONLY a duplicate if it belongs to the SAME supplier.
+    """
+    if not invoice_number or not str(invoice_number).strip():
+        return None
+
+    qs = PurchaseInvoice.objects.filter(
+        tenant=tenant,
+        invoice_number__iexact=str(invoice_number).strip()
+    ).select_related('supplier')
+
+    if invoice_id:
+        qs = qs.exclude(id=invoice_id)
+
+    # 1. If supplier_id is provided, check strictly for this supplier
+    if supplier_id:
+        try:
+            return qs.filter(supplier_id=int(supplier_id)).first()
+        except (ValueError, TypeError):
+            return None
+
+    # 2. If supplier_name is provided, match strictly by supplier name
+    if supplier_name and str(supplier_name).strip():
+        sname = str(supplier_name).strip()
+        matched = qs.filter(supplier__name__iexact=sname).first()
+        if not matched:
+            matched = qs.filter(supplier__name__icontains=sname).first()
+        return matched
+
+    # 3. If neither supplier_id nor supplier_name is provided, cannot determine duplicate
+    return None
+
+
 class CheckInvoiceNumberView(LoginRequiredMixin, View):
-    """Live check: invoice number already used for this supplier or tenant?"""
+    """Live check: invoice number already used for this supplier."""
     def get(self, request):
         supplier_id = request.GET.get('supplier_id')
+        supplier_name = request.GET.get('supplier_name', '').strip()
         invoice_number = request.GET.get('invoice_number', '').strip()
         invoice_id = request.GET.get('invoice_id')  # present only in edit mode
 
-        if not invoice_number:
-            return JsonResponse({'exists': False})
-
-        qs = PurchaseInvoice.objects.filter(
+        inv = find_duplicate_purchase_invoice(
             tenant=request.tenant,
-            invoice_number__iexact=invoice_number
-        ).select_related('supplier')
+            invoice_number=invoice_number,
+            supplier_id=supplier_id,
+            invoice_id=invoice_id,
+            supplier_name=supplier_name
+        )
 
-        if supplier_id:
-            qs = qs.filter(supplier_id=supplier_id)
-
-        if invoice_id:
-            qs = qs.exclude(id=invoice_id)
-        
-        inv = qs.first()
         if inv:
             return JsonResponse({
                 'exists': True,
@@ -374,7 +404,7 @@ class CheckInvoiceNumberView(LoginRequiredMixin, View):
                 'voucher_number': inv.voucher_number or f'PV-{inv.id}',
                 'purchase_date': inv.purchase_date.strftime('%d-%m-%Y') if inv.purchase_date else '',
                 'total_amount': float(inv.total_amount or 0),
-                'same_supplier': (str(inv.supplier_id) == str(supplier_id)) if supplier_id else True
+                'same_supplier': True
             })
         return JsonResponse({'exists': False})
 
@@ -1833,13 +1863,26 @@ class PurchaseScanAPI(LoginRequiredMixin, View):
                     'total': total,
                 })
                 
-        # 7. Check if invoice number is duplicate
+        # 7. Check if invoice number is duplicate for this supplier (DRY helper)
         invoice_number = parsed_data.get('invoice_number')
         is_duplicate = False
-        if invoice_number and PurchaseInvoice.objects.filter(
-            tenant=request.tenant, invoice_number=invoice_number
-        ).exists():
-            is_duplicate = True
+        duplicate_details = None
+        if invoice_number and (matched_supplier_id or supplier_name):
+            dup_inv = find_duplicate_purchase_invoice(
+                tenant=request.tenant,
+                invoice_number=invoice_number,
+                supplier_id=matched_supplier_id,
+                supplier_name=supplier_name
+            )
+            if dup_inv:
+                is_duplicate = True
+                duplicate_details = {
+                    'supplier_name': dup_inv.supplier.name if dup_inv.supplier else '',
+                    'invoice_number': dup_inv.invoice_number,
+                    'voucher_number': dup_inv.voucher_number or f'PV-{dup_inv.id}',
+                    'purchase_date': dup_inv.purchase_date.strftime('%d-%m-%Y') if dup_inv.purchase_date else '',
+                    'total_amount': float(dup_inv.total_amount or 0)
+                }
 
         return JsonResponse({
             'success': True,
@@ -1852,7 +1895,8 @@ class PurchaseScanAPI(LoginRequiredMixin, View):
             'payment_mode': parsed_data.get('payment_mode') or 'Cash',
             'items': matched_items,
             'missing_products': missing_products,
-            'is_duplicate': is_duplicate
+            'is_duplicate': is_duplicate,
+            'duplicate_details': duplicate_details
         })
 
 

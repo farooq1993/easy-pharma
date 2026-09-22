@@ -514,8 +514,8 @@ class AIProductAutoFillAPI(LoginRequiredMixin, View):
             models_to_try = [
                 ("v1beta", "gemini-3.6-flash"),
                 ("v1beta", "gemini-3.5-flash-lite"),
-                ("v1beta", "gemini-flash-lite-latest"),
                 ("v1beta", "gemini-flash-latest"),
+                ("v1beta", "gemini-flash-lite-latest"),
                 ("v1beta", "gemini-3.5-flash"),
                 ("v1beta", "gemini-3.1-flash-lite"),
                 ("v1beta", "gemini-2.5-flash"),
