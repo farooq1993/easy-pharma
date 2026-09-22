@@ -850,10 +850,15 @@ class ProductSearchAPI(LoginRequiredMixin,View):
             current_quantity__gt=0
         )
         
-        qs = Products.objects.filter(tenant=request.tenant)
+        tenant_filter = Q(tenant=request.tenant) | Q(tenant__isnull=True)
+        qs = Products.objects.filter(tenant_filter)
 
         if query:
-            qs = qs.filter(product_name__istartswith=query)
+            qs = qs.filter(
+                Q(product_name__icontains=query) |
+                Q(product_content__content_name__icontains=query) |
+                Q(compny_name__company_name__icontains=query)
+            )
 
         products = qs.annotate(
             has_stock=Exists(active_batches)
@@ -862,7 +867,10 @@ class ProductSearchAPI(LoginRequiredMixin,View):
         ).prefetch_related(
             Prefetch(
                 'batches',
-                queryset=StockBatch.objects.filter(current_quantity__gt=0).only(
+                queryset=StockBatch.objects.filter(
+                    tenant=request.tenant,
+                    current_quantity__gt=0
+                ).only(
                     'id', 'product_id', 'batch_number', 'expiry_date', 'current_quantity', 'sale_price', 'mrp'
                 ).order_by('expiry_date')
             )
@@ -874,6 +882,7 @@ class ProductSearchAPI(LoginRequiredMixin,View):
         data = []
         for p in products:
             batches = list(p.batches.all())
+            cf = p.conversion_factor or 1
             
             if not batches:
                 # Still return the product but flag as out of stock so UI can show substitute button
@@ -884,7 +893,7 @@ class ProductSearchAPI(LoginRequiredMixin,View):
                     'content': p.product_content.content_name if p.product_content else None,
                     'company': p.compny_name.company_name if p.compny_name else None,
                     'tax_rate': p.product_tax.tax_rate if p.product_tax else 0,
-                    'conversion_factor': 1 if sale_type == 'strip' else p.conversion_factor,
+                    'conversion_factor': 1 if sale_type == 'strip' else cf,
                     'out_of_stock': True,
                     'batches': []
                 })
@@ -894,23 +903,30 @@ class ProductSearchAPI(LoginRequiredMixin,View):
             for batch in batches:
                 unit_price = float(batch.sale_price) if batch.sale_price else 0.0
                 if sale_type == 'strip':
-                    if p.conversion_factor > 1 and unit_price > 0:
-                        unit_price = unit_price * p.conversion_factor
+                    if cf > 1 and unit_price > 0:
+                        unit_price = unit_price * cf
                     elif batch.mrp:
                         unit_price = float(batch.mrp)
+                    
+                    if cf > 1:
+                        strips = batch.current_quantity // cf
+                        stock_qty = strips if strips > 0 else batch.current_quantity
+                    else:
+                        stock_qty = batch.current_quantity
                 else:
-                    if p.conversion_factor > 1 and batch.mrp:
-                        unit_price = float(batch.mrp) / p.conversion_factor
+                    if cf > 1 and batch.mrp and unit_price == 0:
+                        unit_price = float(batch.mrp) / cf
                     elif unit_price == 0 and batch.mrp:
                         unit_price = float(batch.mrp)
+                    stock_qty = batch.current_quantity
                 
                 batch_list.append({
                     'batch_id': batch.id,
                     'batch_no': batch.batch_number,
-                    'expiry': batch.expiry_date.strftime('%m/%y'),
-                    'stock': int(batch.current_quantity / (p.conversion_factor or 1)) if sale_type == 'strip' else batch.current_quantity,
+                    'expiry': batch.expiry_date.strftime('%m/%y') if batch.expiry_date else 'N/A',
+                    'stock': stock_qty,
                     'price': unit_price,
-                    'mrp_pack': float(batch.mrp)
+                    'mrp_pack': float(batch.mrp) if batch.mrp else 0.0
                 })
             
             data.append({
@@ -921,7 +937,7 @@ class ProductSearchAPI(LoginRequiredMixin,View):
                 'schedule': p.product_schedule.schedule_name if p.product_schedule else None,
                 'company': p.compny_name.company_name if p.compny_name else None,
                 'tax_rate': p.product_tax.tax_rate if p.product_tax else 0,
-                'conversion_factor': 1 if sale_type == 'strip' else p.conversion_factor,
+                'conversion_factor': 1 if sale_type == 'strip' else cf,
                 'out_of_stock': False,
                 'batches': batch_list
             })
