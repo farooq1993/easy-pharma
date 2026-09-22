@@ -24,6 +24,8 @@ import re
 import logging
 from decimal import Decimal
 from easypharma.models.general_setup import GeneralSetup
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils.decorators import method_decorator
 
 logger = logging.getLogger('easypharma.purchase')
 
@@ -31,6 +33,7 @@ logger = logging.getLogger('easypharma.purchase')
 from easypharma.utility.purchase_import import process_csv_file
 
 
+@method_decorator(ensure_csrf_cookie, name='dispatch')
 class PurchaseEntryView(LoginRequiredMixin,View):
     template_name = 'purchase/entry.html'
     
@@ -193,9 +196,19 @@ class PurchaseEntryView(LoginRequiredMixin,View):
                     )
 
                 invoice.save()
-                
+
                 for item in data['items']:
-                    product = Products.objects.get(id=item['product_id'], tenant=request.tenant)
+                    prod_id = item.get('product_id')
+                    product = None
+                    if prod_id:
+                        try:
+                            product = Products.objects.filter(id=int(prod_id), tenant=request.tenant).first()
+                        except (ValueError, TypeError):
+                            product = None
+                    if not product and item.get('name'):
+                        product = Products.objects.filter(product_name__iexact=str(item['name']).strip(), tenant=request.tenant).first()
+                    if not product:
+                        raise Products.DoesNotExist(f"Product '{item.get('name') or prod_id}' not found.")
                     total_units = (int(item['quantity']) + int(item.get('free_quantity', 0))) * product.conversion_factor
                     
                     key = (product.id, item['batch_number'])
@@ -1126,7 +1139,17 @@ class OpeningStockEntryView(LoginRequiredMixin, View):
                 stock.save()
 
                 for item in data['items']:
-                    product = Products.objects.get(id=item['product_id'], tenant=request.tenant)
+                    prod_id = item.get('product_id')
+                    product = None
+                    if prod_id:
+                        try:
+                            product = Products.objects.filter(id=int(prod_id), tenant=request.tenant).first()
+                        except (ValueError, TypeError):
+                            product = None
+                    if not product and item.get('name'):
+                        product = Products.objects.filter(product_name__iexact=str(item['name']).strip(), tenant=request.tenant).first()
+                    if not product:
+                        raise Products.DoesNotExist(f"Product '{item.get('name') or prod_id}' not found.")
                     
                     expiry_str = item['expiry_date']
                     if expiry_str and len(expiry_str) <= 7:  # e.g. "2028-01", "01-28", "01-2028"

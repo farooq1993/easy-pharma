@@ -238,6 +238,13 @@ const OfflineSync = {
      * @param {string} type - 'pos' (with batches) or 'master' (without batches)
      * @returns {Array} matching products
      */
+    /**
+     * Searches locally cached products when offline.
+     * Called by POS and Purchase Entry when navigator.onLine is false.
+     * @param {string} query - search term
+     * @param {string} type - 'pos' (with batches) or 'master' (without batches)
+     * @returns {Array} matching products
+     */
     async searchOfflineProducts(query, type = 'pos') {
         try {
             const cacheKey = type === 'pos' ? 'pos_products' : 'master_products';
@@ -251,12 +258,15 @@ const OfflineSync = {
                 if (!combinedIds.has(p.id)) combined.push(p);
             });
 
-            const lowerQuery = query.toLowerCase();
-            return combined.filter(p =>
-                (p.name && p.name.toLowerCase().includes(lowerQuery)) ||
-                (p.content && p.content.toLowerCase().includes(lowerQuery)) ||
-                (p.salt && p.salt.toLowerCase().includes(lowerQuery))
-            ).slice(0, 30);
+            const lowerQuery = (query || '').toLowerCase().trim();
+            if (!lowerQuery) return combined.slice(0, 30);
+
+            return combined.filter(p => {
+                const name = (p.name || p.product_name || '').toLowerCase();
+                const content = (p.content || p.salt || '').toLowerCase();
+                const company = (p.company || p.company_name || '').toLowerCase();
+                return name.includes(lowerQuery) || content.includes(lowerQuery) || company.includes(lowerQuery);
+            }).slice(0, 30);
         } catch (e) {
             return [];
         }
@@ -267,21 +277,43 @@ const OfflineSync = {
      * so the pharmacist can select it in the current bill without going online.
      */
     async cacheNewProduct(product) {
+        if (!product) return;
         try {
-            // Add to pos_products
-            let posProducts = await this.productCache.getItem('pos_products') || [];
-            posProducts.unshift(product); // Add at top for quick access
-            await this.productCache.setItem('pos_products', posProducts.slice(0, 5000));
+            const formatted = {
+                id: product.id,
+                name: product.name || product.product_name,
+                product_name: product.name || product.product_name,
+                packing: product.packing || product.product_packing || '1',
+                product_packing: product.packing || product.product_packing || '1',
+                conversion_factor: parseInt(product.conversion_factor) || 1,
+                tax_rate: product.tax_rate !== undefined && product.tax_rate !== null ? parseFloat(product.tax_rate) : 0,
+                tax_id: product.tax_id || null,
+                schedule_id: product.schedule_id || null,
+                schedule_name: product.schedule_name || '',
+                company_id: product.company_id || null,
+                company_name: product.company_name || '',
+                content_id: product.content_id || null,
+                content: product.content || product.salt || '',
+                salt: product.content || product.salt || '',
+                hsn_code: product.hsn_code || '',
+                batches: Array.isArray(product.batches) ? product.batches : [],
+                is_offline: Boolean(product.is_offline)
+            };
 
-            // Add to master_products
-            let masterProducts = await this.productCache.getItem('master_products') || [];
-            masterProducts.unshift(product);
-            await this.productCache.setItem('master_products', masterProducts.slice(0, 5000));
+            const updateCacheStore = async (key) => {
+                let list = await this.productCache.getItem(key) || [];
+                const idx = list.findIndex(p => p.id === formatted.id || (p.name && p.name.toLowerCase() === formatted.name.toLowerCase()));
+                if (idx >= 0) {
+                    list[idx] = { ...list[idx], ...formatted };
+                } else {
+                    list.unshift(formatted);
+                }
+                await this.productCache.setItem(key, list.slice(0, 5000));
+            };
 
-            // Add to all_products
-            let allProducts = await this.productCache.getItem('all_products') || [];
-            allProducts.unshift(product);
-            await this.productCache.setItem('all_products', allProducts.slice(0, 5000));
+            await updateCacheStore('pos_products');
+            await updateCacheStore('master_products');
+            await updateCacheStore('all_products');
         } catch (e) {
             console.warn('[OfflineSync] Failed to cache new product', e);
         }
@@ -303,7 +335,7 @@ const OfflineSync = {
         };
 
         await store.setItem(id, reqData);
-        this.showToast(successMsg);
+        if (successMsg) this.showToast(successMsg);
         this._updateQueueCount();
         return id;
     },
@@ -410,10 +442,10 @@ const OfflineSync = {
         }
 
         await this.syncServiceWorkerQueue();
-        await this.processQueue(this.salesStore, csrfToken);
-        await this.processQueue(this.purchaseStore, csrfToken);
+        // Master queue synced first so new products exist on server before purchases/sales
         await this.processQueue(this.masterStore, csrfToken);
-
+        await this.processQueue(this.purchaseStore, csrfToken);
+        await this.processQueue(this.salesStore, csrfToken);
         this._updateQueueCount();
 
         // After sync, refresh product cache if it's old
