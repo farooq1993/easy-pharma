@@ -78,27 +78,37 @@
 
             <!-- CSV upload for supplier invoices -->
 
-            <!-- Add product row (enhanced keyboard + batch history) -->
+            <!-- Add product (Row 1: Product Search, Row 2: Batch & Pricing Details) -->
             <div class="ep-card">
-                <div class="ep-card-header">
-                    <div class="step-badge">3</div>
-                    <h6>Add Products</h6>
-                    <button class="btn-quick-add ms-auto" data-bs-toggle="modal" data-bs-target="#quickAddModal"><i class="fas fa-plus-circle"></i> Quick Add</button>
+                <div class="ep-card-header d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="step-badge">2</div>
+                        <h6>Add Products</h6>
+                    </div>
+                    <button class="btn-quick-add" data-bs-toggle="modal" data-bs-target="#quickAddModal"><i class="fas fa-plus-circle me-1"></i> Quick Add</button>
                 </div>
-                <div class="ep-card-body">
-                    <div class="add-row-grid" id="addItemForm">
-                        <!-- Product Search -->
-                        <div>
-                            <label class="ep-label">Medicine <i class="fas fa-search"></i></label>
-                            <div class="search-wrap position-relative">
-                                <input type="text" id="productSearch" class="ep-input" placeholder="Type name..." autocomplete="off">
-                                <div id="searchResults" class="search-dropdown" style="position:absolute; background:white; width:100%; z-index:1055; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border-radius: 6px;"></div>
+                <div class="ep-card-body p-3">
+                    <!-- ROW 1: Product Search & Selected Medicine Header -->
+                    <div class="product-search-section mb-3">
+                        <label class="ep-label d-flex justify-content-between align-items-center mb-1">
+                            <span><i class="fas fa-pills text-primary me-1"></i> Medicine Name / Product Search <span class="text-danger">*</span></span>
+                            <span class="text-muted fw-normal" style="font-size:0.75rem; text-transform:none;">Type medicine name, salt or brand to search</span>
+                        </label>
+                        <div class="search-wrap position-relative">
+                            <div class="position-relative d-flex align-items-center">
+                                <i class="fas fa-search position-absolute text-muted" style="left: 14px; z-index: 5; font-size: 0.95rem;"></i>
+                                <input type="text" id="productSearch" class="ep-input search-input-wide" placeholder="Search medicine (e.g. Paracetamol, Dolo 650, Azithral...)" autocomplete="off" style="padding-left: 40px; height: 42px; font-size: 0.92rem;">
                             </div>
-                            <div id="productInfo" class="product-info-bar mt-1" style="font-size:0.7rem; background:var(--brand-light); border-radius:6px; padding:4px 8px; display:none;"></div>
+                            <div id="searchResults" class="search-dropdown"></div>
                         </div>
+                        <div id="productInfo" class="product-info-bar mt-2" style="display:none;"></div>
+                    </div>
+
+                    <!-- ROW 2: Product Entry Details -->
+                    <div class="product-details-grid" id="addItemForm">
                         <!-- Batch + history -->
                         <div class="batch-history-container">
-                            <label class="ep-label">Batch No.</label>
+                            <label class="ep-label">Batch No. <span class="text-danger">*</span></label>
                             <input type="text" id="itemBatch" class="ep-input" placeholder="e.g. B2401A" autocomplete="off"
                                 style="text-transform:uppercase; letter-spacing:0.05em;"
                                 oninput="this.value=this.value.replace(/[^A-Za-z0-9]/g,'').toUpperCase()"
@@ -107,11 +117,11 @@
                         </div>
                         <!-- Expiry -->
                         <div>
-                            <label class="ep-label">Expiry</label>
+                            <label class="ep-label">Expiry <span class="text-danger">*</span></label>
                             <div class="expiry-split-wrap" id="expiryWrapper">
                                 {% if general_setup.expiry_date_format == 'dropdown' %}
-                                <div class="d-flex gap-2">
-                                    <select id="itemExpiryMonth" class="form-select ep-input py-1 px-2" style="width: 100px; height: 38px;">
+                                <div class="d-flex gap-1">
+                                    <select id="itemExpiryMonth" class="form-select ep-input py-1 px-1" style="min-width: 68px; height: 38px;">
                                         <option value="">Month</option>
                                         <option value="01">01 - Jan</option>
                                         <option value="02">02 - Feb</option>
@@ -126,13 +136,13 @@
                                         <option value="11">11 - Nov</option>
                                         <option value="12">12 - Dec</option>
                                     </select>
-                                    <select id="itemExpiryYear" class="form-select ep-input py-1 px-2" style="width: 100px; height: 38px;">
+                                    <select id="itemExpiryYear" class="form-select ep-input py-1 px-1" style="min-width: 68px; height: 38px;">
                                         <option value="">Year</option>
                                     </select>
                                 </div>
                                 {% else %}
                                 <input type="text" id="itemExpiryInput" class="ep-input"
-                                    placeholder="e.g. 01-27 or 2027-01"
+                                    placeholder="MM-YY (01-27)"
                                     maxlength="10" autocomplete="off"
                                     inputmode="numeric">
                                 {% endif %}
@@ -141,27 +151,29 @@
                             <div id="expiryHint" class="expiry-hint-text small text-muted mt-1"></div>
                         </div>
                         <!-- Qty -->
-                        <div><label class="ep-label">Qty (Packs)</label><input type="number" id="itemQty" class="ep-input" value="0" min="0"></div>
+                        <div><label class="ep-label">Qty (Packs) <span class="text-danger">*</span></label><input type="number" id="itemQty" class="ep-input text-center" value="1" min="0"></div>
                         <!-- Free -->
-                        <div><label class="ep-label" style="color:var(--green)">Free</label><input type="number" id="itemFreeQty" class="ep-input" value="0" min="0"></div>
+                        <div><label class="ep-label" style="color:var(--green)">Free</label><input type="number" id="itemFreeQty" class="ep-input text-center" value="0" min="0"></div>
                         <!-- Cost per pack -->
-                        <div><label class="ep-label">Pur rate (₹)</label><input type="number" id="itemPrice" class="ep-input" step="0.01"></div>
+                        <div><label class="ep-label">Pur rate (₹) <span class="text-danger">*</span></label><input type="number" id="itemPrice" class="ep-input text-end" step="0.01" placeholder="0.00"></div>
                         <!-- Disc % -->
-                        <div><label class="ep-label">Disc %</label><input type="number" id="itemDisc" class="ep-input" value="0" min="0" max="100" step="0.01"></div>
+                        <div><label class="ep-label">Disc %</label><input type="number" id="itemDisc" class="ep-input text-center" value="0" min="0" max="100" step="0.01"></div>
                         <!-- Amount (readonly, auto-calculated) -->
-                        <div><label class="ep-label">Amount (₹)</label><input type="text" id="itemAmount" class="ep-input" readonly style="background:#f8f9fa;" value="0.00"></div>
+                        <div><label class="ep-label">Amount (₹)</label><input type="text" id="itemAmount" class="ep-input text-end" readonly style="background:#f8fafc; color:#334155;" value="0.00"></div>
                         <!-- GST (readonly but shows) -->
-                        <div><label class="ep-label">GST %</label><input type="text" id="itemTax" class="ep-input" readonly></div>
-                        <!-- Item Total (readonly, auto-calculated) -->
-                        
+                        <div><label class="ep-label">GST %</label><input type="text" id="itemTax" class="ep-input text-center" readonly style="background:#f8fafc; color:#334155;" placeholder="0%"></div>
                         <!-- MRP per pack -->
-                        <div><label class="ep-label">MRP/Pack (&#8377;)</label><input type="number" id="itemMrp" class="ep-input" step="0.01"></div>
-                        <!-- Add button -->
-                         <div>
-                            <label class="ep-label" style="color:#1a7a4a;">Total (&#8377;)</label>
-                            <div id="itemTotalDisplay" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1.5px solid #22c55e;border-radius:10px;padding:9px 12px;font-size:0.95rem;font-weight:700;color:#1a7a4a;min-height:42px;display:flex;align-items:center;">&#8377;0.00</div>
+                        <div><label class="ep-label">MRP/Pack (₹) <span class="text-danger">*</span></label><input type="number" id="itemMrp" class="ep-input text-end" step="0.01" placeholder="0.00"></div>
+                        <!-- Item Total display -->
+                        <div>
+                            <label class="ep-label" style="color:#1a7a4a;">Total (₹)</label>
+                            <div id="itemTotalDisplay" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1.5px solid #22c55e;border-radius:9px;padding:8px 8px;font-size:0.92rem;font-weight:700;color:#1a7a4a;height:38px;display:flex;align-items:center;justify-content:center;white-space:nowrap;">₹0.00</div>
                         </div>
-                        <div><button class="btn-add-item" id="addItemBtn" type="button"><i class="fas fa-plus"></i> Add</button></div>
+                        <!-- Add button -->
+                        <div>
+                            <label class="ep-label" style="visibility:hidden;">Action</label>
+                            <button class="btn-add-item w-100" id="addItemBtn" type="button"><i class="fas fa-plus"></i> Add</button>
+                        </div>
                     </div>
                     <div class="unit-preview" id="unitPreview"></div>
 
@@ -520,8 +532,109 @@
     background: linear-gradient(90deg,#6366f1,#818cf8);
     color: #fff; border-left-color: #4338ca; font-weight: 600;
 }
-.qs-empty { padding: 10px 14px; font-size: 0.84rem; color: #9ca3af; font-style: italic; }
-.qs-input:focus { border-color: #6366f1 !important; box-shadow: 0 0 0 3px rgba(99,102,241,0.15) !important; }
+/* ── Product Search & Details 2-Row Layout ── */
+.product-search-section {
+    position: relative;
+}
+
+.search-input-wide {
+    height: 42px !important;
+    font-size: 0.92rem !important;
+    font-weight: 600 !important;
+    background: #ffffff !important;
+    border: 1.5px solid var(--border) !important;
+    border-radius: 10px !important;
+    transition: all 0.2s ease !important;
+}
+
+.search-input-wide:focus {
+    border-color: var(--brand) !important;
+    box-shadow: 0 0 0 3px rgba(92, 61, 153, 0.12) !important;
+}
+
+.search-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    border: 1.5px solid #c7d2fe;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    max-height: 280px;
+    overflow-y: auto;
+    z-index: 1060;
+    padding: 4px 0;
+}
+
+.search-item {
+    padding: 9px 14px;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: background 0.12s, border-left-color 0.12s;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.search-item:last-child {
+    border-bottom: none;
+}
+
+.search-item:hover, .search-item.selected-item {
+    background: #eff6ff !important;
+    border-left-color: var(--brand) !important;
+}
+
+.product-details-grid {
+    display: grid;
+    grid-template-columns: minmax(105px, 1.2fr) minmax(130px, 1.4fr) minmax(70px, 0.8fr) minmax(60px, 0.7fr) minmax(90px, 1fr) minmax(65px, 0.7fr) minmax(90px, 1fr) minmax(60px, 0.7fr) minmax(95px, 1fr) minmax(100px, 1.1fr) minmax(80px, 0.9fr);
+    gap: 8px;
+    align-items: end;
+}
+
+.product-details-grid .ep-input {
+    padding: 7px 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    height: 38px;
+}
+
+.product-details-grid input[type="number"]::-webkit-inner-spin-button,
+.product-details-grid input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.product-details-grid input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+@media (max-width: 1250px) and (min-width: 769px) {
+    .product-details-grid {
+        grid-template-columns: repeat(6, 1fr);
+        gap: 10px;
+    }
+}
+
+@media (max-width: 768px) {
+    .product-details-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        align-items: end;
+    }
+
+    .product-details-grid > div:last-child {
+        grid-column: span 2;
+    }
+}
+
+@media (max-width: 480px) {
+    .product-details-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .product-details-grid > div {
+        grid-column: span 1 !important;
+    }
+}
 </style>
 
 <script src="{% static 'js/localforage.min.js' %}"></script>
@@ -1496,33 +1609,49 @@
             searchResultsDiv.innerHTML = '';
             searchSelectedIndex = -1;
             if (data.length === 0) {
-                searchResultsDiv.innerHTML = `<div class="search-item p-2 text-muted">No products</div>`;
+                searchResultsDiv.innerHTML = `<div class="search-item p-3 text-muted text-center"><i class="fas fa-search me-1"></i> No matching medicines found</div>`;
             } else {
                 data.forEach(p => {
                     const btn = document.createElement('button');
-                    btn.className = 'search-item d-flex justify-content-between align-items-center w-100 px-3 py-2.5 border-0 bg-transparent text-start';
+                    btn.className = 'search-item d-flex justify-content-between align-items-center w-100 px-3 py-2 border-0 bg-transparent text-start';
                     btn.style.outline = 'none';
                     btn.innerHTML = `
-                        <div style="min-width: 0; flex-grow: 1; padding-right: 12px; text-align: left;">
-                            <div style="font-size: 0.86rem; font-weight: 600; color: #1e293b; line-height: 1.3;">${p.name}</div>
-                            ${p.salt ? `<div style="font-size: 0.74rem; color: #f97316; font-weight: 500; margin-top: 1px; font-style: italic;">${p.salt}</div>` : ''}
-                            <div style="font-size: 0.74rem; color: #64748b; margin-top: 3px;">${p.packing || 'Standard'} | Factor: ×${p.conversion_factor}</div>
+                        <div style="min-width: 0; flex-grow: 1; padding-right: 14px; text-align: left;">
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <span style="font-size: 0.92rem; font-weight: 700; color: #0f172a; line-height: 1.3;">${p.name}</span>
+                                ${p.company_name ? `<span class="badge bg-light text-secondary border" style="font-size:0.7rem; font-weight:500;">${p.company_name}</span>` : ''}
+                            </div>
+                            ${p.salt ? `<div style="font-size: 0.76rem; color: #d97706; font-weight: 500; margin-top: 2px;"><i class="fas fa-flask me-1 text-muted"></i>${p.salt}</div>` : ''}
+                            <div style="font-size: 0.74rem; color: #64748b; margin-top: 2px;">
+                                <span class="me-3"><i class="fas fa-box me-1"></i>Packing: <strong>${p.packing || 'Standard'}</strong></span>
+                                <span><i class="fas fa-calculator me-1"></i>Conv: <strong>×${p.conversion_factor}</strong></span>
+                            </div>
                         </div>
-                        <span style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; font-size: 0.72rem; border-radius: 6px; padding: 4px 8px; font-weight: 600; flex-shrink: 0; white-space: nowrap;">${p.tax_rate}% GST</span>
+                        <div class="text-end flex-shrink-0">
+                            <span style="background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; font-size: 0.75rem; border-radius: 6px; padding: 4px 8px; font-weight: 700; white-space: nowrap;">${p.tax_rate}% GST</span>
+                        </div>
                     `;
                     btn.onclick = () => {
                         selectedProduct = p;
                         searchInput.value = p.name;
                         document.getElementById('itemTax').value = p.tax_rate;
                         document.getElementById('productInfo').innerHTML = `
-                            <div class="d-flex justify-content-between align-items-center w-100 py-1">
-                                <div><i class="fas fa-info-circle"></i> ${p.packing || 'Standard'} | Conv:×${p.conversion_factor} | GST:${p.tax_rate}%</div>
-                                <button type="button" class="btn btn-warning btn-sm py-0 px-2 rounded fw-bold text-dark border-0 shadow-sm" style="font-size: 0.7rem;" onclick="openPreviousPurchases(${p.id}, '${p.name.replace(/'/g,"\\'")}')">
-                                    <i class="fas fa-history me-1"></i>History
-                                </button>
-                                <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2 rounded fw-bold" style="font-size:0.7rem;" onclick="openEditProductModal()">
-                                    <i class="fas fa-edit me-1"></i>Edit Product
-                                </button>
+                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 p-2" style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 8px;">
+                                <div class="d-flex align-items-center gap-2 flex-wrap">
+                                    <span class="badge bg-success" style="font-size: 0.8rem; font-weight: 600;"><i class="fas fa-check-circle me-1"></i> ${p.name}</span>
+                                    <span class="text-dark fw-bold" style="font-size: 0.8rem;">Packing: <span class="badge bg-light text-dark border">${p.packing || 'Standard'}</span></span>
+                                    <span class="text-dark fw-bold" style="font-size: 0.8rem;">Factor: <span class="badge bg-light text-dark border">×${p.conversion_factor}</span></span>
+                                    <span class="text-dark fw-bold" style="font-size: 0.8rem;">GST: <span class="badge bg-info text-dark">${p.tax_rate}%</span></span>
+                                    ${p.salt ? `<span class="text-muted fst-italic" style="font-size: 0.76rem;"><i class="fas fa-flask text-warning me-1"></i>${p.salt}</span>` : ''}
+                                </div>
+                                <div class="d-flex align-items-center gap-2 ms-auto">
+                                    <button type="button" class="btn btn-warning btn-sm py-1 px-2.5 rounded-pill fw-bold text-dark border-0 shadow-sm" style="font-size: 0.75rem;" onclick="openPreviousPurchases(${p.id}, '${p.name.replace(/'/g,"\\'")}')">
+                                        <i class="fas fa-history me-1"></i> History
+                                    </button>
+                                    <button type="button" class="btn btn-outline-primary btn-sm py-1 px-2.5 rounded-pill fw-bold" style="font-size:0.75rem; background:white;" onclick="openEditProductModal()">
+                                        <i class="fas fa-edit me-1"></i> Edit
+                                    </button>
+                                </div>
                             </div>
                         `;
                         document.getElementById('productInfo').style.display = 'block';
@@ -1720,6 +1849,120 @@
             }
         }
 
+        // ══════════════════════════════════════════════════════════════
+        // ROBUST EXPIRY DATE HELPER & REAL-TIME AUTO-FORMATTER
+        // Handles: 0426 -> 04-26, 04 26 -> 04-26, 4/26 -> 04-26, 04-2026 -> 04-26
+        // ══════════════════════════════════════════════════════════════
+        const ExpiryDateHelper = {
+            CURRENT_CENTURY: Math.floor(new Date().getFullYear() / 100) * 100,
+
+            parse(raw) {
+                if (!raw || typeof raw !== 'string') return null;
+                const cleaned = raw.trim().replace(/[\/\.\s_]+/g, '-');
+                let month = null;
+                let year = null;
+
+                if (cleaned.includes('-')) {
+                    const parts = cleaned.split('-').filter(Boolean);
+                    if (parts.length === 2) {
+                        const [p1, p2] = parts;
+                        if (p1.length === 4 && p2.length <= 2) {
+                            year = parseInt(p1, 10);
+                            month = parseInt(p2, 10);
+                        } else {
+                            month = parseInt(p1, 10);
+                            year = parseInt(p2, 10);
+                        }
+                    }
+                } else {
+                    const digits = cleaned.replace(/\D/g, '');
+                    if (digits.length === 3) {
+                        month = parseInt(digits.substring(0, 1), 10);
+                        year = parseInt(digits.substring(1), 10);
+                    } else if (digits.length === 4) {
+                        month = parseInt(digits.substring(0, 2), 10);
+                        year = parseInt(digits.substring(2), 10);
+                    } else if (digits.length === 6) {
+                        const first4 = parseInt(digits.substring(0, 4), 10);
+                        if (first4 >= 2000 && first4 <= 2100) {
+                            year = first4;
+                            month = parseInt(digits.substring(4), 10);
+                        } else {
+                            month = parseInt(digits.substring(0, 2), 10);
+                            year = parseInt(digits.substring(2), 10);
+                        }
+                    }
+                }
+
+                if (month === null || year === null || isNaN(month) || isNaN(year)) return null;
+                if (month < 1 || month > 12) return null;
+
+                if (year < 100) year = this.CURRENT_CENTURY + year;
+                if (year < 2000 || year > 2100) return null;
+
+                const monthStr = String(month).padStart(2, '0');
+                const shortYear = String(year).slice(-2);
+
+                return {
+                    month,
+                    year,
+                    iso: `${year}-${monthStr}`,
+                    display: `${monthStr}-${shortYear}`
+                };
+            },
+
+            formatDisplay(month, year) {
+                if (!month || !year) return '';
+                return `${String(month).padStart(2, '0')}-${String(year).slice(-2)}`;
+            },
+
+            attachAutoFormatter(inputEl, onSyncCallback) {
+                if (!inputEl) return;
+                let isDeleting = false;
+
+                inputEl.addEventListener('keydown', (e) => {
+                    isDeleting = (e.key === 'Backspace' || e.key === 'Delete');
+                });
+
+                inputEl.addEventListener('input', () => {
+                    let val = inputEl.value;
+                    let raw = val.replace(/[^0-9\/\-\s]/g, '').replace(/[\/\s]+/g, '-');
+
+                    if (!isDeleting) {
+                        const digits = raw.replace(/\D/g, '');
+                        if (raw.indexOf('-') === -1) {
+                            if (digits.length === 1 && parseInt(digits, 10) > 1) {
+                                raw = `0${digits}-`;
+                            } else if (digits.length === 2) {
+                                const m = parseInt(digits, 10);
+                                if (m >= 1 && m <= 12) {
+                                    raw = `${digits}-`;
+                                }
+                            } else if (digits.length === 3) {
+                                raw = `0${digits[0]}-${digits.slice(1)}`;
+                            } else if (digits.length >= 4) {
+                                raw = `${digits.slice(0, 2)}-${digits.slice(2, 6)}`;
+                            }
+                        }
+                    }
+
+                    inputEl.value = raw.slice(0, 7);
+                    if (typeof onSyncCallback === 'function') onSyncCallback();
+                });
+
+                inputEl.addEventListener('blur', () => {
+                    const parsed = ExpiryDateHelper.parse(inputEl.value);
+                    if (parsed) {
+                        inputEl.value = parsed.display;
+                    }
+                    if (typeof onSyncCallback === 'function') onSyncCallback();
+                });
+            }
+        };
+
+        window.parseExpiryInput = function(raw) { return ExpiryDateHelper.parse(raw); };
+        window.formatExpiryDisplay = function(m, y) { return ExpiryDateHelper.formatDisplay(m, y); };
+
         // Sync free-typed or selected expiry input → hidden itemExpiry (YYYY-MM) whenever it changes
         function syncExpiryHidden() {
             const hint = document.getElementById('expiryHint');
@@ -1727,8 +1970,8 @@
             if (expiryFormat === 'dropdown') {
                 const mSelect = document.getElementById('itemExpiryMonth');
                 const ySelect = document.getElementById('itemExpiryYear');
-                const month = mSelect.value;
-                const year = ySelect.value;
+                const month = mSelect ? mSelect.value : '';
+                const year = ySelect ? ySelect.value : '';
                 
                 if (month && year) {
                     const val = `${year}-${month}`;
@@ -1736,7 +1979,7 @@
                     mSelect.classList.remove('is-invalid');
                     ySelect.classList.remove('is-invalid');
                     
-                    const expDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+                    const expDate = new Date(parseInt(year, 10), parseInt(month, 10) - 1, 1);
                     const today = new Date(); today.setDate(1); today.setHours(0, 0, 0, 0);
                     
                     if (expDate < today) {
@@ -1759,16 +2002,21 @@
             } else {
                 const input = document.getElementById('itemExpiryInput');
                 if (!input) return false;
-                const parsed = parseExpiryInput(input.value);
+                const val = input.value.trim();
 
+                if (!val) {
+                    document.getElementById('itemExpiry').value = '';
+                    hint.style.display = 'none';
+                    input.classList.remove('is-invalid');
+                    return false;
+                }
+
+                const parsed = ExpiryDateHelper.parse(val);
                 if (parsed) {
-                    const { month, year } = parsed;
-                    const val = `${year}-${String(month).padStart(2, '0')}`;
-                    document.getElementById('itemExpiry').value = val;
+                    document.getElementById('itemExpiry').value = parsed.iso;
                     input.classList.remove('is-invalid');
 
-                    // Warn if expiry is in the past / expiring soon
-                    const expDate = new Date(year, month - 1, 1);
+                    const expDate = new Date(parsed.year, parsed.month - 1, 1);
                     const today = new Date(); today.setDate(1); today.setHours(0, 0, 0, 0);
                     if (expDate < today) {
                         hint.style.color = '#dc3545';
@@ -1784,9 +2032,9 @@
                     return true;
                 } else {
                     document.getElementById('itemExpiry').value = '';
-                    if (input.value.trim()) {
+                    if (val.length >= 2) {
                         hint.style.color = '#dc3545';
-                        hint.textContent = 'Format: MM-YY or YYYY-MM (e.g. 01-27 or 2027-01)';
+                        hint.textContent = 'Format: MM-YY (e.g. 04-26 or type 0426)';
                         hint.style.display = 'block';
                         input.classList.add('is-invalid');
                     } else {
@@ -1799,25 +2047,12 @@
         }
 
         if (expiryFormat === 'dropdown') {
-            document.getElementById('itemExpiryMonth').addEventListener('change', () => {
-                syncExpiryHidden();
-            });
-            document.getElementById('itemExpiryYear').addEventListener('change', () => {
-                syncExpiryHidden();
-            });
+            document.getElementById('itemExpiryMonth')?.addEventListener('change', syncExpiryHidden);
+            document.getElementById('itemExpiryYear')?.addEventListener('change', syncExpiryHidden);
         } else {
             const expInput = document.getElementById('itemExpiryInput');
             if (expInput) {
-                expInput.addEventListener('input', () => {
-                    syncExpiryHidden();
-                });
-                expInput.addEventListener('blur', () => {
-                    const parsed = parseExpiryInput(expInput.value);
-                    if (parsed) {
-                        expInput.value = formatExpiryDisplay(parsed.month, parsed.year);
-                    }
-                    syncExpiryHidden();
-                });
+                ExpiryDateHelper.attachAutoFormatter(expInput, syncExpiryHidden);
             }
         }
 
@@ -1961,13 +2196,16 @@
                 // Expiry Text input: on Enter, validate & normalize, then move to Qty
                 if (id === 'itemExpiryInput') {
                     e.preventDefault();
-                    const valid = syncExpiryHidden();
-                    if (!valid) {
-                        showToast('Enter a valid expiry, e.g. 01-27 or 2027-01', 'error');
+                    const inputEl = document.getElementById('itemExpiryInput');
+                    const parsed = ExpiryDateHelper.parse(inputEl.value);
+                    if (!parsed) {
+                        showToast('Enter a valid expiry, e.g. 04-26 or type 0426', 'error');
+                        inputEl.classList.add('is-invalid');
+                        inputEl.focus();
                         return;
                     }
-                    const parsed = parseExpiryInput(document.getElementById('itemExpiryInput').value);
-                    document.getElementById('itemExpiryInput').value = formatExpiryDisplay(parsed.month, parsed.year);
+                    inputEl.value = parsed.display;
+                    syncExpiryHidden();
                     const qtyEl = document.getElementById('itemQty');
                     qtyEl.focus(); qtyEl.select();
                     return;

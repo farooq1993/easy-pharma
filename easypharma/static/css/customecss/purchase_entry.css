@@ -129,76 +129,98 @@ body {
     box-shadow: 0 0 0 3px rgba(92, 61, 153, 0.1);
 }
 
-/* ADD ROW GRID - IMPROVED ALIGNMENT & RESPONSIVE */
-.add-row-grid {
+/* PRODUCT SEARCH & DETAILS - 2 ROW LAYOUT */
+.product-search-section {
+    position: relative;
+}
+
+.search-input-wide {
+    height: 42px !important;
+    font-size: 0.92rem !important;
+    font-weight: 600 !important;
+    background: #ffffff !important;
+    border: 1.5px solid var(--border) !important;
+    border-radius: 10px !important;
+    transition: all 0.2s ease !important;
+}
+
+.search-input-wide:focus {
+    border-color: var(--brand) !important;
+    box-shadow: 0 0 0 3px rgba(92, 61, 153, 0.12) !important;
+}
+
+.search-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    border: 1.5px solid #c7d2fe;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    max-height: 280px;
+    overflow-y: auto;
+    z-index: 1060;
+    padding: 4px 0;
+}
+
+.search-item {
+    padding: 9px 14px;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: background 0.12s, border-left-color 0.12s;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.search-item:last-child {
+    border-bottom: none;
+}
+
+.search-item:hover, .search-item.selected-item {
+    background: #eff6ff !important;
+    border-left-color: var(--brand) !important;
+}
+
+/* PRODUCT DETAILS GRID (ROW 2) */
+.product-details-grid {
     display: grid;
-    grid-template-columns: minmax(180px, 2.8fr) minmax(80px, 0.9fr) minmax(105px, 1fr) minmax(75px, 0.7fr) minmax(55px, 0.5fr) minmax(80px, 0.8fr) minmax(60px, 0.6fr) minmax(80px, 0.8fr) minmax(55px, 0.5fr) minmax(85px, 0.8fr) minmax(90px, 0.9fr) auto;
+    grid-template-columns: minmax(105px, 1.2fr) minmax(130px, 1.4fr) minmax(70px, 0.8fr) minmax(60px, 0.7fr) minmax(90px, 1fr) minmax(65px, 0.7fr) minmax(90px, 1fr) minmax(60px, 0.7fr) minmax(95px, 1fr) minmax(100px, 1.1fr) minmax(80px, 0.9fr);
     gap: 8px;
     align-items: end;
 }
 
-.add-row-grid .ep-input {
-    padding: 9px 6px;
-    font-size: 0.95rem;
+.product-details-grid .ep-input {
+    padding: 7px 8px;
+    font-size: 0.9rem;
     font-weight: 600;
+    height: 38px;
 }
 
-.add-row-grid input[type="number"]::-webkit-inner-spin-button,
-.add-row-grid input[type="number"]::-webkit-outer-spin-button {
+.product-details-grid input[type="number"]::-webkit-inner-spin-button,
+.product-details-grid input[type="number"]::-webkit-outer-spin-button {
     -webkit-appearance: none;
     margin: 0;
 }
-.add-row-grid input[type="number"] {
+.product-details-grid input[type="number"] {
     -moz-appearance: textfield;
 }
 
-@media (min-width: 769px) and (max-width: 1250px) {
-    .add-row-grid {
+@media (max-width: 1250px) and (min-width: 769px) {
+    .product-details-grid {
         grid-template-columns: repeat(6, 1fr);
-        gap: 12px;
-        align-items: end;
-    }
-    /* Product search takes first 3 cols on row 1 */
-    .add-row-grid > div:nth-child(1) {
-        grid-column: span 3;
-    }
-    /* Batch takes next 1 col on row 1 */
-    .add-row-grid > div:nth-child(2) {
-        grid-column: span 1;
-    }
-    /* Expiry takes next 2 cols on row 1 */
-    .add-row-grid > div:nth-child(3) {
-        grid-column: span 2;
-    }
-    /* Row 2/3 items each take 1 col */
-    .add-row-grid > div:nth-child(4),
-    .add-row-grid > div:nth-child(5),
-    .add-row-grid > div:nth-child(6),
-    .add-row-grid > div:nth-child(7),
-    .add-row-grid > div:nth-child(8),
-    .add-row-grid > div:nth-child(9),
-    .add-row-grid > div:nth-child(10),
-    .add-row-grid > div:nth-child(11),
-    .add-row-grid > div:nth-child(12) {
-        grid-column: span 1;
+        gap: 10px;
     }
 }
 
 @media (max-width: 768px) {
-    .add-row-grid {
+    .product-details-grid {
         grid-template-columns: 1fr 1fr;
-        gap: 12px;
+        gap: 10px;
         align-items: end;
     }
 
-    .add-row-grid>div:first-child {
+    .product-details-grid > div:last-child {
         grid-column: span 2;
-        /* Search takes full width */
-    }
-
-    .add-row-grid>div:last-child {
-        grid-column: span 2;
-        /* Add button takes full width */
     }
 
     .btn-add-item {
@@ -218,11 +240,11 @@ body {
 }
 
 @media (max-width: 480px) {
-    .add-row-grid {
+    .product-details-grid {
         grid-template-columns: 1fr;
     }
 
-    .add-row-grid>div {
+    .product-details-grid > div {
         grid-column: span 1 !important;
     }
 }
