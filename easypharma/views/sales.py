@@ -117,17 +117,27 @@ class POSView(LoginRequiredMixin,View):
         if invoice_id:
             try:
                 edit_invoice = SaleInvoice.objects.get(id=invoice_id, tenant=request.tenant)
-                items = []
-                for item in edit_invoice.items.all().select_related('product'):
-                    from easypharma.models.stock import StockBatch
-                    batch = StockBatch.objects.filter(
+                items_qs = list(edit_invoice.items.select_related('product').all())
+                
+                # Batch fetch stock batches to avoid N+1 queries
+                prod_ids = [it.product_id for it in items_qs if it.product_id]
+                batch_nos = [it.batch_number for it in items_qs if it.batch_number]
+                batch_map = {}
+                if prod_ids and batch_nos:
+                    batches = StockBatch.objects.filter(
                         tenant=request.tenant,
-                        product=item.product,
-                        batch_number=item.batch_number
-                    ).first()
+                        product_id__in=prod_ids,
+                        batch_number__in=batch_nos
+                    ).values('id', 'product_id', 'batch_number')
+                    for b in batches:
+                        batch_map[(b['product_id'], b['batch_number'])] = b['id']
+
+                items = []
+                for item in items_qs:
+                    b_id = batch_map.get((item.product_id, item.batch_number))
                     items.append({
                         'product_id': item.product.id,
-                        'batch_id': batch.id if batch else None,
+                        'batch_id': b_id,
                         'product_name': item.product.product_name,
                         'batch_number': item.batch_number,
                         'expiry_date': item.expiry_date.strftime('%Y-%m-%d') if item.expiry_date else '',
@@ -158,7 +168,6 @@ class POSView(LoginRequiredMixin,View):
             except SaleInvoice.DoesNotExist:
                 edit_data = None
 
-        from easypharma.models import PrintSetup
         ps, _ = PrintSetup.objects.get_or_create(tenant=request.tenant)
 
         return render(request, self.template_name, {

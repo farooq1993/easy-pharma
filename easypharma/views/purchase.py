@@ -21,8 +21,11 @@ from datetime import timedelta,datetime
 import json
 import io
 import re
+import logging
 from decimal import Decimal
 from easypharma.models.general_setup import GeneralSetup
+
+logger = logging.getLogger('easypharma.purchase')
 
 # Import from your utility file
 from easypharma.utility.purchase_import import process_csv_file
@@ -32,30 +35,28 @@ class PurchaseEntryView(LoginRequiredMixin,View):
     template_name = 'purchase/entry.html'
     
     def get(self, request, invoice_id=None):
-        suppliers = Supplier.objects.filter(tenant=request.tenant).order_by('name')
-        products = Products.objects.filter(tenant=request.tenant).order_by('product_name')
-        from easypharma.models.Items import ProductTax
+        tenant_filter = Q(tenant=request.tenant) | Q(tenant__isnull=True)
+        suppliers = Supplier.objects.filter(tenant=request.tenant).only('id', 'name', 'address').order_by('name')
         product_taxes = ProductTax.objects.filter(tenant=request.tenant)
-        product_type = ProductType.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('name')
-        product_schedules = ProductSchedule.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('schedule_name')
-        drug_companies = DrugCompany.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('company_name')
-        product_contents = ProductContent.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('content_name')
-        product_types = ProductType.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).order_by('name')
+        product_types = ProductType.objects.filter(tenant_filter).order_by('name')
+        product_schedules = ProductSchedule.objects.filter(tenant_filter).order_by('schedule_name')
+        drug_companies = DrugCompany.objects.filter(tenant_filter).order_by('company_name')
+        product_contents = ProductContent.objects.filter(tenant_filter).order_by('content_name')
         
         edit_data = None
         if invoice_id:
             try:
-                invoice = PurchaseInvoice.objects.get(id=invoice_id, tenant=request.tenant)
+                invoice = PurchaseInvoice.objects.select_related('supplier').get(id=invoice_id, tenant=request.tenant)
                 items = []
-                for item in invoice.items.all():
+                for item in invoice.items.select_related('product', 'product__product_schedule').all():
                     items.append({
                         'product_id': item.product.id,
                         'name': item.product.product_name,
                         'batch_number': item.batch_number,
-                        'expiry_date': item.expiry_date.strftime('%Y-%m'),
+                        'expiry_date': item.expiry_date.strftime('%Y-%m') if item.expiry_date else '',
                         'quantity': item.quantity,
                         'free_quantity': item.free_quantity,
-                        'total_units': (item.quantity + item.free_quantity) * item.product.conversion_factor,
+                        'total_units': (item.quantity + item.free_quantity) * (item.product.conversion_factor or 1),
                         'purchase_price': float(item.purchase_price),
                         'tax_percentage': float(item.tax_percentage),
                         'discount_percentage': float(item.discount_percentage or 0),
@@ -84,10 +85,9 @@ class PurchaseEntryView(LoginRequiredMixin,View):
         
         return render(request, self.template_name, {
             'suppliers': suppliers,
-            'products': products,
             'product_types': product_types,
             'product_taxes': product_taxes,
-            'product_type':product_type,
+            'product_type': product_types,
             'product_schedules': product_schedules,
             'drug_companies': drug_companies,
             'product_contents': product_contents,
@@ -157,13 +157,22 @@ class PurchaseEntryView(LoginRequiredMixin,View):
                     invoice = PurchaseInvoice(tenant=request.tenant, user=request.user)
 
                 # Prevent duplicate invoice numbers for the same supplier
-                existing_invoice = PurchaseInvoice.objects.filter(
+                existing_qs = PurchaseInvoice.objects.filter(
                     tenant=request.tenant,
                     supplier_id=data['supplier_id'],
-                    invoice_number=data['invoice_number']
-                ).exclude(id=invoice.id).first()
+                    invoice_number__iexact=str(data['invoice_number']).strip()
+                )
+                if invoice_id:
+                    existing_qs = existing_qs.exclude(id=invoice_id)
+                existing_invoice = existing_qs.first()
                 if existing_invoice:
-                    return JsonResponse({'error': 'Invoice number already exists for this supplier'}, status=400)
+                    supp_name = existing_invoice.supplier.name if existing_invoice.supplier else 'this supplier'
+                    v_num = existing_invoice.voucher_number or f'PV-{existing_invoice.id}'
+                    p_dt = existing_invoice.purchase_date.strftime('%d-%m-%Y') if existing_invoice.purchase_date else 'N/A'
+                    tot = float(existing_invoice.total_amount or 0)
+                    return JsonResponse({
+                        'error': f"Invoice #{data['invoice_number']} already exists for '{supp_name}' (Voucher: {v_num}, Date: {p_dt}, Amount: ₹{tot:,.2f}). Duplicate invoices are not allowed."
+                    }, status=400)
 
                 supplier = Supplier.objects.get(id=data['supplier_id'], tenant=request.tenant)
                 invoice.supplier = supplier
@@ -322,23 +331,39 @@ class PurchaseImportCSVView(View):
             })
 
 class CheckInvoiceNumberView(LoginRequiredMixin, View):
-    """Live check: invoice number already used for this supplier?"""
+    """Live check: invoice number already used for this supplier or tenant?"""
     def get(self, request):
         supplier_id = request.GET.get('supplier_id')
         invoice_number = request.GET.get('invoice_number', '').strip()
         invoice_id = request.GET.get('invoice_id')  # present only in edit mode
 
-        if not supplier_id or not invoice_number:
+        if not invoice_number:
             return JsonResponse({'exists': False})
 
         qs = PurchaseInvoice.objects.filter(
             tenant=request.tenant,
-            supplier_id=supplier_id,
-            invoice_number=invoice_number
-        )
+            invoice_number__iexact=invoice_number
+        ).select_related('supplier')
+
+        if supplier_id:
+            qs = qs.filter(supplier_id=supplier_id)
+
         if invoice_id:
-            qs = qs.exclude(id=invoice_id)  
-        return JsonResponse({'exists': qs.exists()})
+            qs = qs.exclude(id=invoice_id)
+        
+        inv = qs.first()
+        if inv:
+            return JsonResponse({
+                'exists': True,
+                'supplier_name': inv.supplier.name if inv.supplier else '',
+                'supplier_id': inv.supplier_id,
+                'invoice_number': inv.invoice_number,
+                'voucher_number': inv.voucher_number or f'PV-{inv.id}',
+                'purchase_date': inv.purchase_date.strftime('%d-%m-%Y') if inv.purchase_date else '',
+                'total_amount': float(inv.total_amount or 0),
+                'same_supplier': (str(inv.supplier_id) == str(supplier_id)) if supplier_id else True
+            })
+        return JsonResponse({'exists': False})
 
 class SupplierAutocomplete(LoginRequiredMixin,View):
     def get(self, request):
@@ -1606,7 +1631,7 @@ class StockDiscardDeleteView(LoginRequiredMixin, View):
 
 from easypharma.models.purchase_scan_log import PurchaseScanLog
 from easypharma.utility.purchase_ocr_service import extract_purchase_bill_data
-from easypharma.utility.purchase_import import find_product, parse_expiry
+from easypharma.utility.purchase_import import find_product, find_product_in_cache, build_product_cache, parse_expiry
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 
@@ -1671,9 +1696,11 @@ class PurchaseScanAPI(LoginRequiredMixin, View):
                 'items': parsed_items_combined
             }
         except ValueError as ve:
+            logger.warning(f"AI Scan validation error: {ve}")
             return JsonResponse({'success': False, 'error': str(ve)})
         except Exception as e:
-            return JsonResponse({'success': False, 'error': f'AI Scanning failed: {str(e)}'})
+            logger.error(f"AI Scan failed internally: {str(e)}", exc_info=True)
+            return JsonResponse({'success': False, 'error': 'AI Scanning could not read the bill image. Please ensure the document is clear, flat, and well-lit, then try again.'})
             
         # 4. Success: Log the scan
         PurchaseScanLog.objects.create(
@@ -1694,10 +1721,11 @@ class PurchaseScanAPI(LoginRequiredMixin, View):
             if supplier:
                 matched_supplier_id = supplier.id
                 
-        # 6. Match extracted medicines with database Products
+        # 6. Match extracted medicines with database Products using in-memory cache
         extracted_items = parsed_data.get('items', [])
         matched_items = []
         missing_products = []
+        product_cache = build_product_cache(request.tenant)
         
         for idx, item in enumerate(extracted_items, start=1):
             name = (item.get('name') or '').strip()
@@ -1745,8 +1773,10 @@ class PurchaseScanAPI(LoginRequiredMixin, View):
             except (ValueError, TypeError):
                 total = quantity * purchase_price
 
-            # Find product in db
-            product = find_product(request.tenant, name)
+            # Find product in db via memory cache
+            product = find_product_in_cache(product_cache, name) if name else None
+            if not product and name:
+                product = find_product(request.tenant, name)
             if product:
                 tax_rate = getattr(getattr(product, 'product_tax', None), 'tax_rate', tax_percentage)
                 matched_items.append({
@@ -2066,4 +2096,4 @@ class OpeningStockScanAPI(LoginRequiredMixin, View):
             'max_scans': limit,
             'items': matched_items,
             'missing_products': missing_products
-        })
+        })

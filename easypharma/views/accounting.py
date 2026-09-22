@@ -3,13 +3,18 @@ from django.contrib import messages
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.db import transaction
+from django.db.models import Sum, Q, F, Count, DecimalField, Value
+from django.core.paginator import Paginator
 from django.utils.timezone import now
 import json
 from django.contrib.auth.mixins import LoginRequiredMixin
 
 from easypharma.models.purchase_invoice import Supplier, PurchaseInvoice
 from easypharma.models.sales import Customer
-from easypharma.models.accounting import SupplierLedger, SupplierPayment, ExpiryReturn, ExpiryReturnItem, CustomerLedger, CustomerPayment
+from easypharma.models.accounting import (
+    SupplierLedger, SupplierPayment, ExpiryReturn, ExpiryReturnItem, 
+    CustomerLedger, CustomerPayment, ExpenseCategory, Expense
+)
 from easypharma.models.stock import StockBatch
 
 class SupplierLedgerView(View):
@@ -1074,3 +1079,349 @@ class SupplierOutstandingView(LoginRequiredMixin, View):
                 'suppliers_with_balance_count': suppliers_with_balance_count,
             }
             return render(request, self.template_name, context)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# EXPENSE MANAGEMENT VIEWS
+# ══════════════════════════════════════════════════════════════════════
+
+DEFAULT_EXPENSE_CATEGORIES = [
+    {'name': 'Shop Rent', 'icon': 'fa-building', 'description': 'Monthly shop / pharmacy rent'},
+    {'name': 'Electricity & Power', 'icon': 'fa-bolt', 'description': 'Electricity bills, power backup'},
+    {'name': 'Staff Salary & Wages', 'icon': 'fa-users', 'description': 'Salaries, overtime, pharmacist fees'},
+    {'name': 'Tea & Refreshment', 'icon': 'fa-mug-hot', 'description': 'Daily tea, coffee, snacks, drinking water'},
+    {'name': 'Shop Maintenance & Repairs', 'icon': 'fa-screwdriver-wrench', 'description': 'AC, refrigeration, furniture repairs'},
+    {'name': 'Stationery & Printing', 'icon': 'fa-print', 'description': 'Billing rolls, registers, bags, printing'},
+    {'name': 'Transportation & Delivery', 'icon': 'fa-truck', 'description': 'Courier, local delivery, petrol / conveyance'},
+    {'name': 'Packaging & Carry Bags', 'icon': 'fa-box', 'description': 'Carry bags, envelopes, medicine pouches'},
+    {'name': 'Internet & Software / Telecom', 'icon': 'fa-wifi', 'description': 'Broadband, mobile recharge, software subs'},
+    {'name': 'Taxes, Licenses & Legal', 'icon': 'fa-file-invoice-dollar', 'description': 'Drug license renewal, trade tax, CA fees'},
+    {'name': 'Miscellaneous & Daily Expenses', 'icon': 'fa-receipt', 'description': 'Other incidental pharmacy expenses'},
+]
+
+def seed_default_expense_categories(tenant):
+    """Seed default expense categories for a tenant if none exist."""
+    if not tenant:
+        return
+    if ExpenseCategory.objects.filter(tenant=tenant).count() == 0:
+        for cat in DEFAULT_EXPENSE_CATEGORIES:
+            ExpenseCategory.objects.create(
+                tenant=tenant,
+                name=cat['name'],
+                icon=cat['icon'],
+                description=cat['description'],
+                is_active=True
+            )
+
+
+class ExpenseListView(LoginRequiredMixin, View):
+    template_name = 'accounting/expenses.html'
+
+    def get(self, request):
+        seed_default_expense_categories(request.tenant)
+        
+        categories = ExpenseCategory.objects.filter(tenant=request.tenant, is_active=True).order_by('name')
+        
+        # Filters
+        start_date = request.GET.get('start_date')
+        end_date = request.GET.get('end_date')
+        category_id = request.GET.get('category_id')
+        payment_mode = request.GET.get('payment_mode')
+        search_query = request.GET.get('q', '').strip()
+        
+        qs = Expense.objects.filter(tenant=request.tenant).select_related('category')
+        
+        # Default date filter: Current Month if no dates provided
+        today = now().date()
+        if not start_date and not end_date:
+            start_date = today.replace(day=1).strftime('%Y-%m-%d')
+            end_date = today.strftime('%Y-%m-%d')
+        
+        if start_date:
+            qs = qs.filter(expense_date__gte=start_date)
+        if end_date:
+            qs = qs.filter(expense_date__lte=end_date)
+        if category_id:
+            qs = qs.filter(category_id=category_id)
+        if payment_mode:
+            qs = qs.filter(payment_mode=payment_mode)
+        if search_query:
+            qs = qs.filter(
+                Q(title__icontains=search_query) |
+                Q(paid_to__icontains=search_query) |
+                Q(reference_number__icontains=search_query) |
+                Q(notes__icontains=search_query) |
+                Q(expense_number__icontains=search_query)
+            )
+
+        # Metrics
+        today_total = Expense.objects.filter(tenant=request.tenant, expense_date=today).aggregate(Sum('amount'))['amount__sum'] or 0
+        current_month_start = today.replace(day=1)
+        month_total = Expense.objects.filter(tenant=request.tenant, expense_date__gte=current_month_start, expense_date__lte=today).aggregate(Sum('amount'))['amount__sum'] or 0
+        filtered_total = qs.aggregate(Sum('amount'))['amount__sum'] or 0
+        total_count = qs.count()
+
+        # Category breakdown for the filtered period
+        category_breakdown = []
+        for cat in categories:
+            cat_sum = qs.filter(category=cat).aggregate(Sum('amount'))['amount__sum'] or 0
+            if cat_sum > 0:
+                perc = (float(cat_sum) / float(filtered_total) * 100) if filtered_total > 0 else 0
+                category_breakdown.append({
+                    'category': cat,
+                    'amount': cat_sum,
+                    'percentage': round(perc, 1)
+                })
+        category_breakdown.sort(key=lambda x: x['amount'], reverse=True)
+
+        # Pagination
+        page = request.GET.get('page', 1)
+        paginator = Paginator(qs, 25)
+        page_obj = paginator.get_page(page)
+
+        return render(request, self.template_name, {
+            'expenses': page_obj,
+            'page_obj': page_obj,
+            'categories': categories,
+            'payment_modes': Expense.PAYMENT_MODES,
+            'start_date': start_date,
+            'end_date': end_date,
+            'category_id': category_id,
+            'payment_mode': payment_mode,
+            'search_query': search_query,
+            'today_total': today_total,
+            'month_total': month_total,
+            'filtered_total': filtered_total,
+            'total_count': total_count,
+            'category_breakdown': category_breakdown,
+            'today': today,
+        })
+
+
+class ExpenseCreateView(LoginRequiredMixin, View):
+    def post(self, request):
+        try:
+            category_id = request.POST.get('category_id')
+            title = request.POST.get('title', '').strip()
+            expense_date = request.POST.get('expense_date') or now().date().strftime('%Y-%m-%d')
+            amount = request.POST.get('amount')
+            payment_mode = request.POST.get('payment_mode', 'Cash')
+            paid_to = request.POST.get('paid_to', '').strip()
+            reference_number = request.POST.get('reference_number', '').strip()
+            notes = request.POST.get('notes', '').strip()
+
+            if not title or not amount or float(amount) <= 0:
+                if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                    return JsonResponse({'success': False, 'error': 'Title and valid positive amount are required.'}, status=400)
+                messages.error(request, 'Title and valid positive amount are required.')
+                return redirect('expense_list')
+
+            category = None
+            if category_id:
+                category = ExpenseCategory.objects.filter(id=category_id, tenant=request.tenant).first()
+
+            exp = Expense.objects.create(
+                tenant=request.tenant,
+                category=category,
+                title=title,
+                expense_date=expense_date,
+                amount=amount,
+                payment_mode=payment_mode,
+                paid_to=paid_to,
+                reference_number=reference_number,
+                notes=notes
+            )
+
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': True,
+                    'message': f'Expense #{exp.expense_number} of ₹{exp.amount} recorded successfully!',
+                    'id': exp.id,
+                    'expense_number': exp.expense_number
+                })
+
+            messages.success(request, f'Expense #{exp.expense_number} of ₹{exp.amount} recorded successfully!')
+            return redirect('expense_list')
+
+        except Exception as e:
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': str(e)}, status=400)
+            messages.error(request, f'Error saving expense: {str(e)}')
+            return redirect('expense_list')
+
+
+class ExpenseUpdateView(LoginRequiredMixin, View):
+    def get(self, request, pk):
+        exp = get_object_or_404(Expense, id=pk, tenant=request.tenant)
+        return JsonResponse({
+            'success': True,
+            'id': exp.id,
+            'expense_number': exp.expense_number,
+            'category_id': exp.category_id or '',
+            'title': exp.title,
+            'expense_date': exp.expense_date.strftime('%Y-%m-%d') if exp.expense_date else '',
+            'amount': float(exp.amount),
+            'payment_mode': exp.payment_mode,
+            'paid_to': exp.paid_to or '',
+            'reference_number': exp.reference_number or '',
+            'notes': exp.notes or ''
+        })
+
+    def post(self, request, pk):
+        try:
+            exp = get_object_or_404(Expense, id=pk, tenant=request.tenant)
+            category_id = request.POST.get('category_id')
+            title = request.POST.get('title', '').strip()
+            expense_date = request.POST.get('expense_date') or exp.expense_date
+            amount = request.POST.get('amount')
+            payment_mode = request.POST.get('payment_mode', 'Cash')
+            paid_to = request.POST.get('paid_to', '').strip()
+            reference_number = request.POST.get('reference_number', '').strip()
+            notes = request.POST.get('notes', '').strip()
+
+            if not title or not amount or float(amount) <= 0:
+                messages.error(request, 'Title and valid positive amount are required.')
+                return redirect('expense_list')
+
+            category = None
+            if category_id:
+                category = ExpenseCategory.objects.filter(id=category_id, tenant=request.tenant).first()
+
+            exp.category = category
+            exp.title = title
+            exp.expense_date = expense_date
+            exp.amount = amount
+            exp.payment_mode = payment_mode
+            exp.paid_to = paid_to
+            exp.reference_number = reference_number
+            exp.notes = notes
+            exp.save()
+
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': True,
+                    'message': f'Expense #{exp.expense_number} updated successfully!'
+                })
+
+            messages.success(request, f'Expense #{exp.expense_number} updated successfully!')
+            return redirect('expense_list')
+
+        except Exception as e:
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': str(e)}, status=400)
+            messages.error(request, f'Error updating expense: {str(e)}')
+            return redirect('expense_list')
+
+
+class ExpenseDeleteView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        try:
+            exp = get_object_or_404(Expense, id=pk, tenant=request.tenant)
+            num = exp.expense_number
+            exp.delete()
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({'success': True, 'message': f'Expense #{num} deleted successfully.'})
+            messages.success(request, f'Expense #{num} deleted successfully.')
+            return redirect('expense_list')
+        except Exception as e:
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': str(e)}, status=400)
+            messages.error(request, f'Error deleting expense: {str(e)}')
+            return redirect('expense_list')
+
+
+class ExpenseCategoryCreateView(LoginRequiredMixin, View):
+    def post(self, request):
+        try:
+            name = request.POST.get('name', '').strip()
+            icon = request.POST.get('icon', 'fa-receipt').strip()
+            description = request.POST.get('description', '').strip()
+
+            if not name:
+                if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                    return JsonResponse({'success': False, 'error': 'Category name is required.'}, status=400)
+                messages.error(request, 'Category name is required.')
+                return redirect('expense_list')
+
+            cat, created = ExpenseCategory.objects.get_or_create(
+                tenant=request.tenant,
+                name__iexact=name,
+                defaults={
+                    'name': name,
+                    'icon': icon or 'fa-receipt',
+                    'description': description,
+                    'is_active': True
+                }
+            )
+
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': True,
+                    'id': cat.id,
+                    'name': cat.name,
+                    'icon': cat.icon,
+                    'created': created
+                })
+
+            messages.success(request, f'Category "{cat.name}" added successfully!')
+            return redirect('expense_list')
+        except Exception as e:
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': str(e)}, status=400)
+            messages.error(request, f'Error adding category: {str(e)}')
+            return redirect('expense_list')
+
+
+class ExpenseExportCSVView(LoginRequiredMixin, View):
+    def get(self, request):
+        import csv
+        from django.http import HttpResponse
+        
+        start_date = request.GET.get('start_date')
+        end_date = request.GET.get('end_date')
+        category_id = request.GET.get('category_id')
+        payment_mode = request.GET.get('payment_mode')
+        search_query = request.GET.get('q', '').strip()
+
+        qs = Expense.objects.filter(tenant=request.tenant).select_related('category')
+        if start_date:
+            qs = qs.filter(expense_date__gte=start_date)
+        if end_date:
+            qs = qs.filter(expense_date__lte=end_date)
+        if category_id:
+            qs = qs.filter(category_id=category_id)
+        if payment_mode:
+            qs = qs.filter(payment_mode=payment_mode)
+        if search_query:
+            qs = qs.filter(
+                Q(title__icontains=search_query) |
+                Q(paid_to__icontains=search_query) |
+                Q(reference_number__icontains=search_query) |
+                Q(notes__icontains=search_query)
+            )
+
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="Expenses_Report_{now().strftime("%Y%m%d_%H%M")}.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow(['Voucher No.', 'Date', 'Category', 'Title / Particulars', 'Paid To', 'Payment Mode', 'Reference No.', 'Amount (Rs.)', 'Notes'])
+
+        total_amt = 0
+        for exp in qs:
+            total_amt += float(exp.amount)
+            writer.writerow([
+                exp.expense_number or f'EXP-{exp.id}',
+                exp.expense_date.strftime('%d-%m-%Y') if exp.expense_date else '',
+                exp.category.name if exp.category else 'General',
+                exp.title,
+                exp.paid_to or '',
+                exp.payment_mode,
+                exp.reference_number or '',
+                f'{float(exp.amount):.2f}',
+                exp.notes or ''
+            ])
+
+        writer.writerow([])
+        writer.writerow(['Total', '', '', '', '', '', '', f'{total_amt:.2f}', ''])
+        return response
+

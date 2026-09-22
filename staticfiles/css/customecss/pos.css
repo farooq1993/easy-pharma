@@ -1,0 +1,374 @@
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap');
+
+    /* ══════════════════════════════════════════════════
+       DESIGN TOKENS — Pharmacy POS
+       Palette: deep clinical teal (brand/trust) + emerald
+       (money/success) + amber (caution/schedule) on a warm
+       paper background. Numeric data (prices, qty, batch
+       codes, bill totals) always renders in monospace —
+       a receipt/label-precision signature that lets a
+       cashier scan figures at a glance under time pressure.
+       ══════════════════════════════════════════════════ */
+    :root {
+        --ink:            #16241F;
+        --muted:          #64766F;
+        --bg:             #F5F7F3;
+        --surface:        #FFFFFF;
+        --border:         #E3E8E1;
+
+        --brand:          #0C6B58;
+        --brand-dk:       #084A3D;
+        --brand-tint:     #E7F2EE;
+
+        --success:        #059669;
+        --success-dk:     #047857;
+        --success-tint:   #E5F6EE;
+
+        --accent:         #D97706;
+        --accent-tint:    #FDF1E1;
+
+        --danger:         #DC2626;
+        --danger-tint:    #FCEBEA;
+
+        --r-lg: 16px;
+        --r-md: 12px;
+        --r-sm: 8px;
+        --shadow:    0 2px 10px rgba(22,36,31,.06), 0 1px 2px rgba(22,36,31,.05);
+        --shadow-lg: 0 16px 40px rgba(22,36,31,.14);
+    }
+
+    body { background: var(--bg); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; }
+
+    h1, h2, h3, h4, h5, h6, .modal-title, .fw-bold {
+        font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+        letter-spacing: -0.01em;
+    }
+
+    /* Monospace signature for all figures: money, qty, batch codes, bill no. */
+    #posTable td, .qty-input, .batch-item, .summary-card span,
+    #summarySubTotal, #summaryTax, #summaryGrandTotal, #summaryRoundOff,
+    #cartTotal, #runningBillNumber, #successInvoiceNum,
+    #searchResults .fw-bold.text-primary, #searchResults .badge.bg-white {
+        font-family: 'JetBrains Mono', ui-monospace, monospace;
+        font-variant-numeric: tabular-nums;
+    }
+    #posTable td .fw-bold, #posTable td .text-muted { font-family: 'Inter', sans-serif; } /* medicine name / exp stay in body font */
+    .x-small { font-size: 0.65rem; }
+
+    /* ── Base surfaces ── */
+    .card {
+        border-radius: var(--r-lg) !important;
+        border: 1px solid var(--border) !important;
+        box-shadow: var(--shadow) !important;
+    }
+    .rounded-4 { border-radius: var(--r-lg) !important; }
+    .rounded-3 { border-radius: var(--r-md) !important; }
+    .shadow-sm { box-shadow: var(--shadow) !important; }
+    .shadow-lg { box-shadow: var(--shadow-lg) !important; }
+    .card-header { background: var(--surface) !important; border-bottom: 1px solid var(--border) !important; }
+    .card-footer { background: var(--surface) !important; border-top: 1px solid var(--border) !important; }
+
+    /* ── Brand color takeover (keeps Bootstrap class names, new palette) ── */
+    .text-success { color: var(--success) !important; }
+    .text-primary { color: var(--brand) !important; }
+    .btn-success { background: var(--success) !important; border-color: var(--success) !important; }
+    .btn-success:hover { background: var(--success-dk) !important; border-color: var(--success-dk) !important; }
+    .btn-primary { background: var(--brand) !important; border-color: var(--brand) !important; }
+    .btn-primary:hover { background: var(--brand-dk) !important; border-color: var(--brand-dk) !important; }
+    .btn-outline-primary { color: var(--brand) !important; border-color: var(--brand) !important; }
+    .btn-outline-primary:hover { background: var(--brand) !important; color: #fff !important; }
+
+    #runningBillNumber {
+        background: var(--brand-tint) !important;
+        color: var(--brand-dk) !important;
+        border: 1px solid rgba(12,107,88,.25) !important;
+        letter-spacing: 0.02em;
+    }
+
+    /* ── Top search bar ── */
+    #productSearch {
+        background: var(--surface) !important;
+        border: 1.5px solid var(--border) !important;
+        color: var(--ink);
+    }
+    #productSearch:focus {
+        background: var(--surface) !important;
+        border: 1.5px solid var(--brand) !important;
+        box-shadow: 0 0 0 4px var(--brand-tint) !important;
+        padding-left: 3rem;
+    }
+    #productSearch::placeholder { color: var(--muted); opacity: .8; }
+
+    /* ── Search results dropdown ── */
+    #searchResults {
+        border-radius: var(--r-lg) !important;
+        border: 2.5px solid var(--brand) !important;
+        box-shadow: 0 15px 40px rgba(0,0,0,0.18) !important;
+        overflow: hidden;
+        margin-top: 10px;
+        background: #ffffff !important;
+    }
+    #searchResults .list-group-item {
+        border-color: var(--border) !important;
+        background: #ffffff !important;
+    }
+    #searchResults .h6.fw-bold { font-size: 0.95rem; }
+    #searchResults .badge.bg-light {
+        background: var(--bg) !important;
+        border-color: var(--border) !important;
+        color: var(--muted) !important;
+        font-weight: 500;
+    }
+    #searchResults .badge.bg-info-soft,
+    .bg-info-soft { background: var(--brand-tint) !important; color: var(--brand-dk) !important; }
+    .bg-success-soft { background: var(--success-tint) !important; color: var(--success-dk) !important; }
+    .bg-primary-soft { background: var(--brand-tint) !important; color: var(--brand-dk) !important; }
+
+    .batch-list { max-height: 220px; overflow-y: auto; padding-right: 2px; }
+
+    .batch-item {
+        cursor: pointer;
+        border-radius: var(--r-sm) !important;
+        background: rgba(250, 251, 249, 0.9) !important;
+        border-left: 4px solid var(--brand) !important;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+    .batch-item:hover {
+        background: var(--brand-tint) !important;
+        border-left-color: var(--brand-dk) !important;
+        transform: translateY(-2px) scale(1.005) !important;
+        box-shadow: 0 4px 12px rgba(12, 107, 88, 0.08) !important;
+    }
+    .batch-item.selected-batch, .batch-item.selected-batch:hover {
+        background: var(--brand-tint) !important;
+        border-left-color: var(--brand-dk) !important;
+        box-shadow: inset 0 0 0 1px rgba(12,107,88,.18) !important;
+        transform: translateX(4px) !important;
+    }
+    .batch-item .fw-bold.text-primary { color: var(--brand-dk) !important; }
+    .batch-item .badge.bg-success { background: var(--success) !important; }
+    .batch-item .add-btn, .batch-item.selected-batch .add-btn {
+        background: var(--brand) !important;
+        border-color: var(--brand) !important;
+        letter-spacing: 0.03em;
+    }
+    .batch-item:hover .add-btn { background: var(--brand-dk) !important; border-color: var(--brand-dk) !important; }
+    .selected-batch {
+        background-color: var(--brand-tint) !important;
+        border-color: var(--brand) !important;
+        box-shadow: 0 0 0 2px rgba(12,107,88,.20);
+    }
+
+    /* ── Cart table ── */
+    #posTable thead {
+        background: var(--bg) !important;
+        color: var(--muted);
+        letter-spacing: 0.04em;
+        border-bottom: 1px solid var(--border);
+    }
+    .cart-row { transition: all .18s ease; border-left: 3px solid transparent; }
+    .cart-row:hover { background: var(--brand-tint) !important; border-left-color: var(--brand) !important; }
+    .cart-row td { border-color: var(--border) !important; }
+
+    .qty-input { font-weight: 700; transition: all .2s; }
+    .qty-input:focus {
+        background-color: #fff !important;
+        border-color: var(--brand) !important;
+        box-shadow: 0 0 0 3px var(--brand-tint) !important;
+    }
+
+    /* ── Empty state ── */
+    #emptyState .opacity-25 { color: var(--brand); }
+    #emptyState .alert-info {
+        border-radius: var(--r-md) !important;
+        background: var(--brand-tint) !important;
+        border: none !important;
+        color: var(--brand-dk) !important;
+    }
+
+    /* ── Checkout / summary sidebar ── */
+    .summary-card {
+        background: var(--bg) !important;
+        border: 1px solid var(--border);
+        border-radius: var(--r-lg) !important;
+    }
+    #summaryGrandTotal { color: var(--success) !important; font-size: 1.6rem; }
+
+    .payment-btn {
+        border: 1.5px solid var(--border) !important;
+        background: var(--surface) !important;
+        color: var(--muted);
+        border-radius: var(--r-md) !important;
+        transition: all .2s ease;
+    }
+    .payment-btn:hover { border-color: var(--success) !important; background: var(--success-tint) !important; color: var(--success-dk) !important; }
+    .payment-btn-active {
+        border-color: var(--success) !important;
+        background: var(--success-tint) !important;
+        color: var(--success-dk) !important;
+        font-weight: 700;
+        box-shadow: 0 0 0 3px rgba(5,150,105,.15) !important;
+    }
+
+    /* Complete & Print CTA */
+    .btn-success.btn-lg {
+        background: linear-gradient(135deg, var(--success), var(--success-dk)) !important;
+        border: none !important;
+        letter-spacing: 0.03em;
+        box-shadow: 0 10px 24px rgba(5,150,105,.28) !important;
+        transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .btn-success.btn-lg:hover { transform: translateY(-1px); box-shadow: 0 14px 28px rgba(5,150,105,.34) !important; }
+
+    /* ── Patient details inputs ── */
+    #patientName, #patientAddress, #patientPhone, #doctorName {
+        background: var(--bg) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: var(--r-sm) !important;
+    }
+    #patientName:focus, #patientAddress:focus, #patientPhone:focus, #doctorName:focus {
+        background: var(--surface) !important;
+        border-color: var(--brand) !important;
+        box-shadow: 0 0 0 3px var(--brand-tint) !important;
+    }
+
+    /* ── Mode banner ── */
+    #counterSaleBanner {
+        background: var(--brand-tint) !important;
+        border-left: 4px solid var(--brand) !important;
+    }
+    #counterSaleBanner h6 { color: var(--brand-dk) !important; }
+
+    /* Validation styles */
+    .form-control.is-invalid {
+        border: 1.5px solid var(--danger) !important;
+        background-color: var(--danger-tint) !important;
+        animation: fieldShake 0.3s ease;
+    }
+    .form-control.is-invalid + .invalid-feedback {
+        display: block;
+        font-size: 0.75rem;
+        color: var(--danger);
+        margin-top: 4px;
+    }
+    @keyframes fieldShake {
+        0%, 100% { transform: translateX(0); }
+        25%       { transform: translateX(-4px); }
+        75%       { transform: translateX(4px); }
+    }
+
+    /* Modal Button Focus Highlight */
+    #checkoutSuccessModal .btn:focus {
+        outline: none;
+        box-shadow: 0 0 0 5px rgba(217,119,6,.35) !important;
+        border-color: var(--accent) !important;
+        transform: scale(1.02);
+        transition: all 0.15s ease-in-out;
+    }
+    #checkoutSuccessModal i.fa-check-circle { color: var(--success) !important; }
+
+    .toast-container { z-index: 1056; }
+    .w-60 { width: 60%; }
+
+    /* ── Patient Details section pulse on Tab-in ── */
+    @keyframes patientPulse {
+        0%   { box-shadow: 0 0 0 0 rgba(12,107,88,0.0); background: transparent; }
+        30%  { box-shadow: 0 0 0 6px rgba(12,107,88,0.20); background: rgba(12,107,88,0.06); }
+        70%  { box-shadow: 0 0 0 10px rgba(12,107,88,0.10); background: rgba(12,107,88,0.03); }
+        100% { box-shadow: 0 0 0 0 rgba(12,107,88,0.0); background: transparent; }
+    }
+    .patient-section-pulse {
+        animation: patientPulse 1.2s ease forwards;
+        border-radius: 10px;
+        padding: 8px !important;
+        margin: -8px !important;
+    }
+
+    .universal-loader {
+        position: fixed;
+        inset: 0;
+        z-index: 2000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(245, 247, 243, 0.9);
+        backdrop-filter: blur(3px);
+    }
+    .universal-loader.d-none { display: none !important; }
+    .loader-spinner {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1rem 1.25rem;
+        background: var(--surface);
+        border-radius: var(--r-md);
+        box-shadow: var(--shadow-lg);
+    }
+    .loader-text { font-weight: 600; color: var(--ink); }
+
+    kbd {
+        background-color: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--ink);
+        border-radius: 5px;
+        padding: 2px 7px;
+        font-size: 0.72rem;
+        font-family: 'JetBrains Mono', monospace;
+        display: inline-block;
+        box-shadow: 0 1px 0 rgba(0,0,0,0.06);
+    }
+
+    .alert-info {
+        border-radius: var(--r-md);
+        background: var(--brand-tint);
+        border: none;
+        color: var(--brand-dk);
+    }
+
+    /* AI Prescription Scanner CSS */
+    .border-dashed {
+        border-style: dashed !important;
+    }
+    .step-item {
+        transition: all 0.3s ease;
+    }
+    .step-item.active .step-number {
+        transform: scale(1.1);
+        box-shadow: 0 0 10px rgba(12, 107, 88, 0.4);
+    }
+    .upload-dropzone:hover {
+        background-color: var(--brand-tint) !important;
+        border-color: var(--brand) !important;
+    }
+    .btn-xs {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+        border-radius: 0.25rem;
+    }
+    @keyframes scan-anim {
+        0% { top: 0%; }
+        50% { top: 100%; }
+        100% { top: 0%; }
+    }
+    .scan-bar {
+        left: 0;
+        right: 0;
+        height: 4px;
+        box-shadow: 0 0 8px var(--brand);
+    }
+
+    /* Hover effects and animations */
+    .hover-grow {
+        transition: all 0.2s ease-in-out;
+    }
+    .hover-grow:hover {
+        transform: translateY(-2px) scale(1.02);
+        box-shadow: 0 8px 20px rgba(12, 107, 88, 0.25) !important;
+    }
+    .animate-pulse {
+        animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes pulse-ring {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }

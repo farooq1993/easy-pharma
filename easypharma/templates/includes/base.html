@@ -40,16 +40,14 @@
     </style>
 
     <!-- Custom CSS -->
-    <link href="{% static 'css/global.css' %}" rel="stylesheet">
+    <link href="{% static 'css/global.css' %}?v=2.0.2" rel="stylesheet">
     <link href="{% static 'css/customecss/sidebar.css' %}" rel="stylesheet">
     
     
     {% block extra_css %}{% endblock %}
     
     <!-- Preload critical resources (optional performance boost) -->
-    {% block preload %}
-        <link rel="preload" href="{% static 'css/global.css' %}" as="style">
-    {% endblock %}
+    {% block preload %}{% endblock %}
 </head>
 <body>
 
@@ -105,6 +103,18 @@
         </div>
     </div>
 
+    <!-- Universal Brand Loader (With Mid-Size PNG) -->
+    <div id="universalLoader" class="universal-loader d-none" role="status" aria-live="polite" aria-busy="false">
+        <div class="universal-loader-card">
+            <div class="universal-loader-img-wrap">
+                <div class="universal-loader-ring"></div>
+                <img src="{% static 'img/easyPharma.png' %}" alt="Easy Pharma" class="universal-loader-img">
+            </div>
+            <div class="universal-loader-text" id="universalLoaderText">Please wait...</div>
+            <p class="universal-loader-subtext" id="universalLoaderSubtext">Processing request...</p>
+        </div>
+    </div>
+
     <!-- PWA: Offline / Online Status Badge -->
     <div id="epNetworkBadge" style="
         display: none;
@@ -140,6 +150,99 @@
     <script src="{% static 'js/localforage.min.js' %}"></script>
     <!-- Offline Sync JS -->
     <script src="{% static 'js/offline_sync.js' %}"></script>
+
+    <!-- Global Universal Loader Controls & Request Interceptor -->
+    <script>
+        (function() {
+            let activeFetchCount = 0;
+
+            window.showUniversalLoader = function(text, subtext) {
+                const loader = document.getElementById('universalLoader');
+                if (!loader) return;
+                const t = document.getElementById('universalLoaderText') || loader.querySelector('.loader-text');
+                const s = document.getElementById('universalLoaderSubtext');
+                if (t && text) t.textContent = text;
+                if (s) s.textContent = subtext || 'Please wait a moment...';
+                loader.classList.remove('d-none');
+                loader.style.display = 'flex';
+                loader.setAttribute('aria-busy', 'true');
+            };
+
+            window.hideUniversalLoader = function() {
+                const loader = document.getElementById('universalLoader');
+                if (!loader) return;
+                loader.classList.add('d-none');
+                loader.style.display = 'none';
+                loader.setAttribute('aria-busy', 'false');
+            };
+
+            // Aliases for compatibility across existing scripts
+            window.showLoader = window.showUniversalLoader;
+            window.hideLoader = window.hideUniversalLoader;
+
+            // Global Fetch Request Interceptor (Auto-show loader on POST/Async operations)
+            const originalFetch = window.fetch;
+            window.fetch = async function(...args) {
+                const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
+                const options = args[1] || {};
+                const method = (options.method || (args[0]?.method) || 'GET').toUpperCase();
+
+                // Skip non-blocking fast lookups
+                const isSilent = options.silent || url.includes('/search/') || url.includes('/autocomplete/') || url.includes('/check-duplicate') || url.includes('/check-invoice-number');
+
+                if (!isSilent && (method === 'POST' || options.showLoader || url.includes('/import/'))) {
+                    activeFetchCount++;
+                    const msg = url.includes('/ocr/') ? 'AI OCR is Reading Bill...' :
+                                url.includes('/csv/') ? 'Parsing CSV File...' :
+                                method === 'POST' ? 'Processing & Saving...' : 'Loading Data...';
+                    const sub = url.includes('/ocr/') ? 'Extracting medicines, batches & rates' : 'Communicating with server';
+                    window.showUniversalLoader(msg, sub);
+                }
+
+                try {
+                    const response = await originalFetch.apply(this, args);
+                    return response;
+                } finally {
+                    if (!isSilent && (method === 'POST' || options.showLoader || url.includes('/import/'))) {
+                        activeFetchCount = Math.max(0, activeFetchCount - 1);
+                        if (activeFetchCount === 0) {
+                            window.hideUniversalLoader();
+                        }
+                    }
+                }
+            };
+
+            // Intercept standard full-page form submissions (both GET & POST)
+            document.addEventListener('submit', function(e) {
+                const form = e.target;
+                if (form) {
+                    const method = (form.method || 'GET').toUpperCase();
+                    const action = form.action || '';
+                    if (!action.includes('export') && !action.includes('download')) {
+                        const title = method === 'POST' ? 'Saving Changes...' : 'Loading Records...';
+                        const sub = method === 'POST' ? 'Please wait while we update your records' : 'Fetching latest data from server';
+                        window.showUniversalLoader(title, sub);
+                    }
+                }
+            });
+
+            // Show brand loader when navigating internal links
+            document.addEventListener('click', function(e) {
+                const link = e.target.closest('a');
+                if (link && link.href && !link.target && !link.hasAttribute('download') && !link.dataset.bsToggle) {
+                    const url = link.href;
+                    if (url.startsWith(window.location.origin) && !url.includes('#') && !url.includes('javascript:') && !url.includes('/export/') && !url.includes('/print/')) {
+                        window.showUniversalLoader('Easy Pharma', 'Loading page, please wait...');
+                    }
+                }
+            });
+
+            // Page navigation unload trigger
+            window.addEventListener('beforeunload', function() {
+                window.showUniversalLoader('Easy Pharma', 'Loading, please wait...');
+            });
+        })();
+    </script>
     
     <!-- Sidebar Toggle Script -->
     <script>

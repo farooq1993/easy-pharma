@@ -3,10 +3,13 @@ import time
 import requests
 import json
 import re
+import logging
 from django.conf import settings
 from decouple import config
 import os
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 # Try standard dotenv load
 load_dotenv()
@@ -19,9 +22,51 @@ if os.path.exists(inner_env_path):
 
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', default='')
 
+def _call_ai_vision_api(api_key, payload, timeout=15):
+    """
+    Calls the AI Vision endpoints with ultra-fast model fallbacks.
+    """
+    models_to_try = [
+        ("v1beta", "gemini-3.6-flash"),
+        ("v1beta", "gemini-3.5-flash-lite"),
+        ("v1beta", "gemini-flash-lite-latest"),
+        ("v1beta", "gemini-flash-latest"),
+        ("v1beta", "gemini-3.5-flash"),
+        ("v1beta", "gemini-3.1-flash-lite"),
+        ("v1beta", "gemini-2.5-flash"),
+    ]
+
+    headers = {'Content-Type': 'application/json'}
+    last_error = None
+    response = None
+
+    for api_version, model_name in models_to_try:
+        url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model_name}:generateContent?key={api_key}"
+        try:
+            res = requests.post(url, headers=headers, json=payload, timeout=timeout)
+            if res.status_code == 200:
+                response = res
+                break
+            elif res.status_code in [429, 503]:
+                time.sleep(0.5)
+                continue
+            else:
+                last_error = f"{model_name} ({api_version}) status {res.status_code}: {res.text}"
+                logger.warning(f"AI Vision model attempt error: {last_error}")
+        except Exception as e:
+            last_error = f"{model_name} exception: {str(e)}"
+            logger.warning(f"AI Vision request exception: {last_error}")
+
+    if not response or response.status_code != 200:
+        logger.error(f"AI Vision request failed across all models. Last details: {last_error}")
+        raise Exception("AI OCR engine is currently busy or unable to process this document. Please ensure the image is clear and try again.")
+
+    return response
+
+
 def extract_purchase_bill_data(image_file):
     """
-    Sends the purchase bill/invoice image to Gemini API to extract details.
+    Sends the purchase bill/invoice image to AI OCR Engine to extract details.
     image_file: file-like object or bytes
     """
     api_key = GEMINI_API_KEY
@@ -29,7 +74,8 @@ def extract_purchase_bill_data(image_file):
         api_key = api_key.split('#')[0].strip().split()[0]
     
     if not api_key:
-        raise ValueError("Gemini API key is not configured. Please set GEMINI_API_KEY in environment variables.")
+        logger.error("AI API key is missing in environment variables.")
+        raise ValueError("AI Bill Scanner service is not configured. Please contact administrator.")
 
     # Read image bytes
     if hasattr(image_file, 'read'):
@@ -83,13 +129,6 @@ def extract_purchase_bill_data(image_file):
         "Return ONLY the raw JSON block without markdown formatting or code blocks."
     )
 
-    models_to_try = [
-        "gemini-3.5-flash-lite",
-        "gemini-2.5-flash",
-        "gemini-2.5-flash-lite"
-    ]
-
-    headers = {'Content-Type': 'application/json'}
     payload = {
         "contents": [
             {
@@ -105,36 +144,19 @@ def extract_purchase_bill_data(image_file):
             }
         ],
         "generationConfig": {
-            "temperature": 0.1
+            "temperature": 0.1,
+            "response_mime_type": "application/json"
         }
     }
 
-    last_error = None
-    response = None
-
-    for model_name in models_to_try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-        try:
-            res = requests.post(url, headers=headers, json=payload, timeout=20)
-            if res.status_code == 200:
-                response = res
-                break
-            elif res.status_code in [429, 503]:
-                time.sleep(0.75)
-                continue
-            else:
-                last_error = f"{model_name} failed with status {res.status_code}: {res.text}"
-        except Exception as e:
-            last_error = f"{model_name} exception: {str(e)}"
-
-    if not response or response.status_code != 200:
-        raise Exception(f"Gemini API request failed. Last error: {last_error}")
+    response = _call_ai_vision_api(api_key, payload, timeout=15)
 
     resp_json = response.json()
     try:
         raw_text = resp_json['candidates'][0]['content']['parts'][0]['text']
     except (KeyError, IndexError):
-        raise Exception(f"Invalid response format from Gemini API: {resp_json}")
+        logger.error(f"Unexpected AI response structure: {resp_json}")
+        raise Exception("Unable to parse bill structure. Please ensure the document is clear and try again.")
 
     # Parse and clean JSON
     cleaned_text = raw_text.strip()
@@ -146,12 +168,13 @@ def extract_purchase_bill_data(image_file):
         parsed_data = json.loads(cleaned_text.strip())
         return parsed_data
     except json.JSONDecodeError as e:
-        raise Exception(f"Failed to parse Gemini output as JSON: {cleaned_text}. Error: {str(e)}")
+        logger.error(f"JSON decode failed for AI OCR output: {cleaned_text}. Error: {e}")
+        raise Exception("Could not extract structured data from this document. Please ensure the image is clear.")
 
 
 def extract_opening_stock_data(image_file):
     """
-    Sends an opening stock image (handwritten or printed list) to Gemini API to extract details.
+    Sends an opening stock image (handwritten or printed list) to AI OCR Engine to extract details.
     image_file: file-like object or bytes
     """
     api_key = GEMINI_API_KEY
@@ -159,7 +182,8 @@ def extract_opening_stock_data(image_file):
         api_key = api_key.split('#')[0].strip().split()[0]
     
     if not api_key:
-        raise ValueError("Gemini API key is not configured. Please set GEMINI_API_KEY in environment variables.")
+        logger.error("AI API key is missing in environment variables.")
+        raise ValueError("AI Opening Stock service is not configured. Please contact administrator.")
 
     # Read image bytes
     if hasattr(image_file, 'read'):
@@ -199,13 +223,6 @@ def extract_opening_stock_data(image_file):
         "Return ONLY the raw JSON block without markdown formatting or code blocks."
     )
 
-    models_to_try = [
-        "gemini-3.5-flash-lite",
-        "gemini-2.5-flash",
-        "gemini-2.5-flash-lite"
-    ]
-
-    headers = {'Content-Type': 'application/json'}
     payload = {
         "contents": [
             {
@@ -221,42 +238,19 @@ def extract_opening_stock_data(image_file):
             }
         ],
         "generationConfig": {
-            "temperature": 0.1
+            "temperature": 0.1,
+            "response_mime_type": "application/json"
         }
     }
 
-    last_error = None
-    response = None
-
-    for model_name in models_to_try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-        max_retries = 2
-        for attempt in range(max_retries):
-            try:
-                res = requests.post(url, headers=headers, json=payload, timeout=45)
-                if res.status_code == 200:
-                    response = res
-                    break
-                elif res.status_code in [429, 503] and attempt < max_retries - 1:
-                    time.sleep(1.5)
-                    continue
-                else:
-                    last_error = f"{model_name} failed with status {res.status_code}: {res.text}"
-                    break
-            except Exception as e:
-                last_error = f"{model_name} exception: {str(e)}"
-                break
-        if response and response.status_code == 200:
-            break
-
-    if not response or response.status_code != 200:
-        raise Exception(f"Gemini API request failed. Last error: {last_error}")
+    response = _call_ai_vision_api(api_key, payload, timeout=20)
 
     resp_json = response.json()
     try:
         raw_text = resp_json['candidates'][0]['content']['parts'][0]['text']
     except (KeyError, IndexError):
-        raise Exception(f"Invalid response format from Gemini API: {resp_json}")
+        logger.error(f"Unexpected AI response structure: {resp_json}")
+        raise Exception("Unable to parse document structure. Please ensure the document is clear and try again.")
 
     cleaned_text = raw_text.strip()
     match = re.search(r'```(?:json)?\s*(.*?)\s*```', cleaned_text, re.DOTALL)
@@ -267,5 +261,5 @@ def extract_opening_stock_data(image_file):
         parsed_data = json.loads(cleaned_text.strip())
         return parsed_data
     except json.JSONDecodeError as e:
-        raise Exception(f"Failed to parse Gemini output as JSON: {cleaned_text}. Error: {str(e)}")
-
+        logger.error(f"JSON decode failed for opening stock output: {cleaned_text}. Error: {e}")
+        raise Exception("Could not extract structured data from this document. Please ensure the image is clear.")

@@ -98,9 +98,11 @@
                             <div class="qs-dropdown" id="qs-drop-quickSchedule" style="display:none;"></div>
                         </div>
                     </div>
-                    <div class="col-lg-4 col-md-6 col-12">
+                <!-- Product Content (Full Width) -->
+                <div class="row g-3 mb-3">
+                    <div class="col-12">
                         <label class="ep-label d-flex justify-content-between align-items-center">
-                            <span>Product Content</span>
+                            <span>Product Content / Composition (Salt)</span>
                             <a href="#" class="text-success text-decoration-none text-lowercase" style="font-size: 0.75rem;" onclick="openMasterAddModal('product-content', 'quickContent', 'Product Content', 'content_name'); return false;">Add New</a>
                         </label>
                         <select id="quickContent" style="display:none;">
@@ -110,13 +112,17 @@
                         </select>
                         <div class="qs-wrap" id="qs-wrap-quickContent">
                             <div class="qs-input-row">
-                                <input type="text" class="ep-input qs-input" id="qs-input-quickContent" placeholder="Search content...">
+                                <input type="text" class="ep-input qs-input" id="qs-input-quickContent" placeholder="Search salt / generic composition (e.g. Paracetamol 325mg + Aceclofenac 100mg)..." style="font-size:0.88rem;">
                                 <button type="button" class="qs-clear-btn" id="qs-clear-quickContent" onclick="qsClear('quickContent')" style="display:none;">✕</button>
                             </div>
                             <div class="qs-dropdown" id="qs-drop-quickContent" style="display:none;"></div>
                         </div>
                     </div>
-                    <div class="col-lg-4 col-md-12 col-12">
+                </div>
+
+                <!-- Company + HSN -->
+                <div class="row g-3 mb-3">
+                    <div class="col-lg-8 col-md-7 col-12">
                         <label class="ep-label d-flex justify-content-between align-items-center">
                             <span>Company Name</span>
                             <a href="#" class="text-success text-decoration-none text-lowercase" style="font-size: 0.75rem;" onclick="openMasterAddModal('drug-company', 'quickCompany', 'Company', 'company_name'); return false;">Add New</a>
@@ -134,11 +140,10 @@
                             <div class="qs-dropdown" id="qs-drop-quickCompany" style="display:none;"></div>
                         </div>
                     </div>
-                </div>
-
-                <div class="mb-3">
-                    <label class="ep-label">HSN Code</label>
-                    <input type="text" id="quickHsn" class="ep-input" placeholder="e.g. 30049099" maxlength="8">
+                    <div class="col-lg-4 col-md-5 col-12">
+                        <label class="ep-label">HSN Code</label>
+                        <input type="text" id="quickHsn" class="ep-input" placeholder="e.g. 30049099" maxlength="8">
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">

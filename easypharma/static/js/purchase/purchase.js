@@ -22,6 +22,25 @@ let _csvMissing      = [];
 let isTransitioningToCsvSupplier = false;
 let isTransitioningToOcrSupplier = false;
 
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function getCsrfToken() {
+    return window.EP_CONFIG?.csrfToken || document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken') || '';
+}
+
 // console.log("✅ CSV Import JS Loaded");
 
 // ── Stacked modal fix ─────────────────────────
@@ -168,7 +187,7 @@ async function _csvFetchAndRender(file) {
 
     const resp = await fetch('/import/csv/', {
         method: 'POST',
-        headers: { 'X-CSRFToken': csrfToken },
+        headers: { 'X-CSRFToken': getCsrfToken() },
         body: form
     });
     const data = await resp.json();
@@ -409,6 +428,10 @@ function csvConfirmAndLoad() {
     document.getElementById('invoiceNumber').value = invNum;
     if (invDate) document.getElementById('purchaseDate').value = invDate;
     document.getElementById('summaryPaymentMode').value = payMode;
+
+    if (typeof checkDuplicateInvoice === 'function') {
+        checkDuplicateInvoice();
+    }
 
     items = [];
     _csvParsedItems.forEach(item => {
@@ -661,7 +684,7 @@ async function saveCsvSupplier() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'X-CSRFToken': csrfToken,
+                'X-CSRFToken': getCsrfToken(),
                 'X-Requested-With': 'XMLHttpRequest'
             },
             body: payload.toString()
@@ -883,7 +906,7 @@ function submitOcrParse() {
             method: 'POST',
             body: formData,
             headers: {
-                'X-CSRFToken': csrfToken
+                'X-CSRFToken': getCsrfToken()
             }
         })
         .then(response => response.json())
@@ -1127,18 +1150,19 @@ function _ocrRenderPreviewTable(items) {
 
     items.forEach((item, idx) => {
         const tr = document.createElement('tr');
+        tr.className = 'ocr-item-row';
         tr.innerHTML = `
-            <td data-label="#" class="text-muted" style="padding:6px;">${idx + 1}</td>
-            <td data-label="Medicine Name"><div class="fw-bold text-dark">${_esc(item.name)}</div></td>
-            <td data-label="Batch No" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'batch_number', this.textContent)" style="background:#fffbeb; cursor:text;">${_esc(item.batch_number)}</td>
-            <td data-label="Expiry" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'expiry_date', this.textContent)" style="background:#fffbeb; cursor:text;" placeholder="YYYY-MM-DD">${_esc(item.expiry_date || '')}</td>
-            <td data-label="Qty" class="text-center" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'quantity', this.textContent)" style="background:#fffbeb; cursor:text; font-weight:bold;">${item.quantity}</td>
-            <td data-label="Free" class="text-center text-success" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'free_quantity', this.textContent)" style="background:#fffbeb; cursor:text;">${item.free_quantity}</td>
-            <td data-label="Pur. Rate" class="text-end" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'purchase_price', this.textContent)" style="background:#fffbeb; cursor:text;">${Number(item.purchase_price).toFixed(2)}</td>
-            <td data-label="MRP" class="text-end" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'mrp', this.textContent)" style="background:#fffbeb; cursor:text;">${Number(item.mrp).toFixed(2)}</td>
-            <td data-label="GST%" class="text-center" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'tax_percentage', this.textContent)" style="background:#fffbeb; cursor:text;">${item.tax_percentage}</td>
-            <td data-label="Total" class="text-end fw-bold text-teal" id="ocrRowTotal-${idx}">₹${Number(item.total).toFixed(2)}</td>
-            <td data-label="Action" class="text-center">
+            <td data-label="#" class="text-muted ocr-cell-index" style="padding:6px; text-align:center;">${idx + 1}</td>
+            <td data-label="Medicine Name" class="ocr-cell-name"><div class="fw-bold text-dark d-flex align-items-center gap-2"><span class="badge bg-light text-secondary border d-inline d-md-none">#${idx + 1}</span> ${_esc(item.name)}</div></td>
+            <td data-label="Batch No" class="ocr-cell-batch" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'batch_number', this.textContent)" style="cursor:text;">${_esc(item.batch_number)}</td>
+            <td data-label="Expiry" class="ocr-cell-expiry" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'expiry_date', this.textContent)" style="cursor:text;" placeholder="YYYY-MM-DD">${_esc(item.expiry_date || '')}</td>
+            <td data-label="Qty" class="text-center ocr-cell-qty" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'quantity', this.textContent)" style="cursor:text; font-weight:bold;">${item.quantity}</td>
+            <td data-label="Free" class="text-center text-success ocr-cell-free" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'free_quantity', this.textContent)" style="cursor:text;">${item.free_quantity}</td>
+            <td data-label="Pur. Rate" class="text-end ocr-cell-rate" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'purchase_price', this.textContent)" style="cursor:text;">${Number(item.purchase_price).toFixed(2)}</td>
+            <td data-label="MRP" class="text-end ocr-cell-mrp" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'mrp', this.textContent)" style="cursor:text;">${Number(item.mrp).toFixed(2)}</td>
+            <td data-label="GST%" class="text-center ocr-cell-gst" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'tax_percentage', this.textContent)" style="cursor:text;">${item.tax_percentage}</td>
+            <td data-label="Total" class="text-end fw-bold text-teal ocr-cell-total" id="ocrRowTotal-${idx}">₹${Number(item.total).toFixed(2)}</td>
+            <td data-label="Action" class="text-center ocr-cell-action">
                 <button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="window._ocrRemoveRow(${idx})" title="Remove item">
                     <i class="fas fa-trash-alt"></i>
                 </button>
@@ -1251,6 +1275,10 @@ function ocrConfirmAndLoad() {
     document.getElementById('invoiceNumber').value = invNum;
     if (invDate) document.getElementById('purchaseDate').value = invDate;
     document.getElementById('summaryPaymentMode').value = payMode;
+
+    if (typeof checkDuplicateInvoice === 'function') {
+        checkDuplicateInvoice();
+    }
 
     items = [];
     _ocrParsedItems.forEach(item => {
@@ -1454,7 +1482,7 @@ async function saveOcrSupplier() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'X-CSRFToken': csrfToken,
+                'X-CSRFToken': getCsrfToken(),
                 'X-Requested-With': 'XMLHttpRequest'
             },
             body: payload.toString()
@@ -1550,7 +1578,7 @@ async function aiAutoFillProductDetails() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
+                'X-CSRFToken': getCsrfToken()
             },
             body: JSON.stringify({ product_name: name })
         });
