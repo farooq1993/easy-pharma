@@ -376,16 +376,21 @@ class ProductMasterSearchAPI(LoginRequiredMixin,View):
                 response['Cache-Control'] = 'private, max-age=30, stale-while-revalidate=60'
                 return response
 
-        qs = Products.objects.filter(tenant=request.tenant)
+        tenant_filter = Q(tenant=request.tenant) | Q(tenant__isnull=True)
+        qs = Products.objects.filter(tenant_filter)
 
         if query:
-            qs = qs.filter(product_name__istartswith=query)
+            qs = qs.filter(
+                Q(product_name__icontains=query) |
+                Q(product_content__content_name__icontains=query) |
+                Q(compny_name__company_name__icontains=query)
+            )
 
         products = qs.select_related(
-            'product_tax', 'product_schedule', 'product_content'
+            'product_tax', 'product_schedule', 'product_content', 'compny_name'
         ).only(
             'id', 'product_name', 'product_packing', 'conversion_factor', 'product_tax__tax_rate',
-            'product_schedule__schedule_name', 'compny_name', 'product_hsn_code',
+            'product_schedule__schedule_name', 'compny_name__company_name', 'product_hsn_code',
             'product_content__content_name'
         ).order_by('product_name')[:limit]
         
@@ -395,11 +400,12 @@ class ProductMasterSearchAPI(LoginRequiredMixin,View):
                 'id': p.id,
                 'name': p.product_name,
                 'packing': p.product_packing or '',
-                'conversion_factor': p.conversion_factor,
+                'conversion_factor': p.conversion_factor or 1,
                 'tax_rate': p.product_tax.tax_rate if p.product_tax else 0,
                 'schedule_id': p.product_schedule_id or '',
                 'schedule_name': p.product_schedule.schedule_name if p.product_schedule else '',
                 'company_id': p.compny_name_id or '',
+                'company_name': p.compny_name.company_name if p.compny_name else '',
                 'hsn_code': p.product_hsn_code or '',
                 'salt': p.product_content.content_name if p.product_content else ''
             })

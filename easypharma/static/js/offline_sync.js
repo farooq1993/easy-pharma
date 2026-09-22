@@ -249,14 +249,15 @@ const OfflineSync = {
         try {
             const cacheKey = type === 'pos' ? 'pos_products' : 'master_products';
             const products = await this.productCache.getItem(cacheKey) || [];
-            const allProducts = await this.productCache.getItem('all_products') || [];
-
-            // Merge all cached products (deduplicated)
-            const combined = [...products];
-            const combinedIds = new Set(combined.map(p => p.id));
-            allProducts.forEach(p => {
-                if (!combinedIds.has(p.id)) combined.push(p);
-            });
+            
+            let combined = [...products];
+            if (type !== 'pos') {
+                const allProducts = await this.productCache.getItem('all_products') || [];
+                const combinedIds = new Set(combined.map(p => p.id));
+                allProducts.forEach(p => {
+                    if (!combinedIds.has(p.id)) combined.push(p);
+                });
+            }
 
             const lowerQuery = (query || '').toLowerCase().trim();
             if (!lowerQuery) return combined.slice(0, 30);
@@ -304,7 +305,9 @@ const OfflineSync = {
                 let list = await this.productCache.getItem(key) || [];
                 const idx = list.findIndex(p => p.id === formatted.id || (p.name && p.name.toLowerCase() === formatted.name.toLowerCase()));
                 if (idx >= 0) {
-                    list[idx] = { ...list[idx], ...formatted };
+                    const existingBatches = list[idx].batches || [];
+                    const newBatches = (Array.isArray(formatted.batches) && formatted.batches.length > 0) ? formatted.batches : existingBatches;
+                    list[idx] = { ...list[idx], ...formatted, batches: newBatches, out_of_stock: newBatches.length === 0 };
                 } else {
                     list.unshift(formatted);
                 }
