@@ -558,130 +558,158 @@
     }
 
     function renderSearchResults(data) {
-        resultsDiv.innerHTML = '';
-        searchSelectedIndex = -1;
-        let batchIndex = 0;
+        try {
+            resultsDiv.innerHTML = '';
+            searchSelectedIndex = -1;
+            let batchIndex = 0;
 
-        // Safe data extraction
-        const products = data?.results || data?.products || data || [];
+            // Safe data extraction
+            const products = data?.results || data?.products || data || [];
 
-        if (products.length === 0) {
-            resultsDiv.innerHTML = `
-                <div class="p-3 text-center text-muted small">
-                    No items found. 
-                    <button class="btn btn-link btn-sm" data-bs-toggle="modal" data-bs-target="#quickAddModal">
-                        Add New?
-                    </button>
-                </div>`;
-            resultsDiv.classList.remove('d-none');
-            return;
-        }
-        products.forEach(product => {
-            const productGroup = document.createElement('div');
-            productGroup.className = 'list-group-item p-3 border-bottom bg-white';
-
-            // ── Product header info ──
-            const contentBadge = product.content
-                ? `<span class="badge bg-light text-secondary border x-small me-1"><i class="fas fa-flask me-1"></i>${product.content}</span>`
-                : '';
-            const companyBadge = product.company
-                ? `<span class="badge bg-light text-muted border x-small">${product.company}</span>`
-                : '';
-
-            if (product.out_of_stock) {
-                // Out of stock — show greyed card with substitute button
-                productGroup.innerHTML = `
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div class="flex-grow-1">
-                            <div class="fw-bold text-muted h6 mb-0" style="text-decoration:line-through;opacity:.6;">${product.name}</div>
-                            <div class="mt-1">${contentBadge}${companyBadge}</div>
-                            <div class="text-muted x-small mt-1">Packing: ${product.packing || '—'}</div>
-                        </div>
-                        <div class="d-flex flex-column align-items-end gap-1">
-                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="fas fa-times-circle me-1"></i>Out of Stock</span>
-                            ${product.content ? `
-                            <button class="btn btn-warning btn-sm px-3 rounded-pill fw-bold sub-btn mt-1"
-                                onclick="openSubstitutes(${product.id}, '${product.name.replace(/'/g,"\\'")}')"
-                                title="Find same-composition drugs in stock">
-                                <i class="fas fa-exchange-alt me-1"></i>Substitute
-                            </button>` : '<small class="text-muted" style="font-size:9px;">No content linked</small>'}
-                        </div>
+            if (!Array.isArray(products) || products.length === 0) {
+                resultsDiv.innerHTML = `
+                    <div class="p-3 text-center text-muted small">
+                        No items found. 
+                        <button class="btn btn-link btn-sm" data-bs-toggle="modal" data-bs-target="#quickAddModal">
+                            Add New?
+                        </button>
                     </div>`;
-                resultsDiv.appendChild(productGroup);
-                return; // no batches to render
+                resultsDiv.classList.remove('d-none');
+                return;
             }
 
-            let batchesHtml = '';
-            product.batches.forEach(b => {
-                const expired = isExpired(b.expiry);
-                const borderClass = expired ? 'border-danger' : 'border-primary';
-                const bgClass = expired ? 'bg-danger-soft' : 'bg-light';
-                const btnHtml = expired
-                    ? `<button type="button" class="btn btn-danger btn-sm ms-3 px-3 rounded-pill fw-bold" onclick="alert('Item &quot;${product.name.replace(/"/g, '&quot;').replace(/'/g, "\\'")}&quot; is EXPIRED (Exp: ${b.expiry}) and CANNOT be sold!')"><i class="fas fa-ban me-1"></i>Expired</button>`
-                    : `<button type="button" class="btn btn-primary btn-sm ms-3 px-3 rounded-pill fw-bold add-btn" 
-                        onclick='addToCart({
-                            id: ${product.id}, 
-                            batch_id: ${b.batch_id}, 
-                            name: "${product.name.replace(/"/g,"&quot;")}", 
-                            batch_no: "${b.batch_no}", 
-                            expiry: "${b.expiry}", 
-                            price: ${b.price}, 
-                            tax_rate: ${product.tax_rate}, 
-                            stock: ${b.stock},
-                            schedule: "${(product.schedule || '').replace(/"/g,'&quot;')}"
-                        })'>+ ADD</button>`;
+            products.forEach(product => {
+                if (!product) return;
+                const productGroup = document.createElement('div');
+                productGroup.className = 'list-group-item p-3 border-bottom bg-white';
 
-                batchesHtml += `
-                <div class="d-flex justify-content-between align-items-center mt-2 p-3 rounded ${bgClass} border-start border-4 ${borderClass} batch-item" data-batch-index="${batchIndex++}" ${expired ? 'style="background-color: rgba(220, 53, 69, 0.08) !important; border-color: #dc3545 !important;"' : ''}>
-                    <div class="d-flex align-items-center flex-grow-1" style="min-width: 0;">
-                        <!-- Price & Batch -->
-                        <div class="d-flex flex-column justify-content-center" style="min-width: 140px;">
-                            <div class="fw-extrabold text-primary fs-5" style="font-family: 'JetBrains Mono', monospace; font-weight: 800;">₹${b.price.toFixed(2)}</div>
-                            <div class="mt-1">
-                                <span class="badge ${expired ? 'bg-danger text-white' : 'bg-white text-dark'} border px-2 py-1" style="font-size: 0.78rem; font-family: 'JetBrains Mono', monospace;">B: ${b.batch_no}</span>
+                const prodName = product.name || product.product_name || 'Unnamed Product';
+                const prodContent = product.content || product.salt || '';
+                const prodCompany = product.company || product.company_name || '';
+                const prodPacking = product.packing || product.product_packing || '—';
+                const prodFactor = product.conversion_factor || 1;
+                const prodTax = Number(product.tax_rate || 0);
+                const prodSchedule = product.schedule || product.schedule_name || '';
+                const batches = Array.isArray(product.batches) ? product.batches : [];
+                const isOutOfStock = Boolean(product.out_of_stock) || batches.length === 0;
+
+                // ── Product header info ──
+                const contentBadge = prodContent
+                    ? `<span class="badge bg-light text-secondary border x-small me-1"><i class="fas fa-flask me-1"></i>${prodContent}</span>`
+                    : '';
+                const companyBadge = prodCompany
+                    ? `<span class="badge bg-light text-muted border x-small">${prodCompany}</span>`
+                    : '';
+
+                if (isOutOfStock) {
+                    // Out of stock — show greyed card with substitute button
+                    const safeNameForSub = prodName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                    productGroup.innerHTML = `
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <div class="fw-bold text-muted h6 mb-0" style="text-decoration:line-through;opacity:.6;">${prodName}</div>
+                                <div class="mt-1">${contentBadge}${companyBadge}</div>
+                                <div class="text-muted x-small mt-1">Packing: ${prodPacking}</div>
+                            </div>
+                            <div class="d-flex flex-column align-items-end gap-1">
+                                <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="fas fa-times-circle me-1"></i>Out of Stock</span>
+                                ${prodContent ? `
+                                <button class="btn btn-warning btn-sm px-3 rounded-pill fw-bold sub-btn mt-1"
+                                    onclick="openSubstitutes(${product.id}, '${safeNameForSub}')"
+                                    title="Find same-composition drugs in stock">
+                                    <i class="fas fa-exchange-alt me-1"></i>Substitute
+                                </button>` : '<small class="text-muted" style="font-size:9px;">No content linked</small>'}
+                            </div>
+                        </div>`;
+                    resultsDiv.appendChild(productGroup);
+                    return; // no batches to render
+                }
+
+                let batchesHtml = '';
+                batches.forEach(b => {
+                    const price = Number(b.price || b.sale_price || b.mrp || 0);
+                    const batchNo = b.batch_no || b.batch_number || '—';
+                    const batchId = b.batch_id || b.id || 0;
+                    const expiry = b.expiry || b.expiry_date || '—';
+                    const stock = Number(b.stock !== undefined ? b.stock : (b.current_quantity !== undefined ? b.current_quantity : 0));
+                    const expired = isExpired(expiry);
+
+                    const borderClass = expired ? 'border-danger' : 'border-primary';
+                    const bgClass = expired ? 'bg-danger-soft' : 'bg-light';
+                    
+                    const itemData = JSON.stringify({
+                        id: product.id,
+                        batch_id: batchId,
+                        name: prodName,
+                        batch_no: batchNo,
+                        expiry: expiry,
+                        price: price,
+                        tax_rate: prodTax,
+                        stock: stock,
+                        schedule: prodSchedule
+                    }).replace(/'/g, '&#39;');
+
+                    const btnHtml = expired
+                        ? `<button type="button" class="btn btn-danger btn-sm ms-3 px-3 rounded-pill fw-bold" onclick="alert('Item is EXPIRED and CANNOT be sold!')"><i class="fas fa-ban me-1"></i>Expired</button>`
+                        : `<button type="button" class="btn btn-primary btn-sm ms-3 px-3 rounded-pill fw-bold add-btn" 
+                            onclick='addToCart(${itemData})'>+ ADD</button>`;
+
+                    batchesHtml += `
+                    <div class="d-flex justify-content-between align-items-center mt-2 p-3 rounded ${bgClass} border-start border-4 ${borderClass} batch-item" data-batch-index="${batchIndex++}" ${expired ? 'style="background-color: rgba(220, 53, 69, 0.08) !important; border-color: #dc3545 !important;"' : ''}>
+                        <div class="d-flex align-items-center flex-grow-1" style="min-width: 0;">
+                            <!-- Price & Batch -->
+                            <div class="d-flex flex-column justify-content-center" style="min-width: 140px;">
+                                <div class="fw-extrabold text-primary fs-5" style="font-family: 'JetBrains Mono', monospace; font-weight: 800;">₹${price.toFixed(2)}</div>
+                                <div class="mt-1">
+                                    <span class="badge ${expired ? 'bg-danger text-white' : 'bg-white text-dark'} border px-2 py-1" style="font-size: 0.78rem; font-family: 'JetBrains Mono', monospace;">B: ${batchNo}</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Expiry Date (Centered & Large) -->
+                            <div class="flex-grow-1 px-3 d-flex align-items-center">
+                                <span class="${expired ? 'text-danger fw-bold' : 'text-dark fw-semibold'}" style="font-size: 0.9rem;">
+                                    <i class="far fa-clock me-1 text-muted"></i>Exp: <strong style="font-size: 0.95rem; font-family: 'JetBrains Mono', monospace;">${expiry}</strong>
+                                    ${expired ? ' <span class="badge bg-danger text-white ms-1">EXPIRED</span>' : ''}
+                                </span>
+                            </div>
+                            
+                            <!-- Stock Qty Badge -->
+                            <div class="px-2">
+                                <span class="badge ${expired ? 'bg-danger' : (stock <= 0 ? 'bg-secondary' : (stock <= 5 ? 'bg-warning text-dark' : 'bg-success'))} text-white px-3 py-2 fw-bold" style="font-size: 0.88rem; font-family: 'JetBrains Mono', monospace;">
+                                    ${expired ? 'Expired' : stock + ' left'}
+                                </span>
                             </div>
                         </div>
-                        
-                        <!-- Expiry Date (Centered & Large) -->
-                        <div class="flex-grow-1 px-3 d-flex align-items-center">
-                            <span class="${expired ? 'text-danger fw-bold' : 'text-dark fw-semibold'}" style="font-size: 0.9rem;">
-                                <i class="far fa-clock me-1 text-muted"></i>Exp: <strong style="font-size: 0.95rem; font-family: 'JetBrains Mono', monospace;">${b.expiry}</strong>
-                                ${expired ? ' <span class="badge bg-danger text-white ms-1">EXPIRED</span>' : ''}
-                            </span>
+                        <div class="ps-2">
+                            ${btnHtml}
                         </div>
-                        
-                        <!-- Stock Qty Badge -->
-                        <div class="px-2">
-                            <span class="badge ${expired ? 'bg-danger' : (b.stock <= 0 ? 'bg-secondary' : (b.stock <= 5 ? 'bg-warning text-dark' : 'bg-success'))} text-white px-3 py-2 fw-bold" style="font-size: 0.88rem; font-family: 'JetBrains Mono', monospace;">
-                                ${expired ? 'Expired' : b.stock + ' left'}
-                            </span>
-                        </div>
-                    </div>
-                    <div class="ps-2">
-                        ${btnHtml}
-                    </div>
-                </div>`;
-            });
+                    </div>`;
+                });
 
-            productGroup.innerHTML = `
-                <div class="d-flex justify-content-between align-items-start mb-1">
-                    <div>
-                        <div class="fw-bold text-dark h6 mb-0">${product.name}</div>
-                        <div class="mt-1">${contentBadge}${companyBadge}</div>
-                        <div class="text-muted x-small mt-1">Packing: ${product.packing || '1'} | Factor: ${product.conversion_factor}</div>
-                    </div>
-                    <div class="d-flex flex-column align-items-end gap-1">
-                        <span class="badge bg-info-soft text-info x-small">${product.batches.length} Batch(es)</span>
-                        <div class="d-flex gap-1 mt-1">
-                            ${product.content ? `<button class="btn btn-outline-secondary btn-sm rounded-pill x-small px-2" onclick="openSubstitutes(${product.id}, '${product.name.replace(/'/g,"\\'").replace(/"/g,"&quot;")}')"><i class="fas fa-exchange-alt me-1"></i>Alt</button>` : ''}
-                            <button class="btn btn-outline-primary btn-sm rounded-pill x-small px-2" onclick="openProductHistoryInline(${product.id}, '${product.name.replace(/'/g,"\\'").replace(/"/g,"&quot;")}')"><i class="fas fa-history me-1"></i>History</button>
+                const safeNameForSub = prodName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                productGroup.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-start mb-1">
+                        <div>
+                            <div class="fw-bold text-dark h6 mb-0">${prodName}</div>
+                            <div class="mt-1">${contentBadge}${companyBadge}</div>
+                            <div class="text-muted x-small mt-1">Packing: ${prodPacking} | Factor: ${prodFactor}</div>
+                        </div>
+                        <div class="d-flex flex-column align-items-end gap-1">
+                            <span class="badge bg-info-soft text-info x-small">${batches.length} Batch(es)</span>
+                            <div class="d-flex gap-1 mt-1">
+                                ${prodContent ? `<button class="btn btn-outline-secondary btn-sm rounded-pill x-small px-2" onclick="openSubstitutes(${product.id}, '${safeNameForSub}')"><i class="fas fa-exchange-alt me-1"></i>Alt</button>` : ''}
+                                <button class="btn btn-outline-primary btn-sm rounded-pill x-small px-2" onclick="openProductHistoryInline(${product.id}, '${safeNameForSub}')"><i class="fas fa-history me-1"></i>History</button>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div class="batch-list">${batchesHtml}</div>
-            `;
-        });
-        resultsDiv.classList.remove('d-none');
+                    <div class="batch-list">${batchesHtml}</div>
+                `;
+                resultsDiv.appendChild(productGroup);
+            });
+            resultsDiv.classList.remove('d-none');
+        } catch (renderErr) {
+            console.error('[POS] Error in renderSearchResults:', renderErr);
+        }
     }
 
     searchInput.addEventListener('input', (e) => {
@@ -698,32 +726,29 @@
             return;
         }
 
-    _posDebounceTimer = setTimeout(async () => {
-        try {
-            // ── Immediately use offline cache if no connection ──
-            if (!navigator.onLine) {
-                const offlineResults = await OfflineSync.searchOfflineProducts(query, 'pos');
-                renderSearchResults(offlineResults);
-                return;
-            }
+        _posDebounceTimer = setTimeout(async () => {
+            try {
+                if (!navigator.onLine) {
+                    const offlineResults = await OfflineSync.searchOfflineProducts(query, 'pos');
+                    renderSearchResults(offlineResults);
+                    return;
+                }
 
-            const response = await fetch(`/api/products/search/?q=${encodeURIComponent(query)}`);
-            if (!response.ok) {
-                throw new Error('Offline');
+                const response = await fetch(`/api/products/search/?q=${encodeURIComponent(query)}`);
+                if (!response.ok) {
+                    throw new Error('Search request failed');
+                }
+                const data = await response.json();
+                _posSearchCache[query] = data;
+                renderSearchResults(data);
+            } catch (err) {
+                console.warn('[POS] Fetch error, using offline store:', err);
+                if (typeof OfflineSync !== 'undefined') {
+                    const offlineResults = await OfflineSync.searchOfflineProducts(query, 'pos');
+                    renderSearchResults(offlineResults);
+                }
             }
-            const data = await response.json();
-            
-            // Populate memory cache for 0ms subsequent search hits
-            _posSearchCache[query] = data;
-
-            renderSearchResults(data);
-        } catch (err) {
-            // Network failed — use cached data
-            const offlineResults = await OfflineSync.searchOfflineProducts(query, 'pos');
-            renderSearchResults(offlineResults);
-        }
-    }, 300);
-    
+        }, 250);
     });
 
     searchInput.addEventListener('focus', () => {
