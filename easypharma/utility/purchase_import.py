@@ -294,7 +294,7 @@ def parse_marg_format(rows, request):
             'tax_percentage':    float(tax_rate),
             'tax_amount':        float((purchase_price * quantity) * tax_rate / 100),
             'mrp':               float(mrp),
-            'sale_price':        float(mrp),
+            'sale_price':        round(float(mrp) / max(getattr(product, 'conversion_factor', 1) or 1, 1), 2),
             'total':             float(total_amount),
         })
 
@@ -452,7 +452,7 @@ def parse_micropro_format(rows, request):
                 'tax_percentage':    float(tax_rate),
                 'tax_amount':        float((purchase_price * quantity) * tax_rate / 100),
                 'mrp':               float(mrp),
-                'sale_price':        float(mrp),
+                'sale_price':        round(float(mrp) / max(getattr(product, 'conversion_factor', 1) or 1, 1), 2),
                 'total':             float(total_amount),
             })
 

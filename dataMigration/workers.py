@@ -726,6 +726,9 @@ def _bulk_import_stock(items, tenant, log_entry, total_items):
             qty = int(item.get('quantity') or 0)
             exp_date = item.get('expiry_date') or today_str
 
+            cf = getattr(prod_obj, 'conversion_factor', 1) or 1
+            unit_sale_price = round(mrp / cf, 2) if cf > 1 else mrp
+
             new_objs.append(StockBatch(
                 tenant=tenant,
                 product=prod_obj,
@@ -733,7 +736,7 @@ def _bulk_import_stock(items, tenant, log_entry, total_items):
                 expiry_date=exp_date,
                 purchase_price=purchase_price,
                 mrp=mrp,
-                sale_price=mrp,
+                sale_price=unit_sale_price,
                 initial_quantity=qty,
                 current_quantity=qty,
             ))
