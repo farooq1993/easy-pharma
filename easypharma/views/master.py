@@ -512,13 +512,17 @@ class AIProductAutoFillAPI(LoginRequiredMixin, View):
             )
 
             models_to_try = [
-                ("v1beta", "gemini-3.6-flash"),
-                ("v1beta", "gemini-3.5-flash-lite"),
-                ("v1beta", "gemini-flash-latest"),
-                ("v1beta", "gemini-flash-lite-latest"),
-                ("v1beta", "gemini-3.5-flash"),
                 ("v1beta", "gemini-3.1-flash-lite"),
+                ("v1beta", "gemini-3.5-flash-lite"),
+                ("v1beta", "gemini-3.1-flash-lite-preview"),
+                ("v1beta", "gemini-3.7-flash"),
+                ("v1beta", "gemini-3.5-flash"),
+                ("v1beta", "gemini-3-flash"),
+                ("v1beta", "gemini-3.6-flash"),
+                ("v1beta", "gemini-3.8-flash"),
                 ("v1beta", "gemini-2.5-flash"),
+                ("v1beta", "gemini-2.0-flash"),
+                ("v1beta", "gemini-1.5-flash"),
             ]
 
             headers = {'Content-Type': 'application/json'}

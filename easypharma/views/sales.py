@@ -901,23 +901,23 @@ class ProductSearchAPI(LoginRequiredMixin,View):
                 
             batch_list = []
             for batch in batches:
-                unit_price = float(batch.sale_price) if batch.sale_price else 0.0
                 if sale_type == 'strip':
-                    if cf > 1 and unit_price > 0:
-                        unit_price = unit_price * cf
-                    elif batch.mrp:
-                        unit_price = float(batch.mrp)
-                    
+                    unit_price = float(batch.mrp) if batch.mrp else float(batch.sale_price or 0.0)
                     if cf > 1:
                         strips = batch.current_quantity // cf
                         stock_qty = strips if strips > 0 else batch.current_quantity
                     else:
                         stock_qty = batch.current_quantity
                 else:
-                    if cf > 1 and batch.mrp and unit_price == 0:
-                        unit_price = float(batch.mrp) / cf
-                    elif unit_price == 0 and batch.mrp:
-                        unit_price = float(batch.mrp)
+                    if cf > 1:
+                        if batch.mrp:
+                            unit_price = round(float(batch.mrp) / cf, 2)
+                        elif batch.sale_price:
+                            unit_price = float(batch.sale_price)
+                        else:
+                            unit_price = 0.0
+                    else:
+                        unit_price = float(batch.mrp) if batch.mrp else float(batch.sale_price or 0.0)
                     stock_qty = batch.current_quantity
                 
                 batch_list.append({
@@ -1082,22 +1082,26 @@ class SubstituteSearchAPI(LoginRequiredMixin,View):
 
             batch_list = []
             for batch in batches:
-                unit_price = float(batch.sale_price) if batch.sale_price else 0.0
+                cf = p.conversion_factor or 1
                 if sale_type == 'strip':
-                    if p.conversion_factor > 1 and unit_price > 0:
-                        unit_price = unit_price * p.conversion_factor
-                    elif batch.mrp:
-                        unit_price = float(batch.mrp)
+                    unit_price = float(batch.mrp) if batch.mrp else float(batch.sale_price or 0.0)
+                    stock_qty = int(batch.current_quantity / cf) if cf > 1 else batch.current_quantity
                 else:
-                    if p.conversion_factor > 1 and batch.mrp:
-                        unit_price = float(batch.mrp) / p.conversion_factor
-                    elif unit_price == 0 and batch.mrp:
-                        unit_price = float(batch.mrp)
+                    if cf > 1:
+                        if batch.mrp:
+                            unit_price = round(float(batch.mrp) / cf, 2)
+                        elif batch.sale_price:
+                            unit_price = float(batch.sale_price)
+                        else:
+                            unit_price = 0.0
+                    else:
+                        unit_price = float(batch.mrp) if batch.mrp else float(batch.sale_price or 0.0)
+                    stock_qty = batch.current_quantity
                 batch_list.append({
                     'batch_id': batch.id,
                     'batch_no': batch.batch_number,
                     'expiry': batch.expiry_date.strftime('%m/%y'),
-                    'stock': int(batch.current_quantity / (p.conversion_factor or 1)) if sale_type == 'strip' else batch.current_quantity,
+                    'stock': stock_qty,
                     'price': unit_price,
                 })
             
@@ -1895,7 +1899,8 @@ class PrescriptionScanAPI(LoginRequiredMixin, View):
         except ValueError as ve:
             return JsonResponse({'success': False, 'error': str(ve)})
         except Exception as e:
-            return JsonResponse({'success': False, 'error': f'AI Scanning failed: {str(e)}'})
+            logger.error(f"AI Prescription Scan failed internally: {str(e)}", exc_info=True)
+            return JsonResponse({'success': False, 'error': 'AI Scanner could not read this prescription at the moment. Please ensure the photo is clear and try again.'})
             
         # 4. Success: Log the scan
         PrescriptionScanLog.objects.create(
@@ -1983,18 +1988,27 @@ class PrescriptionScanAPI(LoginRequiredMixin, View):
                 
                 batch_list = []
                 for batch in batches:
-                    unit_price = float(batch.sale_price) if batch.sale_price else 0.0
-                    eff_cf = 1 if sale_type == "strip" else p.conversion_factor
-                    if eff_cf > 1 and batch.mrp:
-                        unit_price = float(batch.mrp) / eff_cf
-                    elif unit_price == 0 and batch.mrp:
-                        unit_price = float(batch.mrp)
+                    cf = p.conversion_factor or 1
+                    if sale_type == 'strip':
+                        unit_price = float(batch.mrp) if batch.mrp else float(batch.sale_price or 0.0)
+                        stock_qty = int(batch.current_quantity / cf) if cf > 1 else batch.current_quantity
+                    else:
+                        if cf > 1:
+                            if batch.mrp:
+                                unit_price = round(float(batch.mrp) / cf, 2)
+                            elif batch.sale_price:
+                                unit_price = float(batch.sale_price)
+                            else:
+                                unit_price = 0.0
+                        else:
+                            unit_price = float(batch.mrp) if batch.mrp else float(batch.sale_price or 0.0)
+                        stock_qty = batch.current_quantity
                         
                     batch_list.append({
                         'batch_id': batch.id,
                         'batch_no': batch.batch_number,
                         'expiry': batch.expiry_date.strftime('%m/%y') if batch.expiry_date else '',
-                        'stock': int(batch.current_quantity / (p.conversion_factor or 1)) if sale_type == 'strip' else batch.current_quantity,
+                        'stock': stock_qty,
                         'price': unit_price,
                         'mrp_pack': float(batch.mrp) if batch.mrp else 0.0
                     })

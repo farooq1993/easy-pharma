@@ -30,7 +30,18 @@ def get_gemini_api_keys():
     Returns a list of clean API keys configured in environment.
     Supports single or multiple comma/semicolon/newline-separated keys for 100% free multi-key rotation.
     """
-    raw = config('GEMINI_API_KEY', default='') or os.getenv('GEMINI_API_KEY', '') or getattr(settings, 'GEMINI_API_KEY', '')
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    for env_candidate in [
+        os.path.join(current_dir, '..', '..', 'pharmaProject', '.env'),
+        os.path.join(current_dir, '..', '..', '.env'),
+        os.path.join(current_dir, '..', '.env'),
+        '/var/www/easypharma/.env',
+        '/var/www/easypharma/pharmaProject/.env',
+    ]:
+        if os.path.exists(env_candidate):
+            load_dotenv(env_candidate, override=True)
+
+    raw = os.getenv('GEMINI_API_KEY', '') or config('GEMINI_API_KEY', default='') or getattr(settings, 'GEMINI_API_KEY', '')
     if not raw:
         return []
     
@@ -42,7 +53,7 @@ def get_gemini_api_keys():
             clean_keys.append(k)
     return clean_keys
 
-def _prepare_and_optimize_image(image_file, max_dimension=1600, quality=82):
+def _prepare_and_optimize_image(image_file, max_dimension=2048, quality=88):
     """
     Optimizes and compresses image before base64 encoding to speed up upload & AI processing by 80-90%.
     """
@@ -78,10 +89,10 @@ def _prepare_and_optimize_image(image_file, max_dimension=1600, quality=82):
         logger.warning(f"Image optimization fallback: {e}")
         return base64.b64encode(image_data).decode('utf-8')
 
-def _call_ai_vision_api(api_keys, payload, timeout=45):
+def _call_ai_vision_api(api_keys, payload, timeout=8):
     """
-    Calls the fastest active Gemini Vision endpoints with multi-key rotation,
-    exponential backoff & jitter for 503 high demand spikes, and rapid key failover for 429 quota exhaustion.
+    Calls the fastest active Gemini Vision endpoints with multi-key rotation
+    and sub-second failover across active models.
     """
     if isinstance(api_keys, str):
         api_keys = [api_keys] if api_keys else []
@@ -92,70 +103,66 @@ def _call_ai_vision_api(api_keys, payload, timeout=45):
         logger.error("No valid Gemini API key found.")
         raise ValueError("AI Bill Scanner service is not configured. Please add GEMINI_API_KEY in settings or .env.")
 
-    # High-quota Free Tier models in order of speed and stability
+    # NOTE: gemini-1.5-flash, 2.0-flash, 2.5-flash, 1.5-pro all return 404 on this project
+    # Only gemini-3.x models are available on Google AI Studio free tier project
+    # (api_version, model_name, timeout_seconds)
     models_to_try = [
-        ("v1beta", "gemini-3.1-flash-lite-preview"),  # Ultra fast, 1,000 req/day free
-        ("v1beta", "gemini-3-flash-preview"),        # 250 req/day free
-        ("v1beta", "gemini-3.1-flash-lite"),        # Fallback alias
-        ("v1beta", "gemini-flash-lite-latest"),     # Dynamic latest
-        ("v1beta", "gemini-3.5-flash-lite"),
-        ("v1beta", "gemini-3.6-flash"),
-        ("v1beta", "gemini-flash-latest"),
-        ("v1beta", "gemini-3.5-flash"),
+        ("v1beta", "gemini-3.5-flash-lite",  90),  # WORKS ✓ - needs long timeout (~44s under load)
+        ("v1beta", "gemini-3.1-flash-lite",   5),  # Try fast, 503 pe instantly skip
+        ("v1beta", "gemini-3.5-flash",         5),  # Try fast, 503 pe instantly skip
+        ("v1beta", "gemini-3.7-flash",         5),  # Try fast, 503 pe instantly skip
     ]
 
     headers = {'Content-Type': 'application/json'}
     last_error = None
     response = None
 
-    for key_idx, api_key in enumerate(api_keys):
-        for api_version, model_name in models_to_try:
+    # Load-balance across multiple API keys for concurrent users
+    shuffled_keys = list(api_keys)
+    random.shuffle(shuffled_keys)
+    logger.info(f"AI OCR starting scan with {len(shuffled_keys)} active API key(s)")
+
+    for key_idx, api_key in enumerate(shuffled_keys):
+        for api_version, model_name, model_timeout in models_to_try:
             url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model_name}:generateContent?key={api_key}"
             
-            # Max 2 attempts per model with exponential backoff on 503 (High Demand)
-            max_retries = 2
-            for attempt in range(max_retries):
-                try:
-                    res = requests.post(url, headers=headers, json=payload, timeout=timeout)
-                    if res.status_code == 200:
-                        response = res
-                        break
-                    elif res.status_code == 503:
-                        # Temporary high demand on Google server - backoff with jitter
-                        sleep_time = (1.5 * (attempt + 1)) + random.uniform(0.3, 0.8)
-                        last_error = f"Key #{key_idx+1} {model_name} status 503 (High Demand). Retrying in {sleep_time:.2f}s..."
-                        logger.warning(last_error)
-                        time.sleep(sleep_time)
-                    elif res.status_code == 429:
-                        # Quota exceeded for this key, switch key immediately without retrying this key
-                        last_error = f"Key #{key_idx+1} {model_name} status 429 (Quota exceeded)"
-                        logger.warning(last_error)
-                        break
-                    elif res.status_code == 404:
-                        # Model name not supported on this endpoint version
-                        last_error = f"Key #{key_idx+1} {model_name} status 404 (Not Found)"
-                        break
-                    else:
-                        last_error = f"Key #{key_idx+1} {model_name} status {res.status_code}: {res.text[:150]}"
-                        logger.warning(f"AI Vision attempt error: {last_error}")
-                        break
-                except requests.exceptions.Timeout:
-                    last_error = f"Key #{key_idx+1} {model_name} timed out after {timeout}s"
+            try:
+                res = requests.post(url, headers=headers, json=payload, timeout=model_timeout)
+                if res.status_code == 200:
+                    logger.info(f"AI OCR success: Key #{key_idx+1} {model_name} ({api_version})")
+                    response = res
+                    break
+                elif res.status_code == 429:
+                    last_error = f"Key #{key_idx+1} {model_name} rate limited (429): {res.text[:100]}"
                     logger.warning(last_error)
-                    break
-                except Exception as e:
-                    last_error = f"Key #{key_idx+1} {model_name} exception: {str(e)}"
-                    logger.warning(f"AI Vision request exception: {last_error}")
-                    break
+                    continue
+                elif res.status_code == 503:
+                    last_error = f"Key #{key_idx+1} {model_name} busy (503): {res.text[:100]}"
+                    logger.warning(last_error)
+                    continue
+                elif res.status_code == 404:
+                    last_error = f"Key #{key_idx+1} {model_name} ({api_version}) not found (404)"
+                    logger.debug(last_error)
+                    continue
+                else:
+                    last_error = f"Key #{key_idx+1} {model_name} status {res.status_code}: {res.text[:100]}"
+                    logger.warning(f"AI OCR attempt note: {last_error}")
+                    continue
+            except requests.exceptions.Timeout:
+                last_error = f"Key #{key_idx+1} {model_name} timed out after {model_timeout}s"
+                logger.warning(last_error)
+                continue
+            except Exception as e:
+                last_error = f"Key #{key_idx+1} {model_name} exception: {str(e)}"
+                logger.warning(f"AI OCR connection error: {last_error}")
+                continue
 
-            if response and response.status_code == 200:
-                break
         if response and response.status_code == 200:
             break
 
     if not response or response.status_code != 200:
         logger.error(f"AI Vision request failed across all keys and models. Last details: {last_error}")
-        raise Exception("AI OCR engine is currently busy or unable to process this document. Please ensure the image is clear and try again.")
+        raise Exception(f"AI OCR service is temporarily busy. Last developer note: {last_error}")
 
     return response
 
@@ -236,7 +243,7 @@ def extract_purchase_bill_data(image_file):
         }
     }
 
-    response = _call_ai_vision_api(api_keys, payload, timeout=45)
+    response = _call_ai_vision_api(api_keys, payload, timeout=8)
 
     resp_json = response.json()
     try:

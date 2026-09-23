@@ -1753,7 +1753,7 @@ class PurchaseScanAPI(LoginRequiredMixin, View):
             return JsonResponse({'success': False, 'error': str(ve)})
         except Exception as e:
             logger.error(f"AI Scan failed internally: {str(e)}", exc_info=True)
-            return JsonResponse({'success': False, 'error': 'AI Scanning could not read the bill image. Please ensure the document is clear, flat, and well-lit, then try again.'})
+            return JsonResponse({'success': False, 'error': 'AI Scanner could not read this bill image at the moment. Please ensure the photo is clear, flat, and try again in a few moments.'})
             
         # 4. Success: Log the scan
         PurchaseScanLog.objects.create(
@@ -1832,21 +1832,23 @@ class PurchaseScanAPI(LoginRequiredMixin, View):
                 product = find_product(request.tenant, name)
             if product:
                 tax_rate = getattr(getattr(product, 'product_tax', None), 'tax_rate', tax_percentage)
+                cf = getattr(product, 'conversion_factor', 1) or 1
+                unit_sale_price = round(mrp / cf, 2) if cf > 1 else mrp
                 matched_items.append({
                     'product_id': product.id,
                     'name': product.product_name,
                     'packing': getattr(product, 'product_packing', ''),
-                    'conversion_factor': getattr(product, 'conversion_factor', 1),
+                    'conversion_factor': cf,
                     'batch_number': batch_number,
                     'expiry_date': expiry_date,
                     'quantity': quantity,
                     'free_quantity': free_quantity,
-                    'total_units': (quantity + free_quantity) * getattr(product, 'conversion_factor', 1),
+                    'total_units': (quantity + free_quantity) * cf,
                     'purchase_price': purchase_price,
                     'tax_percentage': float(tax_rate),
                     'tax_amount': (purchase_price * quantity) * float(tax_rate) / 100.0,
                     'mrp': mrp,
-                    'sale_price': mrp,
+                    'sale_price': unit_sale_price,
                     'total': total,
                 })
             else:
