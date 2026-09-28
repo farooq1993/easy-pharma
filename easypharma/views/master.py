@@ -271,11 +271,24 @@ class ProductCreate(LoginRequiredMixin,View):
             # Ensure conversion factor is at least 1 and handled correctly if empty
             try:
                 conv_val = request.POST.get("conversion_factor")
-                product.conversion_factor = int(conv_val) if conv_val and int(conv_val) > 0 else 1
+                new_cf = int(conv_val) if conv_val and int(conv_val) > 0 else 1
             except (ValueError, TypeError):
-                product.conversion_factor = 1
+                new_cf = 1
                 
+            product.conversion_factor = new_cf
             product.save()
+
+            if product_id:
+                from decimal import Decimal
+                from easypharma.models.stock import StockBatch
+                from easypharma.views.reports import invalidate_stock_cache, invalidate_daily_sale_cache
+                # Sync all batches sale_price for this product
+                for b in StockBatch.objects.filter(product=product, tenant=request.tenant):
+                    if b.mrp:
+                        b.sale_price = round(Decimal(str(b.mrp)) / Decimal(str(new_cf)), 2)
+                        b.save(update_fields=['sale_price'])
+                invalidate_stock_cache(request.tenant.id)
+                invalidate_daily_sale_cache(request.tenant.id)
             
             messages.success(request, f"Product {'updated' if product_id else 'added'} successfully.")
         except Exception as e:

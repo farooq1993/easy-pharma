@@ -5,6 +5,21 @@
 <link rel="stylesheet" href="{% static 'css/customecss/pos.css' %}">
 
 <div class="py-2">
+    <!-- Breadcrumb & Back Bar -->
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-0" style="font-size: 0.85rem;">
+                <li class="breadcrumb-item"><a href="{% url 'pos_list' %}" class="text-decoration-none text-muted"><i class="fas fa-file-invoice-dollar me-1"></i>Sales</a></li>
+                <li class="breadcrumb-item active text-primary fw-semibold" aria-current="page">New Sale (POS)</li>
+            </ol>
+        </nav>
+        <div class="d-flex align-items-center gap-2">
+            <a href="{% url 'pos_list' %}" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 fw-bold shadow-sm" id="posBackBtn" title="Back to Sales List (Press Esc)">
+                <i class="fas fa-arrow-left me-1"></i> Back to Sales <span class="badge bg-light text-dark border ms-1 x-small fw-normal">Esc</span>
+            </a>
+        </div>
+    </div>
+
     <!-- Mode Notice Banner -->
     <div id="counterSaleBanner" class="alert alert-info border-0 shadow-sm rounded-4 d-none align-items-center gap-3 mb-3 p-3 animate-fade-in">
         <div class="rounded-circle bg-white p-2 d-flex align-items-center justify-content-center text-primary shadow-sm" style="width: 40px; height: 40px;">

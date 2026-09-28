@@ -810,7 +810,7 @@ class SaleListView(LoginRequiredMixin, View):
 
 class ProductSearchAPI(LoginRequiredMixin,View):
 
-    CACHE_TIMEOUT = 120  # 2 minutes — short enough that new stock shows quickly
+    CACHE_TIMEOUT = 300  # 5 minutes TTL — caches tenant batch-wise stock efficiently
 
     @staticmethod
     def _cache_key(tenant_id, query):
@@ -821,16 +821,18 @@ class ProductSearchAPI(LoginRequiredMixin,View):
 
     def get(self, request):
         query = request.GET.get('q', '').strip()
-        limit_str = request.GET.get('limit', '10')
-        try:
-            limit = int(limit_str)
-        except ValueError:
-            limit = 10
+        limit_str = request.GET.get('limit')
+        limit = None
+        if limit_str:
+            try:
+                limit = int(limit_str)
+            except ValueError:
+                limit = None
         tenant_id = request.tenant.id
         
-        # Include limit in cache key if preloading/limiting
-        cache_key = f"{self._cache_key(tenant_id, query)}:lim{limit}"
-
+        # Include limit in cache key if limiting
+        lim_part = f":lim{limit}" if limit else ""
+        cache_key = f"{self._cache_key(tenant_id, query)}{lim_part}"
 
         setup = GeneralSetup.objects.filter(tenant_id=tenant_id).first()
         sale_type = setup.sale_type if setup else 'unit'
@@ -859,8 +861,11 @@ class ProductSearchAPI(LoginRequiredMixin,View):
                 Q(product_content__content_name__icontains=query) |
                 Q(compny_name__company_name__icontains=query)
             )
+        else:
+            # If no search query, load all products with active batch-wise stock for the tenant
+            qs = qs.filter(Exists(active_batches))
 
-        products = qs.annotate(
+        products_qs = qs.annotate(
             has_stock=Exists(active_batches)
         ).order_by('-has_stock', 'product_name').select_related(
             'product_tax', 'product_content', 'compny_name', 'product_schedule'
@@ -878,7 +883,12 @@ class ProductSearchAPI(LoginRequiredMixin,View):
             'id', 'product_name', 'product_packing', 'conversion_factor',
             'product_content__content_name', 'product_schedule__schedule_name',
             'compny_name__company_name', 'product_tax__tax_rate'
-        )[:limit]
+        )
+
+        if limit:
+            products = products_qs[:limit]
+        else:
+            products = products_qs
         data = []
         for p in products:
             batches = list(p.batches.all())

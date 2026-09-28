@@ -8,191 +8,220 @@
             <h2 class="fw-bold mb-0">Stock Inventory Report</h2>
             <p class="text-muted small">Real-time tracking of medicine batches and quantities.</p>
         </div>
-        <div class="col-auto d-flex align-items-center gap-2">
-            <form method="GET" class="d-flex align-items-center gap-2">
-                <input type="text" name="search" class="form-control" placeholder="Search item..." value="{{ search_query }}">
-                <select name="filter" class="form-select" onchange="this.form.submit()">
-                    <option value="">-- All Batches --</option>
-                    <option value="near_expiry" {% if filter_param == 'near_expiry' %}selected{% endif %}>⚠️ Expiring Soon (Next 90 Days)</option>
-                </select>
-                <select name="schedule_filter" class="form-select" onchange="this.form.submit()">
-                    <option value="">-- All Schedules --</option>
-                    <option value="H1" {% if schedule_filter == 'H1' %}selected{% endif %}>Schedule H1 Only</option>
-                </select>
-                <button type="submit" class="btn btn-primary d-none">Search</button>
-            </form>
-            <a href="?pdf=1&search={{ search_query }}&filter={{ filter_param }}&schedule_filter={{ schedule_filter }}" class="btn btn-outline-danger shadow-sm" target="_blank">
-                <i class="fas fa-file-pdf"></i> PDF
-            </a>
-            <a href="?csv=1&search={{ search_query }}&filter={{ filter_param }}&schedule_filter={{ schedule_filter }}" class="btn btn-outline-success shadow-sm">
-                <i class="fas fa-file-csv"></i> CSV
-            </a>
-            <button class="btn btn-outline-primary shadow-sm" onclick="window.print()">
-                <i class="fas fa-print"></i> Print
-            </button>
-        </div>
-    </div>
-
-    <!-- Summary Cards -->
-    <div class="row g-3 mb-4">
-        <div class="col-md-4">
-            <div class="card border-0 shadow-sm rounded-4 bg-success text-white">
-                <div class="card-body p-4">
-                    <div class="small opacity-75 text-uppercase fw-bold">Active Batches</div>
-                    <div class="h2 fw-bold mb-0">{{ page_obj.paginator.count }}</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card border-0 shadow-sm rounded-4 bg-info text-white">
-                <div class="card-body p-4">
-                    <div class="small opacity-75 text-uppercase fw-bold">Total Stock Value</div>
-                    <div class="h2 fw-bold mb-0">₹ {{ total_value|floatformat:2 }}</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card border-0 shadow-sm rounded-4 bg-warning text-white">
-                <div class="card-body p-4">
-                    <div class="small opacity-75 text-uppercase fw-bold">Total MRP Value</div>
-                    <div class="h2 fw-bold mb-0">₹ {{ total_mrp_value|floatformat:2 }}</div>
+        <div class="col-12 col-lg-auto mt-3 mt-lg-0">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <form id="stockFilterForm" method="GET" class="d-flex flex-wrap align-items-center gap-2 no-loader flex-grow-1" onsubmit="event.preventDefault(); performLiveSearch();">
+                    <div class="position-relative flex-grow-1" style="min-width: 200px;">
+                        <input type="text" id="stockSearchInput" name="search" class="form-control pe-4 search-input-touch" placeholder="Search medicine or batch..." value="{{ search_query }}" autocomplete="off">
+                        <button type="button" id="clearSearchBtn" class="btn btn-sm btn-link text-muted position-absolute end-0 top-50 translate-middle-y text-decoration-none p-0 me-2 {% if not search_query %}d-none{% endif %}" onclick="clearSearch()" title="Clear search">
+                            <i class="fas fa-times-circle"></i>
+                        </button>
+                    </div>
+                    <select id="filterSelect" name="filter" class="form-select select-touch flex-grow-1" style="min-width: 160px;" onchange="performLiveSearch()">
+                        <option value="" {% if not filter_param %}selected{% endif %}>In Stock Batches</option>
+                        <option value="all" {% if filter_param == 'all' %}selected{% endif %}>All Batches (Inc. 0 Stock)</option>
+                        <option value="zero_stock" {% if filter_param == 'zero_stock' %}selected{% endif %}>🚫 Out of Stock (0 Stock)</option>
+                        <option value="near_expiry" {% if filter_param == 'near_expiry' %}selected{% endif %}>⚠️ Expiring Soon (Next 90 Days)</option>
+                    </select>
+                    <select id="scheduleFilterSelect" name="schedule_filter" class="form-select select-touch flex-grow-1" style="min-width: 140px;" onchange="performLiveSearch()">
+                        <option value="">-- All Schedules --</option>
+                        <option value="H1" {% if schedule_filter == 'H1' %}selected{% endif %}>Schedule H1 Only</option>
+                    </select>
+                    <button type="submit" class="btn btn-primary d-none">Search</button>
+                </form>
+                <div class="d-flex align-items-center gap-1">
+                    <a id="pdfExportBtn" href="?pdf=1&search={{ search_query }}&filter={{ filter_param }}&schedule_filter={{ schedule_filter }}" class="btn btn-outline-danger shadow-sm no-loader btn-action-touch" target="_blank" title="Export PDF">
+                        <i class="fas fa-file-pdf"></i> <span class="d-none d-sm-inline">PDF</span>
+                    </a>
+                    <a id="csvExportBtn" href="?csv=1&search={{ search_query }}&filter={{ filter_param }}&schedule_filter={{ schedule_filter }}" class="btn btn-outline-success shadow-sm no-loader btn-action-touch" title="Export CSV">
+                        <i class="fas fa-file-csv"></i> <span class="d-none d-sm-inline">CSV</span>
+                    </a>
+                    <button class="btn btn-outline-primary shadow-sm btn-action-touch" onclick="window.print()" title="Print">
+                        <i class="fas fa-print"></i> <span class="d-none d-sm-inline">Print</span>
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Detailed Stock Table -->
-    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
-        <div class="card-header bg-white border-0 py-3">
-            <h6 class="fw-bold mb-0">Batch-wise Stock Details</h6>
-        </div>
-        <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="bg-light text-muted small text-uppercase">
-                        <tr>
-                            <th class="ps-4">Medicine Name</th>
-                            <th>Packing</th>
-                            <th>Batch No.</th>
-                            <th>Expiry</th>
-                            <th>Current Stock (Units)</th>
-                            <th>MRP Rate (Unit)</th>
-                            <th>Status</th>
-                            <th class="text-end pe-4">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for stock in stocks %}
-                        <tr>
-                            <td class="ps-4 fw-bold text-dark">{{ stock.product.product_name }}</td>
-                            <td>{{ stock.product.product_packing }}</td>
-                            <td><span class="badge bg-light text-dark border">{{ stock.batch_number }}</span></td>
-                            <td>
-                                <span class="{% if stock.is_expired %}text-danger fw-bold{% endif %}">
-                                    {{ stock.expiry_date|date:"m/Y" }}
-                                </span>
-                            </td>
-                            <td class="fw-bold text-success">{{ stock.current_quantity }}</td>
-                            <td>₹{{ stock.mrp_rate_per_unit|floatformat:2 }}</td>
-                            <td>
-                                {% if stock.current_quantity <= stock.product.conversion_factor %}
-                                <span class="badge bg-warning text-dark">Low Stock</span>
-                                {% else %}
-                                <span class="badge bg-success-soft text-success">Available</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-end pe-4">
-                                <button type="button" class="btn btn-sm btn-outline-primary border-0 rounded-pill px-2 py-1" 
-                                        style="font-size:0.78rem;" 
-                                        onclick="openEditBatchModal('{{ stock.id }}', '{{ stock.product.product_name|escapejs }}', '{{ stock.batch_number|escapejs }}', '{{ stock.expiry_date|date:'m/Y' }}', '{{ stock.mrp }}', '{{ stock.sale_price }}', '{{ stock.current_quantity }}')" 
-                                        title="Edit Batch Details">
-                                    <i class="fas fa-edit"></i> Edit
-                                </button>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="11" class="text-center py-5 text-muted">No stock available. Record a purchase to add inventory.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+    <!-- Results Container for AJAX Updates -->
+    <div id="stockResultsContainer">
+        <!-- Summary Cards -->
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-md-4">
+                <div class="card border-0 shadow-sm rounded-4 bg-success text-white">
+                    <div class="card-body p-3 p-md-4">
+                        <div class="small opacity-75 text-uppercase fw-bold">Active Batches</div>
+                        <div class="h2 fw-bold mb-0">{{ page_obj.paginator.count }}</div>
+                    </div>
+                </div>
             </div>
-            
-            {% if page_obj.has_other_pages %}
-            <div class="px-4 py-3 border-top">
-                <nav>
-                    <ul class="pagination pagination-sm mb-0 justify-content-end">
-                        {% if page_obj.has_previous %}
-                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&search={{ search_query }}&filter={{ filter_param }}&schedule_filter={{ schedule_filter }}">Previous</a></li>
-                        {% else %}
-                        <li class="page-item disabled"><a class="page-link" href="#">Previous</a></li>
-                        {% endif %}
-                        
-                        {% for num in page_obj.paginator.page_range %}
-                            {% if page_obj.number == num %}
-                                <li class="page-item active"><a class="page-link" href="#">{{ num }}</a></li>
-                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                                <li class="page-item"><a class="page-link" href="?page={{ num }}&search={{ search_query }}&filter={{ filter_param }}&schedule_filter={{ schedule_filter }}">{{ num }}</a></li>
+            <div class="col-12 col-md-4">
+                <div class="card border-0 shadow-sm rounded-4 bg-info text-white">
+                    <div class="card-body p-3 p-md-4">
+                        <div class="small opacity-75 text-uppercase fw-bold">Total Stock Value</div>
+                        <div class="h2 fw-bold mb-0">₹ {{ total_value|floatformat:2 }}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-md-4">
+                <div class="card border-0 shadow-sm rounded-4 bg-warning text-white">
+                    <div class="card-body p-3 p-md-4">
+                        <div class="small opacity-75 text-uppercase fw-bold">Total MRP Value</div>
+                        <div class="h2 fw-bold mb-0">₹ {{ total_mrp_value|floatformat:2 }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detailed Stock Table -->
+        <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+            <div class="card-header bg-white border-0 py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <h6 class="fw-bold mb-0"><i class="fas fa-boxes me-2 text-primary"></i>Batch-wise Stock Details</h6>
+                {% if search_query %}
+                <span class="badge bg-light text-primary border px-3 py-2 rounded-pill">Found {{ page_obj.paginator.count }} batch results for "{{ search_query }}"</span>
+                {% endif %}
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="-webkit-overflow-scrolling: touch;">
+                    <table class="table table-hover align-middle mb-0 stock-table-responsive">
+                        <thead class="bg-light text-muted small text-uppercase">
+                            <tr>
+                                <th class="ps-3 ps-md-4">Medicine Name</th>
+                                <th>Packing</th>
+                                <th>Batch No.</th>
+                                <th>Expiry</th>
+                                <th>Current Stock (Units)</th>
+                                <th>MRP Rate (Unit)</th>
+                                <th>Status</th>
+                                <th class="text-end pe-3 pe-md-4">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for stock in stocks %}
+                            <tr>
+                                <td class="ps-3 ps-md-4 fw-bold text-dark medicine-name-cell">{{ stock.product.product_name }}</td>
+                                <td class="text-nowrap">{{ stock.product.product_packing }}</td>
+                                <td><span class="badge bg-light text-dark border px-2 py-1 font-monospace">{{ stock.batch_number }}</span></td>
+                                <td class="text-nowrap">
+                                    <span class="{% if stock.is_expired %}text-danger fw-bold{% endif %}">
+                                        {{ stock.expiry_date|date:"m/Y" }}
+                                    </span>
+                                </td>
+                                <td class="fw-bold {% if stock.current_quantity <= 0 %}text-danger{% else %}text-success{% endif %}">
+                                    {{ stock.current_quantity }}
+                                </td>
+                                <td class="text-nowrap">₹{{ stock.mrp_rate_per_unit|floatformat:2 }}</td>
+                                <td>
+                                    {% if stock.current_quantity <= 0 %}
+                                    <span class="badge bg-danger rounded-pill px-2 py-1">Out of Stock (0)</span>
+                                    {% elif stock.current_quantity <= stock.product.conversion_factor %}
+                                    <span class="badge bg-warning text-dark rounded-pill px-2 py-1">Low Stock</span>
+                                    {% else %}
+                                    <span class="badge bg-success-soft text-success rounded-pill px-2 py-1">Available</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end pe-3 pe-md-4">
+                                    <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 py-1 btn-edit-touch" 
+                                            onclick="openEditBatchModal('{{ stock.id }}', '{{ stock.product.product_name|escapejs }}', '{{ stock.batch_number|escapejs }}', '{{ stock.expiry_date|date:'m/Y' }}', '{{ stock.mrp }}', '{{ stock.sale_price }}', '{{ stock.current_quantity }}', '{{ stock.product.conversion_factor|default:1 }}')" 
+                                            title="Edit Batch Details">
+                                        <i class="fas fa-edit me-1"></i> Edit
+                                    </button>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="11" class="text-center py-5 text-muted">
+                                    <i class="fas fa-box-open fa-2x mb-2 d-block text-secondary opacity-50"></i>
+                                    {% if search_query %}
+                                    No matching medicine or batch found for "<strong>{{ search_query }}</strong>".
+                                    {% else %}
+                                    No stock available. Record a purchase or opening stock to add inventory.
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                {% if page_obj.has_other_pages %}
+                <div class="px-3 px-md-4 py-3 border-top">
+                    <nav>
+                        <ul class="pagination pagination-sm mb-0 justify-content-center justify-content-md-end flex-wrap gap-1">
+                            {% if page_obj.has_previous %}
+                            <li class="page-item"><a class="page-link rounded-2" href="javascript:void(0)" onclick="goToPage('{{ page_obj.previous_page_number }}')">Previous</a></li>
+                            {% else %}
+                            <li class="page-item disabled"><a class="page-link rounded-2" href="#">Previous</a></li>
                             {% endif %}
-                        {% endfor %}
-                        
-                        {% if page_obj.has_next %}
-                        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&search={{ search_query }}&filter={{ filter_param }}&schedule_filter={{ schedule_filter }}">Next</a></li>
-                        {% else %}
-                        <li class="page-item disabled"><a class="page-link" href="#">Next</a></li>
-                        {% endif %}
-                    </ul>
-                </nav>
+                            
+                            {% for num in page_obj.paginator.page_range %}
+                                {% if page_obj.number == num %}
+                                    <li class="page-item active"><a class="page-link rounded-2" href="#">{{ num }}</a></li>
+                                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                    <li class="page-item"><a class="page-link rounded-2" href="javascript:void(0)" onclick="goToPage('{{ num }}')">{{ num }}</a></li>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if page_obj.has_next %}
+                            <li class="page-item"><a class="page-link rounded-2" href="javascript:void(0)" onclick="goToPage('{{ page_obj.next_page_number }}')">Next</a></li>
+                            {% else %}
+                            <li class="page-item disabled"><a class="page-link rounded-2" href="#">Next</a></li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                </div>
+                {% endif %}
             </div>
-            {% endif %}
         </div>
     </div>
 </div>
 
 <!-- Edit Batch Modal -->
 <div class="modal fade" id="editBatchModal" tabindex="-1" aria-labelledby="editBatchModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content rounded-4 border-0 shadow-lg">
             <div class="modal-header border-0 py-3" style="background:linear-gradient(135deg,#3b82f6 0%,#1d4ed8 100%);">
-                <h5 class="modal-title fw-bold text-white" id="editBatchModalLabel"><i class="fas fa-edit me-2"></i>Edit Batch Details</h5>
+                <h5 class="modal-title fw-bold text-white fs-5" id="editBatchModalLabel"><i class="fas fa-edit me-2"></i>Edit Batch Details</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form id="editBatchForm">
-                <div class="modal-body p-4">
+                <div class="modal-body p-3 p-md-4">
                     <input type="hidden" id="editBatchId" name="batch_id">
+                    <input type="hidden" id="editConversionFactor" value="1">
                     <div class="mb-3">
                         <label class="form-label text-muted small fw-bold">Medicine Name</label>
-                        <input type="text" class="form-control bg-light" id="editProductLabel" readonly style="border-radius:10px;">
+                        <input type="text" class="form-control bg-light input-touch" id="editProductLabel" readonly style="border-radius:10px;">
                     </div>
                     <div class="row g-3 mb-3">
-                        <div class="col-md-6">
+                        <div class="col-12 col-sm-6">
                             <label for="editBatchNumber" class="form-label text-muted small fw-bold">Batch Number</label>
-                            <input type="text" class="form-control rounded-3" id="editBatchNumber" name="batch_number" required style="border-radius:10px;">
+                            <input type="text" class="form-control input-touch" id="editBatchNumber" name="batch_number" required style="border-radius:10px;">
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-12 col-sm-6">
                             <label for="editExpiryDate" class="form-label text-muted small fw-bold">Expiry (MM/YY or MM/YYYY)</label>
-                            <input type="text" class="form-control rounded-3" id="editExpiryDate" name="expiry_date" placeholder="MM/YY" required style="border-radius:10px;">
+                            <input type="text" class="form-control input-touch" id="editExpiryDate" name="expiry_date" placeholder="MM/YY" required style="border-radius:10px;">
                         </div>
                     </div>
                     <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label for="editMRP" class="form-label text-muted small fw-bold">MRP (per pack)</label>
-                            <input type="number" step="0.01" class="form-control rounded-3" id="editMRP" name="mrp" style="border-radius:10px;">
+                        <div class="col-12 col-sm-6">
+                            <label for="editMRP" class="form-label text-muted small fw-bold">MRP (per pack / strip)</label>
+                            <input type="number" step="0.01" class="form-control input-touch" id="editMRP" name="mrp" style="border-radius:10px;" oninput="updateUnitHint()">
+                            <div id="editUnitMrpHint" class="text-primary mt-1 fw-bold" style="font-size:0.75rem;"></div>
                         </div>
-                        <div class="col-md-6">
-                            <label for="editSalePrice" class="form-label text-muted small fw-bold">Sale Price (per pack)</label>
-                            <input type="number" step="0.01" class="form-control rounded-3" id="editSalePrice" name="sale_price" style="border-radius:10px;">
+                        <div class="col-12 col-sm-6">
+                            <label for="editSalePrice" class="form-label text-muted small fw-bold">Sale Price (per tablet / unit)</label>
+                            <input type="number" step="0.01" class="form-control input-touch" id="editSalePrice" name="sale_price" style="border-radius:10px;">
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label for="editCurrentQuantity" class="form-label text-muted small fw-bold">Current Stock Quantity (in units)</label>
-                        <input type="number" class="form-control rounded-3" id="editCurrentQuantity" name="current_quantity" style="border-radius:10px;">
+                        <label for="editCurrentQuantity" class="form-label text-muted small fw-bold">Current Stock Quantity (in units / tablets)</label>
+                        <input type="number" class="form-control input-touch" id="editCurrentQuantity" name="current_quantity" style="border-radius:10px;">
                     </div>
                 </div>
-                <div class="modal-footer border-0 px-4 pb-4 pt-0">
-                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary rounded-pill px-4 shadow-sm" id="saveBatchBtn" style="background:#2563eb; border-color:#2563eb;">Save Changes</button>
+                <div class="modal-footer border-0 px-3 px-md-4 pb-4 pt-0 d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-light rounded-pill px-4 py-2" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 py-2 shadow-sm" id="saveBatchBtn" style="background:#2563eb; border-color:#2563eb;">Save Changes</button>
                 </div>
             </form>
         </div>
@@ -200,17 +229,48 @@
 </div>
 
 <script>
-function openEditBatchModal(id, productName, batchNo, expiry, mrp, salePrice, quantity) {
+window.bypassLoader = true;
+
+function updateUnitHint() {
+    const mrp = parseFloat(document.getElementById('editMRP').value) || 0;
+    const cf = parseInt(document.getElementById('editConversionFactor').value) || 1;
+    const hintEl = document.getElementById('editUnitMrpHint');
+    if (cf > 1 && mrp > 0) {
+        hintEl.textContent = `Unit MRP: ₹${(mrp / cf).toFixed(2)} per tablet (Pack MRP ÷ ${cf})`;
+    } else {
+        hintEl.textContent = '';
+    }
+}
+
+function openEditBatchModal(id, productName, batchNo, expiry, mrp, salePrice, quantity, factor) {
+    const cf = parseInt(factor) || 1;
     document.getElementById('editBatchId').value = id;
+    document.getElementById('editConversionFactor').value = cf;
     document.getElementById('editProductLabel').value = productName;
     document.getElementById('editBatchNumber').value = batchNo;
     document.getElementById('editExpiryDate').value = expiry;
     document.getElementById('editMRP').value = mrp;
     document.getElementById('editSalePrice').value = (salePrice && salePrice !== 'None') ? salePrice : '';
     document.getElementById('editCurrentQuantity').value = quantity;
+    updateUnitHint();
     
     var myModal = new bootstrap.Modal(document.getElementById('editBatchModal'));
     myModal.show();
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
 }
 
 document.getElementById('editBatchForm').addEventListener('submit', function(e) {
@@ -228,20 +288,26 @@ document.getElementById('editBatchForm').addEventListener('submit', function(e) 
         current_quantity: document.getElementById('editCurrentQuantity').value
     };
 
+    const token = getCookie('csrftoken') || '{{ csrf_token }}';
+
     fetch('/api/stock/update-batch/', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': '{{ csrf_token }}'
+            'X-CSRFToken': token
         },
         body: JSON.stringify(payload)
     })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            location.reload();
+    .then(async response => {
+        const data = await response.json().catch(() => null);
+        if (response.ok && data && data.success) {
+            const modalEl = document.getElementById('editBatchModal');
+            const modalInstance = bootstrap.Modal.getInstance(modalEl);
+            if (modalInstance) modalInstance.hide();
+            performLiveSearch(currentPage);
         } else {
-            alert('Error: ' + data.error);
+            const errMsg = (data && data.error) ? data.error : ('Server returned ' + response.status + ' ' + response.statusText);
+            alert('Error: ' + errMsg);
             saveBtn.disabled = false;
             saveBtn.innerHTML = 'Save Changes';
         }
@@ -253,12 +319,130 @@ document.getElementById('editBatchForm').addEventListener('submit', function(e) 
         saveBtn.innerHTML = 'Save Changes';
     });
 });
+
+// Silent In-Place AJAX Live Search
+let searchTimeout = null;
+let currentPage = 1;
+let activeSearchAbort = null;
+
+function performLiveSearch(page = 1) {
+    currentPage = page;
+    const searchVal = document.getElementById('stockSearchInput').value.trim();
+    const filterVal = document.getElementById('filterSelect').value;
+    const scheduleVal = document.getElementById('scheduleFilterSelect').value;
+    const clearBtn = document.getElementById('clearSearchBtn');
+
+    if (clearBtn) {
+        if (searchVal) clearBtn.classList.remove('d-none');
+        else clearBtn.classList.add('d-none');
+    }
+
+    // Update Export links
+    const queryParams = new URLSearchParams({
+        search: searchVal,
+        filter: filterVal,
+        schedule_filter: scheduleVal,
+        page: page
+    });
+
+    const pdfBtn = document.getElementById('pdfExportBtn');
+    if (pdfBtn) pdfBtn.href = `?pdf=1&${queryParams.toString()}`;
+    const csvBtn = document.getElementById('csvExportBtn');
+    if (csvBtn) csvBtn.href = `?csv=1&${queryParams.toString()}`;
+
+    // Update browser URL without reloading
+    const newUrl = `${window.location.pathname}?${queryParams.toString()}`;
+    window.history.replaceState({ path: newUrl }, '', newUrl);
+
+    // Abort previous in-flight request if user is actively typing
+    if (activeSearchAbort) {
+        activeSearchAbort.abort();
+    }
+    activeSearchAbort = new AbortController();
+
+    fetch(newUrl, {
+        signal: activeSearchAbort.signal,
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(res => res.text())
+    .then(html => {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const newResults = doc.getElementById('stockResultsContainer');
+        if (newResults) {
+            document.getElementById('stockResultsContainer').innerHTML = newResults.innerHTML;
+        }
+    })
+    .catch(err => {
+        if (err.name !== 'AbortError') {
+            console.error('Search error:', err);
+        }
+    });
+}
+
+function goToPage(page) {
+    performLiveSearch(page);
+}
+
+const searchInput = document.getElementById('stockSearchInput');
+if (searchInput) {
+    searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(function() {
+            performLiveSearch(1);
+        }, 200);
+    });
+}
+
+function clearSearch() {
+    if (searchInput) {
+        searchInput.value = '';
+        performLiveSearch(1);
+        searchInput.focus();
+    }
+}
 </script>
 
 <style>
-    .bg-success-soft { background-color: rgba(25, 135, 84, 0.1); }
+    .bg-success-soft { background-color: rgba(25, 135, 84, 0.12); }
+    
+    /* Touch & Tablet Optimizations */
+    .search-input-touch, .select-touch, .input-touch {
+        min-height: 42px;
+        font-size: 0.95rem;
+        border-radius: 10px;
+    }
+    .btn-action-touch {
+        min-height: 42px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.45rem 0.85rem;
+        border-radius: 10px;
+    }
+    .btn-edit-touch {
+        min-height: 34px;
+        font-size: 0.82rem;
+        font-weight: 500;
+    }
+    .stock-table-responsive th, .stock-table-responsive td {
+        padding: 0.85rem 0.75rem;
+        vertical-align: middle;
+    }
+    .medicine-name-cell {
+        min-width: 170px;
+        font-size: 0.93rem;
+    }
+
+    /* Tablet Specific Adjustments (768px - 1024px) */
+    @media (max-width: 991.98px) {
+        .card-header h6 { font-size: 1rem; }
+        .h2 { font-size: 1.5rem; }
+        .search-input-touch { width: 100%; }
+    }
+
     @media print {
-        .sidebar, .sidebar-toggle, .btn-outline-primary { display: none !important; }
+        .sidebar, .sidebar-toggle, .btn-outline-primary, .btn-action-touch, #stockFilterForm { display: none !important; }
         .main-content { margin-left: 0 !important; width: 100% !important; }
         .card { box-shadow: none !important; border: 1px solid #eee !important; }
     }

@@ -237,9 +237,18 @@
                 }
             });
 
-            // Page navigation unload trigger
-            window.addEventListener('beforeunload', function() {
-                window.showUniversalLoader('Easy Pharma', 'Loading, please wait...');
+            // Auto-hide loader if navigation was cancelled or page restored from cache
+            window.addEventListener('pageshow', function() {
+                window.hideUniversalLoader();
+                const gl = document.getElementById('globalLoader');
+                if (gl) gl.style.display = 'none';
+            });
+            window.addEventListener('focus', function() {
+                setTimeout(function() {
+                    window.hideUniversalLoader();
+                    const gl = document.getElementById('globalLoader');
+                    if (gl) gl.style.display = 'none';
+                }, 200);
             });
         })();
     </script>
@@ -559,14 +568,6 @@
                         globalLoader.style.display = 'flex';
                     });
                 }
-            });
-
-            // 3. Show on page unload (refreshes, back/forward)
-            window.addEventListener('beforeunload', function() {
-                if (window.bypassLoader) {
-                    return;
-                }
-                globalLoader.style.display = 'flex';
             });
         }
     });

@@ -36,16 +36,18 @@
                             {% if stock.discount_amount > 0 %}-₹{{ stock.discount_amount }}{% else %}—{% endif %}
                         </td>
                         <td class="text-end fw-bold text-success">₹{{ stock.total_amount }}</td>
-                        <td class="text-end pe-4">
-                            <div class="btn-group">
+                        <td class="text-end pe-4 text-nowrap">
+                            <div class="d-inline-flex align-items-center gap-1">
                                 <a href="{% url 'opening_stock_edit' stock.id %}"
-                                   class="btn btn-sm btn-outline-primary border-0" title="Edit">
-                                    <i class="fas fa-edit"></i>
+                                   class="btn btn-sm btn-outline-secondary rounded-pill px-2 py-1 shadow-sm d-inline-flex align-items-center gap-1"
+                                   style="font-size: 0.76rem; font-weight: 600;" title="Edit Opening Stock">
+                                    <i class="fas fa-edit text-primary"></i> <span>Edit</span>
                                 </a>
-                                <button class="btn btn-sm btn-outline-danger border-0"
+                                <button class="btn btn-sm btn-outline-danger rounded-pill px-2 py-1 shadow-sm d-inline-flex align-items-center gap-1"
+                                    style="font-size: 0.76rem; font-weight: 600;"
                                     onclick="deleteOpeningStock({{ stock.id }}, '{{ stock.voucher_number }}')"
-                                    title="Delete">
-                                    <i class="fas fa-trash-alt"></i>
+                                    title="Delete Opening Stock">
+                                    <i class="fas fa-trash-alt"></i> <span>Delete</span>
                                 </button>
                             </div>
                         </td>
