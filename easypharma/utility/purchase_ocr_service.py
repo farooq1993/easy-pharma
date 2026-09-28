@@ -107,10 +107,13 @@ def _call_ai_vision_api(api_keys, payload, timeout=8):
     # Only gemini-3.x models are available on Google AI Studio free tier project
     # (api_version, model_name, timeout_seconds)
     models_to_try = [
-        ("v1beta", "gemini-3.5-flash-lite",  90),  # WORKS ✓ - needs long timeout (~44s under load)
-        ("v1beta", "gemini-3.1-flash-lite",   5),  # Try fast, 503 pe instantly skip
-        ("v1beta", "gemini-3.5-flash",         5),  # Try fast, 503 pe instantly skip
-        ("v1beta", "gemini-3.7-flash",         5),  # Try fast, 503 pe instantly skip
+        ("v1beta", "gemini-3.1-flash-lite-preview", 30),
+        ("v1beta", "gemini-3.1-flash-lite",         30),
+        ("v1beta", "gemini-flash-latest",           45),
+        ("v1beta", "gemini-3.6-flash",              35),
+        ("v1beta", "gemini-3.5-flash-lite",         35),
+        ("v1beta", "gemini-3.7-flash",              35),
+        ("v1beta", "gemma-4-26b-a4b-it",            30),
     ]
 
     headers = {'Content-Type': 'application/json'}
@@ -122,41 +125,52 @@ def _call_ai_vision_api(api_keys, payload, timeout=8):
     random.shuffle(shuffled_keys)
     logger.info(f"AI OCR starting scan with {len(shuffled_keys)} active API key(s)")
 
-    for key_idx, api_key in enumerate(shuffled_keys):
-        for api_version, model_name, model_timeout in models_to_try:
-            url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model_name}:generateContent?key={api_key}"
-            
-            try:
-                res = requests.post(url, headers=headers, json=payload, timeout=model_timeout)
-                if res.status_code == 200:
-                    logger.info(f"AI OCR success: Key #{key_idx+1} {model_name} ({api_version})")
-                    response = res
-                    break
-                elif res.status_code == 429:
-                    last_error = f"Key #{key_idx+1} {model_name} rate limited (429): {res.text[:100]}"
-                    logger.warning(last_error)
-                    continue
-                elif res.status_code == 503:
-                    last_error = f"Key #{key_idx+1} {model_name} busy (503): {res.text[:100]}"
-                    logger.warning(last_error)
-                    continue
-                elif res.status_code == 404:
-                    last_error = f"Key #{key_idx+1} {model_name} ({api_version}) not found (404)"
-                    logger.debug(last_error)
-                    continue
-                else:
-                    last_error = f"Key #{key_idx+1} {model_name} status {res.status_code}: {res.text[:100]}"
-                    logger.warning(f"AI OCR attempt note: {last_error}")
-                    continue
-            except requests.exceptions.Timeout:
-                last_error = f"Key #{key_idx+1} {model_name} timed out after {model_timeout}s"
-                logger.warning(last_error)
-                continue
-            except Exception as e:
-                last_error = f"Key #{key_idx+1} {model_name} exception: {str(e)}"
-                logger.warning(f"AI OCR connection error: {last_error}")
-                continue
+    # 2-pass retry loop with exponential backoff on 503/429 high demand spikes
+    for pass_num in range(2):
+        if pass_num > 0:
+            logger.info(f"AI OCR initiating retry pass #{pass_num+1} after high demand spike...")
+            time.sleep(1.2)
 
+        for key_idx, api_key in enumerate(shuffled_keys):
+            for api_version, model_name, model_timeout in models_to_try:
+                url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model_name}:generateContent?key={api_key}"
+                
+                try:
+                    res = requests.post(url, headers=headers, json=payload, timeout=model_timeout)
+                    if res.status_code == 200:
+                        logger.info(f"AI OCR success: Key #{key_idx+1} {model_name} ({api_version}) [pass {pass_num+1}]")
+                        response = res
+                        break
+                    elif res.status_code == 429:
+                        last_error = f"Key #{key_idx+1} {model_name} rate limited (429): {res.text[:100]}"
+                        logger.warning(last_error)
+                        time.sleep(0.3)
+                        continue
+                    elif res.status_code == 503:
+                        last_error = f"Key #{key_idx+1} {model_name} busy (503): {res.text[:100]}"
+                        logger.warning(last_error)
+                        time.sleep(0.3)
+                        continue
+                    elif res.status_code == 404:
+                        last_error = f"Key #{key_idx+1} {model_name} ({api_version}) not found (404)"
+                        logger.debug(last_error)
+                        continue
+                    else:
+                        last_error = f"Key #{key_idx+1} {model_name} status {res.status_code}: {res.text[:100]}"
+                        logger.warning(f"AI OCR attempt note: {last_error}")
+                        continue
+                except requests.exceptions.Timeout:
+                    last_error = f"Key #{key_idx+1} {model_name} timed out after {model_timeout}s"
+                    logger.warning(last_error)
+                    continue
+                except Exception as e:
+                    last_error = f"Key #{key_idx+1} {model_name} exception: {str(e)}"
+                    logger.warning(f"AI OCR connection error: {last_error}")
+                    continue
+
+            if response and response.status_code == 200:
+                break
+        
         if response and response.status_code == 200:
             break
 
