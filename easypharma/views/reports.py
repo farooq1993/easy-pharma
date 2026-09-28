@@ -140,7 +140,12 @@ class StockReportView(LoginRequiredMixin,View):
         logger.debug('StockReportView cache MISS tenant=%s filter=%s search=%s', request.tenant.id, schedule_filter, search_query)
         
         # Aggregate stock by product
-        stocks = StockBatch.objects.filter(tenant=request.tenant, current_quantity__gt=0).select_related('product', 'product__product_schedule')
+        if filter_param == 'zero_stock':
+            stocks = StockBatch.objects.filter(tenant=request.tenant, current_quantity=0).select_related('product', 'product__product_schedule')
+        elif filter_param == 'all' or search_query:
+            stocks = StockBatch.objects.filter(tenant=request.tenant).select_related('product', 'product__product_schedule')
+        else:
+            stocks = StockBatch.objects.filter(tenant=request.tenant, current_quantity__gt=0).select_related('product', 'product__product_schedule')
         
         if filter_param == 'near_expiry':
             expiry_limit = date.today() + timedelta(days=90)
@@ -149,7 +154,7 @@ class StockReportView(LoginRequiredMixin,View):
             stocks = stocks.filter(product__product_schedule__schedule_name__iexact='Schedule H1')
 
         if search_query:
-            stocks = stocks.filter(product__product_name__icontains=search_query)
+            stocks = stocks.filter(Q(product__product_name__icontains=search_query) | Q(batch_number__icontains=search_query))
             
         stocks = stocks.order_by('product__product_name', 'expiry_date')
             
@@ -160,7 +165,7 @@ class StockReportView(LoginRequiredMixin,View):
         if schedule_filter == 'H1':
             product_summary = product_summary.filter(product__product_schedule__schedule_name__iexact='Schedule H1')
         if search_query:
-            product_summary = product_summary.filter(product__product_name__icontains=search_query)
+            product_summary = product_summary.filter(Q(product__product_name__icontains=search_query) | Q(batch_number__icontains=search_query))
 
         product_summary = product_summary.values(
             'product__product_name', 'product__product_packing', 'product__conversion_factor'

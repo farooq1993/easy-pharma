@@ -5,21 +5,31 @@
 <link rel="stylesheet" href="{% static 'css/customecss/purchase_entry.css' %}?v=2.0.5">
 
 <div class="container-fluid py-3 px-4">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-2">
+        <ol class="breadcrumb mb-1" style="font-size: 0.85rem;">
+            <li class="breadcrumb-item"><a href="{% url 'purchase_list' %}" class="text-decoration-none text-muted"><i class="fas fa-file-invoice me-1"></i>Purchases</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{% if edit_data %}Edit Purchase{% else %}New Purchase Entry{% endif %}</li>
+        </ol>
+    </nav>
+
     <!-- Header -->
-    <div class="page-header">
+    <div class="page-header d-flex align-items-center justify-content-between mb-3">
         <div>
             <h1 class="page-title">
                 <i class="fas fa-file-invoice" style="color:var(--brand); margin-right:8px;"></i> 
-                Purchase Entry 
+                {% if edit_data %}Edit Purchase{% else %}Purchase Entry{% endif %} 
                 <span id="editVoucherBadge" class="badge bg-warning text-dark ms-2 d-none" style="font-size: 0.9rem; vertical-align: middle;"></span>
             </h1>
             <p class="ep-label mt-1" style="margin-bottom:0;">Stock + GST + Batch tracking</p>
         </div>
         <div class="d-flex align-items-center gap-2">
+            <a href="{% url 'purchase_list' %}" class="btn btn-outline-secondary rounded-pill px-3 py-2 fw-bold" style="font-size: 0.85rem;" title="Back to Purchase List">
+                <i class="fas fa-arrow-left me-1"></i> Back to List
+            </a>
             <button class="btn btn-outline-secondary rounded-pill px-3 py-2 fw-bold" style="font-size: 0.85rem;" data-bs-toggle="modal" data-bs-target="#workflowModal">
                 <i class="fas fa-keyboard me-1"></i> Shortcuts
             </button>
-            
         </div>
     </div>
 

@@ -1902,6 +1902,7 @@ class PurchaseScanAPI(LoginRequiredMixin, View):
         })
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class UpdateStockBatchView(LoginRequiredMixin, View):
     def post(self, request):
         try:
@@ -2016,9 +2017,14 @@ class UpdateStockBatchView(LoginRequiredMixin, View):
                     expiry_date=new_expiry_date
                 )
                 
-                # Invalidate report caches
+                # Invalidate report and POS caches
                 invalidate_stock_cache(request.tenant.id)
                 invalidate_daily_sale_cache(request.tenant.id)
+                try:
+                    from easypharma.views.sales import invalidate_pos_cache
+                    invalidate_pos_cache(request.tenant.id)
+                except Exception:
+                    pass
                 
             return JsonResponse({'success': True, 'message': 'Batch details updated successfully'})
         except Exception as e:

@@ -367,6 +367,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
 async function handleProductSubmit(e) {
     if (_formSubmitAllowed) return true; // second pass — real submit
+
+    {% if product %}
+    // On edit mode, bypass duplicate check and submit directly
+    _formSubmitAllowed = true;
+    return true;
+    {% endif %}
+
     e.preventDefault();
 
     const nameInput = document.getElementById('productName');

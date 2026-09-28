@@ -511,11 +511,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 100);
 });
 
-// Guard before unload
+// Guard before unload (only warn if items are actually modified/unsaved)
 window.addEventListener('beforeunload', function(e) {
     if (window.__isOpeningStockSubmitting) return;
-    saveOpeningStockDraft();
-    if (openingItems && openingItems.length > 0) {
+    const isEdit = isOpeningStockEditMode();
+    const isDirty = isEdit 
+        ? (Boolean(window.__initialOpeningItemsJSON) && JSON.stringify(openingItems) !== window.__initialOpeningItemsJSON)
+        : (openingItems && openingItems.length > 0);
+    if (isDirty) {
+        saveOpeningStockDraft();
         e.preventDefault();
         e.returnValue = 'You have unsaved opening stock items. Are you sure you want to leave or refresh?';
         return e.returnValue;
@@ -798,6 +802,25 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update total dynamically when values change
             if (['newQty', 'newPrice', 'newTax'].includes(id)) {
                 el.addEventListener('input', updateNewItemTotal);
+            }
+        }
+    });
+
+    // Global key listener (Escape to go back to list)
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            const openModal = document.querySelector('.modal.show');
+            if (openModal) return;
+            const resDiv = document.getElementById('searchResults');
+            if (resDiv && resDiv.style.display !== 'none' && resDiv.children.length > 0) {
+                resDiv.style.display = 'none';
+                return;
+            }
+            const backBtn = document.querySelector('.page-header a[href*="opening"]') || document.querySelector('a[href*="opening/stock/list"]');
+            if (backBtn) {
+                window.location.href = backBtn.href;
+            } else {
+                window.location.href = '/purchase/opening/stock/list/';
             }
         }
     });
