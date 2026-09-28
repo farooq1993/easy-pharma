@@ -107,13 +107,10 @@ def _call_ai_vision_api(api_keys, payload, timeout=8):
     # Only gemini-3.x models are available on Google AI Studio free tier project
     # (api_version, model_name, timeout_seconds)
     models_to_try = [
-        ("v1beta", "gemini-3.1-flash-lite-preview", 30),
-        ("v1beta", "gemini-3.1-flash-lite",         30),
-        ("v1beta", "gemini-flash-latest",           45),
-        ("v1beta", "gemini-3.6-flash",              35),
-        ("v1beta", "gemini-3.5-flash-lite",         35),
-        ("v1beta", "gemini-3.7-flash",              35),
-        ("v1beta", "gemma-4-26b-a4b-it",            30),
+        ("v1beta", "gemini-3.1-flash-lite",         12),
+        ("v1beta", "gemini-3.5-flash-lite",         12),
+        ("v1beta", "gemini-3.1-flash-lite-preview", 12),
+        ("v1beta", "gemini-flash-latest",           12),
     ]
 
     headers = {'Content-Type': 'application/json'}
@@ -126,13 +123,20 @@ def _call_ai_vision_api(api_keys, payload, timeout=8):
     logger.info(f"AI OCR starting scan with {len(shuffled_keys)} active API key(s)")
 
     # 2-pass retry loop with exponential backoff on 503/429 high demand spikes
+    start_time = time.time()
+    MAX_LOOP_TIME = 45 # Prevent Nginx 504 Gateway Timeout (Nginx default is often 30s or 60s)
+
     for pass_num in range(2):
         if pass_num > 0:
             logger.info(f"AI OCR initiating retry pass #{pass_num+1} after high demand spike...")
-            time.sleep(1.2)
+            time.sleep(1.0)
 
         for key_idx, api_key in enumerate(shuffled_keys):
             for api_version, model_name, model_timeout in models_to_try:
+                if time.time() - start_time > MAX_LOOP_TIME:
+                    logger.error("AI OCR loop exceeded maximum execution time (45s). Aborting to prevent 504.")
+                    raise Exception("Server is currently overloaded. Please try again in a few minutes.")
+
                 url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model_name}:generateContent?key={api_key}"
                 
                 try:
@@ -144,12 +148,12 @@ def _call_ai_vision_api(api_keys, payload, timeout=8):
                     elif res.status_code == 429:
                         last_error = f"Key #{key_idx+1} {model_name} rate limited (429): {res.text[:100]}"
                         logger.warning(last_error)
-                        time.sleep(0.3)
+                        time.sleep(0.5)
                         continue
                     elif res.status_code == 503:
                         last_error = f"Key #{key_idx+1} {model_name} busy (503): {res.text[:100]}"
                         logger.warning(last_error)
-                        time.sleep(0.3)
+                        time.sleep(0.5)
                         continue
                     elif res.status_code == 404:
                         last_error = f"Key #{key_idx+1} {model_name} ({api_version}) not found (404)"
@@ -283,7 +287,7 @@ def extract_purchase_bill_data(image_file):
         }
     }
 
-    response = _call_ai_vision_api(api_keys, payload, timeout=15)
+    response = _call_ai_vision_api(api_keys, payload, timeout=45)
 
     resp_json = response.json()
     try:
@@ -316,16 +320,17 @@ def extract_purchase_bill_data(image_file):
             logger.warning(f"AI OCR WARNING: Duplicate batch numbers detected: {dupes} across {len(items)} items. "
                            f"This may indicate row misalignment. Items: {[(i.get('name','?'), i.get('batch_number')) for i in items]}")
 
-        # Ensure each item has required fields with safe defaults
-        for item in items:
-            item.setdefault('batch_number', None)
-            item.setdefault('expiry_date', None)
-            item.setdefault('quantity', 0)
-            item.setdefault('free_quantity', 0)
-            item.setdefault('purchase_price', 0.0)
-            item.setdefault('mrp', 0.0)
-            item.setdefault('tax_percentage', 12.0)
-            item.setdefault('total', 0.0)
+    # Ensure each item has required fields with safe defaults
+    final_items = parsed_data.get('items', [])
+    for item in final_items:
+        item.setdefault('batch_number', None)
+        item.setdefault('expiry_date', None)
+        item.setdefault('quantity', 0)
+        item.setdefault('free_quantity', 0)
+        item.setdefault('purchase_price', 0.0)
+        item.setdefault('mrp', 0.0)
+        item.setdefault('tax_percentage', 12.0)
+        item.setdefault('total', 0.0)
 
     return parsed_data
 
