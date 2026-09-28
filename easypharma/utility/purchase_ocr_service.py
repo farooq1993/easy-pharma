@@ -195,26 +195,52 @@ def extract_purchase_bill_data(image_file):
 
     prompt = (
         "You are an expert accountant and pharmacy billing OCR AI specializing in Indian pharmacy purchase bills/invoices.\n"
-        "Carefully parse this purchase bill image and extract all details with extreme precision:\n\n"
+        "Parse this purchase bill image with EXTREME precision using the ROW-BY-ROW method below.\n\n"
+        "=== HEADER EXTRACTION ===\n"
         "1. Supplier/Vendor name (distributor/wholesaler selling the medicines)\n"
         "2. Invoice number (bill number or reference number)\n"
-        "3. Purchase/Invoice date (YYYY-MM-DD format if visible, or original text date converted to standard date)\n"
-        "4. Payment mode ('Cash' or 'Credit' if visible, default to 'Cash')\n"
-        "5. Line items (medicines/products table). For each item on EVERY row:\n"
-        "   - name: Medicine or product name with brand & strength/dosage (e.g. 'Pantocid 40mg', 'Augmentin 625 Duo', 'Telma 40'). Remove leading serial numbers (e.g., '1.', '2.') or stray symbols.\n"
-        "   - batch_number: Exact batch number on this specific line (e.g. 'B2401', 'BT24110', 'T-5421', 'NX205').\n"
-        "     * CRITICAL FOR BATCH: Maintain strict 1-to-1 horizontal row alignment. Each batch must match ONLY its corresponding row item. Do NOT shift batch numbers across adjacent rows. If a row lacks a batch, return null.\n"
-        "     * Do not confuse HSN codes, dates, or prices with batch numbers.\n"
-        "   - expiry_date: Expiry date (convert to MM/YYYY or YYYY-MM-DD format. E.g. '06/27' -> '06/2027', '04/28' -> '04/2028', '11-26' -> '11/2026'). Expiry represents future dates.\n"
-        "   - quantity: Exact billed/purchased quantity.\n"
-        "     * CRITICAL FOR QUANTITY: Read every single digit with extreme care. NEVER truncate or drop digits (e.g., if quantity is '24', extract exactly 24, NOT 2; if '120', extract 120, NOT 12). Read the main billed quantity column (Billed Qty / Qty / Invoiced Qty).\n"
-        "     * Do not confuse Pack Size (e.g. 10TAB, 1x10, 10's) or Scheme/Free qty with the main Quantity column.\n"
-        "   - free_quantity: Free/scheme quantity received (e.g. if '24 + 2' or Free column is '2', free_quantity is 2. Default to 0 if none).\n"
-        "   - purchase_price: Purchase rate/price per unit/pack excluding GST tax (or standard billing rate).\n"
-        "   - mrp: Maximum Retail Price (MRP) per pack/box/strip.\n"
-        "   - tax_percentage: GST tax rate percentage (e.g. 5, 12, 18. Default to 12 if not explicitly stated).\n"
-        "   - total: Net line amount for this row (quantity * purchase_price, or bill line amount).\n\n"
-        "Output MUST be a valid JSON object matching this schema:\n"
+        "3. Purchase/Invoice date (YYYY-MM-DD format)\n"
+        "4. Payment mode ('Cash' or 'Credit' if visible, default to 'Cash')\n\n"
+        "=== MANDATORY ROW-BY-ROW PARSING METHOD ===\n"
+        "You MUST follow this exact procedure for the items table:\n\n"
+        "STEP 1: Identify the column headers in the table (e.g., Sr.No, Product/Item Name, Batch No, Expiry, Qty, Free, Rate, MRP, GST%, Amount, etc.).\n"
+        "STEP 2: Count the total number of data rows in the table.\n"
+        "STEP 3: Process EACH ROW ONE AT A TIME, from top (Row 1) to bottom (last row):\n"
+        "   - Place your finger on the ROW NUMBER or first cell of that row.\n"
+        "   - Read HORIZONTALLY across that SAME row to extract ALL fields.\n"
+        "   - DO NOT look at any other row while extracting this row's data.\n"
+        "   - The batch_number, expiry_date, quantity, mrp, and all other values\n"
+        "     MUST come from the SAME horizontal line as the product name.\n\n"
+        "*** ABSOLUTE RULE - BATCH NUMBER ALIGNMENT ***\n"
+        "The #1 most critical rule: Each product's batch_number MUST be read from\n"
+        "the EXACT SAME horizontal row as that product's name. NEVER assign a batch\n"
+        "number from Row N to a product on Row N-1 or Row N+1.\n"
+        "If a bill has 5 products:\n"
+        "  - Row 1's batch goes ONLY to Row 1's product\n"
+        "  - Row 2's batch goes ONLY to Row 2's product\n"
+        "  - Row 3's batch goes ONLY to Row 3's product\n"
+        "  - Row 4's batch goes ONLY to Row 4's product\n"
+        "  - Row 5's batch goes ONLY to Row 5's product\n"
+        "If a row has no batch number visible, set batch_number to null for that row.\n"
+        "NEVER shift or swap batch numbers between rows.\n\n"
+        "=== FIELD RULES ===\n"
+        "- name: Medicine/product name with brand & strength/dosage (e.g. 'Pantocid 40mg', 'Augmentin 625 Duo'). Remove leading serial numbers ('1.', '2.') or stray symbols.\n"
+        "- batch_number: Exact batch number from THIS row only (e.g. 'B2401', 'BT24110'). Do NOT confuse HSN codes, dates, or prices with batch numbers.\n"
+        "- expiry_date: Convert to MM/YYYY format (e.g. '06/27' -> '06/2027', '04/28' -> '04/2028'). Expiry represents future dates.\n"
+        "- quantity: Exact billed/purchased quantity. Read EVERY digit carefully. NEVER truncate digits (e.g., '24' must be 24 NOT 2; '120' must be 120 NOT 12). Read the main Billed Qty / Qty / Invoiced Qty column.\n"
+        "  * Do NOT confuse Pack Size (10TAB, 1x10, 10's) or Scheme/Free qty with Quantity.\n"
+        "- free_quantity: Free/scheme quantity (default 0 if none).\n"
+        "- purchase_price: Purchase rate per unit/pack excluding GST.\n"
+        "- mrp: Maximum Retail Price (MRP) per pack/box/strip.\n"
+        "- tax_percentage: GST rate (e.g. 5, 12, 18. Default 12 if not stated).\n"
+        "- total: Net line amount for this row.\n\n"
+        "=== SELF-VERIFICATION STEP ===\n"
+        "After extraction, verify:\n"
+        "1. The number of items in your JSON equals the number of rows in the table.\n"
+        "2. For each item, confirm its batch_number was read from the same row as its name.\n"
+        "3. No two adjacent items have swapped batch numbers.\n\n"
+        "=== OUTPUT FORMAT ===\n"
+        "Output MUST be a valid JSON object:\n"
         "{\n"
         "  \"supplier_name\": \"string or null\",\n"
         "  \"invoice_number\": \"string or null\",\n"
@@ -252,12 +278,12 @@ def extract_purchase_bill_data(image_file):
             }
         ],
         "generationConfig": {
-            "temperature": 0.1,
+            "temperature": 0.0,
             "response_mime_type": "application/json"
         }
     }
 
-    response = _call_ai_vision_api(api_keys, payload, timeout=8)
+    response = _call_ai_vision_api(api_keys, payload, timeout=15)
 
     resp_json = response.json()
     try:
@@ -274,10 +300,34 @@ def extract_purchase_bill_data(image_file):
 
     try:
         parsed_data = json.loads(cleaned_text.strip())
-        return parsed_data
     except json.JSONDecodeError as e:
         logger.error(f"JSON decode failed for AI OCR output: {cleaned_text}. Error: {e}")
         raise Exception("Could not extract structured data from this document. Please ensure the image is clear.")
+
+    # Post-processing validation: detect potential batch number misalignment
+    items = parsed_data.get('items', [])
+    if items:
+        batch_numbers = [item.get('batch_number') for item in items if item.get('batch_number')]
+        unique_batches = set(batch_numbers)
+        if len(batch_numbers) != len(unique_batches):
+            # Duplicate batch numbers detected — could be legitimate (same batch for different products)
+            # but also a sign of row shifting. Log for monitoring.
+            dupes = [b for b in unique_batches if batch_numbers.count(b) > 1]
+            logger.warning(f"AI OCR WARNING: Duplicate batch numbers detected: {dupes} across {len(items)} items. "
+                           f"This may indicate row misalignment. Items: {[(i.get('name','?'), i.get('batch_number')) for i in items]}")
+
+        # Ensure each item has required fields with safe defaults
+        for item in items:
+            item.setdefault('batch_number', None)
+            item.setdefault('expiry_date', None)
+            item.setdefault('quantity', 0)
+            item.setdefault('free_quantity', 0)
+            item.setdefault('purchase_price', 0.0)
+            item.setdefault('mrp', 0.0)
+            item.setdefault('tax_percentage', 12.0)
+            item.setdefault('total', 0.0)
+
+    return parsed_data
 
 
 def extract_opening_stock_data(image_file):
