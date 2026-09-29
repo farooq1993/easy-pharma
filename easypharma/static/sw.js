@@ -14,7 +14,7 @@
  *   • Proper Cache-Control header respect on API responses
  */
 
-const SW_VERSION = 'v2.0.1';
+const SW_VERSION = 'v2.0.5';
 const CACHE_STATIC = `ep-static-${SW_VERSION}`;
 const CACHE_PAGES  = `ep-pages-${SW_VERSION}`;
 const CACHE_API    = `ep-api-${SW_VERSION}`;
@@ -117,9 +117,31 @@ self.addEventListener('fetch', event => {
   // Only handle HTTP(s)
   if (!['http:', 'https:'].includes(url.protocol)) return;
 
-  // 0. Offline-capable POST requests — queue when offline
-  if (request.method === 'POST' && OFFLINE_QUEUE_PATTERNS.some(p => p.test(url.pathname))) {
-    event.respondWith(handleOfflinePost(request, event));
+  // Clear user data caches on logout
+  if (url.pathname === '/logout' || url.pathname === '/logout/') {
+    event.waitUntil(
+      caches.keys().then(keys =>
+        Promise.all(
+          keys.filter(k => k.startsWith('ep-pages-') || k.startsWith('ep-api-')).map(k => caches.delete(k))
+        )
+      )
+    );
+  }
+
+  // Intercept all mutating requests to invalidate cache
+  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(request.method)) {
+    event.waitUntil(
+      caches.keys().then(keys =>
+        Promise.all(
+          keys.filter(k => k.startsWith('ep-pages-') || k.startsWith('ep-api-')).map(k => caches.delete(k))
+        )
+      )
+    );
+
+    // 0. Offline-capable POST requests — queue when offline
+    if (request.method === 'POST' && OFFLINE_QUEUE_PATTERNS.some(p => p.test(url.pathname))) {
+      event.respondWith(handleOfflinePost(request, event));
+    }
     return;
   }
 
@@ -162,10 +184,9 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 4. Stale-While-Revalidate for all HTML pages
-  //    → Second visit loads INSTANTLY from cache, background refresh updates it
+  // 4. Network-First for HTML pages (Desktop-like real-time experience)
   if (request.headers.get('Accept') && request.headers.get('Accept').includes('text/html')) {
-    event.respondWith(staleWhileRevalidate(request, CACHE_PAGES));
+    event.respondWith(networkFirstWithTimeout(request, CACHE_PAGES, 3000));
     return;
   }
 
@@ -374,6 +395,15 @@ async function networkFirstWithTimeout(request, cacheName, timeout) {
   } catch {
     const cached = await cache.match(request);
     if (cached) return cached;
+    
+    // Return offline HTML if request expects HTML
+    if (request.headers.get('Accept') && request.headers.get('Accept').includes('text/html')) {
+        const offline = await caches.match('/offline/');
+        return offline || new Response('<h1>You are offline</h1>', {
+            headers: { 'Content-Type': 'text/html' }
+        });
+    }
+
     return new Response(JSON.stringify({ error: 'offline', cached: false }), {
       headers: { 'Content-Type': 'application/json' },
       status: 503
