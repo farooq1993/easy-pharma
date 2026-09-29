@@ -56,6 +56,11 @@ def create_user(request):
     return render(request, 'accounts/createuser.html')
 
 def login_view(request):
+    if request.user.is_authenticated:
+        if getattr(request.user, 'user_type', '') == 'admin':
+            return redirect('org_admin_dashboard')
+        return redirect('home')
+
     if request.method == "POST":
         username = request.POST.get("username")
         password = request.POST.get("password")

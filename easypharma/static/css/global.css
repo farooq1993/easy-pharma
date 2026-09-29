@@ -13,7 +13,7 @@ html {
 
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background-color: #f4f7f6;
+    background-color: #fcfaf2;
     color: #333;
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
@@ -73,7 +73,7 @@ input[type="text"], input[type="search"], input:not([type]), textarea {
 
 /* Top Bar (Header) Styles */
 .topbar {
-    background-color: #ffffff;
+    background-color: #fffef7;
     border-bottom: 1px solid #eef2f5;
     min-height: 70px;
     padding: var(--sat) 2rem 0 2rem;
@@ -112,7 +112,7 @@ input[type="text"], input[type="search"], input:not([type]), textarea {
 }
 
 .search-wrapper .search-input:focus {
-    background-color: #ffffff;
+    background-color: #fffef7;
     border-color: #cbd5e1;
     box-shadow: none;
     outline: none;
@@ -150,14 +150,14 @@ input[type="text"], input[type="search"], input:not([type]), textarea {
     width: 38px;
     height: 38px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #10b981, #059669);
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
     color: #ffffff;
     font-weight: 700;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 0.9rem;
-    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
 }
 
 .leading-none {
@@ -313,8 +313,8 @@ input[type="text"], input[type="search"], input:not([type]), textarea {
     inset: -6px;
     border-radius: 50%;
     border: 3.5px solid #e2e8f0;
-    border-top-color: #5C3D99;
-    border-right-color: #16A34A;
+    border-top-color: #3b82f6;
+    border-right-color: #2563eb;
     animation: epSpin 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 

@@ -1,15 +1,15 @@
 :root {
-    --sidebar-bg: #9052b9; /* Purple background */
-    --sidebar-hover: #68d12b; /* Green for hover */
+    --sidebar-bg: #1e293b; /* Dark Slate background */
+    --sidebar-hover: #3b82f6; /* Blue for hover */
     --sidebar-active: rgba(255, 255, 255, 0.15); /* Semi-transparent white for active */
-    --sidebar-text: #e7e1cb; /* Cream text */
+    --sidebar-text: #f8fafc; /* Slate 50 text */
     --sidebar-width: 280px;
     --sidebar-collapsed-width: 70px; /* Hide on toggle for full focus */
 }
 
 body {
     overflow-x: hidden;
-    background-color: #f8f9fa;
+    background-color: #fcfaf2;
 }
 
 /* Sidebar styling */
@@ -246,7 +246,7 @@ body {
 
 /* Sidebar Custom Brand Wrapper */
 .sidebar-brand-wrapper {
-    background-color: #ffffff;
+    background-color: #fffef7;
     border-bottom: 1px solid #eef2f5;
     padding: 1.25rem 1rem;
     display: flex;
