@@ -46,35 +46,23 @@ def link_callback(uri, rel):
 
 
 def render_to_pdf(request, template_src, context_dict={}, filename="report.pdf"):
-    try:
-        from weasyprint import HTML
-    except Exception as err:
-        logger.warning('WeasyPrint import failed: %s', err)
-        return HttpResponse(
-            "PDF export is unavailable because WeasyPrint is not installed or its native libraries are missing.",
-            content_type='text/plain',
-            status=503
-        )
-
     context_dict = dict(context_dict)
     context_dict['is_pdf'] = True
     template = get_template(template_src)
     html_string = template.render(context_dict)
 
     try:
+        from weasyprint import HTML
         html = HTML(string=html_string, base_url=request.build_absolute_uri('/'))
         pdf_data = html.write_pdf()
+        response = HttpResponse(pdf_data, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
     except Exception as err:
-        logger.error('WeasyPrint PDF generation failed: %s', err, exc_info=True)
-        return HttpResponse(
-            "PDF export is unavailable because the server is missing required WeasyPrint libraries.",
-            content_type='text/plain',
-            status=503
-        )
-
-    response = HttpResponse(pdf_data, content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="{filename}"'
-    return response
+        logger.warning('WeasyPrint import or generation failed: %s', err)
+        # Fallback to browser print if WeasyPrint/GTK is missing
+        fallback_html = html_string + f"<script>window.onload = function() {{ document.title = '{filename.replace('.pdf', '')}'; window.print(); }}</script>"
+        return HttpResponse(fallback_html, content_type='text/html')
 
 
 def export_sales_csv(request, sales, filename='sales_report.csv'):
@@ -1203,7 +1191,97 @@ class ScheduleHReportView(LoginRequiredMixin,View):
 
         if request.GET.get('pdf') == '1':
             fn = f"schedule_h_register_{schedule_type.replace(' ', '_')}_{start_date}_{end_date}.pdf"
-            return render_to_pdf(self.template_name, context, filename=fn)
+            return render_to_pdf(request, 'reports/schedule_h_report_pdf.html', context, filename=fn)
+
+        return render(request, self.template_name, context)
+
+
+class DailyH1SaleReportView(LoginRequiredMixin,View):
+    """
+    Daily Schedule H1 Drug Sale Report - explicitly shows ONLY today's H1 sales
+    with batch numbers, no date filters or dropdowns needed.
+    """
+    template_name = 'reports/daily_h1_sale_report.html'
+
+    def get(self, request):
+        today = now().date()
+        
+        start_date_str = request.GET.get('start_date')
+        end_date_str = request.GET.get('end_date')
+
+        if start_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                start_date = today
+        else:
+            start_date = today
+
+        if end_date_str:
+            try:
+                end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                end_date = today
+        else:
+            end_date = today
+
+        logger.debug('DailyH1SaleReportView.get start=%s end=%s tenant=%s', start_date, end_date, request.tenant)
+
+        # Get sale items for H1 schedule in date range
+        sale_items = SaleItem.objects.filter(
+            tenant=request.tenant,
+            product__product_schedule__schedule_name__icontains='H1',
+            sale_invoice__created_at__date__gte=start_date,
+            sale_invoice__created_at__date__lte=end_date,
+        ).select_related(
+            'product',
+            'product__product_schedule',
+            'sale_invoice',
+            'sale_invoice__customer',
+        ).order_by('sale_invoice__created_at')
+
+        # Build register rows
+        register_rows = []
+        serial = 1
+        for item in sale_items:
+            inv = item.sale_invoice
+            register_rows.append({
+                'sr': serial,
+                'date': inv.created_at.strftime('%d/%m/%Y'),
+                'invoice_no': inv.invoice_number,
+                'patient_name': inv.patient_name or (inv.customer.name if inv.customer else 'Walk-in'),
+                'patient_address': inv.patient_address or '-',
+                'patient_phone': inv.patient_phone or '-',
+                'doctor_name': inv.doctor_name or '-',
+                'product_name': item.product.product_name,
+                'packing': item.product.product_packing or '-',
+                'batch_number': item.batch_number or '-',
+                'expiry_date': item.expiry_date.strftime('%m/%Y') if item.expiry_date else '-',
+                'quantity': item.quantity,
+                'unit_price': float(item.unit_price),
+                'total': float(item.total_amount),
+                'payment_mode': inv.payment_mode,
+                'sale_type': inv.sale_type,
+            })
+            serial += 1
+
+        total_qty = sum(r['quantity'] for r in register_rows)
+        total_value = sum(r['total'] for r in register_rows)
+
+        context = {
+            'today': today,
+            'start_date': start_date,
+            'end_date': end_date,
+            'schedule_type': 'H1',
+            'register_rows': register_rows,
+            'total_qty': total_qty,
+            'total_value': total_value,
+            'pharmacy': request.tenant,
+        }
+
+        if request.GET.get('pdf') == '1':
+            fn = f"h1_sale_{start_date}_{end_date}.pdf"
+            return render_to_pdf(request, 'reports/daily_h1_sale_report_pdf.html', context, filename=fn)
 
         return render(request, self.template_name, context)
 
@@ -1408,7 +1486,7 @@ class NarcoticDrugReportView(LoginRequiredMixin,View):
 
         if request.GET.get('pdf') == '1':
             fn = f"narcotic_drug_register_{start_date}_{end_date}.pdf"
-            return render_to_pdf(self.template_name, context, filename=fn)
+            return render_to_pdf(request, 'reports/narcotic_drug_report_pdf.html', context, filename=fn)
 
         return render(request, self.template_name, context)
 

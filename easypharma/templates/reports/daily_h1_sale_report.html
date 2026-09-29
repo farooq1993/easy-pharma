@@ -3,8 +3,9 @@
 {% block title %}Schedule H Drug Register{% endblock %}
 {% block content %}
 
+
 <style>
-.register-table { font-size: 12px; }
+.register-table { font-size: 14px; }
 .register-table th { background: #1a237e; color: #fff; white-space: nowrap; vertical-align: middle; }
 .register-table td { vertical-align: middle; }
 .badge-schedule { font-size: 10px; }
@@ -23,31 +24,25 @@
           <h4 class="mb-0 fw-bold">{{ schedule_type }} Drug Register</h4>
           <small class="text-muted">
             Statutory Sale Register &nbsp;|&nbsp;
-            {{ start_date|date:"d M Y" }} — {{ end_date|date:"d M Y" }}
+            {{ start_date|date:"d M Y" }}{% if start_date != end_date %} to {{ end_date|date:"d M Y" }}{% endif %}
           </small>
         </div>
       </div>
     </div>
     <div class="col-md-5">
-      <form method="GET" class="row g-2">
+      <form method="GET" class="row g-2 justify-content-end">
         <div class="col-md-4">
-          <select name="schedule_type" class="form-select form-select-sm">
-            {% for sc in schedule_choices %}
-              <option value="{{ sc.schedule_name }}" {% if schedule_type == sc.schedule_name %}selected{% endif %}>{{ sc.schedule_name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-3">
           <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date|date:'Y-m-d' }}">
         </div>
-        <div class="col-md-3">
+        <div class="col-md-4">
           <input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date|date:'Y-m-d' }}">
         </div>
-        <div class="col-md-2 d-flex gap-1">
-          <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-filter"></i></button>
-          <a href="?schedule_type={{ schedule_type }}&start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}&pdf=1"
-             class="btn btn-danger btn-sm" title="Export PDF">
-            <i class="bi bi-file-earmark-pdf"></i>
+        <div class="col-md-auto d-flex gap-2">
+          <button type="submit" class="btn btn-primary btn-sm px-3">
+            <i class="bi bi-filter me-1"></i> Filter
+          </button>
+          <a href="?start_date={{ start_date|date:'Y-m-d' }}&end_date={{ end_date|date:'Y-m-d' }}&pdf=1" class="btn btn-danger btn-sm px-3" title="Export PDF">
+            <i class="bi bi-file-earmark-pdf me-1"></i> PDF
           </a>
         </div>
       </form>
@@ -84,7 +79,7 @@
       <div class="card border-0 shadow-sm rounded-4 text-center py-3">
         <div class="card-body">
           <h6 class="text-muted small text-uppercase fw-bold">Period</h6>
-          <h6 class="fw-bold mb-0">{{ start_date|date:"M Y" }}{% if start_date.month != end_date.month %} – {{ end_date|date:"M Y" }}{% endif %}</h6>
+          <h6 class="fw-bold mb-0">{{ start_date|date:"d M Y" }}{% if start_date != end_date %} to {{ end_date|date:"d M Y" }}{% endif %}</h6>
         </div>
       </div>
     </div>
@@ -122,20 +117,20 @@
           <tbody>
             {% for row in register_rows %}
             <tr>
-              <td class="ps-3 text-muted small">{{ row.sr }}</td>
-              <td class="small fw-bold text-nowrap">{{ row.date }}</td>
+              <td class="ps-3 text-muted">{{ row.sr }}</td>
+              <td class="fw-bold text-nowrap">{{ row.date }}</td>
               <td><span class="badge bg-light text-dark border">#{{ row.invoice_no }}</span></td>
-              <td class="fw-bold small">{{ row.patient_name }}</td>
-              <td class="small text-muted">{{ row.patient_address }}</td>
-              <td class="small text-muted">{{ row.patient_phone }}</td>
-              <td class="small">{{ row.doctor_name }}</td>
-              <td class="fw-bold small">{{ row.product_name }}</td>
-              <td class="small text-muted">{{ row.packing }}</td>
-              <td class="small font-monospace">{{ row.batch_number }}</td>
-              <td class="small text-muted">{{ row.expiry_date }}</td>
+              <td class="fw-bold">{{ row.patient_name }}</td>
+              <td class="text-muted">{{ row.patient_address }}</td>
+              <td class="text-muted">{{ row.patient_phone }}</td>
+              <td >{{ row.doctor_name }}</td>
+              <td class="fw-bold">{{ row.product_name }}</td>
+              <td class="text-muted">{{ row.packing }}</td>
+              <td class="font-monospace">{{ row.batch_number }}</td>
+              <td class="text-muted">{{ row.expiry_date }}</td>
               <td class="text-center fw-bold">{{ row.quantity }}</td>
-              <td class="text-end small">₹{{ row.unit_price }}</td>
-              <td class="text-end fw-bold pe-3">₹{{ row.total }}</td>
+              <td class="text-end">₹{{ row.unit_price|floatformat:2 }}</td>
+              <td class="text-end fw-bold pe-3">₹{{ row.total|floatformat:2 }}</td>
             </tr>
             {% empty %}
             <tr>
