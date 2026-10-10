@@ -1029,6 +1029,7 @@ class SubstituteSearchAPI(LoginRequiredMixin,View):
     """Returns smart AI-matched in-stock drug substitutes with profit margin calculation."""
     def get(self, request):
         product_id = request.GET.get('product_id')
+        sale_type = request.GET.get('sale_type', 'strip')
         if not product_id:
             return JsonResponse([], safe=False)
         

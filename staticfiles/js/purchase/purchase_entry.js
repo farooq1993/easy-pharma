@@ -656,9 +656,10 @@ async function addItem() {
 
     if (!batch) { showToast('Batch number required', 'error'); return; }
 
-    const isAyurvedic = selectedProduct && selectedProduct.schedule_name && selectedProduct.schedule_name.toUpperCase().trim() === 'AYURVEDIC';
+    const schedName = selectedProduct && selectedProduct.schedule_name ? selectedProduct.schedule_name.toUpperCase().trim() : '';
+    const isExpiryExempt = schedName === 'AYURVEDIC' || schedName === 'GENERAL';
     if (!expiry) {
-        if (isAyurvedic) {
+        if (isExpiryExempt) {
             expiry = '2099-12';
         } else {
             showToast('Expiry required', 'error');
@@ -1360,14 +1361,15 @@ function saveEditItem() {
 
     if (!batch) { showToast('Batch number required', 'error'); return; }
     
-    const isAyurvedic = item && item.schedule_name && item.schedule_name.toUpperCase().trim() === 'AYURVEDIC';
-    if ((!em || !ey || ey.length < 4) && !isAyurvedic) { showToast('Valid expiry required', 'error'); return; }
+    const schedName = item && item.schedule_name ? item.schedule_name.toUpperCase().trim() : '';
+    const isExpiryExempt = schedName === 'AYURVEDIC' || schedName === 'GENERAL';
+    if ((!em || !ey || ey.length < 4) && !isExpiryExempt) { showToast('Valid expiry required', 'error'); return; }
     if (isNaN(qty) || qty <= 0) { showToast('Valid quantity required', 'error'); return; }
     if (isNaN(price) || price <= 0) { showToast('Valid cost price required', 'error'); return; }
 
     let expiry_date = '';
     if (!em || !ey) {
-        expiry_date = isAyurvedic ? '2099-12-01' : '';
+        expiry_date = isExpiryExempt ? '2099-12-01' : '';
         if (!expiry_date) { showToast('Valid expiry required', 'error'); return; }
     } else {
         expiry_date = `${ey}-${em}-01`;
@@ -2333,6 +2335,17 @@ document.addEventListener('DOMContentLoaded', function() {
             if (id === 'itemExpiryInput') {
                 e.preventDefault();
                 const inputEl = document.getElementById('itemExpiryInput');
+                const schedName = selectedProduct && selectedProduct.schedule_name ? selectedProduct.schedule_name.toUpperCase().trim() : '';
+                const isExpiryExempt = schedName === 'AYURVEDIC' || schedName === 'GENERAL';
+
+                if (isExpiryExempt && (!inputEl.value.trim() || !ExpiryDateHelper.parse(inputEl.value))) {
+                    inputEl.classList.remove('is-invalid');
+                    syncExpiryHidden();
+                    const qtyEl = document.getElementById('itemQty');
+                    if (qtyEl) { qtyEl.focus(); qtyEl.select(); }
+                    return;
+                }
+
                 const parsed = ExpiryDateHelper.parse(inputEl.value);
                 if (!parsed) {
                     showToast('Enter a valid expiry, e.g. 04-26 or type 0426', 'error');
@@ -2343,7 +2356,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 inputEl.value = parsed.display;
                 syncExpiryHidden();
                 const qtyEl = document.getElementById('itemQty');
-                qtyEl.focus(); qtyEl.select();
+                if (qtyEl) { qtyEl.focus(); qtyEl.select(); }
                 return;
             }
             if (id === 'itemTax') {
