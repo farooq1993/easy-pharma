@@ -489,25 +489,32 @@ class AIProductAutoFillAPI(LoginRequiredMixin, View):
             if not product_name:
                 return JsonResponse({'success': False, 'error': 'Medicine name is required.'})
 
-            from easypharma.utility.purchase_ocr_service import GEMINI_API_KEY
-            api_key = GEMINI_API_KEY
-            if api_key:
-                api_key = api_key.split('#')[0].strip().split()[0]
+            from easypharma.utility.purchase_ocr_service import get_gemini_api_keys
+            api_keys = get_gemini_api_keys()
             
-            if not api_key:
+            if not api_keys:
                 return JsonResponse({'success': False, 'error': 'AI Auto-Fill service is not configured. Please contact administrator.'})
+            
+            api_key = api_keys[0]
 
             prompt = (
                 f"You are an expert Indian pharmacy database AI.\n"
-                f"Given the medicine name: '{product_name}', look up and return accurate specifications and master details used in Indian pharmacy inventory:\n\n"
-                f"1. product_name: Full clean brand name with strength/dosage (e.g. 'Zerodol SP Tablet')\n"
+                f"Given the medicine name: '{product_name}', look up and return accurate specifications and master details used in Indian pharmacy inventory.\n\n"
+                f"CRITICAL GUIDELINES:\n"
+                f"- You have access to Google Search. If you do not recognize the brand or medicine instantly (e.g., 'Meqsel Tablet'), you MUST use Google Search to find its exact composition, manufacturer, and standard packing (from sites like 1mg, Pharmeasy, etc.).\n"
+                f"- Only if a medicine cannot be found on the internet at all, leave 'company', 'content', and 'packing' as EMPTY strings (\"\"). Do NOT invent details.\n"
+                f"- If '{product_name}' is a generic chemical name (e.g. 'Albendazole') and not a brand, leave the 'company' field EMPTY (\"\").\n"
+                f"- For 'packing', if the exact volume or strip size is unknown, leave it empty or provide a safe generic like '1 BOTTLE' or '10 TABLETS / STRIP'. Do NOT hallucinate sizes like 10ML if it could be 30ML.\n"
+                f"- For 'tax_rate', provide the strict Indian GST rate for the molecule (usually 5.0 for standard drugs, 12.0 for essentials/life-saving).\n\n"
+                f"Fields:\n"
+                f"1. product_name: Full clean brand name with strength (e.g. 'Zerodol SP Tablet')\n"
                 f"2. packing: Standard packaging string (e.g. '10 Tablets / Strip', '100ml Bottle', '1 Injection')\n"
                 f"3. conversion_factor: Integer units per box/strip (e.g. 10 for a strip of 10 tablets, 1 for syrup/injection/creams)\n"
-                f"4. product_type: Product category (e.g. 'Tablet', 'Capsule', 'Syrup', 'Injection', 'Ointment', 'Gel', 'Drops', 'Sachet')\n"
-                f"5. tax_rate: Standard GST percentage as number (e.g. 5.0, 12.0, 18.0. Default to 12.0 for standard medicines, 5.0 for essentials)\n"
-                f"6. schedule: Drug schedule classification (e.g. 'Schedule H', 'Schedule H1', 'Schedule C', 'Schedule X', 'OTC', 'General')\n"
-                f"7. content: Active chemical composition / salt formula (e.g. 'Aceclofenac 100mg + Paracetamol 325mg + Serratiopeptidase 15mg')\n"
-                f"8. company: Pharmaceutical manufacturer / brand company (e.g. 'Ipca Laboratories Ltd', 'Cipla Ltd', 'Sun Pharmaceutical', 'Mankind Pharma')\n"
+                f"4. product_type: Product category (e.g. 'Tablet', 'Capsule', 'Syrup', 'Injection', 'Ointment', 'Drops')\n"
+                f"5. tax_rate: Standard GST percentage as number (e.g. 5.0 or 12.0)\n"
+                f"6. schedule: Drug schedule classification (e.g. 'Schedule H', 'Schedule H1', 'OTC', 'General')\n"
+                f"7. content: Active chemical composition / salt formula (e.g. 'Aceclofenac 100mg + Paracetamol 325mg')\n"
+                f"8. company: Pharmaceutical manufacturer (LEAVE EMPTY if the input is a generic drug name)\n"
                 f"9. hsn_code: Standard 4 or 8 digit HSN code for medicines (e.g. '30049099' or '3004')\n\n"
                 f"Output MUST be a valid JSON object matching this schema:\n"
                 f"{{\n"
@@ -645,4 +652,6 @@ class AIProductAutoFillAPI(LoginRequiredMixin, View):
                 }
             })
         except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)}, status=400)
+            import traceback
+            traceback.print_exc()
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)
