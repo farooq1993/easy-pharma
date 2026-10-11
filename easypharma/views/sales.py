@@ -828,10 +828,19 @@ class ProductSearchAPI(LoginRequiredMixin,View):
                 limit = int(limit_str)
             except ValueError:
                 limit = None
+        
+        # Enforce safe default limit to prevent server overload and tablet freeze
+        if limit is None:
+            limit = 35 if query else 25
+        elif query:
+            limit = min(limit, 50)
+        else:
+            limit = min(limit, 2000)
+
         tenant_id = request.tenant.id
         
         # Include limit in cache key if limiting
-        lim_part = f":lim{limit}" if limit else ""
+        lim_part = f":lim{limit}"
         cache_key = f"{self._cache_key(tenant_id, query)}{lim_part}"
 
         setup = GeneralSetup.objects.filter(tenant_id=tenant_id).first()
@@ -885,10 +894,7 @@ class ProductSearchAPI(LoginRequiredMixin,View):
             'compny_name__company_name', 'product_tax__tax_rate'
         )
 
-        if limit:
-            products = products_qs[:limit]
-        else:
-            products = products_qs
+        products = products_qs[:limit]
         data = []
         for p in products:
             batches = list(p.batches.all())
