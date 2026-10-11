@@ -534,7 +534,7 @@
         try {
             let products = [];
             if (navigator.onLine) {
-                const response = await fetch('/api/products/search/?limit=50');
+                const response = await fetch('/api/products/search/?limit=25');
                 if (response.ok) {
                     products = await response.json();
                 }
@@ -563,8 +563,9 @@
             searchSelectedIndex = -1;
             let batchIndex = 0;
 
-            // Safe data extraction
-            const products = data?.results || data?.products || data || [];
+            // Safe data extraction - cap at max 30 to keep tablet/mobile DOM fast & responsive
+            const rawProducts = data?.results || data?.products || data || [];
+            const products = Array.isArray(rawProducts) ? rawProducts.slice(0, 30) : [];
 
             if (!Array.isArray(products) || products.length === 0) {
                 resultsDiv.innerHTML = `
@@ -712,10 +713,13 @@
         }
     }
 
+    let _posSearchAbortController = null;
+
     searchInput.addEventListener('input', (e) => {
         clearTimeout(_posDebounceTimer);
         const query = e.target.value.trim();
         if (query.length < 1) { 
+            if (_posSearchAbortController) _posSearchAbortController.abort();
             showDefaultProducts();
             return; 
         }
@@ -727,6 +731,11 @@
         }
 
         _posDebounceTimer = setTimeout(async () => {
+            if (_posSearchAbortController) {
+                _posSearchAbortController.abort();
+            }
+            _posSearchAbortController = new AbortController();
+
             try {
                 if (!navigator.onLine) {
                     const offlineResults = await OfflineSync.searchOfflineProducts(query, 'pos');
@@ -734,21 +743,32 @@
                     return;
                 }
 
-                const response = await fetch(`/api/products/search/?q=${encodeURIComponent(query)}`);
+                const response = await fetch(`/api/products/search/?q=${encodeURIComponent(query)}&limit=30`, {
+                    signal: _posSearchAbortController.signal
+                });
                 if (!response.ok) {
                     throw new Error('Search request failed');
                 }
                 const data = await response.json();
+                
+                // Avoid race conditions if input changed while fetch was pending
+                if (searchInput.value.trim() !== query) {
+                    return;
+                }
+
                 _posSearchCache[query] = data;
                 renderSearchResults(data);
             } catch (err) {
+                if (err.name === 'AbortError') return;
                 console.warn('[POS] Fetch error, using offline store:', err);
                 if (typeof OfflineSync !== 'undefined') {
                     const offlineResults = await OfflineSync.searchOfflineProducts(query, 'pos');
-                    renderSearchResults(offlineResults);
+                    if (searchInput.value.trim() === query) {
+                        renderSearchResults(offlineResults);
+                    }
                 }
             }
-        }, 250);
+        }, 300);
     });
 
     searchInput.addEventListener('focus', () => {
