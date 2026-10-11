@@ -713,62 +713,58 @@
         }
     }
 
-    let _posSearchAbortController = null;
+    let _currentSearchSeq = 0;
 
     searchInput.addEventListener('input', (e) => {
         clearTimeout(_posDebounceTimer);
         const query = e.target.value.trim();
         if (query.length < 1) { 
-            if (_posSearchAbortController) _posSearchAbortController.abort();
             showDefaultProducts();
             return; 
         }
 
-        // Cache hit
-        if (_posSearchCache[query]) {
-            renderSearchResults(_posSearchCache[query]);
+        const lowerQuery = query.toLowerCase();
+        // Cache hit (case-insensitive)
+        if (_posSearchCache[lowerQuery]) {
+            renderSearchResults(_posSearchCache[lowerQuery]);
             return;
         }
 
         _posDebounceTimer = setTimeout(async () => {
-            if (_posSearchAbortController) {
-                _posSearchAbortController.abort();
-            }
-            _posSearchAbortController = new AbortController();
+            const seq = ++_currentSearchSeq;
 
             try {
                 if (!navigator.onLine) {
                     const offlineResults = await OfflineSync.searchOfflineProducts(query, 'pos');
-                    renderSearchResults(offlineResults);
+                    if (seq === _currentSearchSeq) {
+                        renderSearchResults(offlineResults);
+                    }
                     return;
                 }
 
-                const response = await fetch(`/api/products/search/?q=${encodeURIComponent(query)}&limit=30`, {
-                    signal: _posSearchAbortController.signal
-                });
+                const response = await fetch(`/api/products/search/?q=${encodeURIComponent(query)}&limit=30`);
                 if (!response.ok) {
                     throw new Error('Search request failed');
                 }
                 const data = await response.json();
                 
-                // Avoid race conditions if input changed while fetch was pending
-                if (searchInput.value.trim() !== query) {
-                    return;
-                }
+                // Cache response with lower-case key for instant subsequent hits
+                _posSearchCache[lowerQuery] = data;
 
-                _posSearchCache[query] = data;
-                renderSearchResults(data);
+                // Only render if this is still the most recent search
+                if (seq === _currentSearchSeq) {
+                    renderSearchResults(data);
+                }
             } catch (err) {
-                if (err.name === 'AbortError') return;
                 console.warn('[POS] Fetch error, using offline store:', err);
-                if (typeof OfflineSync !== 'undefined') {
+                if (typeof OfflineSync !== 'undefined' && seq === _currentSearchSeq) {
                     const offlineResults = await OfflineSync.searchOfflineProducts(query, 'pos');
-                    if (searchInput.value.trim() === query) {
+                    if (seq === _currentSearchSeq) {
                         renderSearchResults(offlineResults);
                     }
                 }
             }
-        }, 300);
+        }, 280);
     });
 
     searchInput.addEventListener('focus', () => {
