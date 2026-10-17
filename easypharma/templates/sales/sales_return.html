@@ -2,422 +2,499 @@
 {% load static %}
 
 {% block content %}
-<div class="container-fluid py-4">
-    <div class="row align-items-center mb-4">
+<div class="container-fluid py-3">
+    <!-- Header & Breadcrumbs -->
+    <div class="row align-items-center mb-3 g-2">
         <div class="col">
-            <h2 class="fw-bold mb-0">Sales Returns</h2>
-            <p class="text-muted small mb-0">Process customer returns by selecting items from their invoices.</p>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1" style="font-size: 0.85rem;">
+                    <li class="breadcrumb-item"><a href="{% url 'pos_list' %}" class="text-decoration-none text-muted"><i class="fas fa-file-invoice-dollar me-1"></i>Sales</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'pos_returns' %}" class="text-decoration-none text-muted">Returns</a></li>
+                    <li class="breadcrumb-item active text-primary fw-semibold" aria-current="page">
+                        {% if selected_return %}Edit Return ({{ selected_return.return_inv_no }}){% else %}New Sales Return{% endif %}
+                    </li>
+                </ol>
+            </nav>
+            <h3 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
+                <i class="fas fa-undo-alt text-primary"></i> 
+                <span>Sales Return & Refund</span>
+                {% if selected_return %}
+                <span class="badge bg-warning text-dark fs-6 fw-bold ms-2">Editing: {{ selected_return.return_inv_no }}</span>
+                {% endif %}
+            </h3>
+            <p class="text-muted small mb-0">Fast point-of-sale customer returns and invoice-linked credit notes.</p>
         </div>
-        <div class="col-auto">
-            <a href="{% url 'pos_returns' %}" class="btn btn-outline-secondary rounded-pill px-3 fw-bold">
-                <i class="fas fa-arrow-left me-1"></i> Back to List
+        <div class="col-auto d-flex gap-2">
+            <a href="{% url 'pos_returns' %}" class="btn btn-outline-secondary rounded-pill px-3 fw-semibold shadow-sm">
+                <i class="fas fa-list me-1"></i> Return Records
+            </a>
+            <a href="{% url 'pos' %}" class="btn btn-primary rounded-pill px-3 fw-semibold shadow-sm">
+                <i class="fas fa-cash-register me-1"></i> Open POS
             </a>
         </div>
     </div>
 
-    
-    {% if selected_customer or selected_customer_name or selected_invoice or selected_return or request.GET.customer_id or request.GET.invoice_id or request.GET.return_id or request.GET.tab == 'invoice' %}
-    <ul class="nav nav-tabs mb-4 border-0 gap-2" id="returnTabs" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link border-0 rounded-pill px-4 py-2 fw-bold" id="quick-tab" data-bs-toggle="tab" data-bs-target="#quick" type="button" role="tab" aria-selected="false" style="background-color: #f8f9fa; color: #6c757d;">
-                <i class="bi bi-lightning-charge-fill text-warning me-1"></i> Quick Return
-            </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active border-0 rounded-pill px-4 py-2 fw-bold" id="invoice-tab" data-bs-toggle="tab" data-bs-target="#invoice" type="button" role="tab" aria-selected="true" style="background-color: #f8f9fa; color: #6c757d;">
-                <i class="bi bi-receipt me-1"></i> Return by Invoice
-            </button>
-        </li>
-    </ul>
-    {% else %}
-    <ul class="nav nav-tabs mb-4 border-0 gap-2" id="returnTabs" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active border-0 rounded-pill px-4 py-2 fw-bold" id="quick-tab" data-bs-toggle="tab" data-bs-target="#quick" type="button" role="tab" aria-selected="true" style="background-color: #f8f9fa; color: #6c757d;">
-                <i class="bi bi-lightning-charge-fill text-warning me-1"></i> Quick Return
-            </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link border-0 rounded-pill px-4 py-2 fw-bold" id="invoice-tab" data-bs-toggle="tab" data-bs-target="#invoice" type="button" role="tab" aria-selected="false" style="background-color: #f8f9fa; color: #6c757d;">
-                <i class="bi bi-receipt me-1"></i> Return by Invoice
-            </button>
-        </li>
-    </ul>
+    <!-- Alert / Messages Container -->
+    {% if messages %}
+    <div class="mb-3">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show border-0 shadow-sm rounded-3 py-2 px-3 small d-flex align-items-center" role="alert">
+            <i class="bi bi-info-circle-fill me-2 fs-6"></i>
+            <div>{{ message }}</div>
+            <button type="button" class="btn-close py-2" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    </div>
     {% endif %}
-    
+
+    <!-- Custom Styling for Return Module -->
     <style>
-        .nav-tabs .nav-link.active {
-            background-color: #e0f2fe !important;
-            color: #0369a1 !important;
+        .return-nav-tabs {
+            background-color: #f1f5f9;
+            padding: 6px;
+            border-radius: 50rem;
+            display: inline-flex;
+            gap: 6px;
+            border: 1px solid #e2e8f0;
+        }
+        .return-nav-tabs .nav-link {
+            border: 0;
+            border-radius: 50rem;
+            padding: 8px 24px;
+            font-weight: 600;
+            font-size: 0.92rem;
+            color: #64748b;
+            background: transparent;
+            transition: all 0.2s ease;
+        }
+        .return-nav-tabs .nav-link.active {
+            background: #ffffff !important;
+            color: #0284c7 !important;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+        }
+        .return-nav-tabs .nav-link:hover:not(.active) {
+            color: #1e293b;
+        }
+        .search-input-group {
+            border: 2px solid #cbd5e1;
+            border-radius: 12px;
+            background: #ffffff;
+            transition: all 0.2s ease;
+            overflow: hidden;
+        }
+        .search-input-group:focus-within {
+            border-color: #0284c7;
+            box-shadow: 0 0 0 4px rgba(2, 132, 199, 0.15) !important;
+        }
+        .search-results-box {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 100%;
+            z-index: 1060;
+            max-height: 380px;
+            overflow-y: auto;
+            border-radius: 14px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
+            border: 1px solid #cbd5e1;
+            background: #ffffff;
+        }
+        .search-item-row {
+            padding: 12px 16px;
+            border-bottom: 1px solid #f1f5f9;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            text-decoration: none;
+            display: block;
+            color: #1e293b;
+        }
+        .search-item-row:last-child {
+            border-bottom: none;
+        }
+        .search-item-row:hover, .search-item-row.active {
+            background-color: #f0f9ff !important;
+            border-left: 4px solid #0284c7;
+            padding-left: 14px;
+        }
+        .clean-qty-input {
+            border: 1.5px solid #cbd5e1;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .clean-qty-input:focus {
+            border-color: #0284c7;
+            box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+        }
+        .badge-soft-primary { background-color: #e0f2fe; color: #0284c7; }
+        .badge-soft-success { background-color: #dcfce7; color: #15803d; }
+        .badge-soft-warning { background-color: #fef3c7; color: #b45309; }
+        .badge-soft-danger  { background-color: #fee2e2; color: #b91c1c; }
+        .card-custom {
+            border-radius: 16px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+            background: #ffffff;
+        }
+        .step-circle {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: #e2e8f0;
+            color: #475569;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.85rem;
+            margin-right: 8px;
+        }
+        .step-circle.active {
+            background-color: #0284c7;
+            color: #ffffff;
         }
     </style>
 
+    <!-- Navigation Tabs -->
+    <div class="mb-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <ul class="nav return-nav-tabs" id="returnTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if not selected_customer and not selected_customer_name and not selected_invoice and not selected_return and not request.GET.customer_id and not request.GET.invoice_id and not request.GET.return_id and request.GET.tab != 'invoice' %}active{% endif %}" 
+                        id="quick-tab" data-bs-toggle="tab" data-bs-target="#quick" type="button" role="tab" aria-selected="true">
+                    <i class="bi bi-lightning-charge-fill text-warning me-1"></i> Quick Fast Return
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link {% if selected_customer or selected_customer_name or selected_invoice or selected_return or request.GET.customer_id or request.GET.invoice_id or request.GET.return_id or request.GET.tab == 'invoice' %}active{% endif %}" 
+                        id="invoice-tab" data-bs-toggle="tab" data-bs-target="#invoice" type="button" role="tab" aria-selected="false">
+                    <i class="bi bi-receipt me-1"></i> Return by Invoice
+                </button>
+            </li>
+        </ul>
+        <div class="d-none d-md-flex align-items-center gap-2 text-muted small">
+            <span class="badge bg-light text-dark border px-2 py-1"><kbd>F2</kbd> Focus Search</span>
+            <span class="badge bg-light text-dark border px-2 py-1"><kbd>Enter</kbd> Add Item</span>
+        </div>
+    </div>
+
+    <!-- Tab Contents -->
     <div class="tab-content" id="returnTabsContent">
-        <!-- Quick Return Tab -->
-        <div class="tab-pane fade {% if not selected_customer and not selected_customer_name and not selected_invoice and not selected_return and not request.GET.customer_id and not request.GET.invoice_id and not request.GET.return_id and request.GET.tab != 'invoice' %}show active{% endif %}" id="quick" role="tabpanel" aria-labelledby="quick-tab">
-            <div class="card border-0 shadow-sm rounded-4 mb-4">
-                <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0 fw-bold"><i class="bi bi-cart-x text-danger me-2"></i> Fast POS Return</h5>
-                </div>
-                <div class="card-body p-4">
-                    <!-- Item Entry Form -->
-                    <div class="row g-3 align-items-end mb-4 p-3 bg-light rounded-3 border">
-                        <div class="col-md-5 position-relative">
-                            <label class="form-label fw-semibold text-secondary small mb-1">Product Name *</label>
-                            <input type="text" class="form-control border-2 shadow-none" id="quick_product_search" placeholder="Type to search (Use ? ? arrows)..." autocomplete="off">
-                            <input type="hidden" id="quick_product_id">
-                            <input type="hidden" id="quick_product_name">
-                            <div id="quickSearchResults" class="list-group position-absolute w-100 shadow-lg border-0" style="z-index: 1055; max-height: 250px; overflow-y: auto; display: none; margin-top: 4px; border-radius: 8px;"></div>
+        
+        <!-- ========================================== -->
+        <!-- TAB 1: QUICK FAST POS RETURN              -->
+        <!-- ========================================== -->
+        <div class="tab-pane fade {% if not selected_customer and not selected_customer_name and not selected_invoice and not selected_return and not request.GET.customer_id and not request.GET.invoice_id and not request.GET.return_id and request.GET.tab != 'invoice' %}show active{% endif %}" 
+             id="quick" role="tabpanel" aria-labelledby="quick-tab">
+            
+            <div class="row g-3">
+                <!-- Main Product Input & Cart Column -->
+                <div class="col-lg-8">
+                    <!-- Top Medicine Search & Selection Box -->
+                    <div class="card card-custom mb-3">
+                        <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <h6 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                                <span class="badge bg-primary-subtle text-primary p-2 rounded-3"><i class="fas fa-search-plus"></i></span>
+                                <span>Search Medicine & Select Batch to Return</span>
+                            </h6>
+                            <div class="d-flex align-items-center gap-2 text-muted small">
+                                <span class="badge bg-light text-muted border px-2 py-1"><kbd>/</kbd> or <kbd>F2</kbd> Focus Search</span>
+                                <span class="badge bg-light text-muted border px-2 py-1"><kbd>Enter</kbd> Add</span>
+                            </div>
                         </div>
-                        <div class="col-md-3">
-                            <label class="form-label fw-semibold text-secondary small mb-1">Batch Number</label>
-                            <select class="form-select border-2 shadow-none" id="quick_batch_select">
-                                <option value="">-- Select --</option>
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label fw-semibold text-secondary small mb-1">Return Qty *</label>
-                            <input type="number" class="form-control border-2 text-center fw-bold shadow-none" id="quick_qty" min="1" value="1">
-                        </div>
-                        <div class="col-md-2">
-                            <button type="button" class="btn btn-primary w-100 fw-bold" id="btn_add_return_item">
-                                <i class="bi bi-plus-lg"></i> Add Item
-                            </button>
+                        <div class="card-body p-3 p-md-4">
+                            <!-- 1. Dedicated Full-Width Medicine Search Bar -->
+                            <div class="position-relative mb-3">
+                                <label class="form-label fw-bold small text-secondary mb-1 d-flex align-items-center gap-1">
+                                    <i class="fas fa-pills text-primary"></i> Search Medicine by Name, Salt or Barcode <span class="text-danger">*</span>
+                                </label>
+                                <div class="input-group input-group-lg search-input-group shadow-sm">
+                                    <span class="input-group-text bg-white border-end-0 text-primary ps-3 pe-2">
+                                        <i class="fas fa-search fs-5"></i>
+                                    </span>
+                                    <input type="text" class="form-control border-start-0 border-end-0 ps-2 py-3 fs-6 shadow-none" 
+                                           id="quick_product_search" 
+                                           placeholder="Type medicine name (e.g. Calpol, Paracetamol, A 250)... (Press ↑ ↓ to navigate)" 
+                                           autocomplete="off"
+                                           style="min-height: 50px;">
+                                    <span class="input-group-text bg-white border-start-0 pe-3">
+                                        <button class="btn btn-sm btn-link text-muted p-0 d-none text-decoration-none" type="button" id="quick_clear_btn" title="Clear selection">
+                                            <i class="fas fa-times-circle fs-5 text-secondary"></i>
+                                        </button>
+                                    </span>
+                                </div>
+                                <input type="hidden" id="quick_product_id">
+                                <input type="hidden" id="quick_product_name">
+                                <input type="hidden" id="quick_product_cf" value="1">
+                                
+                                <!-- Search Results Dropdown -->
+                                <div id="quickSearchResults" class="search-results-box" style="display: none;"></div>
+                            </div>
+
+                            <!-- 2. Selected Medicine Status, Batch & Return Qty Row -->
+                            <div class="row g-3 align-items-end">
+                                <!-- Selected Medicine Indicator -->
+                                <div class="col-md-5">
+                                    <label class="form-label fw-bold small text-secondary mb-1 d-flex align-items-center gap-1">
+                                        <i class="fas fa-check-circle text-success"></i> Active Medicine
+                                    </label>
+                                    <div class="form-control bg-light d-flex align-items-center justify-content-between py-2 shadow-none border" style="min-height: 46px; border-radius: 8px;">
+                                        <div class="text-truncate me-2">
+                                            <span class="fw-bold text-dark d-block text-truncate" id="displaySelectedName" style="font-size: 0.95rem;">None (Search above)</span>
+                                            <small class="text-muted d-block text-truncate" id="displaySelectedMeta" style="font-size: 0.75rem;">Type medicine name in the search bar</small>
+                                        </div>
+                                        <span class="badge bg-secondary-subtle text-secondary rounded-pill px-2 py-1 small" id="displaySelectedBadge">Pending</span>
+                                    </div>
+                                </div>
+
+                                <!-- Batch Selection -->
+                                <div class="col-md-3">
+                                    <label class="form-label fw-bold small text-secondary mb-1 d-flex align-items-center gap-1">
+                                        <i class="fas fa-boxes text-secondary"></i> Batch Number
+                                    </label>
+                                    <select class="form-select shadow-none" id="quick_batch_select" style="min-height: 46px; border-radius: 8px; font-size: 0.9rem;">
+                                        <option value="">-- Search product first --</option>
+                                    </select>
+                                </div>
+
+                                <!-- Return Quantity (Clean Standard Input Type) -->
+                                <div class="col-md-2">
+                                    <label class="form-label fw-bold small text-secondary mb-1 d-flex align-items-center gap-1">
+                                        <i class="fas fa-calculator text-secondary"></i> Return Qty <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="number" 
+                                           class="form-control text-center fw-bold shadow-none clean-qty-input" 
+                                           id="quick_qty" 
+                                           min="1" 
+                                           value="1" 
+                                           placeholder="1"
+                                           style="min-height: 46px; border-radius: 8px; font-size: 1.1rem; border: 1.5px solid #cbd5e1;">
+                                </div>
+
+                                <!-- Add Button -->
+                                <div class="col-md-2">
+                                    <button type="button" class="btn btn-primary w-100 fw-bold shadow-sm d-flex align-items-center justify-content-center gap-2" id="btn_add_return_item" style="min-height: 46px; border-radius: 8px;">
+                                        <i class="fas fa-plus"></i> Add Item
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Return Cart Table -->
-                    <form method="post" id="quickReturnForm">
+                    <!-- ======================================================= -->
+                    <!-- DYNAMIC PATIENT SALES HISTORY CARD (LAST 5 PATIENTS)    -->
+                    <!-- ======================================================= -->
+                    <div class="card card-custom mb-3" id="productSalesHistoryCard" style="display: none;">
+                        <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <div>
+                                <h6 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                                    <i class="fas fa-history text-primary"></i>
+                                    <span>Recent Patient Purchase History for <span class="text-primary" id="selectedProductNameHeader"></span></span>
+                                    <span class="badge badge-soft-primary rounded-pill px-2" id="salesHistoryCountBadge">0 Records</span>
+                                </h6>
+                                <small class="text-muted" id="salesHistorySubtitle">Showing last 5 sales records. Click 'Return This' to return directly from a bill.</small>
+                            </div>
+                            <div id="salesHistoryWarningBadge"></div>
+                        </div>
+                        <div class="card-body p-0">
+                            <!-- Alert when all sold units have been returned -->
+                            <div id="salesDepletedAlert" class="alert alert-warning border-0 rounded-0 mb-0 py-2 px-3 small d-none d-flex align-items-center gap-2">
+                                <i class="fas fa-exclamation-triangle fs-5 text-warning-emphasis"></i>
+                                <div>
+                                    <strong>No Returnable Stock Available:</strong> All units previously sold for this medicine have already been returned. Cannot create a new return without an active unreturned sale.
+                                </div>
+                            </div>
+
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0" id="productSalesHistoryTable">
+                                    <thead class="bg-light text-muted small text-uppercase" style="font-size: 0.75rem;">
+                                        <tr>
+                                            <th class="ps-3 py-2">Patient / Customer</th>
+                                            <th>Invoice #</th>
+                                            <th>Date & Time</th>
+                                            <th>Batch</th>
+                                            <th class="text-center">Sold</th>
+                                            <th class="text-center">Returned</th>
+                                            <th class="text-center">Available</th>
+                                            <th class="text-end">Unit Price</th>
+                                            <th class="text-center pe-3" style="width: 140px;">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="productSalesHistoryTbody">
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- View More / Load All Records Footer -->
+                            <div class="p-2 bg-light border-top text-center" id="loadMoreSalesContainer" style="display: none;">
+                                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill fw-bold px-4 shadow-sm" id="btnLoadMoreSales">
+                                    <i class="fas fa-chevron-down me-1"></i> View More Records
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Return Cart Card -->
+                    <div class="card card-custom mb-3">
+                        <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                                <i class="fas fa-shopping-basket text-primary"></i>
+                                <span>Return Cart Items</span>
+                                <span class="badge badge-soft-primary rounded-pill px-2" id="cartItemCountBadge">0 items</span>
+                            </h6>
+                            <button type="button" class="btn btn-sm btn-link text-danger text-decoration-none p-0 fw-semibold d-none" id="btnClearCart">
+                                <i class="fas fa-trash-alt me-1"></i> Clear Cart
+                            </button>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0" id="quickReturnTable">
+                                    <thead class="bg-light text-muted small text-uppercase" style="font-size: 0.75rem;">
+                                        <tr>
+                                            <th class="ps-3 py-3" style="min-width: 220px;">Medicine Name & Linked Sale</th>
+                                            <th style="min-width: 110px;">Batch</th>
+                                            <th class="text-end" style="min-width: 90px;">Unit MRP</th>
+                                            <th class="text-center" style="min-width: 130px;">Return Qty</th>
+                                            <th class="text-end" style="min-width: 100px;">Est. Refund</th>
+                                            <th class="text-center pe-3" style="width: 60px;">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="quickCartTbody">
+                                        <tr id="emptyCartRow">
+                                            <td colspan="6" class="text-center py-5 text-muted">
+                                                <div class="mb-3 opacity-50">
+                                                    <i class="bi bi-basket3 text-secondary" style="font-size: 3.5rem;"></i>
+                                                </div>
+                                                <h6 class="fw-bold text-dark mb-1">Return cart is currently empty</h6>
+                                                <p class="small text-muted mb-0">Search and select medicines above or click <strong>'Return This'</strong> from the patient sales history.</p>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Checkout Summary & Refund Form -->
+                <div class="col-lg-4">
+                    <form method="post" id="quickReturnForm" action="{% url 'pos_returns_create' %}">
                         {% csrf_token %}
                         <input type="hidden" name="action" value="quick_return">
-                        
-                        <div class="table-responsive mb-4">
-                            <table class="table table-hover align-middle border" id="quickReturnTable">
-                                <thead class="table-light text-muted small">
-                                    <tr>
-                                        <th>Product Name</th>
-                                        <th>Batch</th>
-                                        <th class="text-end">Unit MRP</th>
-                                        <th class="text-center">Qty</th>
-                                        <th class="text-end">Est. Refund</th>
-                                        <th class="text-center">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr id="emptyCartRow">
-                                        <td colspan="6" class="text-center py-4 text-muted">No items added to return cart.</td>
-                                    </tr>
-                                </tbody>
-                                <tfoot class="bg-light fw-bold" style="display: none;" id="cartFooter">
-                                    <tr>
-                                        <td colspan="4" class="text-end">Total Estimated Refund:</td>
-                                        <td class="text-end text-danger fs-5" id="cartTotalRefund">₹0.00</td>
-                                        <td></td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
+                        <div id="hiddenCartInputsContainer"></div>
 
-                        <!-- Final Checkout row -->
-                        <div class="row align-items-center bg-white p-3 border rounded-3 shadow-sm" id="checkoutRow" style="display: none;">
-                            <div class="col-md-6 mb-3 mb-md-0">
-                                <label class="form-label fw-semibold text-secondary small mb-1">Patient Name <span class="text-muted fw-normal">(Optional)</span></label>
-                                <input type="text" class="form-control form-control-lg border-2 shadow-none" name="patient_name" placeholder="Walk-in Customer">
+                        <div class="card card-custom sticky-top" style="top: 20px;">
+                            <div class="card-header bg-white border-bottom py-3">
+                                <h6 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                                    <i class="fas fa-file-invoice-dollar text-success"></i>
+                                    <span>Refund & Voucher Summary</span>
+                                </h6>
                             </div>
-                            <div class="col-md-6 text-md-end">
-                                <button type="submit" class="btn btn-danger btn-lg px-5 fw-bold rounded-pill shadow-sm">
-                                    <i class="bi bi-check2-circle me-2"></i> Confirm Return
+                            <div class="card-body p-3 p-md-4">
+                                <!-- Refund Amount Highlight Card -->
+                                <div class="p-3 rounded-3 mb-3 text-center" style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 1px solid #bbf7d0;">
+                                    <span class="text-muted small fw-bold text-uppercase d-block mb-1">Total Refund to Customer</span>
+                                    <h2 class="fw-bold text-success mb-0" id="cartTotalRefund">₹0.00</h2>
+                                    <span class="small text-muted" id="cartSummaryText">0 medicines in cart</span>
+                                </div>
+
+                                <!-- Customer / Patient Details -->
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold small text-secondary mb-1">Customer / Patient Name</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-white text-muted"><i class="fas fa-user"></i></span>
+                                        <input type="text" class="form-control shadow-none" name="patient_name" id="quick_patient_name" placeholder="Walk-in Customer">
+                                    </div>
+                                    <small class="text-muted" style="font-size: 0.75rem;">Auto-populated if returned from patient history.</small>
+                                </div>
+
+                                <!-- Refund Mode -->
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold small text-secondary mb-1">Refund Method</label>
+                                    <div class="d-grid gap-2 d-flex">
+                                        <input type="radio" class="btn-check" name="refund_mode" id="refund_cash" value="Cash" checked>
+                                        <label class="btn btn-outline-secondary btn-sm flex-fill fw-bold" for="refund_cash">
+                                            <i class="fas fa-money-bill-wave me-1"></i> Cash
+                                        </label>
+
+                                        <input type="radio" class="btn-check" name="refund_mode" id="refund_upi" value="UPI">
+                                        <label class="btn btn-outline-secondary btn-sm flex-fill fw-bold" for="refund_upi">
+                                            <i class="fas fa-qrcode me-1"></i> UPI
+                                        </label>
+
+                                        <input type="radio" class="btn-check" name="refund_mode" id="refund_credit" value="Credit">
+                                        <label class="btn btn-outline-secondary btn-sm flex-fill fw-bold" for="refund_credit">
+                                            <i class="fas fa-wallet me-1"></i> Note
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Quick Reason Chips -->
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold small text-secondary mb-1">Return Reason</label>
+                                    <input type="text" class="form-control form-control-sm mb-2 shadow-none" id="quick_reason_input" name="reason" placeholder="e.g. Expired, Doctor changed, Damaged...">
+                                    <div class="d-flex flex-wrap gap-1">
+                                        <button type="button" class="btn btn-sm btn-light border py-0 px-2 reason-chip" style="font-size: 0.75rem;" data-reason="Customer changed mind">Customer mind</button>
+                                        <button type="button" class="btn btn-sm btn-light border py-0 px-2 reason-chip" style="font-size: 0.75rem;" data-reason="Wrong medicine dispensed">Wrong medicine</button>
+                                        <button type="button" class="btn btn-sm btn-light border py-0 px-2 reason-chip" style="font-size: 0.75rem;" data-reason="Doctor changed medicine">Doctor changed</button>
+                                        <button type="button" class="btn btn-sm btn-light border py-0 px-2 reason-chip" style="font-size: 0.75rem;" data-reason="Damaged / Expired">Expired/Damaged</button>
+                                    </div>
+                                </div>
+
+                                <hr class="my-3 text-muted">
+
+                                <!-- Confirm Return Button -->
+                                <button type="submit" class="btn btn-success btn-lg w-100 fw-bold rounded-pill shadow" id="btnConfirmQuickReturn" disabled>
+                                    <i class="fas fa-check-circle me-1"></i> Confirm & Refund
                                 </button>
+                                <div class="text-center mt-2">
+                                    <small class="text-muted" style="font-size: 0.75rem;">Inventory stock will be restored automatically.</small>
+                                </div>
                             </div>
                         </div>
                     </form>
                 </div>
             </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- TAB 2: RETURN BY INVOICE (3-STEP WIZARD)   -->
+        <!-- ========================================== -->
+        <div class="tab-pane fade {% if selected_customer or selected_customer_name or selected_invoice or selected_return or request.GET.customer_id or request.GET.invoice_id or request.GET.return_id or request.GET.tab == 'invoice' %}show active{% endif %}" 
+             id="invoice" role="tabpanel" aria-labelledby="invoice-tab">
             
-            <script>
-                document.addEventListener('DOMContentLoaded', function() {
-                    const searchInput = document.getElementById('quick_product_search');
-                    const resultsDiv = document.getElementById('quickSearchResults');
-                    const idInput = document.getElementById('quick_product_id');
-                    const nameInput = document.getElementById('quick_product_name');
-                    const batchSelect = document.getElementById('quick_batch_select');
-                    const qtyInput = document.getElementById('quick_qty');
-                    const btnAdd = document.getElementById('btn_add_return_item');
-                    
-                    const tbody = document.querySelector('#quickReturnTable tbody');
-                    const emptyRow = document.getElementById('emptyCartRow');
-                    const cartFooter = document.getElementById('cartFooter');
-                    const totalRefundEl = document.getElementById('cartTotalRefund');
-                    const checkoutRow = document.getElementById('checkoutRow');
-                    
-                    let debounceTimer;
-                    let currentFocus = -1;
-                    let totalRefund = 0;
+            {% if selected_return %}
+            <div class="alert alert-warning border-0 shadow-sm rounded-3 py-2 px-3 mb-3 d-flex align-items-center justify-content-between">
+                <div>
+                    <i class="fas fa-edit me-2"></i>
+                    <strong>Editing Return Voucher: {{ selected_return.return_inv_no }}</strong>
+                    <span class="text-muted ms-2">(Invoice: #{{ selected_return.sale_invoice.invoice_number }})</span>
+                </div>
+                <a href="{% url 'pos_returns_create' %}" class="btn btn-sm btn-outline-dark fw-bold">Cancel Edit</a>
+            </div>
+            {% endif %}
 
-                    // Keyboard navigation for autocomplete
-                    searchInput.addEventListener('keydown', function(e) {
-                        const items = resultsDiv.getElementsByTagName('a');
-                        if (e.key === 'ArrowDown') {
-                            e.preventDefault();
-                            currentFocus++;
-                            addActive(items);
-                        } else if (e.key === 'ArrowUp') {
-                            e.preventDefault();
-                            currentFocus--;
-                            addActive(items);
-                        } else if (e.key === 'Enter') {
-                            e.preventDefault();
-                            if (currentFocus > -1 && items.length > 0) {
-                                items[currentFocus].click();
-                            } else if (items.length > 0) {
-                                items[0].click(); // Auto-select first if none focused
-                            }
-                        }
-                    });
-
-                    function addActive(items) {
-                        if (!items) return;
-                        removeActive(items);
-                        if (currentFocus >= items.length) currentFocus = 0;
-                        if (currentFocus < 0) currentFocus = items.length - 1;
-                        items[currentFocus].classList.add('bg-primary', 'text-white');
-                        
-                        const darkText = items[currentFocus].querySelector('.text-dark');
-                        if (darkText) {
-                            darkText.classList.remove('text-dark');
-                            darkText.classList.add('text-white');
-                            darkText.dataset.wasDark = 'true';
-                        }
-                        
-                        // Change text-muted inside to text-white for visibility
-                        const mutedText = items[currentFocus].querySelector('.text-muted');
-                        if (mutedText) {
-                            mutedText.classList.remove('text-muted');
-                            mutedText.classList.add('text-white-50');
-                            mutedText.dataset.wasMuted = 'true';
-                        }
-                        
-                        items[currentFocus].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-                    }
-                    function removeActive(items) {
-                        for (let i = 0; i < items.length; i++) {
-                            items[i].classList.remove('bg-primary', 'text-white');
-                            const darkText = items[i].querySelector('.text-white[data-was-dark="true"]');
-                            if (darkText) {
-                                darkText.classList.remove('text-white');
-                                darkText.classList.add('text-dark');
-                                delete darkText.dataset.wasDark;
-                            }
-                            const mutedText = items[i].querySelector('.text-white-50');
-                            if (mutedText && mutedText.dataset.wasMuted === 'true') {
-                                mutedText.classList.remove('text-white-50');
-                                mutedText.classList.add('text-muted');
-                            }
-                        }
-                    }
-
-                    searchInput.addEventListener('input', function() {
-                        clearTimeout(debounceTimer);
-                        const q = this.value.trim();
-                        currentFocus = -1;
-                        if (q.length < 2) {
-                            resultsDiv.style.display = 'none';
-                            return;
-                        }
-                        
-                        debounceTimer = setTimeout(async () => {
-                            try {
-                                const response = await fetch(`/api/products/master-search/?limit=10&q=${encodeURIComponent(q)}`);
-                                if (response.ok) {
-                                    const products = await response.json();
-                                    resultsDiv.innerHTML = '';
-                                    if (products.length === 0) {
-                                        resultsDiv.innerHTML = '<div class="list-group-item text-muted text-center py-2">No products found</div>';
-                                    } else {
-                                        products.forEach((p, idx) => {
-                                            const a = document.createElement('a');
-                                            a.href = '#';
-                                            a.className = 'list-group-item list-group-item-action py-2';
-                                            a.innerHTML = `
-                                                <div class="fw-bold text-dark" style="font-size:0.9rem;">${p.name}</div>
-                                                <div class="small text-muted" style="font-size:0.75rem;">${p.packing || 'Standard'}</div>
-                                            `;
-                                            a.addEventListener('mouseenter', () => {
-                                                const items = resultsDiv.getElementsByTagName('a');
-                                                currentFocus = Array.from(items).indexOf(a);
-                                                addActive(items);
-                                            });
-                                            a.onclick = async (e) => {
-                                                e.preventDefault();
-                                                searchInput.value = p.name;
-                                                idInput.value = p.id;
-                                                nameInput.value = p.name;
-                                                resultsDiv.style.display = 'none';
-                                                batchSelect.focus();
-                                                
-                                                // Fetch batch history
-                                                try {
-                                                    batchSelect.innerHTML = '<option value="">-- Loading... --</option>';
-                                                    const batchResp = await fetch(`/api/products/batch-history/?product_id=${p.id}`);
-                                                    if (batchResp.ok) {
-                                                        const batches = await batchResp.json();
-                                                        batchSelect.innerHTML = '';
-                                                        if (batches && batches.length > 0) {
-                                                            batches.forEach((b, idx) => {
-                                                                const opt = document.createElement('option');
-                                                                opt.value = b.batch_number;
-                                                                const cf = b.conversion_factor || 1;
-                                                                const unitMrp = (b.mrp / cf).toFixed(2);
-                                                                opt.dataset.mrp = unitMrp;
-                                                                opt.textContent = `${b.batch_number} (Exp: ${b.expiry_date} | Unit MRP: ₹${unitMrp})`;
-                                                                batchSelect.appendChild(opt);
-                                                            });
-                                                        } else {
-                                                            batchSelect.innerHTML = '<option value="" data-mrp="0.00">-- Any Batch --</option>';
-                                                        }
-                                                    }
-                                                } catch(err) {
-                                                    console.error("Batch fetch error", err);
-                                                    batchSelect.innerHTML = '<option value="" data-mrp="0.00">-- Any Batch --</option>';
-                                                }
-                                            };
-                                            resultsDiv.appendChild(a);
-                                        });
-                                    }
-                                    resultsDiv.style.display = 'block';
-                                }
-                            } catch (e) {
-                                console.error(e);
-                            }
-                        }, 250);
-                    });
-                    
-                    document.addEventListener('click', function(e) {
-                        if (e.target !== searchInput && !resultsDiv.contains(e.target)) {
-                            resultsDiv.style.display = 'none';
-                        }
-                    });
-
-                    // Add to Cart Logic
-                    btnAdd.addEventListener('click', function() {
-                        const pid = idInput.value;
-                        const pname = nameInput.value;
-                        const batch = batchSelect.value;
-                        const qty = parseInt(qtyInput.value) || 1;
-                        
-                        let mrp = 0;
-                        if (batchSelect.options.length > 0 && batchSelect.selectedIndex >= 0) {
-                            const selOpt = batchSelect.options[batchSelect.selectedIndex];
-                            mrp = parseFloat(selOpt.dataset.mrp) || 0;
-                        }
-                        if (mrp === 0 && batchSelect.options.length > 0) {
-                            for (let opt of batchSelect.options) {
-                                if (opt.dataset.mrp && parseFloat(opt.dataset.mrp) > 0) {
-                                    mrp = parseFloat(opt.dataset.mrp);
-                                    break;
-                                }
-                            }
-                        }
-
-                        if (!pid || !pname) {
-                            alert("Please search and select a product first.");
-                            searchInput.focus();
-                            return;
-                        }
-                        if (qty <= 0) {
-                            alert("Quantity must be at least 1.");
-                            qtyInput.focus();
-                            return;
-                        }
-
-                        const lineTotal = mrp * qty;
-                        totalRefund += lineTotal;
-
-                        // Create Row
-                        const tr = document.createElement('tr');
-                        tr.innerHTML = `
-                            <td class="fw-bold">
-                                ${pname}
-                                <input type="hidden" name="product_id[]" value="${pid}">
-                            </td>
-                            <td>
-                                ${batch || '<span class="text-muted fst-italic">Auto</span>'}
-                                <input type="hidden" name="batch_number[]" value="${batch}">
-                            </td>
-                            <td class="text-end text-muted">
-                                ₹${mrp > 0 ? mrp.toFixed(2) : '0.00'}
-                            </td>
-                            <td class="text-center fw-bold">
-                                ${qty}
-                                <input type="hidden" name="return_qty[]" value="${qty}">
-                            </td>
-                            <td class="text-end text-success fw-bold">
-                                ₹${lineTotal.toFixed(2)}
-                            </td>
-                            <td class="text-center">
-                                <button type="button" class="btn btn-sm btn-outline-danger btn-remove"><i class="bi bi-trash"></i></button>
-                            </td>
-                        `;
-                        
-                        tr.querySelector('.btn-remove').onclick = function() {
-                            totalRefund -= lineTotal;
-                            tr.remove();
-                            updateCartUI();
-                        };
-
-                        if (emptyRow) emptyRow.style.display = 'none';
-                        tbody.appendChild(tr);
-                        
-                        // Reset form
-                        idInput.value = '';
-                        nameInput.value = '';
-                        searchInput.value = '';
-                        batchSelect.innerHTML = '<option value="">-- Select --</option>';
-                        qtyInput.value = '1';
-                        searchInput.focus();
-                        
-                        updateCartUI();
-                    });
-
-                    function updateCartUI() {
-                        const rowCount = tbody.querySelectorAll('tr:not(#emptyCartRow)').length;
-                        if (rowCount === 0) {
-                            if (emptyRow) emptyRow.style.display = 'table-row';
-                            cartFooter.style.display = 'none';
-                            checkoutRow.style.display = 'none';
-                        } else {
-                            cartFooter.style.display = 'table-row';
-                            checkoutRow.style.display = 'flex';
-                            totalRefundEl.textContent = '₹' + Math.max(0, totalRefund).toFixed(2);
-                        }
-                    }
-                    
-                    // Allow Enter key on Qty to add
-                    qtyInput.addEventListener('keypress', function(e) {
-                        if(e.key === 'Enter') {
-                            e.preventDefault();
-                            btnAdd.click();
-                        }
-                    });
-                });
-            </script>
-
-<!-- Invoice Return Tab -->
-        <div class="tab-pane fade {% if selected_customer or selected_customer_name or selected_invoice or selected_return or request.GET.customer_id or request.GET.invoice_id or request.GET.return_id or request.GET.tab == 'invoice' %}show active{% endif %}" id="invoice" role="tabpanel" aria-labelledby="invoice-tab">
-            <div class="row g-4">
-                <!-- Customer Selection (Step 1) -->
+            <div class="row g-3">
+                <!-- Step 1: Customer or Invoice Search -->
                 <div class="col-lg-4" id="step1Col">
-                    <div class="card border-0 shadow-sm rounded-4">
-                        <div class="card-header bg-white border-bottom">
-                            <h5 class="mb-0">Step 1: Select Customer</h5>
+                    <div class="card card-custom h-100">
+                        <div class="card-header bg-white border-bottom py-3">
+                            <h6 class="mb-0 fw-bold text-dark d-flex align-items-center">
+                                <span class="step-circle active">1</span>
+                                <span>Find Customer or Invoice</span>
+                            </h6>
                         </div>
-                        <div class="card-body">
+                        <div class="card-body p-3 p-md-4">
                             <form id="customerSelectForm">
                                 {% csrf_token %}
                                 <div class="mb-3">
-                                    <label for="customer_name" class="form-label">Customer Name</label>
-                                    <input type="text" class="form-control" id="customer_name" name="customer_name"
-                                           list="customerList" placeholder="Type customer name..." autocomplete="off"
-                                           value="{% if selected_customer %}{{ selected_customer.name }}{% elif selected_customer_name %}{{ selected_customer_name }}{% endif %}" required>
+                                    <label for="customer_name" class="form-label fw-bold small text-secondary mb-1">Customer Name, Phone, or Invoice #</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-white text-muted"><i class="fas fa-search"></i></span>
+                                        <input type="text" class="form-control shadow-none" id="customer_name" name="customer_name"
+                                               list="customerList" placeholder="e.g. Ramesh or INV-0001..." autocomplete="off"
+                                               value="{% if selected_customer_name %}{{ selected_customer_name }}{% elif selected_customer %}{{ selected_customer.name }}{% endif %}" required>
+                                    </div>
                                     <input type="hidden" id="customer_id" name="customer_id"
                                            value="{% if selected_customer %}{{ selected_customer.id }}{% endif %}">
                                     <datalist id="customerList">
@@ -425,50 +502,63 @@
                                         <option value="{{ customer.name }}{% if customer.phone %} ({{ customer.phone }}){% endif %}" data-id="{{ customer.id }}"></option>
                                         {% endfor %}
                                     </datalist>
+                                    <small class="text-muted" style="font-size: 0.75rem;">Type bill number or customer name to list recent invoices.</small>
                                 </div>
-                                <button type="submit" class="btn btn-primary w-100" id="btnFindInvoices">
-                                    <i class="bi bi-search me-1"></i> Find Invoices
+                                <button type="submit" class="btn btn-primary w-100 fw-bold rounded-pill shadow-sm" id="btnFindInvoices">
+                                    <i class="fas fa-search me-1"></i> Find Invoices
                                 </button>
                             </form>
                         </div>
                     </div>
                 </div>
 
-                <!-- Invoice Selection (Step 2) -->
-                <div class="col-lg-4" id="step2Col" style="{% if not selected_customer and not selected_customer_name and not invoices %}display: none;{% endif %}">
-                    <div class="card border-0 shadow-sm rounded-4">
-                        <div class="card-header bg-white border-bottom">
-                            <h5 class="mb-0">Step 2: Select Invoice</h5>
+                <!-- Step 2: Invoice Selection -->
+                <div class="col-lg-4" id="step2Col" style="{% if not selected_customer and not selected_customer_name and not invoices and not selected_return %}display: none;{% endif %}">
+                    <div class="card card-custom h-100">
+                        <div class="card-header bg-white border-bottom py-3">
+                            <h6 class="mb-0 fw-bold text-dark d-flex align-items-center">
+                                <span class="step-circle active">2</span>
+                                <span>Select Bill / Invoice</span>
+                            </h6>
                         </div>
-                        <div class="card-body" id="step2CardBody">
+                        <div class="card-body p-3 p-md-4" id="step2CardBody">
+                            <div class="mb-3">
+                                <label class="small text-muted text-uppercase fw-bold d-block mb-1">Customer / Patient</label>
+                                <span class="fw-bold fs-6 text-dark" id="step2CustomerLabel">
+                                    {% if selected_customer_name %}{{ selected_customer_name }}{% elif selected_customer %}{{ selected_customer.name }}{% else %}Walk-in{% endif %}
+                                </span>
+                            </div>
+
                             <form id="invoiceSelectForm">
                                 <div class="mb-3">
-                                    <label class="form-label">Customer: <strong id="step2CustomerLabel">{% if selected_customer %}{{ selected_customer.name }}{% else %}{{ selected_customer_name }}{% endif %}</strong></label>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="invoice_id" class="form-label">Invoice</label>
-                                    <select class="form-select" id="invoice_id" name="invoice_id" required>
-                                        <option value="">Choose invoice...</option>
+                                    <label for="invoice_id" class="form-label fw-bold small text-secondary mb-1">Invoice Selection</label>
+                                    <select class="form-select shadow-none" id="invoice_id" name="invoice_id" required>
+                                        <option value="">-- Choose Invoice --</option>
                                         {% for invoice in invoices %}
                                         <option value="{{ invoice.id }}" {% if selected_invoice and selected_invoice.id == invoice.id %}selected{% endif %}>
-                                            #{{ invoice.invoice_number }} - {{ invoice.created_at|date:"M d, Y" }} - ₹{{ invoice.total_amount }}
+                                            #{{ invoice.invoice_number }} &bull; {{ invoice.created_at|date:"M d, Y" }} &bull; ₹{{ invoice.total_amount }}
                                         </option>
                                         {% endfor %}
                                     </select>
                                 </div>
-                                <button type="submit" class="btn btn-primary w-100" id="btnSelectItems">Select Items</button>
+                                <button type="submit" class="btn btn-primary w-100 fw-bold rounded-pill shadow-sm" id="btnSelectItems">
+                                    <i class="fas fa-clipboard-list me-1"></i> Load Items to Return
+                                </button>
                             </form>
                         </div>
                     </div>
                 </div>
 
-                <!-- Item Return Form (Step 3) -->
-                <div class="col-lg-4" id="step3Col" style="{% if not selected_invoice %}display: none;{% endif %}">
-                    <div class="card border-0 shadow-sm rounded-4">
-                        <div class="card-header bg-white border-bottom">
-                            <h5 class="mb-0">Step 3: Return Items</h5>
+                <!-- Step 3: Return Items & Processing -->
+                <div class="col-lg-4" id="step3Col" style="{% if not selected_invoice and not selected_return %}display: none;{% endif %}">
+                    <div class="card card-custom">
+                        <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0 fw-bold text-dark d-flex align-items-center">
+                                <span class="step-circle active">3</span>
+                                <span>Choose Return Items</span>
+                            </h6>
                         </div>
-                        <div class="card-body" id="step3CardBody">
+                        <div class="card-body p-3 p-md-4" id="step3CardBody">
                             {% if selected_return %}
                             <form method="post" id="processReturnForm" action="{% url 'pos_returns_edit' selected_return.id %}">
                             {% else %}
@@ -483,82 +573,96 @@
                                 {% endif %}
                                 <input type="hidden" name="invoice_id" value="{{ selected_invoice.id }}">
                                 
-                                <div class="mb-3">
-                                    <label class="form-label">Invoice: <strong>#{{ selected_invoice.invoice_number }}</strong></label>
-                                    {% if selected_return %}
-                                        <p class="small text-muted mb-0">Editing Return <strong>{{ selected_return.return_inv_no }}</strong> (Created {{ selected_return.return_at|date:"d M Y H:i" }})</p>
-                                    {% endif %}
+                                <div class="p-2 mb-3 bg-light rounded-3 border d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <span class="text-muted small">Selected Invoice:</span>
+                                        <span class="fw-bold ms-1 text-primary">#{{ selected_invoice.invoice_number }}</span>
+                                    </div>
+                                    <span class="badge bg-secondary">{{ selected_invoice.created_at|date:"d M Y" }}</span>
                                 </div>
                                 
                                 <div class="mb-3">
-                                    <label class="form-label">Items to Return:</label>
+                                    <label class="form-label fw-bold small text-secondary mb-2">Items in Invoice:</label>
+                                    <div class="d-flex flex-column gap-2" id="invoiceItemsListContainer">
                                     {% if selected_return %}
                                         {% for item in selected_return_items %}
-                                        <div class="border rounded p-3 mb-2 return-item-row" data-price="{{ item.sale_item.unit_price }}">
-                                            <div class="d-flex justify-content-between align-items-start">
+                                        <div class="p-3 rounded-3 border return-item-row" data-price="{{ item.sale_item.unit_price }}" style="background-color: #fafafa;">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
                                                 <div>
-                                                    <strong>{{ item.sale_item.product.product_name }}</strong><br>
+                                                    <strong class="text-dark">{{ item.sale_item.product.product_name }}</strong><br>
                                                     <small class="text-muted">
-                                                        Batch: {{ item.sale_item.batch_number }} | 
-                                                        Sold: {{ item.sale_item.quantity }} | 
+                                                        Batch: <span class="badge bg-light text-dark border">{{ item.sale_item.batch_number }}</span> &bull; 
+                                                        Sold: {{ item.sale_item.quantity }} &bull; 
                                                         Price: ₹{{ item.sale_item.unit_price }}
                                                     </small>
                                                 </div>
+                                                <span class="badge badge-soft-primary">Max: {{ item.max_return_quantity }}</span>
                                             </div>
-                                            <div class="row mt-2">
-                                                <div class="col-6">
-                                                    <label class="form-label small">Return Qty</label>
-                                                    <input type="number" class="form-control form-control-sm return-qty-input" 
-                                                           name="return_quantities[]" min="0" max="{{ item.sale_item.quantity }}" value="{{ item.returned_quantity }}">
+                                            <div class="row g-2">
+                                                <div class="col-5">
+                                                    <label class="form-label small text-muted mb-1">Return Qty</label>
+                                                    <input type="number" class="form-control form-control-sm return-qty-input fw-bold text-center shadow-none" 
+                                                           name="return_quantities[]" min="0" max="{{ item.max_return_quantity }}" value="{{ item.returned_quantity }}">
                                                     <input type="hidden" name="return_item_ids[]" value="{{ item.id }}">
                                                 </div>
-                                                <div class="col-6">
-                                                    <label class="form-label small">Reason (Optional)</label>
-                                                    <input type="text" class="form-control form-control-sm" 
-                                                           name="return_reasons[]" placeholder="e.g., damaged, wrong item" value="{{ item.return_reason|default:'' }}">
+                                                <div class="col-7">
+                                                    <label class="form-label small text-muted mb-1">Reason (Optional)</label>
+                                                    <input type="text" class="form-control form-control-sm shadow-none" 
+                                                           name="return_reasons[]" placeholder="e.g. damaged, wrong" value="{{ item.return_reason|default:'' }}">
                                                 </div>
                                             </div>
                                         </div>
                                         {% endfor %}
                                     {% else %}
                                         {% for item in sale_items %}
-                                        <div class="border rounded p-3 mb-2 return-item-row" data-price="{{ item.unit_price }}">
-                                            <div class="d-flex justify-content-between align-items-start">
+                                        <div class="p-3 rounded-3 border return-item-row" data-price="{{ item.unit_price }}" style="background-color: #fafafa;">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
                                                 <div>
-                                                    <strong>{{ item.product.product_name }}</strong><br>
+                                                    <strong class="text-dark">{{ item.product.product_name }}</strong><br>
                                                     <small class="text-muted">
-                                                        Batch: {{ item.batch_number }} | 
-                                                        Sold: {{ item.quantity }} | 
+                                                        Batch: <span class="badge bg-light text-dark border">{{ item.batch_number }}</span> &bull; 
+                                                        Sold: {{ item.quantity }} &bull; 
                                                         Price: ₹{{ item.unit_price }}
                                                     </small>
                                                 </div>
+                                                <span class="badge badge-soft-primary">Max: {{ item.max_return_quantity }}</span>
                                             </div>
-                                            <div class="row mt-2">
-                                                <div class="col-6">
-                                                    <label class="form-label small">Return Qty</label>
-                                                    <input type="number" class="form-control form-control-sm return-qty-input" 
-                                                           name="return_quantities[]" min="0" max="{{ item.quantity }}" value="0">
+                                            <div class="row g-2">
+                                                <div class="col-5">
+                                                    <label class="form-label small text-muted mb-1">Return Qty</label>
+                                                    <input type="number" class="form-control form-control-sm return-qty-input fw-bold text-center shadow-none" 
+                                                           name="return_quantities[]" min="0" max="{{ item.max_return_quantity }}" value="0">
                                                     <input type="hidden" name="return_items[]" value="{{ item.id }}">
                                                 </div>
-                                                <div class="col-6">
-                                                    <label class="form-label small">Reason (Optional)</label>
-                                                    <input type="text" class="form-control form-control-sm" 
-                                                           name="return_reasons[]" placeholder="e.g., damaged, wrong item">
+                                                <div class="col-7">
+                                                    <label class="form-label small text-muted mb-1">Reason (Optional)</label>
+                                                    <input type="text" class="form-control form-control-sm shadow-none" 
+                                                           name="return_reasons[]" placeholder="e.g. damaged, wrong">
                                                 </div>
                                             </div>
                                         </div>
                                         {% endfor %}
                                     {% endif %}
+                                    </div>
                                 </div>
-                                <div class="alert alert-info d-flex justify-content-between align-items-center mb-3" id="returnTotalBox" style="display:none">
-                                    <span>Total Return Amount:</span>
-                                    <strong id="returnTotalAmount">₹0.00</strong>
+
+                                <!-- Live Total Amount Preview -->
+                                <div class="p-3 rounded-3 bg-light border d-flex justify-content-between align-items-center mb-3" id="returnTotalBox">
+                                    <span class="fw-semibold text-secondary small">Total Refund Amount:</span>
+                                    <strong class="text-success fs-5" id="returnTotalAmount">₹0.00</strong>
                                 </div>
+
                                 {% if selected_return %}
-                                    <button type="submit" name="action" value="update_return" class="btn btn-success w-100 fw-bold">Update Return</button>
-                                    <button type="submit" name="action" value="delete_return" class="btn btn-outline-danger w-100 fw-bold mt-2" onclick="return confirm('Are you sure you want to delete this return record?');">Delete Return</button>
+                                    <button type="submit" name="action" value="update_return" class="btn btn-primary w-100 fw-bold py-2 rounded-pill shadow-sm">
+                                        <i class="fas fa-save me-1"></i> Update Return Voucher
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger w-100 fw-bold py-2 rounded-pill mt-2" data-bs-toggle="modal" data-bs-target="#deleteReturnModal">
+                                        <i class="fas fa-trash-alt me-1"></i> Delete Return
+                                    </button>
                                 {% else %}
-                                    <button type="submit" name="action" value="process_return" class="btn btn-success w-100 fw-bold">Process Return</button>
+                                    <button type="submit" name="action" value="process_return" class="btn btn-success w-100 fw-bold py-2 rounded-pill shadow-sm" id="btnSubmitInvoiceReturn">
+                                        <i class="fas fa-check-circle me-1"></i> Process Return
+                                    </button>
                                 {% endif %}
                             </form>
                         </div>
@@ -566,11 +670,16 @@
                 </div>
             </div>
         </div>
+
     </div>
 </div>
 
+<!-- JAVASCRIPT LOGIC -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // -------------------------------------------------------------
+    // Tab Switching Helper
+    // -------------------------------------------------------------
     function activateTab(tabId) {
         const targetBtn = document.getElementById(tabId + '-tab');
         const targetPane = document.getElementById(tabId);
@@ -589,15 +698,16 @@ document.addEventListener('DOMContentLoaded', function() {
         targetPane.classList.add('show', 'active');
     }
 
-    // 1. Auto-switch to "Return by Invoice" tab if URL params or hash indicate invoice return
+    // Auto-switch to "Return by Invoice" tab if URL has parameters
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.has('customer_id') || urlParams.has('invoice_id') || urlParams.has('return_id') || urlParams.has('customer_name') || urlParams.get('tab') === 'invoice' || window.location.hash === '#invoice' || window.location.pathname.includes('/returns/edit/')) {
+    if (urlParams.has('customer_id') || urlParams.has('invoice_id') || urlParams.has('return_id') || 
+        urlParams.has('customer_name') || urlParams.get('tab') === 'invoice' || 
+        window.location.hash === '#invoice' || window.location.pathname.includes('/returns/edit/')) {
         activateTab('invoice');
     }
 
-    // Tab click listener for reliable switching
     document.querySelectorAll('#returnTabs button[data-bs-toggle="tab"]').forEach(btn => {
-        btn.addEventListener('click', function (e) {
+        btn.addEventListener('click', function () {
             const targetId = this.getAttribute('data-bs-target')?.replace('#', '');
             if (targetId) {
                 activateTab(targetId);
@@ -606,28 +716,638 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Step 1: Customer datalist sync
+    // -------------------------------------------------------------
+    // TAB 1: QUICK FAST RETURN LOGIC
+    // -------------------------------------------------------------
+    const searchInput = document.getElementById('quick_product_search');
+    const resultsDiv = document.getElementById('quickSearchResults');
+    const clearBtn = document.getElementById('quick_clear_btn');
+    const idInput = document.getElementById('quick_product_id');
+    const nameInput = document.getElementById('quick_product_name');
+    const cfInput = document.getElementById('quick_product_cf');
+    const batchSelect = document.getElementById('quick_batch_select');
+    const qtyInput = document.getElementById('quick_qty');
+    const btnAdd = document.getElementById('btn_add_return_item');
+    const clearCartBtn = document.getElementById('btnClearCart');
+    const displaySelectedName = document.getElementById('displaySelectedName');
+    const displaySelectedMeta = document.getElementById('displaySelectedMeta');
+    const displaySelectedBadge = document.getElementById('displaySelectedBadge');
+    
+    // Patient Sales History Elements
+    const salesHistoryCard = document.getElementById('productSalesHistoryCard');
+    const selectedProductNameHeader = document.getElementById('selectedProductNameHeader');
+    const salesHistoryCountBadge = document.getElementById('salesHistoryCountBadge');
+    const salesHistorySubtitle = document.getElementById('salesHistorySubtitle');
+    const salesHistoryWarningBadge = document.getElementById('salesHistoryWarningBadge');
+    const salesDepletedAlert = document.getElementById('salesDepletedAlert');
+    const salesHistoryTbody = document.getElementById('productSalesHistoryTbody');
+    const loadMoreContainer = document.getElementById('loadMoreSalesContainer');
+    const btnLoadMoreSales = document.getElementById('btnLoadMoreSales');
+
+    // Cart Elements
+    const cartTbody = document.getElementById('quickCartTbody');
+    const emptyCartRow = document.getElementById('emptyCartRow');
+    const cartItemCountBadge = document.getElementById('cartItemCountBadge');
+    const cartTotalRefundEl = document.getElementById('cartTotalRefund');
+    const cartSummaryTextEl = document.getElementById('cartSummaryText');
+    const btnConfirmQuickReturn = document.getElementById('btnConfirmQuickReturn');
+    const hiddenInputsContainer = document.getElementById('hiddenCartInputsContainer');
+    const reasonInput = document.getElementById('quick_reason_input');
+    const patientNameInput = document.getElementById('quick_patient_name');
+
+    let quickCartItems = []; // Array of { id, name, batch, qty, mrp, sale_item_id, patient_name, invoice_number }
+    let debounceTimer;
+    let currentFocus = -1;
+    let currentSelectedProductId = null;
+
+    // Reason quick chip click handler
+    document.querySelectorAll('.reason-chip').forEach(chip => {
+        chip.addEventListener('click', function() {
+            if (reasonInput) {
+                reasonInput.value = this.dataset.reason;
+            }
+        });
+    });
+
+    // Clear search button
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            idInput.value = '';
+            nameInput.value = '';
+            currentSelectedProductId = null;
+            resultsDiv.style.display = 'none';
+            clearBtn.classList.add('d-none');
+            batchSelect.innerHTML = '<option value="">-- Search product first --</option>';
+            if (displaySelectedName) displaySelectedName.textContent = 'None (Search above)';
+            if (displaySelectedMeta) displaySelectedMeta.textContent = 'Type medicine name in the search bar';
+            if (displaySelectedBadge) {
+                displaySelectedBadge.className = 'badge bg-secondary-subtle text-secondary rounded-pill px-2 py-1 small';
+                displaySelectedBadge.textContent = 'Pending';
+            }
+            if (salesHistoryCard) salesHistoryCard.style.display = 'none';
+            if (qtyInput) qtyInput.value = '1';
+            searchInput.focus();
+        });
+    }
+
+    // Keyboard shortcut / or F2 to focus medicine search
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'F2' || (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA')) {
+            e.preventDefault();
+            searchInput.focus();
+            searchInput.select();
+        }
+    });
+
+    // Keyboard navigation for autocomplete list
+    searchInput.addEventListener('keydown', function(e) {
+        const items = resultsDiv.getElementsByClassName('search-item-row');
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            currentFocus++;
+            highlightActive(items);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            currentFocus--;
+            highlightActive(items);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (currentFocus > -1 && items.length > 0) {
+                items[currentFocus].click();
+            } else if (items.length > 0) {
+                items[0].click();
+            }
+        } else if (e.key === 'Escape') {
+            resultsDiv.style.display = 'none';
+        }
+    });
+
+    function highlightActive(items) {
+        if (!items || items.length === 0) return;
+        for (let i = 0; i < items.length; i++) {
+            items[i].classList.remove('active');
+        }
+        if (currentFocus >= items.length) currentFocus = 0;
+        if (currentFocus < 0) currentFocus = items.length - 1;
+        items[currentFocus].classList.add('active');
+        items[currentFocus].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
+    // Search Input Fetch
+    searchInput.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        const q = this.value.trim();
+        currentFocus = -1;
+        
+        if (clearBtn) {
+            if (q.length > 0) clearBtn.classList.remove('d-none');
+            else clearBtn.classList.add('d-none');
+        }
+
+        if (q.length < 2) {
+            resultsDiv.style.display = 'none';
+            return;
+        }
+
+        debounceTimer = setTimeout(async () => {
+            try {
+                const response = await fetch(`/api/products/master-search/?limit=10&q=${encodeURIComponent(q)}`);
+                if (response.ok) {
+                    const products = await response.json();
+                    resultsDiv.innerHTML = '';
+                    if (products.length === 0) {
+                        resultsDiv.innerHTML = '<div class="p-3 text-muted text-center small">No matching medicines found</div>';
+                    } else {
+                        products.forEach((p) => {
+                            const a = document.createElement('div');
+                            a.className = 'search-item-row d-flex align-items-center justify-content-between gap-3';
+                            a.innerHTML = `
+                                <div class="d-flex align-items-center gap-2 text-truncate">
+                                    <span class="badge bg-primary-subtle text-primary rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 34px; height: 34px; min-width: 34px;">
+                                        <i class="fas fa-pills"></i>
+                                    </span>
+                                    <div class="text-truncate">
+                                        <div class="fw-bold text-dark text-truncate" style="font-size: 0.95rem;">${p.name}</div>
+                                        <div class="text-muted small text-truncate">
+                                            ${p.salt ? '<span class="text-primary me-1 fw-medium">' + p.salt + '</span>' : ''}
+                                            ${p.company_name ? '<span>(' + p.company_name + ')</span>' : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="text-end text-nowrap">
+                                    <span class="badge badge-soft-primary px-2 py-1">${p.packing || 'Standard'}</span>
+                                </div>
+                            `;
+                            a.onclick = async () => {
+                                selectProduct(p);
+                            };
+                            resultsDiv.appendChild(a);
+                        });
+                    }
+                    resultsDiv.style.display = 'block';
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }, 200);
+    });
+
+    document.addEventListener('click', function(e) {
+        if (e.target !== searchInput && !resultsDiv.contains(e.target)) {
+            resultsDiv.style.display = 'none';
+        }
+    });
+
+    // Select Product handler
+    async function selectProduct(p) {
+        searchInput.value = p.name;
+        idInput.value = p.id;
+        nameInput.value = p.name;
+        cfInput.value = p.conversion_factor || 1;
+        currentSelectedProductId = p.id;
+        resultsDiv.style.display = 'none';
+
+        if (displaySelectedName) displaySelectedName.textContent = p.name;
+        if (displaySelectedMeta) {
+            displaySelectedMeta.textContent = `${p.packing || 'Standard'} • ${p.salt || p.company_name || 'Generic'}`;
+        }
+        if (displaySelectedBadge) {
+            displaySelectedBadge.className = 'badge bg-success-subtle text-success rounded-pill px-2 py-1 small';
+            displaySelectedBadge.innerHTML = '<i class="fas fa-check me-1"></i>Active';
+        }
+
+        // 1. Fetch batches
+        batchSelect.innerHTML = '<option value="">Loading batches...</option>';
+        try {
+            const bResp = await fetch(`/api/products/batch-history/?product_id=${p.id}`);
+            if (bResp.ok) {
+                const batches = await bResp.json();
+                batchSelect.innerHTML = '';
+                if (batches && batches.length > 0) {
+                    batches.forEach(b => {
+                        const opt = document.createElement('option');
+                        opt.value = b.batch_number;
+                        const cf = b.conversion_factor || 1;
+                        const unitMrp = (b.mrp / cf).toFixed(2);
+                        opt.dataset.mrp = unitMrp;
+                        opt.textContent = `${b.batch_number} (Exp: ${b.expiry_date || 'N/A'} | ₹${unitMrp})`;
+                        batchSelect.appendChild(opt);
+                    });
+                } else {
+                    batchSelect.innerHTML = '<option value="" data-mrp="0.00">-- No Batch History (Auto) --</option>';
+                }
+            }
+        } catch (e) {
+            console.error(e);
+            batchSelect.innerHTML = '<option value="" data-mrp="0.00">-- Any Batch --</option>';
+        }
+
+        // Focus quantity input for fast typing
+        if (qtyInput) {
+            qtyInput.value = '1';
+            qtyInput.focus();
+            qtyInput.select();
+        }
+
+        // 2. Fetch and render Recent Patient Sales History (Last 5 records)
+        loadPatientSalesHistory(p.id, p.name, 5);
+    }
+
+    // Function to load and render patient sales history
+    async function loadPatientSalesHistory(productId, productName, limit = 5) {
+        if (!salesHistoryCard) return;
+
+        salesHistoryCard.style.display = 'block';
+        selectedProductNameHeader.textContent = productName;
+        salesHistoryTbody.innerHTML = `
+            <tr>
+                <td colspan="9" class="text-center py-4 text-muted">
+                    <span class="spinner-border spinner-border-sm me-2 text-primary"></span>
+                    Fetching patient sales history...
+                </td>
+            </tr>
+        `;
+        if (salesDepletedAlert) salesDepletedAlert.classList.add('d-none');
+        if (loadMoreContainer) loadMoreContainer.style.display = 'none';
+
+        try {
+            const limitParam = limit === 'all' ? 'all' : limit;
+            const res = await fetch(`/api/sales/product-sales-history/?product_id=${productId}&limit=${limitParam}`);
+            const data = await res.json();
+
+            if (data.success) {
+                salesHistoryCountBadge.textContent = `${data.total_count} Record${data.total_count !== 1 ? 's' : ''}`;
+                
+                if (limit === 'all' || data.total_count <= 5) {
+                    salesHistorySubtitle.textContent = `Showing all ${data.sales.length} sales records for this medicine`;
+                } else {
+                    salesHistorySubtitle.textContent = `Showing last 5 sales records out of ${data.total_count} total`;
+                }
+
+                if (data.sales && data.sales.length > 0) {
+                    let totalAvailableAcrossAll = 0;
+                    salesHistoryTbody.innerHTML = '';
+
+                    data.sales.forEach(s => {
+                        totalAvailableAcrossAll += s.available_qty;
+                        const tr = document.createElement('tr');
+                        const isAvailable = s.available_qty > 0;
+
+                        tr.innerHTML = `
+                            <td class="ps-3">
+                                <div class="fw-bold text-dark">${s.patient_name}</div>
+                                ${s.patient_phone ? '<small class="text-muted">' + s.patient_phone + '</small>' : ''}
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-primary border font-monospace">#${s.invoice_number}</span>
+                            </td>
+                            <td class="small text-muted">
+                                ${s.date}
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark border">${s.batch_number}</span>
+                            </td>
+                            <td class="text-center fw-semibold">${s.sold_qty}</td>
+                            <td class="text-center text-muted">${s.returned_qty}</td>
+                            <td class="text-center">
+                                ${isAvailable 
+                                    ? '<span class="badge badge-soft-success fw-bold px-2 py-1">' + s.available_qty + ' available</span>'
+                                    : '<span class="badge badge-soft-danger fw-bold px-2 py-1">0 left (Returned)</span>'
+                                }
+                            </td>
+                            <td class="text-end fw-bold text-dark">₹${s.unit_price.toFixed(2)}</td>
+                            <td class="text-center pe-3">
+                                ${isAvailable 
+                                    ? `<button type="button" class="btn btn-sm btn-outline-success rounded-pill fw-bold px-3 py-1 btn-return-sale" 
+                                               data-sale-id="${s.sale_item_id}"
+                                               data-invoice="${s.invoice_number}"
+                                               data-patient="${s.patient_name}"
+                                               data-batch="${s.batch_number}"
+                                               data-price="${s.unit_price}"
+                                               data-max="${s.available_qty}">
+                                           <i class="fas fa-undo-alt me-1"></i> Return This
+                                       </button>`
+                                    : `<button type="button" class="btn btn-sm btn-light border text-muted rounded-pill px-2 py-1" disabled title="All items in this bill were already returned">
+                                           Fully Returned
+                                       </button>`
+                                }
+                            </td>
+                        `;
+                        salesHistoryTbody.appendChild(tr);
+                    });
+
+                    // Attach click handlers to "Return This" buttons
+                    salesHistoryTbody.querySelectorAll('.btn-return-sale').forEach(btn => {
+                        btn.addEventListener('click', function() {
+                            const saleId = this.dataset.saleId;
+                            const invNo = this.dataset.invoice;
+                            const patient = this.dataset.patient;
+                            const batch = this.dataset.batch;
+                            const price = parseFloat(this.dataset.price) || 0;
+                            const maxQty = parseInt(this.dataset.max) || 1;
+
+                            // Auto-select batch in dropdown
+                            if (batchSelect) {
+                                for (let opt of batchSelect.options) {
+                                    if (opt.value === batch) {
+                                        opt.selected = true;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            // Pre-fill patient name in form
+                            if (patientNameInput && patient && patient !== 'Walk-in Customer') {
+                                patientNameInput.value = patient;
+                            }
+
+                            // Add directly to return cart
+                            addItemToCart({
+                                id: idInput.value,
+                                name: nameInput.value,
+                                batch: batch,
+                                qty: 1,
+                                mrp: price,
+                                max_qty: maxQty,
+                                sale_item_id: saleId,
+                                patient_name: patient,
+                                invoice_number: invNo
+                            });
+
+                            // Smooth scroll down to cart
+                            document.getElementById('quickReturnTable')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        });
+                    });
+
+                    // If all sold items for this product have already been returned, show warning
+                    if (totalAvailableAcrossAll === 0) {
+                        if (salesDepletedAlert) salesDepletedAlert.classList.remove('d-none');
+                        if (salesHistoryWarningBadge) {
+                            salesHistoryWarningBadge.innerHTML = '<span class="badge badge-soft-danger px-2 py-1">All Sales Returned</span>';
+                        }
+                    } else {
+                        if (salesDepletedAlert) salesDepletedAlert.classList.add('d-none');
+                        if (salesHistoryWarningBadge) {
+                            salesHistoryWarningBadge.innerHTML = `<span class="badge badge-soft-success px-2 py-1">${totalAvailableAcrossAll} total returnable units</span>`;
+                        }
+                    }
+
+                    // View More Button logic
+                    if (data.has_more && limit !== 'all') {
+                        if (loadMoreContainer) {
+                            loadMoreContainer.style.display = 'block';
+                            btnLoadMoreSales.innerHTML = `<i class="fas fa-chevron-down me-1"></i> View More (${data.remaining_count} more records)`;
+                            btnLoadMoreSales.onclick = () => {
+                                loadPatientSalesHistory(productId, productName, 'all');
+                            };
+                        }
+                    } else {
+                        if (loadMoreContainer) loadMoreContainer.style.display = 'none';
+                    }
+
+                } else {
+                    salesHistoryTbody.innerHTML = `
+                        <tr>
+                            <td colspan="9" class="text-center py-4 text-muted">
+                                <i class="fas fa-info-circle me-1"></i> No patient sales history found for this medicine.
+                            </td>
+                        </tr>
+                    `;
+                    if (loadMoreContainer) loadMoreContainer.style.display = 'none';
+                }
+            }
+        } catch (err) {
+            console.error("Sales history error:", err);
+            salesHistoryTbody.innerHTML = `
+                <tr>
+                    <td colspan="9" class="text-center py-3 text-danger">
+                        Failed to load patient sales history.
+                    </td>
+                </tr>
+            `;
+        }
+    }
+
+    // Helper to add item to cart
+    function addItemToCart(itemData) {
+        const existing = quickCartItems.find(it => it.id === itemData.id && it.batch === itemData.batch && it.sale_item_id === itemData.sale_item_id);
+        if (existing) {
+            if (itemData.max_qty && existing.qty >= itemData.max_qty) {
+                alert(`Cannot add more. Maximum available returnable quantity for this bill is ${itemData.max_qty}.`);
+                return;
+            }
+            existing.qty += itemData.qty;
+        } else {
+            quickCartItems.push(itemData);
+        }
+
+        renderQuickCart();
+    }
+
+    // Add to Cart from top form
+    btnAdd.addEventListener('click', function() {
+        const pid = idInput.value;
+        const pname = nameInput.value;
+        const batch = batchSelect.value;
+        const qty = parseInt(qtyInput.value) || 1;
+
+        if (!pid || !pname) {
+            alert("Please search and select a medicine first.");
+            searchInput.focus();
+            return;
+        }
+        if (qty <= 0) {
+            alert("Quantity must be at least 1.");
+            qtyInput.focus();
+            return;
+        }
+
+        let mrp = 0;
+        if (batchSelect.options.length > 0 && batchSelect.selectedIndex >= 0) {
+            const selOpt = batchSelect.options[batchSelect.selectedIndex];
+            mrp = parseFloat(selOpt.dataset.mrp) || 0;
+        }
+
+        addItemToCart({
+            id: pid,
+            name: pname,
+            batch: batch,
+            qty: qty,
+            mrp: mrp,
+            max_qty: 9999,
+            sale_item_id: '',
+            patient_name: '',
+            invoice_number: ''
+        });
+
+        // Reset search inputs
+        searchInput.value = '';
+        idInput.value = '';
+        nameInput.value = '';
+        batchSelect.innerHTML = '<option value="">-- Search product first --</option>';
+        qtyInput.value = '1';
+        if (clearBtn) clearBtn.classList.add('d-none');
+        if (displaySelectedName) displaySelectedName.textContent = 'None (Search above)';
+        if (displaySelectedMeta) displaySelectedMeta.textContent = 'Type medicine name in the search bar';
+        if (displaySelectedBadge) {
+            displaySelectedBadge.className = 'badge bg-secondary-subtle text-secondary rounded-pill px-2 py-1 small';
+            displaySelectedBadge.textContent = 'Pending';
+        }
+        if (salesHistoryCard) salesHistoryCard.style.display = 'none';
+        searchInput.focus();
+    });
+
+    // Enter key on qty input adds item
+    qtyInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            btnAdd.click();
+        }
+    });
+
+    // Render Quick Cart Table and Sync hidden form inputs
+    function renderQuickCart() {
+        // Clear tbody rows except empty row
+        cartTbody.querySelectorAll('tr:not(#emptyCartRow)').forEach(tr => tr.remove());
+        hiddenInputsContainer.innerHTML = '';
+
+        if (quickCartItems.length === 0) {
+            emptyCartRow.style.display = 'table-row';
+            cartItemCountBadge.textContent = '0 items';
+            cartTotalRefundEl.textContent = '₹0.00';
+            cartSummaryTextEl.textContent = '0 medicines in cart';
+            btnConfirmQuickReturn.disabled = true;
+            if (clearCartBtn) clearCartBtn.classList.add('d-none');
+            return;
+        }
+
+        emptyCartRow.style.display = 'none';
+        if (clearCartBtn) clearCartBtn.classList.remove('d-none');
+
+        let totalRefund = 0;
+        let totalQty = 0;
+
+        quickCartItems.forEach((item, idx) => {
+            const lineTotal = item.mrp * item.qty;
+            totalRefund += lineTotal;
+            totalQty += item.qty;
+
+            // Create table row
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="ps-3">
+                    <div class="fw-bold text-dark">${item.name}</div>
+                    ${item.invoice_number ? '<small class="text-muted"><span class="badge bg-light text-primary border">#' + item.invoice_number + '</span> ' + (item.patient_name || '') + '</small>' : ''}
+                </td>
+                <td>
+                    <span class="badge bg-light text-dark border px-2 py-1">${item.batch || 'Auto'}</span>
+                </td>
+                <td class="text-end text-muted">
+                    ₹${item.mrp.toFixed(2)}
+                </td>
+                <td class="text-center">
+                    <input type="number" 
+                           class="form-control form-control-sm text-center fw-bold shadow-none item-qty-input clean-qty-input mx-auto" 
+                           data-idx="${idx}" 
+                           min="1" 
+                           max="${item.max_qty || 9999}" 
+                           value="${item.qty}"
+                           style="width: 80px; height: 38px; border-radius: 8px; font-size: 1rem;">
+                </td>
+                <td class="text-end text-success fw-bold">
+                    ₹${lineTotal.toFixed(2)}
+                </td>
+                <td class="text-center pe-3">
+                    <button type="button" class="btn btn-sm btn-outline-danger border-0 rounded-circle btn-remove-item" data-idx="${idx}" title="Remove item">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </td>
+            `;
+            cartTbody.appendChild(tr);
+
+            // Add hidden inputs for backend submission
+            hiddenInputsContainer.innerHTML += `
+                <input type="hidden" name="product_id[]" value="${item.id}">
+                <input type="hidden" name="batch_number[]" value="${item.batch || ''}">
+                <input type="hidden" name="return_qty[]" value="${item.qty}">
+                <input type="hidden" name="sale_item_id[]" value="${item.sale_item_id || ''}">
+            `;
+        });
+
+        // Attach event listeners for clean qty input
+        cartTbody.querySelectorAll('.item-qty-input').forEach(inp => {
+            const handleQtyChange = () => {
+                const idx = parseInt(inp.dataset.idx);
+                const item = quickCartItems[idx];
+                let val = parseInt(inp.value) || 1;
+                if (item.max_qty && val > item.max_qty) {
+                    alert(`Maximum available returnable quantity for this bill is ${item.max_qty}.`);
+                    val = item.max_qty;
+                    inp.value = val;
+                }
+                item.qty = Math.max(1, val);
+                renderQuickCart();
+            };
+            inp.onchange = handleQtyChange;
+            inp.onkeydown = (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleQtyChange();
+                }
+            };
+        });
+        cartTbody.querySelectorAll('.btn-remove-item').forEach(btn => {
+            btn.onclick = () => {
+                const idx = parseInt(btn.dataset.idx);
+                quickCartItems.splice(idx, 1);
+                renderQuickCart();
+            };
+        });
+
+        cartItemCountBadge.textContent = `${quickCartItems.length} items (${totalQty} units)`;
+        cartTotalRefundEl.textContent = `₹${totalRefund.toFixed(2)}`;
+        cartSummaryTextEl.textContent = `${quickCartItems.length} items &bull; ${totalQty} units`;
+        btnConfirmQuickReturn.disabled = false;
+    }
+
+    if (clearCartBtn) {
+        clearCartBtn.addEventListener('click', () => {
+            if (confirm("Clear all items from return cart?")) {
+                quickCartItems = [];
+                renderQuickCart();
+            }
+        });
+    }
+
+    // -------------------------------------------------------------
+    // TAB 2: RETURN BY INVOICE LOGIC
+    // -------------------------------------------------------------
     const customerInput = document.getElementById('customer_name');
     const customerIdInput = document.getElementById('customer_id');
+    const customerForm = document.getElementById('customerSelectForm');
+    const invoiceSelectEl = document.getElementById('invoice_id');
+    const invoiceSelectForm = document.getElementById('invoiceSelectForm');
+
+    // Datalist customer ID sync
     if (customerInput && customerIdInput) {
         customerInput.addEventListener('input', function() {
             const val = this.value.trim();
             const options = Array.from(document.querySelectorAll('#customerList option'));
             const match = options.find(opt => opt.value === val);
-            customerIdInput.value = match ? match.dataset.id : '';
+            customerIdInput.value = match ? (match.dataset.id || '') : '';
         });
     }
 
-    // Step 1 Form Submit -> AJAX fetch customer invoices (NO PAGE RELOAD)
-    const customerForm = document.getElementById('customerSelectForm');
+    // Step 1: Submit to search invoices
     if (customerForm) {
         customerForm.addEventListener('submit', async function(e) {
             e.preventDefault();
-            const cid = document.getElementById('customer_id').value;
-            const cname = document.getElementById('customer_name').value.trim();
+            const cid = customerIdInput.value;
+            const term = customerInput.value.trim();
 
-            if (!cid && !cname) {
-                alert("Please select or type a customer name.");
+            if (!cid && !term) {
+                alert("Please type a customer name, phone, or invoice number.");
                 return;
             }
 
@@ -641,20 +1361,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (cid) {
                     apiUrl += `customer_id=${encodeURIComponent(cid)}`;
                 } else {
-                    apiUrl += `customer_name=${encodeURIComponent(cname)}`;
+                    apiUrl += `search=${encodeURIComponent(term)}`;
                 }
 
                 const res = await fetch(apiUrl);
                 const data = await res.json();
 
-                if (data.success) {
-                    renderStep2(data.customer, data.invoices);
+                if (data.success && data.invoices && data.invoices.length > 0) {
+                    renderStep2Invoices(data.customer, data.invoices);
                 } else {
-                    alert(data.error || 'No invoices found.');
+                    alert(data.error || 'No matching invoices found for this search.');
                 }
             } catch (err) {
-                console.error('Fetch invoices error:', err);
-                alert('Error fetching customer invoices.');
+                console.error(err);
+                alert('Error fetching invoices. Please try again.');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalText;
@@ -662,62 +1382,32 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Render Step 2 dynamically
-    function renderStep2(customer, invoices) {
+    function renderStep2Invoices(customer, invoices) {
         const step2Col = document.getElementById('step2Col');
         const step3Col = document.getElementById('step3Col');
         if (step3Col) step3Col.style.display = 'none';
 
-        let displayName = (customer && customer.name) ? customer.name : document.getElementById('customer_name').value;
-        const customerLabel = document.getElementById('step2CustomerLabel');
-        if (customerLabel) customerLabel.textContent = displayName;
+        const custLabel = document.getElementById('step2CustomerLabel');
+        if (custLabel) {
+            custLabel.textContent = (customer && customer.name) ? customer.name : customerInput.value;
+        }
 
-        const selectEl = document.getElementById('invoice_id');
-        if (selectEl) {
-            selectEl.innerHTML = '<option value="">Choose invoice...</option>';
-
-            if (invoices && invoices.length > 0) {
-                invoices.forEach(inv => {
-                    const opt = document.createElement('option');
-                    opt.value = inv.id;
-                    opt.textContent = `#${inv.invoice_number} - ${inv.date} - ₹${inv.total_amount.toFixed(2)}`;
-                    selectEl.appendChild(opt);
-                });
-            } else {
+        if (invoiceSelectEl) {
+            invoiceSelectEl.innerHTML = '<option value="">-- Choose Invoice --</option>';
+            invoices.forEach(inv => {
                 const opt = document.createElement('option');
-                opt.value = '';
-                opt.textContent = 'No invoices found for this customer';
-                selectEl.appendChild(opt);
+                opt.value = inv.id;
+                opt.textContent = `#${inv.invoice_number} • ${inv.date} • ${inv.patient_name} • ₹${inv.total_amount.toFixed(2)}`;
+                invoiceSelectEl.appendChild(opt);
+            });
+            if (invoices.length === 1) {
+                invoiceSelectEl.value = invoices[0].id;
+                loadInvoiceItems(invoices[0].id);
             }
         }
 
         step2Col.style.display = 'block';
         step2Col.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-
-    // Step 2 Form / Dropdown Change -> AJAX fetch invoice items (NO PAGE RELOAD)
-    const invoiceSelectForm = document.getElementById('invoiceSelectForm');
-    const invoiceSelectEl = document.getElementById('invoice_id');
-
-    async function loadInvoiceItems(invoiceId) {
-        if (!invoiceId) return;
-        const step3Col = document.getElementById('step3Col');
-        const step3Body = document.getElementById('step3CardBody');
-        step3Col.style.display = 'block';
-        step3Body.innerHTML = '<div class="text-center py-4 text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Loading invoice items...</div>';
-
-        try {
-            const res = await fetch(`/api/sales/invoice-items/?invoice_id=${encodeURIComponent(invoiceId)}`);
-            const data = await res.json();
-            if (data.success) {
-                renderStep3(data.invoice, data.items);
-            } else {
-                step3Body.innerHTML = `<div class="alert alert-danger mb-0">${data.error || 'Failed to load items.'}</div>`;
-            }
-        } catch (err) {
-            console.error('Fetch items error:', err);
-            step3Body.innerHTML = '<div class="alert alert-danger mb-0">Error loading invoice items.</div>';
-        }
     }
 
     if (invoiceSelectEl) {
@@ -729,87 +1419,120 @@ document.addEventListener('DOMContentLoaded', function() {
     if (invoiceSelectForm) {
         invoiceSelectForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            const invId = document.getElementById('invoice_id').value;
-            if (invId) loadInvoiceItems(invId);
-            else alert("Please select an invoice first.");
+            if (invoiceSelectEl.value) {
+                loadInvoiceItems(invoiceSelectEl.value);
+            } else {
+                alert("Please choose an invoice from the dropdown.");
+            }
         });
     }
 
-    // Render Step 3 dynamically
-    function renderStep3(invoice, items) {
+    async function loadInvoiceItems(invoiceId) {
+        if (!invoiceId) return;
+        const step3Col = document.getElementById('step3Col');
+        const step3Body = document.getElementById('step3CardBody');
+        step3Col.style.display = 'block';
+        step3Body.innerHTML = '<div class="text-center py-5 text-muted"><span class="spinner-border spinner-border-sm me-2 text-primary"></span>Loading invoice items...</div>';
+
+        try {
+            const res = await fetch(`/api/sales/invoice-items/?invoice_id=${encodeURIComponent(invoiceId)}`);
+            const data = await res.json();
+            if (data.success) {
+                renderStep3Items(data.invoice, data.items);
+            } else {
+                step3Body.innerHTML = `<div class="alert alert-danger mb-0">${data.error || 'Failed to load items.'}</div>`;
+            }
+        } catch (err) {
+            console.error('Fetch items error:', err);
+            step3Body.innerHTML = '<div class="alert alert-danger mb-0">Error loading invoice items.</div>';
+        }
+    }
+
+    function renderStep3Items(invoice, items) {
         const step3Body = document.getElementById('step3CardBody');
         const csrfToken = document.querySelector('input[name="csrfmiddlewaretoken"]')?.value || '';
 
-        let html = `
-            <form method="post" id="processReturnForm" action="{% url 'pos_returns_create' %}">
-                <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
-                <input type="hidden" name="action" value="process_return">
-                <input type="hidden" name="invoice_id" value="${invoice.id}">
-                
-                <div class="mb-3">
-                    <label class="form-label">Invoice: <strong>#${invoice.invoice_number}</strong></label>
-                </div>
-                
-                <div class="mb-3">
-                    <label class="form-label">Items to Return:</label>
-        `;
-
+        let itemsHtml = '';
         if (items && items.length > 0) {
             items.forEach(item => {
-                html += `
-                    <div class="border rounded p-3 mb-2 return-item-row" data-price="${item.unit_price}">
-                        <div class="d-flex justify-content-between align-items-start">
+                itemsHtml += `
+                    <div class="p-3 rounded-3 border return-item-row mb-2" data-price="${item.unit_price}" style="background-color: #fafafa;">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
                             <div>
-                                <strong>${item.product_name}</strong><br>
+                                <strong class="text-dark">${item.product_name}</strong><br>
                                 <small class="text-muted">
-                                    Batch: ${item.batch_number || 'N/A'} | 
-                                    Sold: ${item.quantity} | 
+                                    Batch: <span class="badge bg-light text-dark border">${item.batch_number || 'N/A'}</span> &bull; 
+                                    Sold: ${item.quantity} &bull; 
                                     Price: ₹${item.unit_price.toFixed(2)}
                                 </small>
                             </div>
+                            <span class="badge ${item.max_return_quantity > 0 ? 'badge-soft-success' : 'badge-soft-danger'}">
+                                ${item.max_return_quantity > 0 ? 'Returnable: ' + item.max_return_quantity : 'Returned'}
+                            </span>
                         </div>
-                        <div class="row mt-2">
-                            <div class="col-6">
-                                <label class="form-label small">Return Qty</label>
-                                <input type="number" class="form-control form-control-sm return-qty-input" 
-                                       name="return_quantities[]" min="0" max="${item.quantity}" value="0">
+                        <div class="row g-2">
+                            <div class="col-5">
+                                <label class="form-label small text-muted mb-1">Return Qty</label>
+                                <input type="number" class="form-control form-control-sm return-qty-input fw-bold text-center shadow-none" 
+                                       name="return_quantities[]" min="0" max="${item.max_return_quantity}" value="0" ${item.max_return_quantity === 0 ? 'disabled' : ''}>
                                 <input type="hidden" name="return_items[]" value="${item.id}">
                             </div>
-                            <div class="col-6">
-                                <label class="form-label small">Reason (Optional)</label>
-                                <input type="text" class="form-control form-control-sm" 
-                                       name="return_reasons[]" placeholder="e.g., damaged, wrong item">
+                            <div class="col-7">
+                                <label class="form-label small text-muted mb-1">Reason (Optional)</label>
+                                <input type="text" class="form-control form-control-sm shadow-none" 
+                                       name="return_reasons[]" placeholder="e.g. damaged, wrong" ${item.max_return_quantity === 0 ? 'disabled' : ''}>
                             </div>
                         </div>
                     </div>
                 `;
             });
         } else {
-            html += `<div class="text-muted small py-2">No returnable items in this invoice.</div>`;
+            itemsHtml = `<div class="text-muted text-center py-4">No returnable items found in this invoice.</div>`;
         }
 
-        html += `
+        step3Body.innerHTML = `
+            <form method="post" id="processReturnForm" action="{% url 'pos_returns_create' %}">
+                <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
+                <input type="hidden" name="action" value="process_return">
+                <input type="hidden" name="invoice_id" value="${invoice.id}">
+                
+                <div class="p-2 mb-3 bg-light rounded-3 border d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="text-muted small">Invoice:</span>
+                        <span class="fw-bold ms-1 text-primary">#${invoice.invoice_number}</span>
+                    </div>
+                    <span class="badge bg-secondary">${invoice.date}</span>
                 </div>
-                <div class="alert alert-info d-flex justify-content-between align-items-center mb-3" id="returnTotalBox" style="display:none">
-                    <span>Total Return Amount:</span>
-                    <strong id="returnTotalAmount">₹0.00</strong>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-secondary mb-2">Items to Return:</label>
+                    <div class="d-flex flex-column gap-2">
+                        ${itemsHtml}
+                    </div>
                 </div>
-                <button type="submit" name="action" value="process_return" class="btn btn-success w-100 fw-bold">Process Return</button>
+
+                <div class="p-3 rounded-3 bg-light border d-flex justify-content-between align-items-center mb-3" id="returnTotalBox">
+                    <span class="fw-semibold text-secondary small">Total Refund Amount:</span>
+                    <strong class="text-success fs-5" id="returnTotalAmount">₹0.00</strong>
+                </div>
+
+                <button type="submit" name="action" value="process_return" class="btn btn-success w-100 fw-bold py-2 rounded-pill shadow-sm" id="btnSubmitInvoiceReturn">
+                    <i class="fas fa-check-circle me-1"></i> Process Return
+                </button>
             </form>
         `;
 
-        step3Body.innerHTML = html;
-
-        // Attach recalculation event listeners
+        // Attach listeners for dynamic items
         const qtyInputs = step3Body.querySelectorAll('.return-qty-input');
         qtyInputs.forEach(input => {
-            input.addEventListener('input', calculateStep3Total);
+            input.addEventListener('input', calculateInvoiceStep3Total);
         });
+        calculateInvoiceStep3Total();
     }
 
-    function calculateStep3Total() {
+    function calculateInvoiceStep3Total() {
         let total = 0;
-        const rows = document.querySelectorAll('.return-item-row');
+        const rows = document.querySelectorAll('#step3CardBody .return-item-row');
         rows.forEach(row => {
             const qtyInput = row.querySelector('.return-qty-input');
             const price = parseFloat(row.dataset.price) || 0;
@@ -817,22 +1540,16 @@ document.addEventListener('DOMContentLoaded', function() {
             total += qty * price;
         });
 
-        const totalBox = document.getElementById('returnTotalBox');
-        const totalAmount = document.getElementById('returnTotalAmount');
-        if (totalBox && totalAmount) {
-            if (total > 0) {
-                totalBox.style.display = 'flex';
-                totalAmount.textContent = '₹' + total.toFixed(2);
-            } else {
-                totalBox.style.display = 'none';
-            }
+        const totalAmountEl = document.getElementById('returnTotalAmount');
+        if (totalAmountEl) {
+            totalAmountEl.textContent = '₹' + total.toFixed(2);
         }
     }
 
-    // Initialize calculation for initial server-rendered items if present
+    // Initialize calculation for initial server-rendered items (e.g. edit mode)
     const initInputs = document.querySelectorAll('.return-qty-input');
-    initInputs.forEach(input => input.addEventListener('input', calculateStep3Total));
-    calculateStep3Total();
+    initInputs.forEach(input => input.addEventListener('input', calculateInvoiceStep3Total));
+    calculateInvoiceStep3Total();
 });
 </script>
 {% endblock %}

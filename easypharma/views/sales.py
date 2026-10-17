@@ -6,7 +6,7 @@ from django.http import JsonResponse
 from django.contrib import messages
 from django.db import transaction
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import F, Q
+from django.db.models import F, Q, Sum, Count
 from django.core.cache import cache
 from easypharma.models.general_setup import GeneralSetup
 from easypharma.models.stock import StockBatch
@@ -16,7 +16,7 @@ from easypharma.models.sales import (SaleInvoice, SaleItem,
                                     Customer, SalesReturn, SalesReturnItem,PrescriptionReminder)
 import json
 import re
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from urllib.parse import quote_plus
 
 from easypharma.models.Items import Products, ProductTax
@@ -1153,13 +1153,31 @@ class SalesReturnListView(LoginRequiredMixin, View):
         search_query = request.GET.get('search', '').strip()
         start_date = request.GET.get('start_date', '')
         end_date = request.GET.get('end_date', '')
+        quick_filter = request.GET.get('quick_filter', '')
         page_number = request.GET.get('page', '1')
 
-        returns_qs = SalesReturn.objects.filter(tenant=request.tenant).select_related('sale_invoice', 'sale_invoice__customer')
+        base_qs = SalesReturn.objects.filter(tenant=request.tenant)
+
+        today = timezone.localdate()
+        if quick_filter == 'today':
+            start_date = today.strftime('%Y-%m-%d')
+            end_date = today.strftime('%Y-%m-%d')
+        elif quick_filter == 'yesterday':
+            yesterday = today - timedelta(days=1)
+            start_date = yesterday.strftime('%Y-%m-%d')
+            end_date = yesterday.strftime('%Y-%m-%d')
+        elif quick_filter == 'this_month':
+            start_date = today.replace(day=1).strftime('%Y-%m-%d')
+            end_date = today.strftime('%Y-%m-%d')
+
+        returns_qs = base_qs.select_related('sale_invoice', 'sale_invoice__customer').prefetch_related(
+            'return_items', 'return_items__sale_item__product'
+        )
         
         if search_query:
             returns_qs = returns_qs.filter(
                 Q(return_inv_no__icontains=search_query) |
+                Q(customer_name__icontains=search_query) |
                 Q(sale_invoice__patient_name__icontains=search_query) |
                 Q(sale_invoice__patient_phone__icontains=search_query) |
                 Q(sale_invoice__invoice_number__icontains=search_query)
@@ -1172,8 +1190,16 @@ class SalesReturnListView(LoginRequiredMixin, View):
             
         returns_qs = returns_qs.order_by('-return_at')
         
+        # Calculate summary statistics for header cards
+        all_tenant_returns = base_qs
+        total_returns_count = all_tenant_returns.count()
+        total_refund_amount = all_tenant_returns.aggregate(total=Sum('return_amount'))['total'] or Decimal('0.00')
+        today_returns_amount = all_tenant_returns.filter(return_at__date=today).aggregate(total=Sum('return_amount'))['total'] or Decimal('0.00')
+        today_returns_count = all_tenant_returns.filter(return_at__date=today).count()
+        total_items_returned = all_tenant_returns.aggregate(total=Sum('return_qty'))['total'] or 0
+
         from django.core.paginator import Paginator
-        paginator = Paginator(returns_qs, 10)
+        paginator = Paginator(returns_qs, 15)
         page_obj = paginator.get_page(page_number)
         
         context = {
@@ -1182,9 +1208,21 @@ class SalesReturnListView(LoginRequiredMixin, View):
             'search_query': search_query,
             'start_date': start_date,
             'end_date': end_date,
+            'quick_filter': quick_filter,
+            'total_returns_count': total_returns_count,
+            'total_refund_amount': total_refund_amount,
+            'today_returns_amount': today_returns_amount,
+            'today_returns_count': today_returns_count,
+            'total_items_returned': total_items_returned,
         }
 
         return render(request, self.template_name, context)
+
+
+def _return_stock_quantity(sale_item, quantity, sale_type):
+    conversion_factor = sale_item.product.conversion_factor or 1
+    return quantity * conversion_factor if sale_type == 'strip' else quantity
+
 
 class SalesReturnView(LoginRequiredMixin,View):
     template_name = 'sales/sales_return.html'
@@ -1215,13 +1253,12 @@ class SalesReturnView(LoginRequiredMixin,View):
                 customer = Customer.objects.get(id=customer_id, tenant=request.tenant)
                 context['selected_customer'] = customer
                 context['selected_customer_name'] = customer.name
+                invoice_customer_filter = Q(customer=customer) | Q(patient_name__iexact=customer.name)
+                if customer.phone:
+                    invoice_customer_filter |= Q(patient_phone__icontains=customer.phone)
                 context['invoices'] = SaleInvoice.objects.filter(
                     tenant=request.tenant
-                ).filter(
-                    Q(customer=customer) |
-                    Q(patient_name__iexact=customer.name) |
-                    Q(patient_phone__icontains=customer.phone)
-                ).order_by('-created_at')
+                ).filter(invoice_customer_filter).order_by('-created_at')
             except Customer.DoesNotExist:
                 messages.error(request, 'Customer not found.')
         elif customer_name:
@@ -1241,6 +1278,12 @@ class SalesReturnView(LoginRequiredMixin,View):
                 invoice = SaleInvoice.objects.get(id=invoice_id, tenant=request.tenant)
                 context['selected_invoice'] = invoice
                 context['sale_items'] = invoice.items.all().select_related('product')
+                for sale_item in context['sale_items']:
+                    already_returned = SalesReturnItem.objects.filter(
+                        sale_item=sale_item,
+                        sales_return__tenant=request.tenant
+                    ).aggregate(total=Sum('returned_quantity'))['total'] or 0
+                    sale_item.max_return_quantity = max(0, sale_item.quantity - already_returned)
             except SaleInvoice.DoesNotExist:
                 messages.error(request, 'Invoice not found.')
 
@@ -1250,9 +1293,21 @@ class SalesReturnView(LoginRequiredMixin,View):
                 context['selected_return'] = selected_return
                 context['selected_invoice'] = selected_return.sale_invoice
                 context['selected_return_items'] = selected_return.return_items.select_related('sale_item__product').all()
+                for return_item in context['selected_return_items']:
+                    returned_elsewhere = SalesReturnItem.objects.filter(
+                        sale_item=return_item.sale_item,
+                        sales_return__tenant=request.tenant
+                    ).exclude(sales_return=selected_return).aggregate(
+                        total=Sum('returned_quantity')
+                    )['total'] or 0
+                    return_item.max_return_quantity = max(
+                        0, return_item.sale_item.quantity - returned_elsewhere
+                    )
                 if selected_return.sale_invoice.customer:
                     context['selected_customer'] = selected_return.sale_invoice.customer
-                    context['selected_customer_name'] = selected_return.sale_invoice.customer.name
+                    context['selected_customer_name'] = (
+                        selected_return.customer_name or selected_return.sale_invoice.customer.name
+                    )
                     context['invoices'] = SaleInvoice.objects.filter(
                         tenant=request.tenant
                     ).filter(
@@ -1261,7 +1316,7 @@ class SalesReturnView(LoginRequiredMixin,View):
                     ).order_by('-created_at')
                 else:
                     cust_name = selected_return.sale_invoice.patient_name or ''
-                    context['selected_customer_name'] = cust_name
+                    context['selected_customer_name'] = selected_return.customer_name or cust_name
                     context['invoices'] = SaleInvoice.objects.filter(
                         tenant=request.tenant
                     ).filter(
@@ -1274,7 +1329,6 @@ class SalesReturnView(LoginRequiredMixin,View):
         return render(request, self.template_name, context)
 
     def post(self, request, return_id=None):
-
         action = request.POST.get('action')
         if not return_id:
             return_id = request.POST.get('return_id')
@@ -1300,7 +1354,7 @@ class SalesReturnView(LoginRequiredMixin,View):
                     return redirect(f"{request.path}?customer_id={customer.id}&tab=invoice")
                 return redirect(f"{request.path}?customer_name={quote_plus(customer_name)}&tab=invoice")
             messages.error(request, 'Please select a valid customer from the list.')
-            return redirect('pos_returns_no_slash')
+            return redirect('pos_returns')
         
         elif action == 'select_invoice':
             customer_id = request.POST.get('customer_id')
@@ -1335,53 +1389,94 @@ class SalesReturnView(LoginRequiredMixin,View):
             if not return_items:
                 messages.error(request, 'Please select items to return.')
                 return redirect(request.META.get('HTTP_REFERER', 'pos_returns'))
+            if len(return_items) != len(return_quantities):
+                messages.error(request, 'Return item and quantity data did not match.')
+                return redirect(request.META.get('HTTP_REFERER', 'pos_returns'))
             
             try:
                 with transaction.atomic():
-                    return_record = SalesReturn.objects.create(
-                        tenant=request.tenant,
-                        sale_invoice=invoice,
-                        return_qty=0,
-                        return_amount=Decimal('0')
-                    )
-                    
+                    prepared_items = []
+                    seen_item_ids = set()
                     total_returned_qty = 0
                     total_return_amount = Decimal('0')
                     
                     for i, item_id in enumerate(return_items):
-                        sale_item = SaleItem.objects.get(id=item_id, sale_invoice=invoice)
+                        if item_id in seen_item_ids:
+                            raise ValueError('A sale item was submitted more than once.')
+                        seen_item_ids.add(item_id)
+                        sale_item = SaleItem.objects.select_for_update().get(
+                            id=item_id,
+                            sale_invoice=invoice,
+                            tenant=request.tenant
+                        )
                         qty_to_return = int(return_quantities[i])
                         reason = return_reasons[i] if i < len(return_reasons) else ''
-                        
-                        if qty_to_return > 0 and qty_to_return <= sale_item.quantity:
-                            SalesReturnItem.objects.create(
-                                tenant=request.tenant,
-                                sales_return=return_record,
-                                sale_item=sale_item,
-                                returned_quantity=qty_to_return,
-                                return_reason=reason
+                        if qty_to_return < 0:
+                            raise ValueError('Return quantity cannot be negative.')
+                        if qty_to_return == 0:
+                            continue
+
+                        already_returned = SalesReturnItem.objects.filter(
+                            sale_item=sale_item,
+                            sales_return__tenant=request.tenant
+                        ).aggregate(total=Sum('returned_quantity'))['total'] or 0
+                        if qty_to_return > sale_item.quantity - already_returned:
+                            raise ValueError(
+                                f'Return quantity exceeds the unreturned quantity for {sale_item.product.product_name}.'
                             )
-                            
-                            StockBatch.objects.filter(
-                                tenant=request.tenant,
-                                product=sale_item.product,
-                                batch_number=sale_item.batch_number
-                            ).update(current_quantity=F('current_quantity') + qty_to_return)
-                            
-                            total_returned_qty += qty_to_return
-                            total_return_amount += Decimal(str(qty_to_return)) * sale_item.unit_price
+
+                        batch = StockBatch.objects.select_for_update().filter(
+                            tenant=request.tenant,
+                            product=sale_item.product,
+                            batch_number__iexact=sale_item.batch_number
+                        ).first()
+                        if not batch:
+                            raise ValueError(
+                                f'Stock batch {sale_item.batch_number or "(blank)"} was not found for {sale_item.product.product_name}.'
+                            )
+
+                        prepared_items.append((sale_item, qty_to_return, reason, batch))
+                        total_returned_qty += qty_to_return
+                        total_return_amount += Decimal(str(qty_to_return)) * sale_item.unit_price
+
+                    if not prepared_items:
+                        raise ValueError('Enter a return quantity greater than zero.')
+
+                    return_record = SalesReturn.objects.create(
+                        tenant=request.tenant,
+                        sale_invoice=invoice,
+                        customer_name=invoice.customer.name if invoice.customer else invoice.patient_name,
+                        return_qty=0,
+                        return_amount=Decimal('0')
+                    )
+
+                    for sale_item, qty_to_return, reason, batch in prepared_items:
+                        SalesReturnItem.objects.create(
+                            tenant=request.tenant,
+                            sales_return=return_record,
+                            sale_item=sale_item,
+                            returned_quantity=qty_to_return,
+                            return_reason=reason
+                        )
+                        batch.current_quantity = F('current_quantity') + _return_stock_quantity(
+                            sale_item, qty_to_return, sale_type
+                        )
+                        batch.save(update_fields=['current_quantity'])
                     
                     return_record.return_qty = total_returned_qty
                     return_record.return_amount = total_return_amount
                     return_record.save()
                     
                     try:
-                        from easypharma.views.reports import invalidate_daily_sale_cache
+                        from easypharma.views.reports import invalidate_daily_sale_cache, invalidate_stock_cache
                         invalidate_daily_sale_cache(request.tenant.id, date_str=str(return_record.return_at.date()))
+                        invalidate_stock_cache(request.tenant.id)
                     except Exception:
                         pass
                     
                     messages.success(request, f"Return created ({return_record.return_inv_no}). {total_returned_qty} items | ₹{total_return_amount} returned.")
+            except ValueError as e:
+                messages.error(request, str(e))
             except Exception as e:
                 import traceback
                 traceback.print_exc()
@@ -1393,74 +1488,107 @@ class SalesReturnView(LoginRequiredMixin,View):
             product_ids = request.POST.getlist('product_id[]')
             batch_numbers = request.POST.getlist('batch_number[]')
             return_qtys = request.POST.getlist('return_qty[]')
+            sale_item_ids = request.POST.getlist('sale_item_id[]')
             patient_name = request.POST.get('patient_name', '').strip()
 
             if not product_ids:
                 messages.error(request, 'No items provided for return.')
                 return redirect('pos_returns')
+            if len(product_ids) != len(return_qtys):
+                messages.error(request, 'Return item and quantity data did not match.')
+                return redirect('pos_returns')
 
             try:
                 with transaction.atomic():
                     invoice_map = {}
+                    pending_return_qty = {}
                     
                     for i, prod_id in enumerate(product_ids):
                         qty = int(return_qtys[i])
                         if qty <= 0:
-                            continue
+                            raise ValueError('Return quantity must be greater than zero.')
                         batch = batch_numbers[i] if i < len(batch_numbers) else ''
-                        
-                        sale_items = SaleItem.objects.filter(
-                            sale_invoice__tenant=request.tenant,
-                            product_id=prod_id
-                        ).select_related('sale_invoice', 'product').order_by('-sale_invoice__created_at')
-                        
-                        if batch:
-                            sale_items_batch = sale_items.filter(batch_number__iexact=batch)
-                            if sale_items_batch.exists():
-                                sale_items = sale_items_batch
+                        specific_item_id = sale_item_ids[i] if i < len(sale_item_ids) and sale_item_ids[i] else None
 
-                        if patient_name:
-                            sale_items_pat = sale_items.filter(
-                                Q(sale_invoice__patient_name__icontains=patient_name) |
-                                Q(sale_invoice__customer__name__icontains=patient_name)
-                            )
-                            if sale_items_pat.exists():
-                                sale_items = sale_items_pat
-                            
-                        sale_item = sale_items.first()
-                        
-                        if not sale_item:
-                            # Fallback: Find any recent sale invoice for this tenant to attach
-                            dummy_inv = SaleInvoice.objects.filter(tenant=request.tenant).order_by('-created_at').first()
-                            if not dummy_inv:
-                                raise ValueError(f"No past invoice found to record return.")
-                            inv = dummy_inv
-                            product = Products.objects.get(id=prod_id, tenant=request.tenant)
-                            sale_item = SaleItem.objects.filter(product=product, tenant=request.tenant).first()
-                            if not sale_item:
-                                sale_item = SaleItem.objects.create(
-                                    tenant=request.tenant,
-                                    sale_invoice=inv,
-                                    product=product,
-                                    batch_number=batch or 'DEFAULT',
-                                    quantity=qty,
-                                    unit_price=product.product_mrp / product.conversion_factor if (product.product_mrp and product.conversion_factor) else Decimal('0'),
-                                    total_amount=Decimal('0')
-                                )
+                        if specific_item_id:
+                            sale_items = SaleItem.objects.filter(
+                                id=specific_item_id,
+                                tenant=request.tenant
+                            ).select_related('sale_invoice', 'product')
                         else:
-                            inv = sale_item.sale_invoice
-                        
-                        if inv not in invoice_map:
-                            invoice_map[inv] = []
-                        invoice_map[inv].append({'sale_item': sale_item, 'qty': qty, 'batch': batch})
+                            sale_items = SaleItem.objects.filter(
+                                sale_invoice__tenant=request.tenant,
+                                tenant=request.tenant,
+                                product_id=prod_id
+                            ).select_related('sale_invoice', 'product').order_by('-sale_invoice__created_at')
+
+                            if batch:
+                                sale_items = sale_items.filter(batch_number__iexact=batch)
+
+                            if patient_name:
+                                patient_sales = sale_items.filter(
+                                    Q(sale_invoice__patient_name__icontains=patient_name) |
+                                    Q(sale_invoice__customer__name__icontains=patient_name)
+                                )
+                                if patient_sales.exists():
+                                    sale_items = patient_sales
+
+                        remaining_qty = qty
+                        for candidate in sale_items.select_for_update():
+                            already_returned = SalesReturnItem.objects.filter(
+                                sale_item=candidate,
+                                sales_return__tenant=request.tenant
+                            ).aggregate(total=Sum('returned_quantity'))['total'] or 0
+                            candidate_remaining = (
+                                candidate.quantity
+                                - already_returned
+                                - pending_return_qty.get(candidate.id, 0)
+                            )
+                            if candidate_remaining <= 0:
+                                continue
+                            quantity_from_sale = min(remaining_qty, candidate_remaining)
+                            stock_batch = StockBatch.objects.select_for_update().filter(
+                                tenant=request.tenant,
+                                product=candidate.product,
+                                batch_number__iexact=candidate.batch_number
+                            ).first()
+                            if not stock_batch:
+                                stock_batch = StockBatch.objects.select_for_update().filter(
+                                    tenant=request.tenant,
+                                    product=candidate.product
+                                ).first()
+                            if not stock_batch:
+                                raise ValueError(
+                                    f'Stock batch {candidate.batch_number or "(blank)"} was not found for {candidate.product.product_name}.'
+                                )
+                            pending_return_qty[candidate.id] = (
+                                pending_return_qty.get(candidate.id, 0) + quantity_from_sale
+                            )
+                            invoice_map.setdefault(candidate.sale_invoice, []).append({
+                                'sale_item': candidate,
+                                'qty': quantity_from_sale,
+                                'stock_batch': stock_batch
+                            })
+                            remaining_qty -= quantity_from_sale
+                            if remaining_qty == 0:
+                                break
+
+                        if remaining_qty:
+                            prod_obj = Products.objects.filter(id=prod_id).first()
+                            pname = prod_obj.product_name if prod_obj else f'Product #{prod_id}'
+                            raise ValueError(
+                                f'Cannot return {qty} of {pname}: No unreturned sale quantity available in batch {batch or "any"}. All previous sales have already been returned.'
+                            )
                     
                     total_amount_returned = Decimal('0')
-                    returns_created = 0
                     
                     for inv, items in invoice_map.items():
                         return_record = SalesReturn.objects.create(
                             tenant=request.tenant,
                             sale_invoice=inv,
+                            customer_name=patient_name or (
+                                inv.customer.name if inv.customer else inv.patient_name
+                            ),
                             return_qty=0,
                             return_amount=Decimal('0')
                         )
@@ -1471,7 +1599,6 @@ class SalesReturnView(LoginRequiredMixin,View):
                         for item_data in items:
                             sale_item = item_data['sale_item']
                             qty = item_data['qty']
-                            batch_no = item_data['batch'] or sale_item.batch_number
                             
                             SalesReturnItem.objects.create(
                                 tenant=request.tenant,
@@ -1481,26 +1608,11 @@ class SalesReturnView(LoginRequiredMixin,View):
                                 return_reason='Quick POS Return'
                             )
                             
-                            # Restore stock for batch safely
-                            batch_obj = StockBatch.objects.filter(
-                                tenant=request.tenant,
-                                product=sale_item.product,
-                                batch_number__iexact=batch_no
-                            ).first()
-                            if batch_obj:
-                                batch_obj.current_quantity = F('current_quantity') + qty
-                                batch_obj.save()
-                            else:
-                                StockBatch.objects.create(
-                                    tenant=request.tenant,
-                                    product=sale_item.product,
-                                    batch_number=batch_no,
-                                    current_quantity=qty,
-                                    initial_quantity=qty,
-                                    purchase_price=sale_item.unit_price,
-                                    mrp=sale_item.unit_price,
-                                    sale_price=sale_item.unit_price
-                                )
+                            stock_batch = item_data['stock_batch']
+                            stock_batch.current_quantity = F('current_quantity') + _return_stock_quantity(
+                                sale_item, qty, sale_type
+                            )
+                            stock_batch.save(update_fields=['current_quantity'])
                             
                             inv_return_qty += qty
                             item_refund = Decimal(str(qty)) * sale_item.unit_price
@@ -1509,8 +1621,8 @@ class SalesReturnView(LoginRequiredMixin,View):
                             
                         return_record.return_qty = inv_return_qty
                         return_record.return_amount = inv_return_amount
+
                         return_record.save()
-                        returns_created += 1
                         
                         try:
                             from easypharma.views.reports import invalidate_daily_sale_cache, invalidate_stock_cache
@@ -1538,9 +1650,14 @@ class SalesReturnView(LoginRequiredMixin,View):
                 messages.error(request, 'Return record not found.')
                 return redirect('pos_returns')
 
+            return_record_deleted = False
             try:
                 with transaction.atomic():
                     return_record = SalesReturn.objects.select_for_update().get(id=return_id, tenant=request.tenant)
+                    if len(return_item_ids) != len(return_quantities):
+                        raise ValueError('Return item and quantity data did not match.')
+                    if len(return_item_ids) != len(set(return_item_ids)):
+                        raise ValueError('A returned item was submitted more than once.')
                     total_returned_qty = 0
                     total_return_amount = Decimal('0')
 
@@ -1550,15 +1667,29 @@ class SalesReturnView(LoginRequiredMixin,View):
                         reason = return_reasons[i] if i < len(return_reasons) else ''
                         delta_qty = new_qty - item.returned_quantity
 
-                        if new_qty < 0 or new_qty > item.sale_item.quantity:
+                        already_returned_elsewhere = SalesReturnItem.objects.filter(
+                            sale_item=item.sale_item,
+                            sales_return__tenant=request.tenant
+                        ).exclude(sales_return=return_record).aggregate(
+                            total=Sum('returned_quantity')
+                        )['total'] or 0
+                        if new_qty < 0 or new_qty > item.sale_item.quantity - already_returned_elsewhere:
                             raise ValueError('Invalid return quantity.')
 
-                        batch_qs = StockBatch.objects.filter(
+                        batch = StockBatch.objects.select_for_update().filter(
                             tenant=request.tenant,
                             product=item.sale_item.product,
-                            batch_number=item.sale_item.batch_number
-                        )
-                        batch_qs.update(current_quantity=F('current_quantity') + delta_qty)
+                            batch_number__iexact=item.sale_item.batch_number
+                        ).first()
+                        if not batch:
+                            raise ValueError(
+                                f'Stock batch {item.sale_item.batch_number or "(blank)"} was not found for {item.sale_item.product.product_name}.'
+                            )
+                        stock_delta = _return_stock_quantity(item.sale_item, delta_qty, sale_type)
+                        if stock_delta < 0 and batch.current_quantity < -stock_delta:
+                            raise ValueError('Cannot reduce the return because the returned stock has already been sold or removed.')
+                        batch.current_quantity = F('current_quantity') + stock_delta
+                        batch.save(update_fields=['current_quantity'])
 
                         if new_qty == 0:
                             item.delete()
@@ -1572,24 +1703,29 @@ class SalesReturnView(LoginRequiredMixin,View):
                     if total_returned_qty == 0:
                         return_date = return_record.return_at.date()
                         return_record.delete()
+                        return_record_deleted = True
                         messages.success(request, 'Return record deleted because there are no returned items.')
                     else:
                         return_record.return_qty = total_returned_qty
                         return_record.return_amount = total_return_amount
                         return_record.save()
+                        return_record_deleted = False
                         messages.success(request, f"Return updated ({return_record.return_inv_no}). {total_returned_qty} items | ₹{total_return_amount} returned.")
 
                     try:
-                        from easypharma.views.reports import invalidate_daily_sale_cache
+                        from easypharma.views.reports import invalidate_daily_sale_cache, invalidate_stock_cache
                         invalidate_daily_sale_cache(request.tenant.id, date_str=str(return_record.return_at.date()))
+                        invalidate_stock_cache(request.tenant.id)
                     except Exception:
                         pass
+            except ValueError as e:
+                messages.error(request, str(e))
             except Exception as e:
                 import traceback
                 traceback.print_exc()
                 messages.error(request, f"Unable to update return: {e}")
 
-            if return_id:
+            if return_id and not return_record_deleted:
                 return redirect('pos_returns_edit', return_id=return_id)
             return redirect('pos_returns')
 
@@ -1603,18 +1739,28 @@ class SalesReturnView(LoginRequiredMixin,View):
                     return_record = SalesReturn.objects.select_for_update().get(id=return_id, tenant=request.tenant)
                     return_date = return_record.return_at.date()
                     for item in return_record.return_items.select_related('sale_item'):
-                        StockBatch.objects.filter(
+                        batch = StockBatch.objects.select_for_update().filter(
                             tenant=request.tenant,
                             product=item.sale_item.product,
-                            batch_number=item.sale_item.batch_number
-                        ).update(current_quantity=F('current_quantity') - item.returned_quantity)
+                            batch_number__iexact=item.sale_item.batch_number
+                        ).first()
+                        stock_quantity = _return_stock_quantity(
+                            item.sale_item, item.returned_quantity, sale_type
+                        )
+                        if not batch or batch.current_quantity < stock_quantity:
+                            raise ValueError('Cannot delete the return because the returned stock has already been sold or removed.')
+                        batch.current_quantity = F('current_quantity') - stock_quantity
+                        batch.save(update_fields=['current_quantity'])
                     return_record.delete()
                     try:
-                        from easypharma.views.reports import invalidate_daily_sale_cache
+                        from easypharma.views.reports import invalidate_daily_sale_cache, invalidate_stock_cache
                         invalidate_daily_sale_cache(request.tenant.id, date_str=str(return_date))
+                        invalidate_stock_cache(request.tenant.id)
                     except Exception:
                         pass
                     messages.success(request, 'Return record deleted successfully.')
+            except ValueError as e:
+                messages.error(request, str(e))
             except Exception as e:
                 import traceback
                 traceback.print_exc()
@@ -1630,6 +1776,10 @@ class CustomerInvoicesAPIView(LoginRequiredMixin, View):
         tenant = request.tenant
         customer_id = request.GET.get('customer_id')
         customer_name = request.GET.get('customer_name', '').strip()
+        search_query = request.GET.get('search', '').strip() or request.GET.get('q', '').strip()
+        invoice_query = request.GET.get('invoice_number', '').strip()
+
+        term = search_query or invoice_query or customer_name
 
         invoices_qs = SaleInvoice.objects.filter(tenant=tenant)
         customer_info = {}
@@ -1645,28 +1795,39 @@ class CustomerInvoicesAPIView(LoginRequiredMixin, View):
                 )
             except Customer.DoesNotExist:
                 return JsonResponse({'success': False, 'error': 'Customer not found'}, status=404)
-        elif customer_name:
-            customer = Customer.objects.filter(tenant=tenant).filter(
-                Q(name__iexact=customer_name) | Q(phone__iexact=customer_name)
-            ).first()
-            if customer:
-                customer_info = {'id': customer.id, 'name': customer.name, 'phone': customer.phone or ''}
-                invoices_qs = invoices_qs.filter(
-                    Q(customer=customer) |
-                    Q(patient_name__iexact=customer.name) |
-                    (Q(patient_phone__icontains=customer.phone) if customer.phone else Q())
-                )
+        elif term:
+            invoice_matches = invoices_qs.filter(invoice_number__icontains=term)
+            if invoice_matches.exists():
+                invoices_qs = invoice_matches
+                first_inv = invoice_matches.first()
+                customer_info = {
+                    'id': first_inv.customer_id,
+                    'name': first_inv.patient_name or (first_inv.customer.name if first_inv.customer else 'Walk-in'),
+                    'phone': first_inv.patient_phone or (first_inv.customer.phone if first_inv.customer else '')
+                }
             else:
-                customer_info = {'id': None, 'name': customer_name, 'phone': ''}
-                invoices_qs = invoices_qs.filter(
-                    Q(patient_name__iexact=customer_name) |
-                    Q(patient_name__icontains=customer_name) |
-                    Q(patient_phone__icontains=customer_name)
-                )
+                customer = Customer.objects.filter(tenant=tenant).filter(
+                    Q(name__iexact=term) | Q(phone__iexact=term) |
+                    Q(name__icontains=term) | Q(phone__icontains=term)
+                ).first()
+                if customer:
+                    customer_info = {'id': customer.id, 'name': customer.name, 'phone': customer.phone or ''}
+                    invoices_qs = invoices_qs.filter(
+                        Q(customer=customer) |
+                        Q(patient_name__iexact=customer.name) |
+                        (Q(patient_phone__icontains=customer.phone) if customer.phone else Q())
+                    )
+                else:
+                    customer_info = {'id': None, 'name': term, 'phone': ''}
+                    invoices_qs = invoices_qs.filter(
+                        Q(patient_name__iexact=term) |
+                        Q(patient_name__icontains=term) |
+                        Q(patient_phone__icontains=term)
+                    )
         else:
-            return JsonResponse({'success': False, 'error': 'Customer ID or name required'}, status=400)
+            return JsonResponse({'success': False, 'error': 'Customer ID, name, or invoice number required'}, status=400)
 
-        invoices_qs = invoices_qs.order_by('-created_at')[:50]
+        invoices_qs = invoices_qs.prefetch_related('items').order_by('-created_at')[:50]
 
         invoices_data = []
         for inv in invoices_qs:
@@ -1675,7 +1836,8 @@ class CustomerInvoicesAPIView(LoginRequiredMixin, View):
                 'invoice_number': inv.invoice_number,
                 'date': inv.created_at.strftime('%b %d, %Y'),
                 'total_amount': float(inv.total_amount or 0),
-                'patient_name': inv.patient_name or (inv.customer.name if inv.customer else 'Walk-in')
+                'patient_name': inv.patient_name or (inv.customer.name if inv.customer else 'Walk-in'),
+                'items_count': inv.items.count(),
             })
 
         return JsonResponse({
@@ -1693,17 +1855,25 @@ class InvoiceItemsAPIView(LoginRequiredMixin, View):
             return JsonResponse({'success': False, 'error': 'Invoice ID required'}, status=400)
 
         try:
-            invoice = SaleInvoice.objects.get(id=invoice_id, tenant=tenant)
+            invoice = SaleInvoice.objects.prefetch_related('items__product').get(id=invoice_id, tenant=tenant)
         except SaleInvoice.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Invoice not found'}, status=404)
 
         items_data = []
-        for item in invoice.items.all().select_related('product'):
+        for item in invoice.items.all():
+            already_returned = SalesReturnItem.objects.filter(
+                sale_item=item,
+                sales_return__tenant=tenant
+            ).aggregate(total=Sum('returned_quantity'))['total'] or 0
             items_data.append({
                 'id': item.id,
                 'product_name': item.product.product_name,
-                'batch_number': item.batch_number or '',
+                'packing': item.product.product_packing or '',
+                'batch_number': item.batch_number or 'N/A',
+                'expiry_date': item.expiry_date.strftime('%b %Y') if item.expiry_date else '—',
                 'quantity': item.quantity,
+                'already_returned': already_returned,
+                'max_return_quantity': max(0, item.quantity - already_returned),
                 'unit_price': float(item.unit_price or 0),
                 'total_amount': float(item.total_amount or 0)
             })
@@ -1713,10 +1883,164 @@ class InvoiceItemsAPIView(LoginRequiredMixin, View):
             'invoice': {
                 'id': invoice.id,
                 'invoice_number': invoice.invoice_number,
-                'date': invoice.created_at.strftime('%b %d, %Y'),
-                'customer_name': invoice.patient_name or (invoice.customer.name if invoice.customer else 'Walk-in')
+                'date': invoice.created_at.strftime('%b %d, %Y %I:%M %p'),
+                'customer_name': invoice.patient_name or (invoice.customer.name if invoice.customer else 'Walk-in'),
+                'total_amount': float(invoice.total_amount or 0),
+                'payment_mode': invoice.payment_mode or 'Cash'
             },
             'items': items_data
+        })
+
+
+class SalesReturnDeleteView(LoginRequiredMixin, View):
+    def post(self, request, return_id):
+        tenant = request.tenant
+        setup = GeneralSetup.objects.filter(tenant=tenant).first()
+        sale_type = setup.sale_type if setup else 'unit'
+
+        try:
+            with transaction.atomic():
+                return_record = SalesReturn.objects.select_for_update().get(id=return_id, tenant=tenant)
+                return_date = return_record.return_at.date()
+                inv_no = return_record.return_inv_no
+                for item in return_record.return_items.select_related('sale_item'):
+                    batch = StockBatch.objects.select_for_update().filter(
+                        tenant=tenant,
+                        product=item.sale_item.product,
+                        batch_number__iexact=item.sale_item.batch_number
+                    ).first()
+                    stock_quantity = _return_stock_quantity(
+                        item.sale_item, item.returned_quantity, sale_type
+                    )
+                    if not batch or batch.current_quantity < stock_quantity:
+                        raise ValueError('Cannot delete the return because the returned stock has already been sold or removed.')
+                    batch.current_quantity = F('current_quantity') - stock_quantity
+                    batch.save(update_fields=['current_quantity'])
+                return_record.delete()
+                try:
+                    from easypharma.views.reports import invalidate_daily_sale_cache, invalidate_stock_cache
+                    invalidate_daily_sale_cache(tenant.id, date_str=str(return_date))
+                    invalidate_stock_cache(tenant.id)
+                except Exception:
+                    pass
+                messages.success(request, f'Return record {inv_no} deleted successfully.')
+        except ValueError as e:
+            messages.error(request, str(e))
+        except Exception as e:
+            messages.error(request, f"Unable to delete return: {e}")
+
+        return redirect('pos_returns')
+
+
+class SalesReturnDetailAPIView(LoginRequiredMixin, View):
+    def get(self, request, return_id):
+        tenant = request.tenant
+        try:
+            ret = SalesReturn.objects.select_related(
+                'sale_invoice', 'sale_invoice__customer'
+            ).prefetch_related(
+                'return_items__sale_item__product'
+            ).get(id=return_id, tenant=tenant)
+        except SalesReturn.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Return record not found'}, status=404)
+
+        items = []
+        for item in ret.return_items.all():
+            items.append({
+                'product_name': item.sale_item.product.product_name,
+                'batch_number': item.sale_item.batch_number or 'N/A',
+                'returned_qty': item.returned_quantity,
+                'unit_price': float(item.sale_item.unit_price),
+                'line_total': float(Decimal(str(item.returned_quantity)) * item.sale_item.unit_price),
+                'reason': item.return_reason or '—'
+            })
+
+        return JsonResponse({
+            'success': True,
+            'return_data': {
+                'id': ret.id,
+                'return_inv_no': ret.return_inv_no,
+                'invoice_number': ret.sale_invoice.invoice_number if ret.sale_invoice else 'N/A',
+                'invoice_id': ret.sale_invoice_id,
+                'customer_name': ret.customer_name or (ret.sale_invoice.customer.name if ret.sale_invoice and ret.sale_invoice.customer else ret.sale_invoice.patient_name if ret.sale_invoice else 'Walk-in'),
+                'return_qty': ret.return_qty,
+                'return_amount': float(ret.return_amount),
+                'return_at': ret.return_at.strftime('%d %b %Y, %I:%M %p'),
+                'items': items
+            }
+        })
+
+
+class ProductSalesHistoryAPIView(LoginRequiredMixin, View):
+    def get(self, request):
+        tenant = request.tenant
+        product_id = request.GET.get('product_id')
+        if not product_id:
+            return JsonResponse({'success': False, 'error': 'Product ID is required'}, status=400)
+
+        limit_param = request.GET.get('limit', '5')
+        try:
+            limit = None if limit_param == 'all' else int(limit_param)
+        except ValueError:
+            limit = 5
+
+        offset_param = request.GET.get('offset', '0')
+        try:
+            offset = int(offset_param)
+        except ValueError:
+            offset = 0
+
+        qs = SaleItem.objects.filter(
+            product_id=product_id,
+            sale_invoice__tenant=tenant
+        ).select_related('sale_invoice', 'sale_invoice__customer', 'product').order_by('-sale_invoice__created_at')
+
+        total_count = qs.count()
+        items = qs[offset:offset+limit] if limit is not None else qs[offset:]
+
+        sales_data = []
+        for item in items:
+            returned_qty = SalesReturnItem.objects.filter(
+                sale_item=item,
+                sales_return__tenant=tenant
+            ).aggregate(total=Sum('returned_quantity'))['total'] or 0
+
+            available_qty = max(0, item.quantity - returned_qty)
+            inv = item.sale_invoice
+            cust_name = inv.patient_name or (inv.customer.name if inv.customer else 'Walk-in Customer')
+            phone = inv.patient_phone or (inv.customer.phone if inv.customer and inv.customer.phone else '')
+
+            sales_data.append({
+                'sale_item_id': item.id,
+                'invoice_id': inv.id,
+                'invoice_number': inv.invoice_number,
+                'patient_name': cust_name,
+                'patient_phone': phone,
+                'date': inv.created_at.strftime('%d %b %Y, %I:%M %p'),
+                'batch_number': item.batch_number or 'N/A',
+                'sold_qty': item.quantity,
+                'returned_qty': returned_qty,
+                'available_qty': available_qty,
+                'unit_price': float(item.unit_price),
+                'total_amount': float(item.total_amount),
+            })
+
+        has_more = total_count > (offset + limit) if limit is not None else False
+        remaining_count = max(0, total_count - (offset + limit)) if limit is not None else 0
+
+        prod_obj = Products.objects.filter(id=product_id).first()
+        prod_name = prod_obj.product_name if prod_obj else f'Product #{product_id}'
+
+        return JsonResponse({
+            'success': True,
+            'product': {
+                'id': product_id,
+                'name': prod_name
+            },
+            'total_count': total_count,
+            'has_more': has_more,
+            'remaining_count': remaining_count,
+            'sales': sales_data
         })
 
 

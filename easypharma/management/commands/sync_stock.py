@@ -71,6 +71,8 @@ class Command(BaseCommand):
                     sale_item__batch_number=batch.batch_number
                 )
                 total_returns = sum(item.returned_quantity for item in return_items)
+                if sale_type == 'strip':
+                    total_returns *= conversion_factor
 
                 # 5. Expiry Returns / Purchase Returns
                 from easypharma.models.accounting import ExpiryReturnItem

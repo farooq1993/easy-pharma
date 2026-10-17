@@ -436,6 +436,8 @@ class StockMismatchView(LoginRequiredMixin, View):
             total_sale = (raw_sale * cf) if sale_type == 'strip' else raw_sale
             
             total_returns = returns_dict.get(key, 0) or 0
+            if sale_type == 'strip':
+                total_returns *= cf
             total_expiry = (expiry_dict.get(key, 0) or 0) * cf
 
             expected_quantity = total_opening + total_purchase - total_sale + total_returns - total_expiry
@@ -630,4 +632,3 @@ class StockMismatchView(LoginRequiredMixin, View):
                 return redirect('stock_mismatch')
 
         return JsonResponse({'success': False, 'error': 'Unknown action'}, status=400)
-

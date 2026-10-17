@@ -14,7 +14,7 @@
  *   • Proper Cache-Control header respect on API responses
  */
 
-const SW_VERSION = 'v2.0.5';
+const SW_VERSION = 'v2.0.6';
 const CACHE_STATIC = `ep-static-${SW_VERSION}`;
 const CACHE_PAGES  = `ep-pages-${SW_VERSION}`;
 const CACHE_API    = `ep-api-${SW_VERSION}`;
@@ -186,7 +186,7 @@ self.addEventListener('fetch', event => {
 
   // 4. Network-First for HTML pages (Desktop-like real-time experience)
   if (request.headers.get('Accept') && request.headers.get('Accept').includes('text/html')) {
-    event.respondWith(networkFirstWithTimeout(request, CACHE_PAGES, 3000));
+    event.respondWith(networkFirstWithTimeout(request, CACHE_PAGES, 8000));
     return;
   }
 
