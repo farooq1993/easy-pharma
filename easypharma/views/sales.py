@@ -1511,30 +1511,47 @@ class SalesReturnView(LoginRequiredMixin,View):
                         specific_item_id = sale_item_ids[i] if i < len(sale_item_ids) and sale_item_ids[i] else None
 
                         if specific_item_id:
-                            sale_items = SaleItem.objects.filter(
-                                id=specific_item_id,
-                                tenant=request.tenant
-                            ).select_related('sale_invoice', 'product')
+                            sale_item_ids_to_lock = list(
+                                SaleItem.objects.filter(
+                                    id=specific_item_id,
+                                    tenant=request.tenant
+                                ).values_list('id', flat=True)
+                            )
                         else:
-                            sale_items = SaleItem.objects.filter(
+                            qs = SaleItem.objects.filter(
                                 sale_invoice__tenant=request.tenant,
                                 tenant=request.tenant,
                                 product_id=prod_id
-                            ).select_related('sale_invoice', 'product').order_by('-sale_invoice__created_at')
+                            ).order_by('-sale_invoice__created_at')
 
                             if batch:
-                                sale_items = sale_items.filter(batch_number__iexact=batch)
+                                qs = qs.filter(batch_number__iexact=batch)
 
                             if patient_name:
-                                patient_sales = sale_items.filter(
+                                patient_qs = qs.filter(
                                     Q(sale_invoice__patient_name__icontains=patient_name) |
                                     Q(sale_invoice__customer__name__icontains=patient_name)
                                 )
-                                if patient_sales.exists():
-                                    sale_items = patient_sales
+                                if patient_qs.exists():
+                                    qs = patient_qs
+
+                            sale_item_ids_to_lock = list(qs.values_list('id', flat=True))
+
+                        # Lock rows WITHOUT outer joins (PostgreSQL compatible)
+                        # select_for_update() must NOT have select_related with nullable FK joins
+                        SaleItem.objects.select_for_update().filter(
+                            id__in=sale_item_ids_to_lock
+                        )  # acquires locks; we iterate a fresh queryset below
+
+                        # Re-fetch with select_related for actual processing (preserving order)
+                        sale_items = SaleItem.objects.filter(
+                            id__in=sale_item_ids_to_lock
+                        ).select_related('sale_invoice', 'product').order_by(
+                            '-sale_invoice__created_at' if not specific_item_id else 'id'
+                        )
 
                         remaining_qty = qty
-                        for candidate in sale_items.select_for_update():
+                        for candidate in sale_items:
                             already_returned = SalesReturnItem.objects.filter(
                                 sale_item=candidate,
                                 sales_return__tenant=request.tenant
