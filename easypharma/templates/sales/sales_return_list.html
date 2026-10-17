@@ -2,107 +2,471 @@
 {% load static %}
 
 {% block content %}
-<div class="container-fluid py-4">
-    <div class="row align-items-center mb-4">
+<div class="container-fluid py-3">
+    <!-- Header & Breadcrumbs -->
+    <div class="row align-items-center mb-4 g-2">
         <div class="col">
-            <h2 class="fw-bold mb-0">Sales Returns List</h2>
-            <p class="text-muted small">View all sales returns processed in the system.</p>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1" style="font-size: 0.85rem;">
+                    <li class="breadcrumb-item"><a href="{% url 'pos_list' %}" class="text-decoration-none text-muted"><i class="fas fa-file-invoice-dollar me-1"></i>Sales</a></li>
+                    <li class="breadcrumb-item active text-primary fw-semibold" aria-current="page">Return Records</li>
+                </ol>
+            </nav>
+            <h3 class="fw-bold mb-0 text-dark d-flex align-items-center gap-2">
+                <i class="fas fa-history text-primary"></i>
+                <span>Sales Return Records</span>
+                <span class="badge bg-primary-subtle text-primary fs-6 fw-bold ms-2">{{ total_returns_count }} Records</span>
+            </h3>
+            <p class="text-muted small mb-0">View, audit, edit, and print customer sales returns and credit notes.</p>
         </div>
-        <div class="col text-end">
-            <a href="{% url 'pos_returns_create' %}" class="btn btn-primary rounded-pill fw-bold">
-                <i class="fas fa-plus me-1"></i> Create Sales Return
+        <div class="col-auto">
+            <a href="{% url 'pos_returns_create' %}" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-plus-circle me-1"></i> New Sales Return
             </a>
         </div>
     </div>
-    
-    <!-- Return History -->
 
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="card border-0 shadow-sm rounded-4">
-                <div class="card-header bg-white border-bottom d-flex flex-wrap align-items-center justify-content-between gap-3">
-                    <h5 class="mb-0">Recent Return History</h5>
-                    <form method="get" class="d-flex align-items-center flex-wrap gap-2 no-loader">
-                        <input type="text" name="search" class="form-control form-control-sm" style="width: 180px;" placeholder="Search Return/Inv/Cust..." value="{{ search_query|default:'' }}">
-                        <input type="date" name="start_date" class="form-control form-control-sm" style="width: 130px;" value="{{ start_date|default:'' }}">
-                        <span class="small text-muted">to</span>
-                        <input type="date" name="end_date" class="form-control form-control-sm" style="width: 130px;" value="{{ end_date|default:'' }}">
-                        <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-filter me-1"></i>Filter</button>
-                        {% if search_query or start_date or end_date %}
-                            <a href="{% url 'pos_returns' %}" class="btn btn-sm btn-outline-secondary">Clear</a>
-                        {% endif %}
-                    </form>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-sm mb-0">
-                            <thead class="bg-light text-muted small text-uppercase">
-                                <tr>
-                                    <th>Return No.</th>
-                                    <th>Invoice</th>
-                                    <th>Customer</th>
-                                    <th>Items Returned</th>
-                                    <th>Amount</th>
-                                    <th>Date</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for ret in returns %}
-                                <tr>
-                                    <td><span class="badge bg-secondary">{{ ret.return_inv_no }}</span></td>
-                                    <td>#{{ ret.sale_invoice.invoice_number }}</td>
-                                    <td>{{ ret.sale_invoice.customer.name|default:ret.sale_invoice.patient_name|default:"Walk-in" }}</td>
-                                    <td>{{ ret.return_qty }}</td>
-                                    <td>₹{{ ret.return_amount }}</td>
-                                    <td>{{ ret.return_at|date:"M d, Y H:i" }}</td>
-                                    <td>
-                                        <a href="{% url 'pos_returns_edit' ret.id %}" class="btn btn-sm btn-outline-primary">Edit</a>
-                                    </td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="7" class="text-center py-4 text-muted">No return records found.</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+    <!-- Django Messages -->
+    {% if messages %}
+    <div class="mb-3">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show border-0 shadow-sm rounded-3 py-2 px-3 small d-flex align-items-center" role="alert">
+            <i class="bi bi-info-circle-fill me-2 fs-6"></i>
+            <div>{{ message }}</div>
+            <button type="button" class="btn-close py-2" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- 4 KPI Stat Cards -->
+    <div class="row g-3 mb-4">
+        <!-- Total Refund Amount -->
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 p-3" style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 1px solid #bbf7d0 !important;">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-muted small fw-bold text-uppercase">Total Refunded</span>
+                    <div class="rounded-circle bg-white p-2 text-success shadow-sm d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
+                        <i class="fas fa-rupee-sign"></i>
                     </div>
                 </div>
-                {% if page_obj.has_other_pages %}
-                <div class="card-footer bg-white border-top d-flex align-items-center justify-content-between">
-                    <span class="small text-muted">Showing page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-                    <nav aria-label="Page navigation">
-                        <ul class="pagination pagination-sm mb-0">
-                            {% if page_obj.has_previous %}
-                            <li class="page-item">
-                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" aria-label="Previous">
-                                    <span aria-hidden="true">&laquo;</span>
-                                </a>
-                            </li>
-                            {% endif %}
-                            
-                            {% for num in page_obj.paginator.page_range %}
-                                {% if page_obj.number == num %}
-                                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-                                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                                <li class="page-item"><a class="page-link" href="?page={{ num }}{% if search_query %}&search={{ search_query }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">{{ num }}</a></li>
-                                {% endif %}
-                            {% endfor %}
-                            
-                            {% if page_obj.has_next %}
-                            <li class="page-item">
-                                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}" aria-label="Next">
-                                    <span aria-hidden="true">&raquo;</span>
-                                </a>
-                            </li>
-                            {% endif %}
-                        </ul>
-                    </nav>
-                </div>
-                {% endif %}
+                <h3 class="fw-bold text-success mb-1">₹{{ total_refund_amount|floatformat:2 }}</h3>
+                <span class="small text-muted">Cumulative refunds issued</span>
             </div>
         </div>
-    
+
+        <!-- Returns Count -->
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 p-3" style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border: 1px solid #bfdbfe !important;">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-muted small fw-bold text-uppercase">Total Returns</span>
+                    <div class="rounded-circle bg-white p-2 text-primary shadow-sm d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
+                        <i class="fas fa-undo-alt"></i>
+                    </div>
+                </div>
+                <h3 class="fw-bold text-primary mb-1">{{ total_returns_count }}</h3>
+                <span class="small text-muted">Return vouchers created</span>
+            </div>
+        </div>
+
+        <!-- Today's Returns -->
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 p-3" style="background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); border: 1px solid #fde68a !important;">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-muted small fw-bold text-uppercase">Today's Returns</span>
+                    <div class="rounded-circle bg-white p-2 text-warning shadow-sm d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
+                        <i class="fas fa-calendar-day"></i>
+                    </div>
+                </div>
+                <h3 class="fw-bold text-warning-emphasis mb-1">₹{{ today_returns_amount|floatformat:2 }}</h3>
+                <span class="small text-muted">{{ today_returns_count }} voucher(s) processed today</span>
+            </div>
+        </div>
+
+        <!-- Units Returned -->
+        <div class="col-sm-6 col-xl-3">
+            <div class="card border-0 shadow-sm rounded-4 h-100 p-3" style="background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%); border: 1px solid #e9d5ff !important;">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <span class="text-muted small fw-bold text-uppercase">Items Restored</span>
+                    <div class="rounded-circle bg-white p-2 text-purple shadow-sm d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; color: #7e22ce;">
+                        <i class="fas fa-boxes"></i>
+                    </div>
+                </div>
+                <h3 class="fw-bold mb-1" style="color: #7e22ce;">{{ total_items_returned }} <span class="fs-6 fw-normal text-muted">units</span></h3>
+                <span class="small text-muted">Restored into inventory stock</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter & Table Card -->
+    <div class="card border-0 shadow-sm rounded-4">
+        <div class="card-header bg-white border-bottom py-3">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <!-- Search & Filters Form -->
+                <form method="get" class="d-flex flex-wrap align-items-center gap-2 no-loader w-100 w-lg-auto" id="filterForm">
+                    <div class="input-group input-group-sm" style="min-width: 240px;">
+                        <span class="input-group-text bg-light border-end-0 text-muted"><i class="fas fa-search"></i></span>
+                        <input type="text" name="search" class="form-control border-start-0 shadow-none" 
+                               placeholder="Search Voucher, Invoice, Customer..." value="{{ search_query|default:'' }}">
+                    </div>
+
+                    <div class="d-flex align-items-center gap-1">
+                        <input type="date" name="start_date" class="form-control form-control-sm shadow-none" style="width: 135px;" value="{{ start_date|default:'' }}" title="From Date">
+                        <span class="text-muted small">to</span>
+                        <input type="date" name="end_date" class="form-control form-control-sm shadow-none" style="width: 135px;" value="{{ end_date|default:'' }}" title="To Date">
+                    </div>
+
+                    <button type="submit" class="btn btn-sm btn-primary px-3 fw-bold rounded-pill shadow-sm">
+                        <i class="fas fa-filter me-1"></i> Filter
+                    </button>
+
+                    {% if search_query or start_date or end_date or quick_filter %}
+                    <a href="{% url 'pos_returns' %}" class="btn btn-sm btn-outline-secondary rounded-pill px-3">
+                        <i class="fas fa-times me-1"></i> Reset
+                    </a>
+                    {% endif %}
+
+                    <!-- Quick Preset Links -->
+                    <div class="d-flex align-items-center gap-1 ms-lg-2">
+                        <a href="?quick_filter=today" class="btn btn-sm {% if quick_filter == 'today' %}btn-secondary{% else %}btn-light border{% endif %} rounded-pill px-2 py-0" style="font-size: 0.8rem;">Today</a>
+                        <a href="?quick_filter=yesterday" class="btn btn-sm {% if quick_filter == 'yesterday' %}btn-secondary{% else %}btn-light border{% endif %} rounded-pill px-2 py-0" style="font-size: 0.8rem;">Yesterday</a>
+                        <a href="?quick_filter=this_month" class="btn btn-sm {% if quick_filter == 'this_month' %}btn-secondary{% else %}btn-light border{% endif %} rounded-pill px-2 py-0" style="font-size: 0.8rem;">This Month</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light text-muted small text-uppercase" style="font-size: 0.78rem;">
+                        <tr>
+                            <th class="ps-4 py-3">Return Voucher</th>
+                            <th>Original Invoice</th>
+                            <th>Customer / Patient</th>
+                            <th>Items Summary</th>
+                            <th class="text-center">Qty</th>
+                            <th class="text-end">Refund Amount</th>
+                            <th>Return Date</th>
+                            <th class="text-center pe-4" style="width: 140px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ret in returns %}
+                        <tr>
+                            <td class="ps-4">
+                                <span class="badge bg-dark text-white font-monospace fw-bold px-2 py-1 shadow-sm">
+                                    {{ ret.return_inv_no }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if ret.sale_invoice %}
+                                <a href="{% url 'pos_print' ret.sale_invoice.id %}" target="_blank" class="fw-semibold text-decoration-none text-primary" title="View Original Bill">
+                                    #{{ ret.sale_invoice.invoice_number }} <i class="fas fa-external-link-alt small ms-1" style="font-size: 0.7rem;"></i>
+                                </a>
+                                {% else %}
+                                <span class="text-muted">Direct POS</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="fw-semibold text-dark">
+                                    {% if ret.customer_name %}
+                                        {{ ret.customer_name }}
+                                    {% elif ret.sale_invoice.customer %}
+                                        {{ ret.sale_invoice.customer.name }}
+                                    {% elif ret.sale_invoice.patient_name %}
+                                        {{ ret.sale_invoice.patient_name }}
+                                    {% else %}
+                                        <span class="text-muted fst-italic">Walk-in Customer</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="small text-muted" style="max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{% for it in ret.return_items.all %}{{ it.sale_item.product.product_name }} ({{ it.returned_quantity }}){% if not forloop.last %}, {% endif %}{% endfor %}">
+                                    {% for it in ret.return_items.all %}
+                                        {{ it.sale_item.product.product_name }} <span class="badge bg-light text-dark border">x{{ it.returned_quantity }}</span>{% if not forloop.last %}, {% endif %}
+                                    {% empty %}
+                                        <span class="text-muted fst-italic">Items processed</span>
+                                    {% endfor %}
+                                </div>
+                            </td>
+                            <td class="text-center fw-bold text-dark">
+                                {{ ret.return_qty }}
+                            </td>
+                            <td class="text-end fw-bold text-success fs-6">
+                                ₹{{ ret.return_amount }}
+                            </td>
+                            <td class="small text-muted">
+                                {{ ret.return_at|date:"M d, Y" }}<br>
+                                <span style="font-size: 0.75rem;">{{ ret.return_at|date:"h:i A" }}</span>
+                            </td>
+                            <td class="text-center pe-4">
+                                <div class="d-inline-flex gap-1">
+                                    <!-- View Voucher Modal Button -->
+                                    <button type="button" class="btn btn-sm btn-outline-info rounded-circle btn-view-return p-1" 
+                                            style="width: 32px; height: 32px;"
+                                            data-return-id="{{ ret.id }}" title="View Voucher Breakdown">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    
+                                    <!-- Edit Button -->
+                                    <a href="{% url 'pos_returns_edit' ret.id %}" class="btn btn-sm btn-outline-primary rounded-circle p-1" 
+                                       style="width: 32px; height: 32px;" title="Edit Return">
+                                        <i class="fas fa-pencil-alt"></i>
+                                    </a>
+
+                                    <!-- Delete Button -->
+                                    <button type="button" class="btn btn-sm btn-outline-danger rounded-circle p-1 btn-delete-return" 
+                                            style="width: 32px; height: 32px;"
+                                            data-return-id="{{ ret.id }}" 
+                                            data-return-no="{{ ret.return_inv_no }}" 
+                                            title="Delete Return">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center py-5 text-muted">
+                                <div class="mb-3 opacity-50">
+                                    <i class="fas fa-box-open text-secondary" style="font-size: 3rem;"></i>
+                                </div>
+                                <h6 class="fw-bold text-dark mb-1">No Return Records Found</h6>
+                                <p class="small text-muted mb-0">No sales return vouchers match your filter criteria.</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <div class="card-footer bg-white border-top py-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <span class="small text-muted">
+                Showing page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }} total records)
+            </span>
+            <nav aria-label="Page navigation">
+                <ul class="pagination pagination-sm mb-0">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if quick_filter %}&quick_filter={{ quick_filter }}{% endif %}" aria-label="Previous">
+                            &laquo;
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                        <li class="page-item"><a class="page-link" href="?page={{ num }}{% if search_query %}&search={{ search_query }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if quick_filter %}&quick_filter={{ quick_filter }}{% endif %}">{{ num }}</a></li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}{% if quick_filter %}&quick_filter={{ quick_filter }}{% endif %}" aria-label="Next">
+                            &raquo;
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
 </div>
+
+<!-- ========================================== -->
+<!-- VIEW RETURN DETAILS MODAL                  -->
+<!-- ========================================== -->
+<div class="modal fade" id="returnDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow rounded-4">
+            <div class="modal-header border-bottom py-3 d-flex justify-content-between align-items-center">
+                <h5 class="modal-title fw-bold text-dark d-flex align-items-center gap-2">
+                    <i class="fas fa-receipt text-primary"></i>
+                    <span>Sales Return Voucher Details</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4" id="modalDetailContent">
+                <div class="text-center py-4">
+                    <span class="spinner-border spinner-border-sm me-2 text-primary"></span>
+                    <span class="text-muted">Loading voucher details...</span>
+                </div>
+            </div>
+            <div class="modal-footer border-top py-2 d-flex justify-content-between">
+                <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary rounded-pill fw-bold" onclick="window.print();">
+                    <i class="fas fa-print me-1"></i> Print Voucher
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- DELETE RETURN CONFIRMATION MODAL           -->
+<!-- ========================================== -->
+<div class="modal fade" id="confirmDeleteReturnModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow rounded-4">
+            <div class="modal-header border-bottom py-3">
+                <h5 class="modal-title fw-bold text-danger d-flex align-items-center gap-2">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>Delete Return Voucher</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="mb-2">Are you sure you want to permanently delete voucher <strong id="deleteVoucherNo"></strong>?</p>
+                <div class="alert alert-warning py-2 px-3 small border-0 rounded-3 mb-0">
+                    <i class="fas fa-info-circle me-1"></i>
+                    The items returned will be deducted from your stock batch quantity to maintain ledger balance.
+                </div>
+            </div>
+            <div class="modal-footer border-top py-2">
+                <button type="button" class="btn btn-secondary rounded-pill" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteReturnForm" method="post" action="">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger rounded-pill fw-bold">
+                        <i class="fas fa-trash-alt me-1"></i> Confirm Delete
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- PRINT STYLES -->
+<style>
+@media print {
+    body * {
+        visibility: hidden;
+    }
+    #returnDetailModal, #returnDetailModal * {
+        visibility: visible;
+    }
+    #returnDetailModal {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+    }
+    .modal-header, .modal-footer, .btn-close {
+        display: none !important;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const detailModalEl = document.getElementById('returnDetailModal');
+    const detailModal = new bootstrap.Modal(detailModalEl);
+    const modalContent = document.getElementById('modalDetailContent');
+
+    const deleteModalEl = document.getElementById('confirmDeleteReturnModal');
+    const deleteModal = new bootstrap.Modal(deleteModalEl);
+    const deleteVoucherNoEl = document.getElementById('deleteVoucherNo');
+    const deleteReturnForm = document.getElementById('deleteReturnForm');
+
+    // View Details Modal Handler
+    document.querySelectorAll('.btn-view-return').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const returnId = this.dataset.returnId;
+            modalContent.innerHTML = '<div class="text-center py-4"><span class="spinner-border spinner-border-sm me-2 text-primary"></span>Loading details...</div>';
+            detailModal.show();
+
+            try {
+                const res = await fetch(`/api/sales/returns/${returnId}/`);
+                const data = await res.json();
+                if (data.success) {
+                    const ret = data.return_data;
+                    let itemsRows = '';
+                    ret.items.forEach((item, idx) => {
+                        itemsRows += `
+                            <tr>
+                                <td class="ps-3">${idx + 1}</td>
+                                <td class="fw-bold">${item.product_name}</td>
+                                <td><span class="badge bg-light text-dark border">${item.batch_number}</span></td>
+                                <td class="text-center fw-bold">${item.returned_qty}</td>
+                                <td class="text-end">₹${item.unit_price.toFixed(2)}</td>
+                                <td class="text-end fw-bold text-success">₹${item.line_total.toFixed(2)}</td>
+                                <td class="small text-muted">${item.reason}</td>
+                            </tr>
+                        `;
+                    });
+
+                    modalContent.innerHTML = `
+                        <!-- Voucher Header -->
+                        <div class="row g-3 mb-4 p-3 bg-light rounded-3 border">
+                            <div class="col-sm-6">
+                                <span class="text-muted small text-uppercase fw-bold d-block">Return Voucher #</span>
+                                <h4 class="fw-bold text-primary mb-1">${ret.return_inv_no}</h4>
+                                <span class="text-muted small">Date: ${ret.return_at}</span>
+                            </div>
+                            <div class="col-sm-6 text-sm-end">
+                                <span class="text-muted small text-uppercase fw-bold d-block">Original Bill Reference</span>
+                                <span class="badge bg-secondary fs-6 px-3 py-1 mb-1">#${ret.invoice_number}</span><br>
+                                <span class="text-dark small fw-semibold">Customer: ${ret.customer_name}</span>
+                            </div>
+                        </div>
+
+                        <!-- Itemized Table -->
+                        <div class="table-responsive mb-3">
+                            <table class="table table-bordered align-middle">
+                                <thead class="table-light small text-uppercase">
+                                    <tr>
+                                        <th class="ps-3" style="width: 40px;">#</th>
+                                        <th>Medicine Name</th>
+                                        <th>Batch</th>
+                                        <th class="text-center">Returned Qty</th>
+                                        <th class="text-end">Unit Price</th>
+                                        <th class="text-end">Total Refund</th>
+                                        <th>Reason</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${itemsRows}
+                                </tbody>
+                                <tfoot class="table-light">
+                                    <tr>
+                                        <td colspan="3" class="text-end fw-bold">Total Summary:</td>
+                                        <td class="text-center fw-bold text-dark">${ret.return_qty} units</td>
+                                        <td></td>
+                                        <td class="text-end fw-bold text-success fs-5">₹${ret.return_amount.toFixed(2)}</td>
+                                        <td></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    `;
+                } else {
+                    modalContent.innerHTML = `<div class="alert alert-danger">${data.error || 'Failed to load details.'}</div>`;
+                }
+            } catch (err) {
+                console.error(err);
+                modalContent.innerHTML = '<div class="alert alert-danger">Error fetching return details.</div>';
+            }
+        });
+    });
+
+    // Delete Modal Handler
+    document.querySelectorAll('.btn-delete-return').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const returnId = this.dataset.returnId;
+            const returnNo = this.dataset.returnNo;
+            deleteVoucherNoEl.textContent = returnNo;
+            deleteReturnForm.action = `/pos/returns/delete/${returnId}/`;
+            deleteModal.show();
+        });
+    });
+});
+</script>
 {% endblock %}

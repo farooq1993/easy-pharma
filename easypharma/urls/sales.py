@@ -1,7 +1,9 @@
 from django.urls import path
 from easypharma.views.sales import(POSView, ProductSearchAPI, 
                         SaleListView, PrintInvoiceView, PrintInvoiceDirectView, 
-                        SalesReturnView, SalesReturnListView, SubstituteSearchAPI,PatientWiseSales,PatientWiseSalesAPI,PrescriptionReminderView,
+                        SalesReturnView, SalesReturnListView, SalesReturnDeleteView, SalesReturnDetailAPIView,
+                        ProductSalesHistoryAPIView,
+                        SubstituteSearchAPI,PatientWiseSales,PatientWiseSalesAPI,PrescriptionReminderView,
                         get_customer_invoices,PrescriptionReminderDeleteView, PrescriptionScanAPI,
                         CustomerInvoicesAPIView, InvoiceItemsAPIView)
 
@@ -15,6 +17,9 @@ urlpatterns = [
     path('pos/returns/', SalesReturnListView.as_view(), name='pos_returns'),
     path('pos/returns/create/', SalesReturnView.as_view(), name='pos_returns_create'),
     path('pos/returns/edit/<int:return_id>/', SalesReturnView.as_view(), name='pos_returns_edit'),
+    path('pos/returns/delete/<int:return_id>/', SalesReturnDeleteView.as_view(), name='pos_returns_delete'),
+    path('api/sales/returns/<int:return_id>/', SalesReturnDetailAPIView.as_view(), name='sales_return_detail_api'),
+    path('api/sales/product-sales-history/', ProductSalesHistoryAPIView.as_view(), name='product_sales_history_api'),
     path('api/sales/customer-invoices/', CustomerInvoicesAPIView.as_view(), name='customer_invoices_api'),
     path('api/sales/invoice-items/', InvoiceItemsAPIView.as_view(), name='invoice_items_api'),
     path('api/pos/scan-prescription/', PrescriptionScanAPI.as_view(), name='scan_prescription_api'),
