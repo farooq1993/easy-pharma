@@ -223,14 +223,27 @@
             return;
         }
 
-        // ESC close search dropdown
+        // ESC close search dropdown or navigate back
         if (e.key === 'Escape') {
+            const openModal = document.querySelector('.modal.show');
+            if (openModal) {
+                return; // Let bootstrap modal close
+            }
 
-            resultsDiv.classList.add('d-none');
+            if (!resultsDiv.classList.contains('d-none')) {
+                resultsDiv.classList.add('d-none');
+                searchInput.value = '';
+                searchSelectedIndex = -1;
+                return;
+            }
 
-            searchInput.value = '';
-
-            searchSelectedIndex = -1;
+            // If search dropdown is already closed, exit POS to Sales List
+            const backBtn = document.getElementById('posBackBtn');
+            if (backBtn) {
+                window.location.href = backBtn.href;
+            } else {
+                window.location.href = '/pos/list/';
+            }
         }
 
         if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
@@ -260,6 +273,13 @@
         }
 
         if (e.key === 'F12') { e.preventDefault(); completeOrder(); }
+
+        // Shortcut to focus Patient Details (F10, F3, or Alt+P)
+        if (e.key === 'F10' || e.key === 'F3' || (e.altKey && (e.key === 'p' || e.key === 'P'))) {
+            e.preventDefault();
+            focusPatientDetails();
+            return;
+        }
         
         // Ctrl+M: Toggle MRP edit mode
         if (e.ctrlKey && e.key.toLowerCase() === 'm') {
@@ -267,6 +287,22 @@
             toggleMrpEditMode();
         }
     });
+
+    function focusPatientDetails() {
+        const patientInput = document.getElementById('patientName');
+        if (patientInput) {
+            patientInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            patientInput.focus();
+            patientInput.select();
+            patientInput.classList.remove('patient-focus-pulse');
+            void patientInput.offsetWidth;
+            patientInput.classList.add('patient-focus-pulse');
+            setTimeout(() => {
+                patientInput.classList.remove('patient-focus-pulse');
+            }, 1400);
+        }
+    }
+    window.focusPatientDetails = focusPatientDetails;
 
     function populateEditData(data) {
         if (!data) return;
@@ -537,6 +573,10 @@
                 const response = await fetch('/api/products/search/?limit=25');
                 if (response.ok) {
                     products = await response.json();
+                    if (Array.isArray(products) && products.length > 0 && typeof localforage !== 'undefined') {
+                        const store = localforage.createInstance({ name: 'ep_product_cache' });
+                        store.setItem('pos_products', products).catch(() => {});
+                    }
                 }
             }
             if (!products || products.length === 0) {

@@ -1475,7 +1475,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <label class="form-label small text-muted mb-1">Return Qty</label>
                                 <input type="number" class="form-control form-control-sm return-qty-input fw-bold text-center shadow-none" 
                                        name="return_quantities[]" min="0" max="${item.max_return_quantity}" value="0" ${item.max_return_quantity === 0 ? 'disabled' : ''}>
-                                <input type="hidden" name="return_items[]" value="${item.id}">
+                                <input type="hidden" name="return_items[]" value="${item.id}" ${item.max_return_quantity === 0 ? "disabled" : ""}>
                             </div>
                             <div class="col-7">
                                 <label class="form-label small text-muted mb-1">Reason (Optional)</label>
@@ -1551,5 +1551,58 @@ document.addEventListener('DOMContentLoaded', function() {
     initInputs.forEach(input => input.addEventListener('input', calculateInvoiceStep3Total));
     calculateInvoiceStep3Total();
 });
+
+    // Client-side Validation & Friendly Toast Handlers
+    const quickForm = document.getElementById('quickReturnForm');
+    if (quickForm) {
+        quickForm.addEventListener('submit', function(e) {
+            if (!quickCartItems || quickCartItems.length === 0) {
+                e.preventDefault();
+                if (window.showToast) {
+                    window.showToast("Wapsi Save Nahi Ho Sakti", "Return cart me koi bhi medicine nahi hai. Kripya pehle medicine search karke add karein.", "danger");
+                } else {
+                    alert("Return cart me koi bhi medicine nahi hai. Kripya pehle medicine search karke add karein.");
+                }
+                return false;
+            }
+        });
+    }
+
+    document.addEventListener('submit', function(e) {
+        if (e.target && e.target.id === 'processReturnForm') {
+            const form = e.target;
+            const qtyInputs = form.querySelectorAll('.return-qty-input');
+            let totalQty = 0;
+            qtyInputs.forEach(input => {
+                const val = parseInt(input.value) || 0;
+                totalQty += val;
+                // If quantity is 0, disable the fields in that row so mismatched data is not sent
+                if (val <= 0) {
+                    const row = input.closest('.return-item-row');
+                    if (row) {
+                        row.querySelectorAll('input').forEach(inp => inp.disabled = true);
+                    }
+                }
+            });
+
+            if (totalQty <= 0) {
+                e.preventDefault();
+                // Re-enable so user can type
+                qtyInputs.forEach(input => {
+                    const row = input.closest('.return-item-row');
+                    if (row) {
+                        row.querySelectorAll('input').forEach(inp => inp.disabled = false);
+                    }
+                });
+                if (window.showToast) {
+                    window.showToast("Return Quantity Dalein", "Kisi bhi medicine ki wapsi quantity 0 se zyada enter nahi ki gayi hai. Kripya kam se kam ek medicine ki quantity dalein.", "warning");
+                } else {
+                    alert("Kripya kam se kam ek medicine ki wapsi quantity enter karein.");
+                }
+                return false;
+            }
+        }
+    });
+
 </script>
 {% endblock %}
