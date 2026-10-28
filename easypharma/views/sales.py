@@ -1387,11 +1387,8 @@ class SalesReturnView(LoginRequiredMixin,View):
             invoice = get_object_or_404(SaleInvoice, id=invoice_id, tenant=request.tenant)
             
             if not return_items:
-                messages.error(request, 'Please select items to return.')
-                return redirect(request.META.get('HTTP_REFERER', 'pos_returns'))
-            if len(return_items) != len(return_quantities):
-                messages.error(request, 'Return item and quantity data did not match.')
-                return redirect(request.META.get('HTTP_REFERER', 'pos_returns'))
+                messages.error(request, 'Kripya wapas lene ke liye kam se kam 1 medicine select karein.')
+                return redirect(request.META.get('HTTP_REFERER') or 'pos_returns_create')
             
             try:
                 with transaction.atomic():
@@ -1401,18 +1398,28 @@ class SalesReturnView(LoginRequiredMixin,View):
                     total_return_amount = Decimal('0')
                     
                     for i, item_id in enumerate(return_items):
-                        if item_id in seen_item_ids:
-                            raise ValueError('A sale item was submitted more than once.')
+                        if not item_id or item_id in seen_item_ids:
+                            continue
                         seen_item_ids.add(item_id)
-                        sale_item = SaleItem.objects.select_for_update().get(
-                            id=item_id,
-                            sale_invoice=invoice,
-                            tenant=request.tenant
-                        )
-                        qty_to_return = int(return_quantities[i])
+                        
+                        try:
+                            sale_item = SaleItem.objects.select_for_update().get(
+                                id=item_id,
+                                sale_invoice=invoice,
+                                tenant=request.tenant
+                            )
+                        except SaleItem.DoesNotExist:
+                            continue
+
+                        qty_str = return_quantities[i] if i < len(return_quantities) else '0'
+                        try:
+                            qty_to_return = int(qty_str)
+                        except (ValueError, TypeError):
+                            qty_to_return = 0
+
                         reason = return_reasons[i] if i < len(return_reasons) else ''
                         if qty_to_return < 0:
-                            raise ValueError('Return quantity cannot be negative.')
+                            raise ValueError('Wapsi quantity negative (-) nahi ho sakti.')
                         if qty_to_return == 0:
                             continue
 
@@ -1420,9 +1427,11 @@ class SalesReturnView(LoginRequiredMixin,View):
                             sale_item=sale_item,
                             sales_return__tenant=request.tenant
                         ).aggregate(total=Sum('returned_quantity'))['total'] or 0
-                        if qty_to_return > sale_item.quantity - already_returned:
+                        
+                        max_allowed = sale_item.quantity - already_returned
+                        if qty_to_return > max_allowed:
                             raise ValueError(
-                                f'Return quantity exceeds the unreturned quantity for {sale_item.product.product_name}.'
+                                f"'{sale_item.product.product_name}' ki wapsi quantity ({qty_to_return}) bechi gayi quantity se zyada hai. Maximum wapas ho sakti hai: {max(0, max_allowed)}"
                             )
 
                         batch = StockBatch.objects.select_for_update().filter(
@@ -1431,8 +1440,18 @@ class SalesReturnView(LoginRequiredMixin,View):
                             batch_number__iexact=sale_item.batch_number
                         ).first()
                         if not batch:
-                            raise ValueError(
-                                f'Stock batch {sale_item.batch_number or "(blank)"} was not found for {sale_item.product.product_name}.'
+                            batch = StockBatch.objects.select_for_update().filter(
+                                tenant=request.tenant,
+                                product=sale_item.product
+                            ).first()
+                        if not batch:
+                            batch = StockBatch.objects.create(
+                                tenant=request.tenant,
+                                product=sale_item.product,
+                                batch_number=sale_item.batch_number or 'DEFAULT',
+                                mrp=sale_item.unit_price,
+                                rate=sale_item.unit_price,
+                                current_quantity=0
                             )
 
                         prepared_items.append((sale_item, qty_to_return, reason, batch))
@@ -1440,7 +1459,7 @@ class SalesReturnView(LoginRequiredMixin,View):
                         total_return_amount += Decimal(str(qty_to_return)) * sale_item.unit_price
 
                     if not prepared_items:
-                        raise ValueError('Enter a return quantity greater than zero.')
+                        raise ValueError('Kripya kam se kam ek medicine ki quantity 1 ya usse zyada enter karein.')
 
                     return_record = SalesReturn.objects.create(
                         tenant=request.tenant,
@@ -1474,13 +1493,15 @@ class SalesReturnView(LoginRequiredMixin,View):
                     except Exception:
                         pass
                     
-                    messages.success(request, f"Return created ({return_record.return_inv_no}). {total_returned_qty} items | ₹{total_return_amount} returned.")
+                    messages.success(request, f"Sales Return safaltapoorvak save ho gaya! Bill #{return_record.return_inv_no} | Total Refund: ₹{total_return_amount:.2f}")
             except ValueError as e:
                 messages.error(request, str(e))
+                return redirect(request.META.get('HTTP_REFERER') or 'pos_returns_create')
             except Exception as e:
                 import traceback
                 traceback.print_exc()
-                messages.error(request, f"Unable to process return: {e}")
+                messages.error(request, f"Return process karte waqt error aaya: {e}")
+                return redirect(request.META.get('HTTP_REFERER') or 'pos_returns_create')
             
             return redirect('pos_returns')
 
@@ -1594,7 +1615,7 @@ class SalesReturnView(LoginRequiredMixin,View):
                             prod_obj = Products.objects.filter(id=prod_id).first()
                             pname = prod_obj.product_name if prod_obj else f'Product #{prod_id}'
                             raise ValueError(
-                                f'Cannot return {qty} of {pname}: No unreturned sale quantity available in batch {batch or "any"}. All previous sales have already been returned.'
+                                f"'{pname}' ki wapsi save nahi ho saki: Is medicine/batch ({batch or 'Any'}) ka koi unreturned sale record nahi mila. Kripya Return by Invoice se bill number select karke wapas karein."
                             )
                     
                     total_amount_returned = Decimal('0')

@@ -273,6 +273,13 @@
         }
 
         if (e.key === 'F12') { e.preventDefault(); completeOrder(); }
+
+        // Shortcut to focus Patient Details (F10, F3, or Alt+P)
+        if (e.key === 'F10' || e.key === 'F3' || (e.altKey && (e.key === 'p' || e.key === 'P'))) {
+            e.preventDefault();
+            focusPatientDetails();
+            return;
+        }
         
         // Ctrl+M: Toggle MRP edit mode
         if (e.ctrlKey && e.key.toLowerCase() === 'm') {
@@ -280,6 +287,22 @@
             toggleMrpEditMode();
         }
     });
+
+    function focusPatientDetails() {
+        const patientInput = document.getElementById('patientName');
+        if (patientInput) {
+            patientInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            patientInput.focus();
+            patientInput.select();
+            patientInput.classList.remove('patient-focus-pulse');
+            void patientInput.offsetWidth;
+            patientInput.classList.add('patient-focus-pulse');
+            setTimeout(() => {
+                patientInput.classList.remove('patient-focus-pulse');
+            }, 1400);
+        }
+    }
+    window.focusPatientDetails = focusPatientDetails;
 
     function populateEditData(data) {
         if (!data) return;

@@ -40,8 +40,12 @@
     </style>
 
     <!-- Custom CSS -->
-    <link href="{% static 'css/global.css' %}?v=2.0.2" rel="stylesheet">
-    <link href="{% static 'css/customecss/sidebar.css' %}" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link href="{% static 'css/global.css' %}?v=3.0.1" rel="stylesheet">
+    <link href="{% static 'css/customecss/sidebar.css' %}?v=3.0.1" rel="stylesheet">
     
     
     {% block extra_css %}{% endblock %}
@@ -572,5 +576,85 @@
         }
     });
     </script>
+    <!-- Global Floating Human-Friendly Toast Container -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" id="globalToastContainer" style="z-index: 99999;">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="toast align-items-center border-0 shadow-lg mb-2 text-white {% if 'error' in message.tags or 'danger' in message.tags %}bg-danger{% elif 'success' in message.tags %}bg-success{% elif 'warning' in message.tags %}bg-warning text-dark{% else %}bg-primary{% endif %}" 
+                     role="alert" aria-live="assertive" aria-atomic="true" style="border-radius: 14px; min-width: 320px; max-width: 440px;" data-bs-delay="7000">
+                    <div class="d-flex p-3 align-items-center">
+                        <div class="me-3 fs-3">
+                            {% if 'error' in message.tags or 'danger' in message.tags %}
+                                <i class="fas fa-exclamation-triangle"></i>
+                            {% elif 'success' in message.tags %}
+                                <i class="fas fa-check-circle"></i>
+                            {% elif 'warning' in message.tags %}
+                                <i class="fas fa-exclamation-circle"></i>
+                            {% else %}
+                                <i class="fas fa-info-circle"></i>
+                            {% endif %}
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="fw-bold mb-1" style="font-size: 0.95rem;">
+                                {% if 'error' in message.tags or 'danger' in message.tags %}
+                                    Entry Save Nahi Ho Saki
+                                {% elif 'success' in message.tags %}
+                                    Safalta Purvak Ho Gaya
+                                {% else %}
+                                    Notice
+                                {% endif %}
+                            </div>
+                            <div class="small opacity-95" style="line-height: 1.4;">{{ message }}</div>
+                        </div>
+                        <button type="button" class="btn-close {% if 'warning' not in message.tags %}btn-close-white{% endif %} ms-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const toastElList = document.querySelectorAll('#globalToastContainer .toast');
+        toastElList.forEach(toastEl => {
+            const toast = new bootstrap.Toast(toastEl, { delay: 7000 });
+            toast.show();
+        });
+    });
+
+    window.showToast = function(title, message, type = 'danger') {
+        const container = document.getElementById('globalToastContainer');
+        if (!container) return;
+        const toastDiv = document.createElement('div');
+        const bgClass = (type === 'danger' || type === 'error') ? 'bg-danger' : (type === 'success' ? 'bg-success' : 'bg-warning text-dark');
+        const iconClass = (type === 'danger' || type === 'error') ? 'fa-exclamation-triangle' : (type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle');
+        const isDark = type !== 'warning';
+        
+        toastDiv.className = `toast align-items-center border-0 shadow-lg mb-2 text-white ${bgClass}`;
+        toastDiv.setAttribute('role', 'alert');
+        toastDiv.setAttribute('aria-live', 'assertive');
+        toastDiv.setAttribute('aria-atomic', 'true');
+        toastDiv.style.borderRadius = '14px';
+        toastDiv.style.minWidth = '320px';
+        toastDiv.style.maxWidth = '440px';
+
+        toastDiv.innerHTML = `
+            <div class="d-flex p-3 align-items-center">
+                <div class="me-3 fs-3">
+                    <i class="fas ${iconClass}"></i>
+                </div>
+                <div class="flex-grow-1">
+                    <div class="fw-bold mb-1" style="font-size: 0.95rem;">${title}</div>
+                    <div class="small opacity-95" style="line-height: 1.4;">${message}</div>
+                </div>
+                <button type="button" class="btn-close ${isDark ? 'btn-close-white' : ''} ms-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        `;
+        container.appendChild(toastDiv);
+        const bsToast = new bootstrap.Toast(toastDiv, { delay: 7000 });
+        bsToast.show();
+    };
+    </script>
+
 </body>
 </html>
