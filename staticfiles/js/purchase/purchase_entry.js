@@ -983,12 +983,18 @@ window.hideInlinePrevPurchases = hideInlinePrevPurchases;
 
 /**
  * ══════════════════════════════════════════════════════════════════════
- * 8. DRAFT SAVING & RECOVERY
+ * 8. DRAFT SAVING & RECOVERY (SUPPORTS NEW ENTRY & EDIT MODE)
  * ══════════════════════════════════════════════════════════════════════
  */
+function getPurchaseDraftKey() {
+    const editId = window.EP_CONFIG?.editData?.invoice_id || window.EP_CONFIG?.editData?.id;
+    return editId ? `easypharma_purchase_edit_draft_${editId}` : 'easypharma_purchase_draft_v1';
+}
+
 function savePurchaseDraft() {
-    if (window.EP_CONFIG?.editData) return;
+    if (window.__isPurchaseSubmitting) return;
     try {
+        const editId = window.EP_CONFIG?.editData?.invoice_id || window.EP_CONFIG?.editData?.id;
         const hasData = (items && items.length > 0) || 
                         Boolean(document.getElementById('invoiceNumber')?.value?.trim()) || 
                         Boolean(document.getElementById('supplierSelect')?.value);
@@ -1002,27 +1008,59 @@ function savePurchaseDraft() {
                 discount_amount: document.getElementById('summaryDiscount')?.value || '0',
                 payment_mode: document.getElementById('summaryPaymentMode')?.value || 'Cash',
                 items: items,
+                is_edit: Boolean(editId),
+                edit_id: editId || null,
                 timestamp: Date.now()
             };
-            localStorage.setItem('easypharma_purchase_draft_v1', JSON.stringify(draft));
+            localStorage.setItem(getPurchaseDraftKey(), JSON.stringify(draft));
         } else {
-            localStorage.removeItem('easypharma_purchase_draft_v1');
+            localStorage.removeItem(getPurchaseDraftKey());
         }
     } catch (e) {}
 }
 window.savePurchaseDraft = savePurchaseDraft;
 
 function clearPurchaseDraft() {
-    try { localStorage.removeItem('easypharma_purchase_draft_v1'); } catch (e) {}
+    try {
+        localStorage.removeItem(getPurchaseDraftKey());
+        const editId = window.EP_CONFIG?.editData?.invoice_id || window.EP_CONFIG?.editData?.id;
+        if (editId) {
+            localStorage.removeItem(`easypharma_purchase_edit_draft_${editId}`);
+        }
+    } catch (e) {}
 }
 window.clearPurchaseDraft = clearPurchaseDraft;
 
 function restorePurchaseDraft() {
-    if (window.EP_CONFIG?.editData) return;
     try {
-        const raw = localStorage.getItem('easypharma_purchase_draft_v1');
+        const key = getPurchaseDraftKey();
+        const raw = localStorage.getItem(key);
         if (!raw) return;
         const draft = JSON.parse(raw);
+        if (!draft) return;
+
+        const isEdit = Boolean(window.EP_CONFIG?.editData);
+
+        if (isEdit) {
+            // In edit mode: restore if newly added items or modifications exist in draft
+            if (Array.isArray(draft.items) && draft.items.length > 0) {
+                const serverItems = window.EP_CONFIG.editData.items || [];
+                const isDifferent = JSON.stringify(draft.items) !== JSON.stringify(serverItems);
+                if (isDifferent) {
+                    items = draft.items;
+                    if (draft.discount_percentage && document.getElementById('summaryDiscountPerc')) {
+                        document.getElementById('summaryDiscountPerc').value = draft.discount_percentage;
+                    }
+                    if (draft.discount_amount && document.getElementById('summaryDiscount')) {
+                        document.getElementById('summaryDiscount').value = draft.discount_amount;
+                    }
+                    renderTable();
+                    showToast(`⚡ Restored unsaved modifications (${items.length} items) from previous session! <button type="button" class="btn btn-sm btn-outline-light ms-2" onclick="resetEditToOriginal()" style="padding:1px 6px;font-size:11px;">Reset to Original</button>`, 'success');
+                }
+            }
+            return;
+        }
+
         if (draft && (Array.isArray(draft.items) && draft.items.length > 0 || draft.invoice_number || draft.supplier_id)) {
             if (draft.supplier_id && document.getElementById('supplierSelect')) {
                 document.getElementById('supplierSelect').value = draft.supplier_id;
@@ -1055,6 +1093,14 @@ function restorePurchaseDraft() {
         }
     } catch (e) {}
 }
+
+window.resetEditToOriginal = function() {
+    clearPurchaseDraft();
+    if (window.EP_CONFIG?.editData) {
+        populateEditData(window.EP_CONFIG.editData);
+        showToast('Reset back to original invoice data', 'info');
+    }
+};
 
 window.clearPurchaseDraftAndReset = function() {
     clearPurchaseDraft();
@@ -1764,6 +1810,8 @@ window.saveQuickProduct = async function(isOcrMode) {
 
         if (!isOcrMode) {
             applySelectedProductToPurchase(offlineProd);
+        } else if (typeof window.onQuickProductSavedOCR === 'function') {
+            window.onQuickProductSavedOCR(offlineProd);
         } else if (typeof onQuickProductSavedOCR === 'function') {
             onQuickProductSavedOCR(offlineProd);
         }
@@ -1816,6 +1864,8 @@ window.saveQuickProduct = async function(isOcrMode) {
 
             if (!isOcrMode) {
                 applySelectedProductToPurchase(onlineProd);
+            } else if (typeof window.onQuickProductSavedOCR === 'function') {
+                window.onQuickProductSavedOCR(onlineProd);
             } else if (typeof onQuickProductSavedOCR === 'function') {
                 onQuickProductSavedOCR(onlineProd);
             }
@@ -2398,6 +2448,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (window.EP_CONFIG?.editData) {
         populateEditData(window.EP_CONFIG.editData);
+        restorePurchaseDraft();
     } else {
         restorePurchaseDraft();
     }
@@ -2454,7 +2505,12 @@ function populateEditData(data) {
 window.addEventListener('beforeunload', function(e) {
     if (window.__isPurchaseSubmitting) return;
     savePurchaseDraft();
-    if (items && items.length > 0) {
+    const isEdit = Boolean(window.EP_CONFIG?.editData);
+    const serverItems = window.EP_CONFIG?.editData?.items || [];
+    const isDirty = isEdit
+        ? (JSON.stringify(items) !== JSON.stringify(serverItems))
+        : (items && items.length > 0);
+    if (isDirty) {
         e.preventDefault();
         e.returnValue = 'You have unsaved purchase items. Are you sure you want to leave or refresh?';
         return e.returnValue;

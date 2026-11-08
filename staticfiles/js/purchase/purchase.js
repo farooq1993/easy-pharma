@@ -1076,47 +1076,74 @@ function _ocrShowError(msg) {
 function _ocrRenderMissingBar() {
     const bar = document.getElementById('ocrMissingProductsBar');
     const list = document.getElementById('ocrMissingProductsList');
-    if (_ocrMissing.length === 0) {
-        bar.classList.add('d-none');
-        list.innerHTML = '';
+    if (!_ocrMissing || _ocrMissing.length === 0) {
+        if (bar) bar.classList.add('d-none');
+        if (list) list.innerHTML = '';
         return;
     }
-    bar.classList.remove('d-none');
+    if (bar) bar.classList.remove('d-none');
     let html = '<ul class="mb-2 ps-3">';
     _ocrMissing.forEach((p, idx) => {
         html += `<li><strong>Row ${p.row || (idx+1)}:</strong> "${_esc(p.product)}" (Batch: ${_esc(p.batch_number || 'N/A')}, Price: ₹${p.purchase_price || 0}, MRP: ₹${p.mrp || 0}) 
-        <button class="btn btn-sm btn-link p-0 ms-2 fw-bold text-teal" style="font-size:0.75rem; text-decoration:none; color:#0d9488;" onclick="openOcrQuickAdd('${_esc(p.product)}')">
+        <button type="button" class="btn btn-sm btn-link p-0 ms-2 fw-bold text-teal" style="font-size:0.75rem; text-decoration:none; color:#0d9488;" onclick="window.openOcrQuickAddByIndex(${idx})">
           <i class="fas fa-plus-circle"></i> Quick Add
         </button></li>`;
     });
     html += '</ul>';
-    list.innerHTML = html;
+    if (list) list.innerHTML = html;
 }
 
-window.openOcrQuickAdd = function(name) {
+window._ocrActiveMissingIndex = -1;
+window._ocrActiveMissingItem = null;
+window._ocrJustAddedProductId = null;
+
+window.openOcrQuickAddByIndex = function(idx) {
+    const missingItem = _ocrMissing[idx];
+    if (!missingItem) return;
+
+    window._ocrActiveMissingIndex = idx;
+    window._ocrActiveMissingItem = missingItem;
+    window._ocrQuickAddMode = true;
+    window._ocrQuickAddName = missingItem.product || '';
+    window._ocrJustAddedProductId = null;
+
     const qaModalEl = document.getElementById('quickAddModal');
     if (!qaModalEl) return;
 
-    // Set a flag so handleSaveProduct knows this is OCR context
-    window._ocrQuickAddMode = true;
-    window._ocrQuickAddName = name;
-
     const modal = bootstrap.Modal.getOrCreateInstance(qaModalEl);
 
-    // Pre-fill the name field (in case both inline & included modals exist)
+    // Pre-fill Name
     const quickNameEl = document.getElementById('quickName');
     if (quickNameEl) {
-        quickNameEl.value = name;
+        quickNameEl.value = missingItem.product || '';
         quickNameEl.readOnly = false;
         quickNameEl.classList.remove('bg-light');
     }
 
-    // Reset all other fields
+    // Pre-fill Packing & Conversion
     const packEl = document.getElementById('quickPacking');
-    if (packEl) packEl.value = '';
+    if (packEl) packEl.value = missingItem.packing || '';
     const convEl = document.getElementById('quickConv');
-    if (convEl) convEl.value = 1;
-    ['quickTax','quickSchedule','quickContent','quickCompany','quickType'].forEach(function(id) {
+    if (convEl) convEl.value = missingItem.conversion_factor || 1;
+
+    // Pre-select Tax Rate if available
+    const taxSelect = document.getElementById('quickTax');
+    if (taxSelect && missingItem.tax_percentage) {
+        const targetTax = parseFloat(missingItem.tax_percentage);
+        for (let i = 0; i < taxSelect.options.length; i++) {
+            const opt = taxSelect.options[i];
+            const rate = parseFloat(opt.dataset?.rate || opt.text?.match(/(\d+(\.\d+)?)/)?.[1] || -1);
+            if (rate === targetTax) {
+                taxSelect.selectedIndex = i;
+                const qsInput = document.getElementById('qs-input-quickTax');
+                if (qsInput) qsInput.value = opt.text;
+                break;
+            }
+        }
+    }
+
+    // Reset remaining fields
+    ['quickSchedule','quickContent','quickCompany','quickType','quickHsn'].forEach(function(id) {
         const el = document.getElementById(id);
         if (el) el.value = '';
         if (typeof qsReset === 'function') qsReset(id);
@@ -1124,14 +1151,111 @@ window.openOcrQuickAdd = function(name) {
 
     modal.show();
 
-    // Listen once: after modal closes, recheck (regardless of how it was closed)
     function onOcrQuickAddHide() {
         qaModalEl.removeEventListener('hidden.bs.modal', onOcrQuickAddHide);
-        window._ocrQuickAddMode = false;
-        showToast('Checking if product was added...', 'info');
-        _ocrRecheckMissingProducts();
+        if (window._ocrJustAddedProductId) {
+            window._ocrJustAddedProductId = null;
+        } else if (window._ocrQuickAddMode) {
+            window._ocrQuickAddMode = false;
+            window._ocrActiveMissingIndex = -1;
+            window._ocrActiveMissingItem = null;
+            _ocrRecheckMissingProducts();
+        }
     }
     qaModalEl.addEventListener('hidden.bs.modal', onOcrQuickAddHide);
+};
+
+window.openOcrQuickAdd = function(target) {
+    if (typeof target === 'number') {
+        return window.openOcrQuickAddByIndex(target);
+    }
+    const idx = _ocrMissing.findIndex(m => m.product === target);
+    if (idx !== -1) {
+        return window.openOcrQuickAddByIndex(idx);
+    }
+    window._ocrActiveMissingIndex = -1;
+    window._ocrActiveMissingItem = { product: target };
+    window._ocrQuickAddMode = true;
+    window._ocrQuickAddName = target;
+    const qaModalEl = document.getElementById('quickAddModal');
+    if (!qaModalEl) return;
+    const modal = bootstrap.Modal.getOrCreateInstance(qaModalEl);
+    const quickNameEl = document.getElementById('quickName');
+    if (quickNameEl) {
+        quickNameEl.value = target;
+        quickNameEl.readOnly = false;
+        quickNameEl.classList.remove('bg-light');
+    }
+    modal.show();
+};
+
+window.onQuickProductSavedOCR = function(onlineProd) {
+    let missingItem = window._ocrActiveMissingItem;
+    let missingIndex = window._ocrActiveMissingIndex;
+
+    if (!missingItem || missingIndex === undefined || missingIndex < 0 || missingIndex >= _ocrMissing.length) {
+        missingIndex = _ocrMissing.findIndex(m => 
+            (m.product && onlineProd.name && m.product.toLowerCase().trim() === onlineProd.name.toLowerCase().trim()) ||
+            (window._ocrQuickAddName && m.product && m.product.toLowerCase().trim() === window._ocrQuickAddName.toLowerCase().trim())
+        );
+        if (missingIndex !== -1) {
+            missingItem = _ocrMissing[missingIndex];
+        }
+    }
+
+    const qty = Number(missingItem?.quantity) || 0;
+    const freeQty = Number(missingItem?.free_quantity) || 0;
+    const purPrice = Number(missingItem?.purchase_price) || 0;
+    const mrp = Number(missingItem?.mrp) || 0;
+    const taxRate = parseFloat(onlineProd.tax_rate !== undefined && onlineProd.tax_rate !== null ? onlineProd.tax_rate : (missingItem?.tax_percentage || 12.0));
+    const convFactor = parseInt(onlineProd.conversion_factor) || 1;
+    const amount = qty * purPrice;
+    const taxAmt = amount * (taxRate / 100.0);
+    const total = amount + taxAmt;
+    const unitSalePrice = convFactor > 1 ? Number((mrp / convFactor).toFixed(2)) : mrp;
+
+    const newItem = {
+        product_id: onlineProd.id,
+        name: onlineProd.name || onlineProd.product_name || missingItem?.product || 'New Product',
+        packing: onlineProd.packing || onlineProd.product_packing || missingItem?.packing || '',
+        conversion_factor: convFactor,
+        batch_number: missingItem?.batch_number || '',
+        expiry_date: missingItem?.expiry_date || '',
+        quantity: qty,
+        free_quantity: freeQty,
+        total_units: (qty + freeQty) * convFactor,
+        purchase_price: purPrice,
+        tax_percentage: taxRate,
+        tax_amount: taxAmt,
+        mrp: mrp,
+        sale_price: unitSalePrice,
+        amount: amount,
+        total: total
+    };
+
+    _ocrParsedItems.push(newItem);
+
+    if (missingIndex !== undefined && missingIndex >= 0 && missingIndex < _ocrMissing.length) {
+        _ocrMissing.splice(missingIndex, 1);
+    } else if (missingItem) {
+        const idx = _ocrMissing.indexOf(missingItem);
+        if (idx !== -1) _ocrMissing.splice(idx, 1);
+    }
+
+    window._ocrActiveMissingIndex = -1;
+    window._ocrActiveMissingItem = null;
+    window._ocrQuickAddMode = false;
+    window._ocrQuickAddName = '';
+    window._ocrJustAddedProductId = onlineProd.id;
+
+    _ocrRenderMissingBar();
+    _ocrRenderPreviewTable(_ocrParsedItems);
+    _ocrRefreshTotals();
+
+    const countEl = document.getElementById('ocrItemCount');
+    if (countEl) countEl.textContent = _ocrParsedItems.length;
+
+    showToast(`"${newItem.name}" bill item list me add ho gaya! ✓`, 'success');
 };
 
 async function _ocrRecheckMissingProducts() {
@@ -1143,22 +1267,32 @@ async function _ocrRecheckMissingProducts() {
             if (data && data.length > 0) {
                 const matchedProduct = data.find(p => (p.name || p.product_name || '').toLowerCase().trim() === item.product.toLowerCase().trim()) || data[0];
                 const matchedName = matchedProduct.name || matchedProduct.product_name || '';
+                const taxRate = parseFloat(matchedProduct.tax_rate !== undefined && matchedProduct.tax_rate !== null ? matchedProduct.tax_rate : 12.0);
+                const convFactor = matchedProduct.conversion_factor || 1;
+                const qty = Number(item.quantity) || 0;
+                const purPrice = Number(item.purchase_price) || 0;
+                const amount = qty * purPrice;
+                const taxAmt = amount * (taxRate / 100.0);
+                const total = amount + taxAmt;
+                const mrp = Number(item.mrp) || 0;
+
                 _ocrParsedItems.push({
                     product_id: matchedProduct.id,
                     name: matchedName,
                     packing: matchedProduct.packing || matchedProduct.product_packing || '',
-                    conversion_factor: matchedProduct.conversion_factor || 1,
+                    conversion_factor: convFactor,
                     batch_number: item.batch_number,
                     expiry_date: item.expiry_date,
-                    quantity: item.quantity,
-                    free_quantity: item.free_quantity,
-                    total_units: (item.quantity + item.free_quantity) * (matchedProduct.conversion_factor || 1),
-                    purchase_price: item.purchase_price,
-                    tax_percentage: parseFloat(matchedProduct.tax_rate || 12.0),
-                    tax_amount: (item.purchase_price * item.quantity) * parseFloat(matchedProduct.tax_rate || 12.0) / 100.0,
-                    mrp: item.mrp,
-                    sale_price: item.mrp,
-                    total: item.total
+                    quantity: qty,
+                    free_quantity: Number(item.free_quantity) || 0,
+                    total_units: (qty + (Number(item.free_quantity) || 0)) * convFactor,
+                    purchase_price: purPrice,
+                    tax_percentage: taxRate,
+                    tax_amount: taxAmt,
+                    mrp: mrp,
+                    sale_price: convFactor > 1 ? Number((mrp / convFactor).toFixed(2)) : mrp,
+                    amount: amount,
+                    total: total
                 });
                 showToast(`Matched "${matchedName}" successfully!`, 'success');
             } else {
@@ -1176,14 +1310,29 @@ async function _ocrRecheckMissingProducts() {
 
 function _ocrRenderPreviewTable(items) {
     const tbody = document.getElementById('ocrPreviewTbody');
+    if (!tbody) return;
     tbody.innerHTML = '';
 
+    const countEl = document.getElementById('ocrItemCount');
+    if (countEl) countEl.textContent = items.length;
+
     if (items.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="11" class="text-center py-4 text-muted"><i class="fas fa-info-circle me-1"></i>No items to display. Upload a bill photo.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="12" class="text-center py-4 text-muted"><i class="fas fa-info-circle me-1"></i>No items to display. Upload a bill photo.</td></tr>`;
+        _ocrRefreshTotals();
         return;
     }
 
     items.forEach((item, idx) => {
+        const qty = Number(item.quantity) || 0;
+        const price = Number(item.purchase_price) || 0;
+        const taxRate = Number(item.tax_percentage) || 0;
+        const amount = item.amount !== undefined ? Number(item.amount) : (qty * price);
+        const taxAmt = item.tax_amount !== undefined ? Number(item.tax_amount) : (amount * (taxRate / 100.0));
+        const total = item.total !== undefined ? Number(item.total) : (amount + taxAmt);
+        item.amount = amount;
+        item.tax_amount = taxAmt;
+        item.total = total;
+
         const tr = document.createElement('tr');
         tr.className = 'ocr-item-row';
         tr.innerHTML = `
@@ -1194,6 +1343,7 @@ function _ocrRenderPreviewTable(items) {
             <td data-label="Qty" class="text-center ocr-cell-qty" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'quantity', this.textContent)" style="cursor:text; font-weight:bold;">${item.quantity}</td>
             <td data-label="Free" class="text-center text-success ocr-cell-free" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'free_quantity', this.textContent)" style="cursor:text;">${item.free_quantity}</td>
             <td data-label="Pur. Rate" class="text-end ocr-cell-rate" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'purchase_price', this.textContent)" style="cursor:text;">${Number(item.purchase_price).toFixed(2)}</td>
+            <td data-label="Amount" class="text-end ocr-cell-amount" id="ocrRowAmount-${idx}" style="font-weight:600; color:#334155;">₹${Number(item.amount).toFixed(2)}</td>
             <td data-label="MRP" class="text-end ocr-cell-mrp" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'mrp', this.textContent)" style="cursor:text;">${Number(item.mrp).toFixed(2)}</td>
             <td data-label="GST%" class="text-center ocr-cell-gst" contenteditable="true" onblur="window._ocrUpdateItem(${idx}, 'tax_percentage', this.textContent)" style="cursor:text;">${item.tax_percentage}</td>
             <td data-label="Total" class="text-end fw-bold text-teal ocr-cell-total" id="ocrRowTotal-${idx}">₹${Number(item.total).toFixed(2)}</td>
@@ -1229,14 +1379,20 @@ function _ocrRecalcRow(idx) {
     const item = _ocrParsedItems[idx];
     if (!item) return;
 
-    const qty = item.quantity || 0;
-    const price = item.purchase_price || 0.0;
-    const taxRate = item.tax_percentage || 0.0;
+    const qty = Number(item.quantity) || 0;
+    const price = Number(item.purchase_price) || 0.0;
+    const taxRate = Number(item.tax_percentage) || 0.0;
 
-    const taxAmt = (price * qty) * (taxRate / 100.0);
+    const amount = qty * price;
+    const taxAmt = amount * (taxRate / 100.0);
+    item.amount = amount;
     item.tax_amount = taxAmt;
-    item.total = (price * qty) + taxAmt;
+    item.total = amount + taxAmt;
 
+    const amtCell = document.getElementById(`ocrRowAmount-${idx}`);
+    if (amtCell) {
+        amtCell.textContent = '₹' + item.amount.toFixed(2);
+    }
     const cell = document.getElementById(`ocrRowTotal-${idx}`);
     if (cell) {
         cell.textContent = '₹' + item.total.toFixed(2);
@@ -1244,12 +1400,21 @@ function _ocrRecalcRow(idx) {
 }
 
 function _ocrRefreshTotals() {
-    const totalQty = _ocrParsedItems.reduce((s, i) => s + (i.quantity || 0), 0);
-    const totalAmt = _ocrParsedItems.reduce((s, i) => s + (i.total || 0), 0);
+    const totalQty = _ocrParsedItems.reduce((s, i) => s + (Number(i.quantity) || 0), 0);
+    const totalBaseAmt = _ocrParsedItems.reduce((s, i) => s + (Number(i.amount !== undefined ? i.amount : (i.quantity * i.purchase_price)) || 0), 0);
+    const totalAmt = _ocrParsedItems.reduce((s, i) => s + (Number(i.total) || 0), 0);
+
     const totalQtyEl = document.getElementById('ocrTotalQty');
     if (totalQtyEl) totalQtyEl.textContent = totalQty;
+
+    const totalBaseAmtEl = document.getElementById('ocrTotalBaseAmount');
+    if (totalBaseAmtEl) totalBaseAmtEl.textContent = '₹' + totalBaseAmt.toFixed(2);
+
     const totalAmtEl = document.getElementById('ocrTotalAmount');
     if (totalAmtEl) totalAmtEl.textContent = '₹' + totalAmt.toFixed(2);
+
+    const countEl = document.getElementById('ocrItemCount');
+    if (countEl) countEl.textContent = _ocrParsedItems.length;
 
     const confirmBtn = document.getElementById('ocrConfirmBtn');
     if (confirmBtn) {
@@ -1329,24 +1494,26 @@ function ocrConfirmAndLoad() {
 
     items = [];
     _ocrParsedItems.forEach(item => {
-        item.quantity = Number(item.quantity) || 0;
-        item.free_quantity = Number(item.free_quantity) || 0;
-        item.purchase_price = Number(item.purchase_price) || 0;
-        item.mrp = Number(item.mrp) || 0;
-        item.tax_percentage = Number(item.tax_percentage) || 0;
+        const qty = Number(item.quantity) || 0;
+        const freeQty = Number(item.free_quantity) || 0;
+        const purPrice = Number(item.purchase_price) || 0;
+        const mrp = Number(item.mrp) || 0;
+        const taxPct = Number(item.tax_percentage) || 0;
+
+        item.quantity = qty;
+        item.free_quantity = freeQty;
+        item.purchase_price = purPrice;
+        item.mrp = mrp;
+        item.tax_percentage = taxPct;
 
         if (item.expiry_date && String(item.expiry_date).length === 7) {
             item.expiry_date = item.expiry_date + '-01';
         }
 
-        if (!item.tax_amount) {
-            const sub = item.quantity * item.purchase_price;
-            item.tax_amount = sub * (item.tax_percentage / 100);
-        }
-        if (!item.total) {
-            const sub = item.quantity * item.purchase_price;
-            item.total = sub + (item.tax_amount || 0);
-        }
+        const sub = qty * purPrice;
+        item.amount = sub;
+        item.tax_amount = sub * (taxPct / 100);
+        item.total = sub + item.tax_amount;
 
         items.push(item);
     });
@@ -1750,7 +1917,10 @@ async function aiAutoFillProductDetails() {
         const data = result.data;
 
         // 1. Fill basic fields
-        if (data.product_name && nameInput) nameInput.value = data.product_name;
+        // Keep original product name intact; only fill if field was empty
+        if (nameInput && !nameInput.value.trim() && data.product_name) {
+            nameInput.value = data.product_name;
+        }
         if (data.packing) document.getElementById('quickPacking').value = data.packing;
         if (data.conversion_factor) document.getElementById('quickConv').value = data.conversion_factor;
         if (data.hsn_code) document.getElementById('quickHsn').value = data.hsn_code;

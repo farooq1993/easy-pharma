@@ -1810,6 +1810,8 @@ window.saveQuickProduct = async function(isOcrMode) {
 
         if (!isOcrMode) {
             applySelectedProductToPurchase(offlineProd);
+        } else if (typeof window.onQuickProductSavedOCR === 'function') {
+            window.onQuickProductSavedOCR(offlineProd);
         } else if (typeof onQuickProductSavedOCR === 'function') {
             onQuickProductSavedOCR(offlineProd);
         }
@@ -1862,6 +1864,8 @@ window.saveQuickProduct = async function(isOcrMode) {
 
             if (!isOcrMode) {
                 applySelectedProductToPurchase(onlineProd);
+            } else if (typeof window.onQuickProductSavedOCR === 'function') {
+                window.onQuickProductSavedOCR(onlineProd);
             } else if (typeof onQuickProductSavedOCR === 'function') {
                 onQuickProductSavedOCR(onlineProd);
             }

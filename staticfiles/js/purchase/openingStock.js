@@ -1474,7 +1474,10 @@ async function aiAutoFillProductDetails() {
         const data = result.data;
 
         // 1. Fill basic fields
-        if (data.product_name && nameInput) nameInput.value = data.product_name;
+        // Keep original product name intact; only fill if field was empty
+        if (nameInput && !nameInput.value.trim() && data.product_name) {
+            nameInput.value = data.product_name;
+        }
         if (data.packing) document.getElementById('quickPacking').value = data.packing;
         if (data.conversion_factor) document.getElementById('quickConv').value = data.conversion_factor;
         if (data.hsn_code) document.getElementById('quickHsn').value = data.hsn_code;
@@ -1526,4 +1529,4 @@ async function aiAutoFillProductDetails() {
     }
 }
 window.aiAutoFillProductDetails = aiAutoFillProductDetails;
-
+
