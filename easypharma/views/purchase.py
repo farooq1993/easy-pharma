@@ -1821,10 +1821,10 @@ class PurchaseScanAPI(LoginRequiredMixin, View):
             except (ValueError, TypeError):
                 tax_percentage = 12.0
 
-            try:
-                total = float(str(item.get('total') or (quantity * purchase_price)).replace(',', '').strip())
-            except (ValueError, TypeError):
-                total = quantity * purchase_price
+            # Calculate amount (base subtotal) and total (with GST) like manual entry
+            amount = quantity * purchase_price  # base amount before GST
+            tax_amt = amount * (tax_percentage / 100.0)
+            total_with_gst = amount + tax_amt
 
             # Find product in db via memory cache
             product = find_product_in_cache(product_cache, name) if name else None
@@ -1846,10 +1846,11 @@ class PurchaseScanAPI(LoginRequiredMixin, View):
                     'total_units': (quantity + free_quantity) * cf,
                     'purchase_price': purchase_price,
                     'tax_percentage': float(tax_rate),
-                    'tax_amount': (purchase_price * quantity) * float(tax_rate) / 100.0,
+                    'tax_amount': amount * float(tax_rate) / 100.0,
                     'mrp': mrp,
                     'sale_price': unit_sale_price,
-                    'total': total,
+                    'amount': amount,
+                    'total': amount + (amount * float(tax_rate) / 100.0),
                 })
             else:
                 missing_products.append({
@@ -1862,7 +1863,8 @@ class PurchaseScanAPI(LoginRequiredMixin, View):
                     'purchase_price': purchase_price,
                     'mrp': mrp,
                     'tax_percentage': tax_percentage,
-                    'total': total,
+                    'amount': amount,
+                    'total': total_with_gst,
                 })
                 
         # 7. Check if invoice number is duplicate for this supplier (DRY helper)
@@ -2162,7 +2164,8 @@ class OpeningStockScanAPI(LoginRequiredMixin, View):
                     'purchase_price': purchase_price,
                     'mrp': mrp,
                     'tax_percentage': tax_percentage,
-                    'total': total,
+                    'amount': amount,
+                    'total': total_with_gst,
                 })
 
         return JsonResponse({
