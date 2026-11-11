@@ -159,29 +159,47 @@ const OfflineSync = {
         try {
             const lastSync = await this.productCache.getItem('last_product_sync_time');
             const now = Date.now();
-            const cacheDuration = 30 * 60 * 1000; // 30 minutes
+            const cacheDuration = 15 * 60 * 1000; // 15 minutes
 
-            if (lastSync && (now - lastSync < cacheDuration)) {
-                // Cache is fresh — skip
+            // Check if pos_products exists in localforage and localStorage
+            const existing = await this.productCache.getItem('pos_products');
+            if (existing && Array.isArray(existing) && existing.length > 50 && lastSync && (now - lastSync < cacheDuration)) {
+                // Ensure localStorage also has a copy
+                try {
+                    if (!localStorage.getItem('ep_pos_products_cache')) {
+                        localStorage.setItem('ep_pos_products_cache', JSON.stringify(existing.slice(0, 2000)));
+                    }
+                } catch(e) {}
                 return;
             }
 
-            // Fetch all products for POS (with batches/stock)
-            const posResponse = await fetch('/api/products/search/?limit=5000');
+            // Fetch all products for POS (with all batch-wise stock up to 10000)
+            const posResponse = await fetch('/api/products/search/?limit=10000&nocache=1');
             if (posResponse.ok) {
                 const products = await posResponse.json();
                 if (Array.isArray(products) && products.length > 0) {
                     await this.productCache.setItem('pos_products', products);
                     await this.productCache.setItem('all_products', products);
+                    // Also save to localStorage for instant synchronous fallback
+                    try {
+                        localStorage.setItem('ep_pos_products_cache', JSON.stringify(products.slice(0, 2000)));
+                        localStorage.setItem('ep_pos_last_sync', String(now));
+                    } catch(e) {
+                        console.warn('[OfflineSync] localStorage quota, IndexedDB holds full catalog');
+                    }
+                    console.log(`[OfflineSync] Cached ${products.length} products with batch-wise stock for offline billing.`);
                 }
             }
 
             // Fetch all products for Purchase Entry (without stock)
-            const masterResponse = await fetch('/api/products/master-search/?limit=5000');
+            const masterResponse = await fetch('/api/products/master-search/?limit=5000&nocache=1');
             if (masterResponse.ok) {
                 const products = await masterResponse.json();
                 if (Array.isArray(products) && products.length > 0) {
                     await this.productCache.setItem('master_products', products);
+                    try {
+                        localStorage.setItem('ep_master_products_cache', JSON.stringify(products.slice(0, 1500)));
+                    } catch(e) {}
                 }
             }
 
@@ -248,7 +266,16 @@ const OfflineSync = {
     async searchOfflineProducts(query, type = 'pos') {
         try {
             const cacheKey = type === 'pos' ? 'pos_products' : 'master_products';
-            const products = await this.productCache.getItem(cacheKey) || [];
+            let products = await this.productCache.getItem(cacheKey);
+            
+            // Fallback to localStorage if IndexedDB is empty
+            if (!Array.isArray(products) || products.length === 0) {
+                try {
+                    const localData = localStorage.getItem(type === 'pos' ? 'ep_pos_products_cache' : 'ep_master_products_cache');
+                    if (localData) products = JSON.parse(localData);
+                } catch (e) {}
+            }
+            if (!Array.isArray(products)) products = [];
             
             let combined = [...products];
             if (type !== 'pos') {
@@ -260,15 +287,22 @@ const OfflineSync = {
             }
 
             const lowerQuery = (query || '').toLowerCase().trim();
-            if (!lowerQuery) return combined.slice(0, 30);
+            if (!lowerQuery) {
+                // Return top items with active batches first
+                return combined.sort((a, b) => (b.batches?.length || 0) - (a.batches?.length || 0)).slice(0, 30);
+            }
 
             return combined.filter(p => {
                 const name = (p.name || p.product_name || '').toLowerCase();
                 const content = (p.content || p.salt || '').toLowerCase();
                 const company = (p.company || p.company_name || '').toLowerCase();
-                return name.includes(lowerQuery) || content.includes(lowerQuery) || company.includes(lowerQuery);
+                const hasMatchingBatch = Array.isArray(p.batches) && p.batches.some(b => 
+                    (b.batch_no || b.batch_number || '').toLowerCase().includes(lowerQuery)
+                );
+                return name.includes(lowerQuery) || content.includes(lowerQuery) || company.includes(lowerQuery) || hasMatchingBatch;
             }).slice(0, 30);
         } catch (e) {
+            console.error('[OfflineSync] searchOfflineProducts error:', e);
             return [];
         }
     },
@@ -317,6 +351,19 @@ const OfflineSync = {
             await updateCacheStore('pos_products');
             await updateCacheStore('master_products');
             await updateCacheStore('all_products');
+
+            // Also update localStorage
+            try {
+                const localStr = localStorage.getItem('ep_pos_products_cache');
+                let localList = localStr ? JSON.parse(localStr) : [];
+                const fIdx = localList.findIndex(p => p.id === formatted.id || (p.name && p.name.toLowerCase() === formatted.name.toLowerCase()));
+                if (fIdx >= 0) {
+                    localList[fIdx] = { ...localList[fIdx], ...formatted };
+                } else {
+                    localList.unshift(formatted);
+                }
+                localStorage.setItem('ep_pos_products_cache', JSON.stringify(localList.slice(0, 2000)));
+            } catch(e) {}
         } catch (e) {
             console.warn('[OfflineSync] Failed to cache new product', e);
         }
@@ -445,6 +492,26 @@ const OfflineSync = {
         }
 
         await this.syncServiceWorkerQueue();
+
+        // Flush any emergency sales queued directly in localStorage
+        try {
+            const rawQueue = localStorage.getItem('ep_offline_sales_queue');
+            if (rawQueue) {
+                const q = JSON.parse(rawQueue);
+                if (Array.isArray(q) && q.length > 0) {
+                    for (let item of q) {
+                        await this.salesStore.setItem(item.id, {
+                            id: item.id,
+                            url: '/pos/',
+                            payload: item.data,
+                            timestamp: item.timestamp
+                        });
+                    }
+                    localStorage.removeItem('ep_offline_sales_queue');
+                }
+            }
+        } catch(e) {}
+
         // Master queue synced first so new products exist on server before purchases/sales
         await this.processQueue(this.masterStore, csrfToken);
         await this.processQueue(this.purchaseStore, csrfToken);
@@ -612,6 +679,116 @@ const OfflineSync = {
             toast.style.opacity = '0';
             setTimeout(() => toast.remove(), 600);
         }, 4500);
+    },
+
+    // ─── Offline Sales Inspection & Management ──────────────────────
+    async getPendingSales() {
+        const list = [];
+        if (this.salesStore) {
+            try {
+                const keys = await this.salesStore.keys();
+                for (let k of keys) {
+                    const item = await this.salesStore.getItem(k);
+                    if (item && (item.payload || item.data)) {
+                        list.push({
+                            storeKey: k,
+                            id: item.id || k,
+                            data: item.payload || item.data,
+                            timestamp: item.timestamp || new Date().toISOString()
+                        });
+                    }
+                }
+            } catch(e) {
+                console.warn('[OfflineSync] Error reading salesStore:', e);
+            }
+        }
+        try {
+            const raw = localStorage.getItem('ep_offline_sales_queue');
+            if (raw) {
+                const q = JSON.parse(raw);
+                if (Array.isArray(q)) {
+                    q.forEach(item => {
+                        if (item && item.data && !list.some(x => x.id === item.id)) {
+                            list.push({
+                                storeKey: null,
+                                isLocalStorage: true,
+                                id: item.id,
+                                data: item.data,
+                                timestamp: item.timestamp || new Date().toISOString()
+                            });
+                        }
+                    });
+                }
+            }
+        } catch(e) {}
+
+        list.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        return list;
+    },
+
+    async deletePendingSale(keyOrId) {
+        if (this.salesStore) {
+            try {
+                await this.salesStore.removeItem(keyOrId);
+            } catch(e) {}
+        }
+        try {
+            const raw = localStorage.getItem('ep_offline_sales_queue');
+            if (raw) {
+                let q = JSON.parse(raw);
+                if (Array.isArray(q)) {
+                    q = q.filter(x => x.id !== keyOrId);
+                    localStorage.setItem('ep_offline_sales_queue', JSON.stringify(q));
+                }
+            }
+        } catch(e) {}
+        this._updateQueueCount();
+    },
+
+    printOfflineSaleReceipt(data) {
+        const W = 42;
+        const lines = [];
+        lines.push(" ");
+        const invoiceDate = data.date || new Date().toLocaleDateString('en-GB');
+        lines.push("           EASY PHARMA (OFFLINE MEMO)");
+        lines.push(" CASH MEMO: Pending Sync*  Dt: " + invoiceDate);
+        lines.push(" " + "-".repeat(W));
+        lines.push(" Pt  : " + (data.patient_name || 'CASH CUSTOMER').substring(0, W));
+        if (data.patient_phone) lines.push(" Ph  : " + data.patient_phone.substring(0, W));
+        if (data.doctor_name) lines.push(" Dr  : " + data.doctor_name.substring(0, W));
+        lines.push(" " + "-".repeat(W));
+        lines.push(" PRODUCT               BATCH    QTY     TOTAL");
+        lines.push(" " + "-".repeat(W));
+        const items = data.items || data.cart || [];
+        items.forEach(it => {
+            const n = (it.name || '').substring(0, 18).padEnd(19);
+            const b = (it.batch_no || 'OFFLINE').substring(0, 7).padEnd(8);
+            const q = String(it.quantity || 1).padStart(3);
+            const t = Number(it.total || (it.price * it.quantity) || 0).toFixed(2).padStart(9);
+            lines.push(` ${n} ${b} ${q} ${t}`);
+        });
+        lines.push(" " + "-".repeat(W));
+        lines.push(` Sub Total:   ₹${Number(data.sub_total || 0).toFixed(2)}`.padStart(W));
+        if (Number(data.tax_amount) > 0) {
+            lines.push(` Tax/GST:     ₹${Number(data.tax_amount || 0).toFixed(2)}`.padStart(W));
+        }
+        if (Number(data.discount_amount) > 0) {
+            lines.push(` Discount:    ₹${Number(data.discount_amount || 0).toFixed(2)}`.padStart(W));
+        }
+        lines.push(" " + "-".repeat(W));
+        lines.push(` GRAND TOTAL: ₹${Number(data.total_amount || 0).toFixed(2)}`.padStart(W));
+        lines.push(" " + "-".repeat(W));
+        lines.push("   * Offline Bill - Will sync when online *");
+
+        const win = window.open('', '_blank', 'width=500,height=600');
+        if (win) {
+            win.document.write(`
+                <!DOCTYPE html><html><head><meta charset="utf-8"><title>Offline Receipt</title>
+                <style>body{margin:0;padding:14px;font-family:monospace;font-size:12px;font-weight:bold;line-height:1.2;white-space:pre;}</style>
+                </head><body><pre>${lines.join('\n')}</pre><script>window.onload=function(){window.print();};<\/script></body></html>
+            `);
+            win.document.close();
+        }
     },
 
     // Legacy compat

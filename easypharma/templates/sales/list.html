@@ -115,7 +115,7 @@
     <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
+                <table class="table table-hover align-middle mb-0" id="salesInvoicesTable">
                     <thead class="bg-light text-muted small text-uppercase">
                         <tr>
                             <th class="ps-4">Date</th>
@@ -129,7 +129,7 @@
                             <th class="text-end pe-4">Actions</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="salesInvoicesTbody">
                         {% for invoice in invoices %}
                         <tr id="invoice-{{ invoice.id }}">
                             <td class="ps-4 small text-nowrap">
@@ -342,14 +342,148 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Live search with debounce
 let _searchTimer;
-document.getElementById('searchInput').addEventListener('input', function() {
-    clearTimeout(_searchTimer);
-    _searchTimer = setTimeout(() => {
-        const form = document.getElementById('filterForm');
-        const hiddenPage = form.querySelector('input[name="page"]');
-        if (hiddenPage) hiddenPage.value = 1;
-        form.submit();
-    }, 500);
+const searchInputEl = document.getElementById('searchInput');
+if (searchInputEl) {
+    searchInputEl.addEventListener('input', function() {
+        clearTimeout(_searchTimer);
+        _searchTimer = setTimeout(() => {
+            const form = document.getElementById('filterForm');
+            const hiddenPage = form.querySelector('input[name="page"]');
+            if (hiddenPage) hiddenPage.value = 1;
+            form.submit();
+        }, 500);
+    });
+}
+
+// ─── Offline Pending Sales: Prepend into History List ────────────────
+function _escSalesHtml(str) {
+    return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function loadOfflinePendingSales() {
+    if (typeof OfflineSync === 'undefined' || typeof OfflineSync.getPendingSales !== 'function') {
+        // Retry shortly if OfflineSync is still initializing
+        setTimeout(loadOfflinePendingSales, 200);
+        return;
+    }
+
+    try {
+        const pendingSales = await OfflineSync.getPendingSales();
+        if (!Array.isArray(pendingSales) || pendingSales.length === 0) return;
+
+        const tbody = document.getElementById('salesInvoicesTbody') || document.querySelector('table tbody');
+        if (!tbody) return;
+
+        // Remove empty state message if present
+        const emptyRow = tbody.querySelector('tr td[colspan]');
+        if (emptyRow) {
+            emptyRow.parentElement.remove();
+        }
+
+        window._pendingOfflineSales = pendingSales;
+
+        pendingSales.forEach((sale, idx) => {
+            const data = sale.data;
+            if (!data) return;
+
+            const rowId = `offline-invoice-${sale.id}`;
+            if (document.getElementById(rowId)) return;
+
+            const tr = document.createElement('tr');
+            tr.id = rowId;
+            tr.style.cssText = 'background: #fffdf5 !important; border-left: 4px solid #f59e0b;';
+
+            const d = new Date(sale.timestamp || data.date);
+            const dateStr = !isNaN(d.getTime()) 
+                ? d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+                : (data.date || 'Today');
+
+            const patientName = data.patient_name || 'Walk-in Customer';
+            const patientPhone = data.patient_phone || '';
+            const doctorName = data.doctor_name || '—';
+            const subTotal = Number(data.sub_total || 0).toFixed(2);
+            const taxAmt = Number(data.tax_amount || 0).toFixed(2);
+            const grandTotal = Number(data.total_amount || 0).toFixed(2);
+            const payMode = data.payment_mode || 'Cash';
+
+            tr.innerHTML = `
+                <td class="ps-4 small text-nowrap">
+                    <div class="fw-bold text-dark">${dateStr}</div>
+                    <span class="badge bg-warning text-dark border border-warning" style="font-size:0.68rem; font-weight:700;">
+                        <i class="fas fa-clock me-1"></i>Offline (Pending Sync)
+                    </span>
+                </td>
+                <td>
+                    <span class="badge bg-warning-subtle text-dark border border-warning fw-bold">
+                        #OFFLINE-${idx + 1}
+                    </span>
+                </td>
+                <td>
+                    <div class="fw-bold small text-dark">${_escSalesHtml(patientName)}</div>
+                    <div class="text-muted" style="font-size:0.75rem;">${_escSalesHtml(patientPhone)}</div>
+                </td>
+                <td class="small text-muted">${_escSalesHtml(doctorName)}</td>
+                <td class="small">₹${subTotal}</td>
+                <td class="small text-primary">₹${taxAmt}</td>
+                <td class="fw-bold text-success" style="font-size:0.95rem;">₹${grandTotal}</td>
+                <td>
+                    <span class="badge rounded-pill" style="background:#fef3c7; color:#92400e; font-weight:600;">
+                        ${_escSalesHtml(payMode)} (Offline)
+                    </span>
+                </td>
+                <td class="text-end pe-4 text-nowrap">
+                    <div class="d-inline-flex align-items-center gap-1">
+                        <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-2 py-1 shadow-sm d-inline-flex align-items-center gap-1"
+                            style="font-size: 0.76rem; font-weight: 600;" onclick="window.printOfflineSaleByIndex(${idx})" title="Print Offline Bill">
+                            <i class="fas fa-print"></i> <span>Print</span>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-2 py-1 shadow-sm d-inline-flex align-items-center gap-1"
+                            style="font-size: 0.76rem; font-weight: 600;" onclick="window.deleteOfflineSale('${sale.id}')" title="Delete Offline Bill">
+                            <i class="fas fa-trash-alt"></i> <span>Delete</span>
+                        </button>
+                    </div>
+                </td>
+            `;
+
+            tbody.prepend(tr);
+        });
+
+        // Update record count
+        const recCard = document.querySelector('.card .h4.mb-0.fw-bold.text-dark');
+        if (recCard) {
+            const currentCount = parseInt(recCard.textContent) || 0;
+            recCard.textContent = `${currentCount + pendingSales.length} (${pendingSales.length} offline)`;
+        }
+    } catch(e) {
+        console.warn('[Sales List] Error loading offline pending sales:', e);
+    }
+}
+
+window.printOfflineSaleByIndex = function(idx) {
+    if (!window._pendingOfflineSales || !window._pendingOfflineSales[idx]) return;
+    const sale = window._pendingOfflineSales[idx];
+    if (typeof OfflineSync !== 'undefined' && typeof OfflineSync.printOfflineSaleReceipt === 'function') {
+        OfflineSync.printOfflineSaleReceipt(sale.data);
+    }
+};
+
+window.deleteOfflineSale = async function(id) {
+    if (!confirm('Are you sure you want to delete this pending offline sale?')) return;
+    if (typeof OfflineSync !== 'undefined' && typeof OfflineSync.deletePendingSale === 'function') {
+        await OfflineSync.deletePendingSale(id);
+    }
+    const row = document.getElementById(`offline-invoice-${id}`);
+    if (row) {
+        row.style.transition = 'opacity 0.3s';
+        row.style.opacity = '0';
+        setTimeout(() => row.remove(), 300);
+    }
+};
+
+// Listen on DOMContentLoaded & online reconnect
+document.addEventListener('DOMContentLoaded', loadOfflinePendingSales);
+window.addEventListener('online', function() {
+    setTimeout(loadOfflinePendingSales, 1000);
 });
 </script>
 

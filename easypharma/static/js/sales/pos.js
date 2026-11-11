@@ -558,8 +558,62 @@
                 }).catch(() => {});
             } catch (e) {}
         }
+
+        // 3. Mutate localStorage offline product cache
+        try {
+            const localStr = localStorage.getItem('ep_pos_products_cache');
+            if (localStr) {
+                const localList = JSON.parse(localStr);
+                if (Array.isArray(localList)) {
+                    localList.forEach(prod => {
+                        if (Array.isArray(prod.batches)) {
+                            prod.batches.forEach(b => {
+                                soldItems.forEach(sold => {
+                                    if (Number(b.batch_id) === Number(sold.batch_id)) {
+                                        b.stock = Math.max(0, (Number(b.stock) || 0) - (Number(sold.quantity) || 0));
+                                    }
+                                });
+                            });
+                        }
+                    });
+                    localStorage.setItem('ep_pos_products_cache', JSON.stringify(localList));
+                }
+            }
+        } catch (e) {}
     }
     window.deductSoldItemsFromPosCache = deductSoldItemsFromPosCache;
+
+    // Helper: Merge new products into offline stores without overwriting existing products
+    async function mergeProductsIntoOfflineCache(newProducts) {
+        if (!Array.isArray(newProducts) || newProducts.length === 0) return;
+        try {
+            // 1. Update localforage
+            if (typeof localforage !== 'undefined') {
+                const store = localforage.createInstance({ name: 'ep_product_cache' });
+                let existing = await store.getItem('pos_products') || [];
+                const map = new Map();
+                existing.forEach(p => map.set(p.id, p));
+                newProducts.forEach(p => map.set(p.id, p));
+                const merged = Array.from(map.values());
+                await store.setItem('pos_products', merged);
+                await store.setItem('all_products', merged);
+            }
+            // 2. Update localStorage
+            try {
+                let localExisting = [];
+                const localStr = localStorage.getItem('ep_pos_products_cache');
+                if (localStr) localExisting = JSON.parse(localStr);
+                const localMap = new Map();
+                localExisting.forEach(p => localMap.set(p.id, p));
+                newProducts.forEach(p => localMap.set(p.id, p));
+                const localMerged = Array.from(localMap.values()).slice(0, 2000);
+                localStorage.setItem('ep_pos_products_cache', JSON.stringify(localMerged));
+            } catch (e) {}
+        } catch (err) {
+            console.warn('[POS] Failed to merge into offline cache:', err);
+        }
+    }
+    window.mergeProductsIntoOfflineCache = mergeProductsIntoOfflineCache;
 
     function clearPosSearchCache() {
         _posSearchCache = {};
@@ -573,23 +627,32 @@
                 const response = await fetch('/api/products/search/?limit=25');
                 if (response.ok) {
                     products = await response.json();
-                    if (Array.isArray(products) && products.length > 0 && typeof localforage !== 'undefined') {
-                        const store = localforage.createInstance({ name: 'ep_product_cache' });
-                        store.setItem('pos_products', products).catch(() => {});
+                    // Merge into offline cache without destroying other cached items
+                    if (Array.isArray(products) && products.length > 0) {
+                        mergeProductsIntoOfflineCache(products);
                     }
                 }
             }
             if (!products || products.length === 0) {
-                if (typeof OfflineSync !== 'undefined') {
-                    const store = localforage.createInstance({ name: 'ep_product_cache' });
-                    products = await store.getItem('pos_products') || [];
+                if (typeof localforage !== 'undefined') {
+                    try {
+                        const store = localforage.createInstance({ name: 'ep_product_cache' });
+                        products = await store.getItem('pos_products') || [];
+                    } catch (e) {}
+                }
+                // Fallback to localStorage
+                if (!products || products.length === 0) {
+                    try {
+                        const localStr = localStorage.getItem('ep_pos_products_cache');
+                        if (localStr) products = JSON.parse(localStr);
+                    } catch (e) {}
                 }
             }
             
             if (products && products.length > 0) {
-                renderSearchResults({ results: products });
+                renderSearchResults({ results: products.slice(0, 30) });
             } else {
-                resultsDiv.innerHTML = '<div class="p-3 text-center text-muted small">No items cached yet. Search while online to cache items.</div>';
+                resultsDiv.innerHTML = '<div class="p-3 text-center text-muted small"><i class="fas fa-wifi text-warning me-1"></i>Offline mode — No items cached yet. Connect to internet once to load stock.</div>';
                 resultsDiv.classList.remove('d-none');
             }
         } catch (err) {
@@ -775,7 +838,26 @@
 
             try {
                 if (!navigator.onLine) {
-                    const offlineResults = await OfflineSync.searchOfflineProducts(query, 'pos');
+                    let offlineResults = [];
+                    if (typeof OfflineSync !== 'undefined') {
+                        offlineResults = await OfflineSync.searchOfflineProducts(query, 'pos');
+                    }
+                    if (!offlineResults || offlineResults.length === 0) {
+                        try {
+                            const localStr = localStorage.getItem('ep_pos_products_cache');
+                            if (localStr) {
+                                const allLocal = JSON.parse(localStr);
+                                const qLower = query.toLowerCase();
+                                offlineResults = allLocal.filter(p => {
+                                    const name = (p.name || p.product_name || '').toLowerCase();
+                                    const content = (p.content || p.salt || '').toLowerCase();
+                                    const company = (p.company || p.company_name || '').toLowerCase();
+                                    const hasBatch = Array.isArray(p.batches) && p.batches.some(b => (b.batch_no || b.batch_number || '').toLowerCase().includes(qLower));
+                                    return name.includes(qLower) || content.includes(qLower) || company.includes(qLower) || hasBatch;
+                                }).slice(0, 30);
+                            }
+                        } catch (e) {}
+                    }
                     if (seq === _currentSearchSeq) {
                         renderSearchResults(offlineResults);
                     }
@@ -791,17 +873,39 @@
                 // Cache response with lower-case key for instant subsequent hits
                 _posSearchCache[lowerQuery] = data;
 
+                // Merge searched product details & batch-wise stock into offline storage!
+                if (Array.isArray(data) && data.length > 0) {
+                    mergeProductsIntoOfflineCache(data);
+                }
+
                 // Only render if this is still the most recent search
                 if (seq === _currentSearchSeq) {
                     renderSearchResults(data);
                 }
             } catch (err) {
-                console.warn('[POS] Fetch error, using offline store:', err);
-                if (typeof OfflineSync !== 'undefined' && seq === _currentSearchSeq) {
-                    const offlineResults = await OfflineSync.searchOfflineProducts(query, 'pos');
-                    if (seq === _currentSearchSeq) {
-                        renderSearchResults(offlineResults);
-                    }
+                console.warn('[POS] Fetch error or offline, using local store:', err);
+                let offlineResults = [];
+                if (typeof OfflineSync !== 'undefined') {
+                    offlineResults = await OfflineSync.searchOfflineProducts(query, 'pos');
+                }
+                if (!offlineResults || offlineResults.length === 0) {
+                    try {
+                        const localStr = localStorage.getItem('ep_pos_products_cache');
+                        if (localStr) {
+                            const allLocal = JSON.parse(localStr);
+                            const qLower = query.toLowerCase();
+                            offlineResults = allLocal.filter(p => {
+                                const name = (p.name || p.product_name || '').toLowerCase();
+                                const content = (p.content || p.salt || '').toLowerCase();
+                                const company = (p.company || p.company_name || '').toLowerCase();
+                                const hasBatch = Array.isArray(p.batches) && p.batches.some(b => (b.batch_no || b.batch_number || '').toLowerCase().includes(qLower));
+                                return name.includes(qLower) || content.includes(qLower) || company.includes(qLower) || hasBatch;
+                            }).slice(0, 30);
+                        }
+                    } catch (e) {}
+                }
+                if (seq === _currentSearchSeq) {
+                    renderSearchResults(offlineResults);
                 }
             }
         }, 280);
@@ -1830,7 +1934,33 @@
                 }
             }
         } catch (err) {
-            alert('Error loader: ' + err.message);
+            console.warn('[POS] Checkout network error, falling back to offline save:', err);
+            try {
+                deductSoldItemsFromPosCache(data.items);
+                if (typeof OfflineSync !== 'undefined') {
+                    await OfflineSync.queueRequest(OfflineSync.salesStore, '/pos/', data, 'Internet disconnected — Bill local storage me save ho gaya! Online aane par auto-sync hoga. ✓');
+                } else {
+                    const q = JSON.parse(localStorage.getItem('ep_offline_sales_queue') || '[]');
+                    q.push({ id: 'sale_' + Date.now(), data, timestamp: new Date().toISOString() });
+                    localStorage.setItem('ep_offline_sales_queue', JSON.stringify(q));
+                }
+
+                document.getElementById('successInvoiceNum').textContent = "Offline (Pending Sync)";
+                document.getElementById('btnSuccessPrint').style.display = 'inline-block';
+                document.getElementById('btnSuccessPrint').onclick = () => {
+                    printInvoiceOffline(data);
+                    setTimeout(() => resetPOS("Offline*"), 500);
+                };
+                document.getElementById('btnSuccessNewSale').onclick = () => resetPOS("Offline*");
+
+                const successModalEl = document.getElementById('checkoutSuccessModal');
+                if (successModalEl) {
+                    const successModal = bootstrap.Modal.getOrCreateInstance(successModalEl);
+                    successModal.show();
+                }
+            } catch (offlineErr) {
+                alert('Offline save error: ' + (offlineErr.message || err.message));
+            }
         } finally {
             hideLoader();
             if (checkoutBtn) { checkoutBtn.disabled = false; }
