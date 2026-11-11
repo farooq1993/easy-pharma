@@ -1326,9 +1326,9 @@ function _ocrRenderPreviewTable(items) {
         const qty = Number(item.quantity) || 0;
         const price = Number(item.purchase_price) || 0;
         const taxRate = Number(item.tax_percentage) || 0;
-        const amount = item.amount !== undefined ? Number(item.amount) : (qty * price);
-        const taxAmt = item.tax_amount !== undefined ? Number(item.tax_amount) : (amount * (taxRate / 100.0));
-        const total = item.total !== undefined ? Number(item.total) : (amount + taxAmt);
+        const amount = qty * price;
+        const taxAmt = amount * (taxRate / 100.0);
+        const total = amount + taxAmt;
         item.amount = amount;
         item.tax_amount = taxAmt;
         item.total = total;

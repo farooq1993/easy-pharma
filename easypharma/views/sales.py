@@ -835,7 +835,7 @@ class ProductSearchAPI(LoginRequiredMixin,View):
         elif query:
             limit = min(limit, 50)
         else:
-            limit = min(limit, 2000)
+            limit = min(limit, 10000)
 
         tenant_id = request.tenant.id
         
