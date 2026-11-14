@@ -47,6 +47,13 @@
     document.addEventListener('DOMContentLoaded', () => {
         ['quickTax', 'quickSchedule', 'quickContent', 'quickCompany', 'quickType'].forEach(initQuickSelect);
 
+        const quickAddModal = document.getElementById('quickAddModal');
+        if (quickAddModal) {
+            quickAddModal.addEventListener('hidden.bs.modal', function() {
+                window._openingOcrQuickAddMissingIndex = null;
+            });
+        }
+
         // Stacked Modal Fix for nested modals (Quick Add, Master Add, Edit Item) over OCR Modal
         ['quickAddModal', 'masterAddModal', 'editItemModal'].forEach(id => {
             const modalEl = document.getElementById(id);
@@ -149,6 +156,8 @@ async function handleSaveQuickProduct() {
             batches: []
         };
 
+        const addedToOcrPreview = _openingOcrAddQuickAddedProduct(offlineProd);
+
         if (typeof OfflineSync !== 'undefined') {
             await OfflineSync.cacheNewProduct(offlineProd);
             await OfflineSync.queueRequest(
@@ -162,10 +171,12 @@ async function handleSaveQuickProduct() {
         clearFormAndModal();
         showToast(`Medicine "${name}" added locally (Offline ✓)`);
 
-        const searchInput = document.getElementById('newProductSearch');
-        if (searchInput) {
-            searchInput.value = name;
-            selectProductForOpening(offlineProd);
+        if (!addedToOcrPreview) {
+            const searchInput = document.getElementById('newProductSearch');
+            if (searchInput) {
+                searchInput.value = name;
+                selectProductForOpening(offlineProd);
+            }
         }
     };
 
@@ -206,13 +217,15 @@ async function handleSaveQuickProduct() {
                 OfflineSync.cacheNewProduct(onlineProd);
             }
 
+            const addedToOcrPreview = _openingOcrAddQuickAddedProduct(onlineProd);
             clearFormAndModal();
 
-            // Auto-select the newly created product
-            const searchInput = document.getElementById('newProductSearch');
-            if (searchInput) {
-                searchInput.value = result.name;
-                selectProductForOpening(onlineProd);
+            if (!addedToOcrPreview) {
+                const searchInput = document.getElementById('newProductSearch');
+                if (searchInput) {
+                    searchInput.value = result.name || name;
+                    selectProductForOpening(onlineProd);
+                }
             }
         } else {
             showToast(result.error || 'Failed to save medicine', 'error');
@@ -1268,6 +1281,41 @@ function openingOcrQuickAddProduct(missingIdx) {
     if (modalEl) {
         bootstrap.Modal.getOrCreateInstance(modalEl).show();
     }
+}
+
+function _openingOcrAddQuickAddedProduct(product) {
+    const missingIdx = window._openingOcrQuickAddMissingIndex;
+    window._openingOcrQuickAddMissingIndex = null;
+
+    const missingItem = _openingOcrMissingProducts[missingIdx];
+    if (!missingItem) return false;
+
+    const quantity = Number(missingItem.quantity) || 1;
+    const purchasePrice = Number(missingItem.purchase_price) || 0;
+    const taxPercentage = Number.isFinite(Number(missingItem.tax_percentage))
+        ? Number(missingItem.tax_percentage)
+        : 5;
+    const subtotal = quantity * purchasePrice;
+    const total = Number.isFinite(Number(missingItem.total))
+        ? Number(missingItem.total)
+        : subtotal + (subtotal * taxPercentage / 100);
+
+    _openingOcrParsedItems.push({
+        product_id: product.is_offline ? null : product.id,
+        name: product.name || product.product_name || missingItem.product,
+        batch_number: missingItem.batch_number || 'OPENING',
+        expiry_date: missingItem.expiry_date || '',
+        quantity: quantity,
+        purchase_price: purchasePrice,
+        mrp: Number(missingItem.mrp) || 0,
+        tax_percentage: taxPercentage,
+        total: total
+    });
+
+    _openingOcrMissingProducts.splice(missingIdx, 1);
+    _openingOcrRenderMissingProducts(_openingOcrMissingProducts);
+    _openingOcrRenderPreviewTable(_openingOcrParsedItems);
+    return true;
 }
 
 function _openingOcrRenderPreviewTable(items) {

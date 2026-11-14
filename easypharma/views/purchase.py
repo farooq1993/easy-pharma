@@ -2164,8 +2164,8 @@ class OpeningStockScanAPI(LoginRequiredMixin, View):
                     'purchase_price': purchase_price,
                     'mrp': mrp,
                     'tax_percentage': tax_percentage,
-                    'amount': amount,
-                    'total': total_with_gst,
+                    'amount': subtotal,
+                    'total': total,
                 })
 
         return JsonResponse({
