@@ -1552,4 +1552,3 @@ async function aiAutoFillProductDetails() {
     }
 }
 window.aiAutoFillProductDetails = aiAutoFillProductDetails;
-

@@ -125,6 +125,14 @@
 {% include "purchase/master_add_modal.html" %}
 
 {% include "includes/opening_stock_ocr.html" %}
+<script>
+    (function() {
+        var openingOcrModal = document.getElementById('openingOcrImportModal');
+        if (openingOcrModal && openingOcrModal.parentElement !== document.body) {
+            document.body.appendChild(openingOcrModal);
+        }
+    })();
+</script>
 
 <div class="ep-toast" id="epToast"></div>
 
