@@ -26,7 +26,7 @@ import csv
 from io import BytesIO
 from django.conf import settings
 from django.template.loader import get_template
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseBadRequest
 
 
 def link_callback(uri, rel):
@@ -113,10 +113,15 @@ class StockReportView(LoginRequiredMixin,View):
         schedule_filter = request.GET.get('schedule_filter', '')
         filter_param = request.GET.get('filter', '')
         search_query = request.GET.get('search', '')
+        batch_filter = request.GET.get('batch', '').strip()
+        product_filter = request.GET.get('product_id', '').strip()
+        if product_filter and not product_filter.isdecimal():
+            return HttpResponseBadRequest('Invalid product filter.')
+        product_filter = int(product_filter) if product_filter else None
         page_number = request.GET.get('page', 1)
         
         base_cache_key = _stock_report_cache_key(request.tenant.id)
-        cache_key = f"{base_cache_key}:{schedule_filter}:{filter_param}:{search_query}:{page_number}"
+        cache_key = f"{base_cache_key}:{schedule_filter}:{filter_param}:{search_query}:{batch_filter}:{product_filter}:{page_number}"
 
         # ── Try cache first (skip for PDF to always get fresh data) ──
         if not is_pdf:
@@ -137,12 +142,19 @@ class StockReportView(LoginRequiredMixin,View):
         
         if filter_param == 'near_expiry':
             expiry_limit = date.today() + timedelta(days=90)
-            stocks = stocks.filter(expiry_date__lte=expiry_limit, expiry_date__gte=date.today()).order_by('expiry_date')
+            stocks = stocks.filter(
+                expiry_date__lte=expiry_limit,
+                expiry_date__gte=date.today().replace(day=1)
+            ).order_by('expiry_date')
         elif schedule_filter == 'H1':
             stocks = stocks.filter(product__product_schedule__schedule_name__iexact='Schedule H1')
 
         if search_query:
             stocks = stocks.filter(Q(product__product_name__icontains=search_query) | Q(batch_number__icontains=search_query))
+        if batch_filter:
+            stocks = stocks.filter(batch_number=batch_filter)
+        if product_filter:
+            stocks = stocks.filter(product_id=product_filter)
             
         stocks = stocks.order_by('product__product_name', 'expiry_date')
             
@@ -154,6 +166,10 @@ class StockReportView(LoginRequiredMixin,View):
             product_summary = product_summary.filter(product__product_schedule__schedule_name__iexact='Schedule H1')
         if search_query:
             product_summary = product_summary.filter(Q(product__product_name__icontains=search_query) | Q(batch_number__icontains=search_query))
+        if batch_filter:
+            product_summary = product_summary.filter(batch_number=batch_filter)
+        if product_filter:
+            product_summary = product_summary.filter(product_id=product_filter)
 
         product_summary = product_summary.values(
             'product__product_name', 'product__product_packing', 'product__conversion_factor'
@@ -240,6 +256,8 @@ class StockReportView(LoginRequiredMixin,View):
             'schedule_filter': schedule_filter,
             'filter_param': filter_param,
             'search_query': search_query,
+            'batch_filter': batch_filter,
+            'product_filter': product_filter,
         }
 
         if not is_pdf:

@@ -323,6 +323,7 @@ class QuickProductAPI(LoginRequiredMixin,View):
                 tenant=request.tenant,
                 product_name=data.get('name'),
                 product_packing=data.get('packing'),
+                product_type_id=data.get('type_id') or None,
                 product_tax_id=data.get('tax_id') or None,
                 product_schedule_id=data.get('schedule_id') or None,
                 compny_name_id=data.get('company_id') or None,
