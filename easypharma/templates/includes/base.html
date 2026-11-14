@@ -192,7 +192,7 @@
                 const method = (options.method || (args[0]?.method) || 'GET').toUpperCase();
 
                 // Skip non-blocking fast lookups
-                const isSilent = options.silent || url.includes('/search/') || url.includes('/autocomplete/') || url.includes('/check-duplicate') || url.includes('/check-invoice-number');
+                const isSilent = options.silent || url.includes('/search/') || url.includes('/autocomplete/') || url.includes('/check-duplicate') || url.includes('/check-invoice-number') || url.includes('/opening/stock/import/ocr/');
 
                 if (!isSilent && (method === 'POST' || options.showLoader || url.includes('/import/'))) {
                     activeFetchCount++;
