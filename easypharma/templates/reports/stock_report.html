@@ -11,6 +11,8 @@
         <div class="col-12 col-lg-auto mt-3 mt-lg-0">
             <div class="d-flex flex-wrap align-items-center gap-2">
                 <form id="stockFilterForm" method="GET" class="d-flex flex-wrap align-items-center gap-2 no-loader flex-grow-1" onsubmit="event.preventDefault(); performLiveSearch();">
+                    {% if batch_filter %}<input type="hidden" name="batch" value="{{ batch_filter }}">{% endif %}
+                    {% if product_filter %}<input type="hidden" name="product_id" value="{{ product_filter }}">{% endif %}
                     <div class="position-relative flex-grow-1" style="min-width: 200px;">
                         <input type="text" id="stockSearchInput" name="search" class="form-control pe-4 search-input-touch" placeholder="Search medicine or batch..." value="{{ search_query }}" autocomplete="off">
                         <button type="button" id="clearSearchBtn" class="btn btn-sm btn-link text-muted position-absolute end-0 top-50 translate-middle-y text-decoration-none p-0 me-2 {% if not search_query %}d-none{% endif %}" onclick="clearSearch()" title="Clear search">
@@ -30,10 +32,10 @@
                     <button type="submit" class="btn btn-primary d-none">Search</button>
                 </form>
                 <div class="d-flex align-items-center gap-1">
-                    <a id="pdfExportBtn" href="?pdf=1&search={{ search_query }}&filter={{ filter_param }}&schedule_filter={{ schedule_filter }}" class="btn btn-outline-danger shadow-sm no-loader btn-action-touch" target="_blank" title="Export PDF">
+                    <a id="pdfExportBtn" href="?pdf=1&search={{ search_query|urlencode }}&filter={{ filter_param }}&schedule_filter={{ schedule_filter }}&batch={{ batch_filter|urlencode }}&product_id={{ product_filter|default_if_none:'' }}" class="btn btn-outline-danger shadow-sm no-loader btn-action-touch" target="_blank" title="Export PDF">
                         <i class="fas fa-file-pdf"></i> <span class="d-none d-sm-inline">PDF</span>
                     </a>
-                    <a id="csvExportBtn" href="?csv=1&search={{ search_query }}&filter={{ filter_param }}&schedule_filter={{ schedule_filter }}" class="btn btn-outline-success shadow-sm no-loader btn-action-touch" title="Export CSV">
+                    <a id="csvExportBtn" href="?csv=1&search={{ search_query|urlencode }}&filter={{ filter_param }}&schedule_filter={{ schedule_filter }}&batch={{ batch_filter|urlencode }}&product_id={{ product_filter|default_if_none:'' }}" class="btn btn-outline-success shadow-sm no-loader btn-action-touch" title="Export CSV">
                         <i class="fas fa-file-csv"></i> <span class="d-none d-sm-inline">CSV</span>
                     </a>
                     <button class="btn btn-outline-primary shadow-sm btn-action-touch" onclick="window.print()" title="Print">
@@ -78,7 +80,12 @@
         <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
             <div class="card-header bg-white border-0 py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
                 <h6 class="fw-bold mb-0"><i class="fas fa-boxes me-2 text-primary"></i>Batch-wise Stock Details</h6>
-                {% if search_query %}
+                {% if batch_filter %}
+                <span class="badge bg-light text-primary border px-3 py-2 rounded-pill">
+                    Exact batch: {{ batch_filter }}
+                    <a class="ms-2 text-decoration-none" href="?filter=near_expiry" aria-label="Clear exact batch filter">Clear</a>
+                </span>
+                {% elif search_query %}
                 <span class="badge bg-light text-primary border px-3 py-2 rounded-pill">Found {{ page_obj.paginator.count }} batch results for "{{ search_query }}"</span>
                 {% endif %}
             </div>
@@ -330,6 +337,8 @@ function performLiveSearch(page = 1) {
     const searchVal = document.getElementById('stockSearchInput').value.trim();
     const filterVal = document.getElementById('filterSelect').value;
     const scheduleVal = document.getElementById('scheduleFilterSelect').value;
+    const batchVal = document.querySelector('#stockFilterForm input[name="batch"]')?.value || '';
+    const productIdVal = document.querySelector('#stockFilterForm input[name="product_id"]')?.value || '';
     const clearBtn = document.getElementById('clearSearchBtn');
 
     if (clearBtn) {
@@ -342,6 +351,8 @@ function performLiveSearch(page = 1) {
         search: searchVal,
         filter: filterVal,
         schedule_filter: scheduleVal,
+        batch: batchVal,
+        product_id: productIdVal,
         page: page
     });
 

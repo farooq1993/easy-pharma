@@ -62,6 +62,7 @@
         <!-- Page Content -->
         <div id="content" style="padding: 0 !important; background-color: #f8f9fa;">
             <!-- Top Bar -->
+            {% block topbar %}
             <header class="topbar d-flex align-items-center justify-content-between px-4">
                 <!-- Search bar -->
                 <div class="search-wrapper">
@@ -98,6 +99,7 @@
                     </div>
                 </div>
             </header>
+            {% endblock topbar %}
 
             <!-- Inner Page Content Container -->
             <div class="p-4 page-content-inner" style="min-height: calc(100vh - 80px);">
