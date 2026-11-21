@@ -201,7 +201,8 @@ body {
     border-radius: 14px;
     padding: 1.25rem 1.5rem;
     position: relative;
-    overflow: hidden;
+    overflow: visible;
+    z-index: 2;
 }
 .greeting-title {
     font-size: 1.45rem;
@@ -237,6 +238,7 @@ body {
 .metric-icon-blue  { background-color: #e0f2fe; color: #0284c7; }
 .metric-icon-purple{ background-color: #f3e8ff; color: #9333ea; }
 .metric-icon-cyan  { background-color: #e0e7ff; color: #4f46e5; }
+.metric-icon-amber { background-color: #fef3c7; color: #d97706; }
 
 .metric-label {
     font-size: 0.76rem;
@@ -408,6 +410,21 @@ body {
     border-bottom: 1px solid #fee2e2;
     padding: 0.8rem 1.15rem;
     border-radius: 11px 11px 0 0;
+}
+.near-expiry-scroll.is-auto-scrolling {
+    overflow-y: auto;
+}
+#nearExpiryTable thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background-color: #f8fafc;
+}
+#nearExpiryTable .expired-stock-row > * {
+    background-color: #fff1f2;
+}
+#nearExpiryTable .expired-stock-row > :first-child {
+    border-left: 4px solid #dc2626;
 }
 .pill-filter-btn {
     font-size: 0.72rem;
@@ -594,13 +611,13 @@ body {
             <!-- 1. GREETING BANNER -->
             <div class="greeting-card mb-3">
                 <div class="row align-items-center">
-                    <div class="col-md-7 col-12">
+                    <div class="col-md-9 col-xl-7 col-12">
                         <h2 class="greeting-title mb-1" id="dashGreeting">Good Evening, {{ user_role }} 👋</h2>
                         <p class="greeting-sub mb-0">Here's your pharmacy performance at a glance for <strong>{{ pharmacy_name }}</strong>.</p>
                     </div>
                     <!-- Pharmacy Storefront Graphic Illustration -->
-                    <div class="col-md-3 d-none d-md-flex justify-content-center">
-                        <div class="pharmacy-graphic-wrap" style="width: 160px; height: 65px; position: relative;">
+                    <div class="col-xl-2 d-none d-xl-flex justify-content-center">
+                        <div class="pharmacy-graphic-wrap" style="width: 140px; height: 65px; position: relative;">
                             <svg viewBox="0 0 160 70" width="100%" height="100%" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <rect x="25" y="15" width="110" height="50" rx="4" fill="#E2FBE8" stroke="#10B981" stroke-width="2"/>
                                 <rect x="35" y="22" width="90" height="15" rx="3" fill="#10B981"/>
@@ -618,12 +635,12 @@ body {
                         </div>
                     </div>
                     <!-- Period Filter Dropdown Pill -->
-                    <div class="col-md-2 col-12 text-md-end mt-2 mt-md-0">
+                    <div class="col-md-3 col-12 text-md-end mt-2 mt-md-0">
                         <div class="dropdown d-inline-block">
-                            <button class="btn btn-sm bg-white border rounded-pill px-3 py-1.5 shadow-sm dropdown-toggle fw-semibold text-dark" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="font-size: 0.8rem; border-color: #cbd5e1 !important;">
-                                <i class="bi bi-calendar3 me-1.5 text-muted"></i>{{ period_label }}
+                            <button class="btn btn-sm bg-white border rounded-pill px-3 py-1.5 shadow-sm dropdown-toggle fw-semibold text-dark d-inline-flex align-items-center justify-content-between gap-2" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="font-size: 0.8rem; border-color: #cbd5e1 !important; min-width: 165px; white-space: nowrap;">
+                                <span><i class="bi bi-calendar3 me-1.5 text-muted"></i>{{ period_label }}</span>
                             </button>
-                            <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-1 rounded-3" style="font-size: 0.82rem;">
+                            <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-1 rounded-3" style="font-size: 0.82rem; min-width: 190px;">
                                 <li><a class="dropdown-item {% if period == 'today' %}active{% endif %}" href="?period=today">Today</a></li>
                                 <li><a class="dropdown-item {% if period == 'yesterday' %}active{% endif %}" href="?period=yesterday">Yesterday</a></li>
                                 <li><a class="dropdown-item {% if period == '7days' %}active{% endif %}" href="?period=7days">Last 7 Days</a></li>
@@ -650,43 +667,41 @@ body {
                             <div class="metric-label">Total Sales</div>
                             <div class="d-flex align-items-center gap-1.5">
                                 <span class="metric-val">₹{{ period_revenue|floatformat:2 }}</span>
-                                <span class="growth-badge-green"><i class="bi bi-triangle-fill" style="font-size: 0.5rem;"></i> {{ sales_growth_str }}</span>
                             </div>
-                            <div class="metric-subtext">vs. previous period</div>
+                            <div class="metric-subtext">{{ period_label }} revenue</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Total Purchase -->
-                <div class="col-sm-6 col-md-3">
-                    <div class="dash-card metric-card">
-                        <div class="metric-icon-wrap metric-icon-blue">
-                            <i class="bi bi-cart3"></i>
-                        </div>
-                        <div class="flex-grow-1 overflow-hidden">
-                            <div class="metric-label">Total Purchase</div>
-                            <div class="d-flex align-items-center gap-1.5">
-                                <span class="metric-val">₹{{ period_purchases|floatformat:2 }}</span>
-                                <span class="growth-badge-green"><i class="bi bi-triangle-fill" style="font-size: 0.5rem;"></i> {{ purchase_growth_str }}</span>
-                            </div>
-                            <div class="metric-subtext">vs. previous period</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Gross Profit -->
+                <!-- Sales Growth -->
                 <div class="col-sm-6 col-md-3">
                     <div class="dash-card metric-card">
                         <div class="metric-icon-wrap metric-icon-purple">
-                            <i class="bi bi-layers-fill"></i>
+                            <i class="bi bi-graph-up-arrow"></i>
                         </div>
                         <div class="flex-grow-1 overflow-hidden">
-                            <div class="metric-label">Gross Profit</div>
-                            <div class="d-flex align-items-center gap-1.5">
-                                <span class="metric-val">₹{{ gross_profit|floatformat:2 }}</span>
-                                <span class="growth-badge-green">{{ gross_margin }}% Margin</span>
+                            <div class="metric-label">Sales Growth</div>
+                            <div class="metric-val">{{ sales_growth_str }}</div>
+                            <div class="metric-subtext">
+                                {% if period == 'all' %}All-time period{% else %}Compared with previous period{% endif %}
                             </div>
-                            <div class="metric-subtext">Sales minus Purchase</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Low Stock Batches -->
+                <div class="col-sm-6 col-md-3">
+                    <div class="dash-card metric-card">
+                        <div class="metric-icon-wrap metric-icon-amber">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                        </div>
+                        <div class="flex-grow-1 overflow-hidden">
+                            <div class="metric-label">Low Stock Batches</div>
+                            <div class="d-flex align-items-center gap-1.5">
+                                <span class="metric-val">{{ low_stock_count }}</span>
+                                <span class="days-badge-amber">Low</span>
+                            </div>
+                            <div class="metric-subtext">Batches with 10 or fewer units</div>
                         </div>
                     </div>
                 </div>
@@ -709,7 +724,94 @@ body {
                 </div>
             </div>
 
-            <!-- 3. MIDDLE ROW: Sales Trend, Stock Status, Compliance & Registers -->
+            <!-- 3. DYNAMIC NEAR EXPIRY ITEMS (NEXT 90 DAYS) TABLE -->
+            <div class="near-expiry-card mb-3">
+                <div class="near-expiry-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <div class="d-flex align-items-center flex-wrap gap-2">
+                        <span class="fw-bold text-dark d-flex align-items-center gap-1.5" style="font-size: 0.92rem;">
+                            <i class="bi bi-exclamation-triangle text-danger fs-6"></i> Near Expiry Items (Next 90 Days)
+                        </span>
+                        <span class="badge bg-danger rounded-pill px-2.5 py-1" style="font-size: 0.72rem;">{{ near_expiry_count }} Items</span>
+                        <span class="text-muted d-none d-sm-inline">|</span>
+                        <span class="fw-bold text-dark small d-flex align-items-center gap-1">
+                            <i class="bi bi-cash-stack text-secondary"></i> Total Value: <span class="text-danger">₹{{ near_expiry_total_val|floatformat:2 }}</span>
+                        </span>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2">
+                        <!-- Filters -->
+                        <div class="d-flex align-items-center gap-1">
+                            <button class="pill-filter-btn active-30" onclick="filterNearExpiry('all')">All ({{ near_expiry_batches|length }})</button>
+                            <button class="pill-filter-btn" onclick="filterNearExpiry('<=30')">&le; 30 Days ({{ exp_30_count }})</button>
+                            <button class="pill-filter-btn" onclick="filterNearExpiry('31-60')">31 – 60 Days ({{ exp_60_count }})</button>
+                            <button class="pill-filter-btn" onclick="filterNearExpiry('61-90')">61 – 90 Days ({{ exp_90_count }})</button>
+                        </div>
+                        <a href="{% url 'stock_report' %}?filter=near_expiry" class="text-primary text-decoration-none fw-bold ms-2" style="font-size: 0.8rem;">
+                            View All <i class="bi bi-arrow-right"></i>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Table -->
+                <div class="table-responsive near-expiry-scroll" id="nearExpiryScroll">
+                    <table class="table table-hover align-middle mb-0" id="nearExpiryTable" style="font-size: 0.82rem;">
+                        <thead class="bg-light text-muted fw-bold">
+                            <tr>
+                                <th class="ps-3 py-2.5">Product Name</th>
+                                <th class="py-2.5">Batch No.</th>
+                                <th class="py-2.5">Expiry Date</th>
+                                <th class="py-2.5 text-center">Days Left</th>
+                                <th class="py-2.5 text-center">Stock</th>
+                                <th class="py-2.5 text-end">MRP (₹)</th>
+                                <th class="py-2.5 text-end">Value (₹)</th>
+                                <th class="py-2.5 text-center pe-3">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in near_expiry_batches %}
+                            <tr class="expiry-data-row{% if item.is_expired %} expired-stock-row{% endif %}" data-cat="{{ item.category }}" id="exp-row-{{ item.id }}">
+                                <td class="ps-3 fw-bold text-dark">{{ item.product_name }}</td>
+                                <td class="text-muted fw-semibold">{{ item.batch_number }}</td>
+                                <td class="fw-semibold text-dark">{{ item.expiry_date }}</td>
+                                <td class="text-center">
+                                    {% if item.is_expired %}
+                                        <span class="days-badge-red">Expired</span>
+                                    {% elif item.days_left <= 30 %}
+                                        <span class="days-badge-red">{{ item.days_left }} Days</span>
+                                    {% elif item.days_left <= 60 %}
+                                        <span class="days-badge-amber">{{ item.days_left }} Days</span>
+                                    {% else %}
+                                        <span class="days-badge-blue">{{ item.days_left }} Days</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center fw-bold text-dark">{{ item.stock }}</td>
+                                <td class="text-end fw-semibold text-dark">{{ item.mrp|floatformat:2 }}</td>
+                                <td class="text-end fw-bold text-dark">{{ item.total_value|floatformat:2 }}</td>
+                                <td class="text-center pe-3">
+                                    <div class="d-inline-flex gap-1.5">
+                                        <a href="{% url 'stock_report' %}?search={{ item.batch_number }}" class="tbl-act-btn" title="View details">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        <button type="button" class="tbl-act-btn delete-act" onclick="removeExpiredBatch('{{ item.id }}')" title="Remove/write-off batch">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="8" class="text-center py-4 text-muted">
+                                    <i class="bi bi-shield-check text-success fs-5 d-block mb-1"></i>
+                                    No medicines expiring within the next 90 days. Stock is in healthy condition!
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 4. MIDDLE ROW: Sales Trend, Stock Status, Compliance & Registers -->
             <div class="row g-3 mb-3">
                 <!-- Sales Trend (Line Area Chart) -->
                 <div class="col-lg-5 col-md-12">
@@ -816,91 +918,6 @@ body {
                 </div>
             </div>
 
-            <!-- 4. DYNAMIC NEAR EXPIRY ITEMS (NEXT 90 DAYS) TABLE -->
-            <div class="near-expiry-card mb-3">
-                <div class="near-expiry-header d-flex align-items-center justify-content-between flex-wrap gap-2">
-                    <div class="d-flex align-items-center flex-wrap gap-2">
-                        <span class="fw-bold text-dark d-flex align-items-center gap-1.5" style="font-size: 0.92rem;">
-                            <i class="bi bi-exclamation-triangle text-danger fs-6"></i> Near Expiry Items (Next 90 Days)
-                        </span>
-                        <span class="badge bg-danger rounded-pill px-2.5 py-1" style="font-size: 0.72rem;">{{ near_expiry_count }} Items</span>
-                        <span class="text-muted d-none d-sm-inline">|</span>
-                        <span class="fw-bold text-dark small d-flex align-items-center gap-1">
-                            <i class="bi bi-cash-stack text-secondary"></i> Total Value: <span class="text-danger">₹{{ near_expiry_total_val|floatformat:2 }}</span>
-                        </span>
-                    </div>
-
-                    <div class="d-flex align-items-center gap-2">
-                        <!-- Filters -->
-                        <div class="d-flex align-items-center gap-1">
-                            <button class="pill-filter-btn active-30" onclick="filterNearExpiry('all')">All ({{ near_expiry_batches|length }})</button>
-                            <button class="pill-filter-btn" onclick="filterNearExpiry('<=30')">&le; 30 Days ({{ exp_30_count }})</button>
-                            <button class="pill-filter-btn" onclick="filterNearExpiry('31-60')">31 – 60 Days ({{ exp_60_count }})</button>
-                            <button class="pill-filter-btn" onclick="filterNearExpiry('61-90')">61 – 90 Days ({{ exp_90_count }})</button>
-                        </div>
-                        <a href="{% url 'stock_report' %}?filter=near_expiry" class="text-primary text-decoration-none fw-bold ms-2" style="font-size: 0.8rem;">
-                            View All <i class="bi bi-arrow-right"></i>
-                        </a>
-                    </div>
-                </div>
-
-                <!-- Table -->
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0" id="nearExpiryTable" style="font-size: 0.82rem;">
-                        <thead class="bg-light text-muted fw-bold">
-                            <tr>
-                                <th class="ps-3 py-2.5">Product Name</th>
-                                <th class="py-2.5">Batch No.</th>
-                                <th class="py-2.5">Expiry Date</th>
-                                <th class="py-2.5 text-center">Days Left</th>
-                                <th class="py-2.5 text-center">Stock</th>
-                                <th class="py-2.5 text-end">MRP (₹)</th>
-                                <th class="py-2.5 text-end">Value (₹)</th>
-                                <th class="py-2.5 text-center pe-3">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for item in near_expiry_batches %}
-                            <tr class="expiry-data-row" data-cat="{{ item.category }}" id="exp-row-{{ item.id }}">
-                                <td class="ps-3 fw-bold text-dark">{{ item.product_name }}</td>
-                                <td class="text-muted fw-semibold">{{ item.batch_number }}</td>
-                                <td class="fw-semibold text-dark">{{ item.expiry_date }}</td>
-                                <td class="text-center">
-                                    {% if item.days_left <= 30 %}
-                                        <span class="days-badge-red">{{ item.days_left }} Days</span>
-                                    {% elif item.days_left <= 60 %}
-                                        <span class="days-badge-amber">{{ item.days_left }} Days</span>
-                                    {% else %}
-                                        <span class="days-badge-blue">{{ item.days_left }} Days</span>
-                                    {% endif %}
-                                </td>
-                                <td class="text-center fw-bold text-dark">{{ item.stock }}</td>
-                                <td class="text-end fw-semibold text-dark">{{ item.mrp|floatformat:2 }}</td>
-                                <td class="text-end fw-bold text-dark">{{ item.total_value|floatformat:2 }}</td>
-                                <td class="text-center pe-3">
-                                    <div class="d-inline-flex gap-1.5">
-                                        <a href="{% url 'stock_report' %}?search={{ item.batch_number }}" class="tbl-act-btn" title="View details">
-                                            <i class="bi bi-eye"></i>
-                                        </a>
-                                        <button type="button" class="tbl-act-btn delete-act" onclick="removeExpiredBatch('{{ item.id }}')" title="Remove/write-off batch">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="8" class="text-center py-4 text-muted">
-                                    <i class="bi bi-shield-check text-success fs-5 d-block mb-1"></i>
-                                    No medicines expiring within the next 90 days. Stock is in healthy condition!
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
             <!-- 5. BOTTOM ROW: Top Selling Products, AI Purchase Suggestion, AI Bill Scan -->
             <div class="row g-3">
                 <!-- Top Selling Products -->
@@ -952,7 +969,7 @@ body {
                             </h6>
                             <a href="{% url 'smart_purchase_suggest_page' %}" class="text-primary text-decoration-none fw-bold" style="font-size: 0.75rem;">View All <i class="bi bi-arrow-right"></i></a>
                         </div>
-                        <div class="text-muted mb-2" style="font-size: 0.72rem;">Based on live stock levels &amp; lead time</div>
+                        <div class="text-muted mb-2" style="font-size: 0.72rem;">Low stock and supplier with best estimated profit</div>
 
                         <div class="ai-suggestions-list">
                             {% for ai in ai_purchase_suggestions %}
@@ -964,6 +981,10 @@ body {
                                     <div>
                                         <div class="fw-bold text-dark" style="font-size: 0.78rem;">{{ ai.name }}</div>
                                         <div class="text-muted" style="font-size: 0.7rem;">Stock: <span class="fw-semibold text-danger">{{ ai.stock }}</span></div>
+                                        <div class="text-muted" style="font-size: 0.7rem;">Supplier: <span class="fw-semibold text-dark">{{ ai.supplier_name }}</span></div>
+                                        {% if ai.unit_profit is not None %}
+                                        <div class="text-success fw-semibold" style="font-size: 0.68rem;">Est. profit: ₹{{ ai.unit_profit|floatformat:2 }}/unit</div>
+                                        {% endif %}
                                     </div>
                                 </div>
                                 <a href="{% url 'purchase_entry' %}" class="btn-buy-pill">
@@ -1173,6 +1194,95 @@ body {
     const trendSales = {{ trend_sales_json|safe }};
     const trendPurchase = {{ trend_purchase_json|safe }};
 
+    let nearExpiryScrollFrame = null;
+    let nearExpiryScrollPaused = false;
+    let nearExpiryPreviousFrame = null;
+
+    function updateNearExpiryAutoScroll() {
+        const scroller = document.getElementById('nearExpiryScroll');
+        const table = document.getElementById('nearExpiryTable');
+        const originalBody = table ? table.tBodies[0] : null;
+        if (!scroller || !originalBody) return;
+
+        const visibleRows = Array.from(originalBody.querySelectorAll('.expiry-data-row'))
+            .filter(row => row.style.display !== 'none');
+        const shouldScroll = visibleRows.length > 5;
+        scroller.classList.toggle('is-auto-scrolling', shouldScroll);
+
+        if (!shouldScroll) {
+            if (nearExpiryScrollFrame !== null) {
+                cancelAnimationFrame(nearExpiryScrollFrame);
+                nearExpiryScrollFrame = null;
+            }
+            nearExpiryPreviousFrame = null;
+            const loopCopy = table.querySelector('tbody[data-expiry-loop-copy]');
+            if (loopCopy) loopCopy.remove();
+            scroller.style.maxHeight = '';
+            scroller.scrollTop = 0;
+            return;
+        }
+
+        let loopCopy = table.querySelector('tbody[data-expiry-loop-copy]');
+        if (!loopCopy) {
+            loopCopy = originalBody.cloneNode(true);
+            loopCopy.dataset.expiryLoopCopy = 'true';
+            loopCopy.setAttribute('aria-hidden', 'true');
+            loopCopy.style.pointerEvents = 'none';
+            loopCopy.querySelectorAll('.expiry-data-row').forEach(row => {
+                row.dataset.loopCopyId = row.id.replace('exp-row-', '');
+                row.removeAttribute('id');
+            });
+            loopCopy.querySelectorAll('[id]').forEach(element => element.removeAttribute('id'));
+            loopCopy.querySelectorAll('a, button').forEach(element => {
+                element.removeAttribute('href');
+                element.removeAttribute('onclick');
+                element.setAttribute('tabindex', '-1');
+            });
+            table.appendChild(loopCopy);
+        }
+
+        const header = scroller.querySelector('thead');
+        const visibleRowsHeight = visibleRows.slice(0, 5)
+            .reduce((height, row) => height + row.getBoundingClientRect().height, 0);
+        const headerHeight = header ? header.getBoundingClientRect().height : 0;
+        scroller.style.maxHeight = `${Math.min(320, headerHeight + visibleRowsHeight + 1)}px`;
+
+        if (nearExpiryScrollFrame !== null) return;
+
+        function scrollExpiryList(timestamp) {
+            if (!nearExpiryScrollPaused) {
+                const elapsed = nearExpiryPreviousFrame === null
+                    ? 0
+                    : Math.min(timestamp - nearExpiryPreviousFrame, 50);
+                const loopHeight = originalBody.getBoundingClientRect().height;
+
+                if (loopHeight > 0) {
+                    scroller.scrollTop += elapsed * 0.06;
+                    if (scroller.scrollTop >= loopHeight) {
+                        scroller.scrollTop -= loopHeight;
+                    }
+                }
+            }
+
+            nearExpiryPreviousFrame = timestamp;
+            nearExpiryScrollFrame = requestAnimationFrame(scrollExpiryList);
+        }
+
+        nearExpiryScrollFrame = requestAnimationFrame(scrollExpiryList);
+    }
+
+    const nearExpiryScroller = document.getElementById('nearExpiryScroll');
+    if (nearExpiryScroller) {
+        nearExpiryScroller.addEventListener('mouseenter', function() {
+            nearExpiryScrollPaused = true;
+        });
+        nearExpiryScroller.addEventListener('mouseleave', function() {
+            nearExpiryScrollPaused = false;
+            nearExpiryPreviousFrame = null;
+        });
+        updateNearExpiryAutoScroll();
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         // 1. Dynamic Greeting
         const greetingEl = document.getElementById('dashGreeting');
@@ -1344,9 +1454,30 @@ body {
                 r.style.display = 'none';
             }
         });
+        const scroller = document.getElementById('nearExpiryScroll');
+        if (scroller) scroller.scrollTop = 0;
+        updateNearExpiryAutoScroll();
     }
 
     // ── Discard Expired Stock Action ──────────────────────────────
+    function removeExpiredBatchRows(batchId) {
+        const scroller = document.getElementById('nearExpiryScroll');
+        if (!scroller) return;
+
+        const batchIdText = String(batchId);
+        const rows = Array.from(scroller.querySelectorAll('.expiry-data-row')).filter(row =>
+            row.id === 'exp-row-' + batchIdText || row.dataset.loopCopyId === batchIdText
+        );
+        rows.forEach(row => {
+            row.style.transition = 'all 0.3s ease';
+            row.style.opacity = '0';
+        });
+        setTimeout(() => {
+            rows.forEach(row => row.remove());
+            updateNearExpiryAutoScroll();
+        }, 300);
+    }
+
     async function removeExpiredBatch(batchId) {
         if (!confirm('Are you sure you want to write-off this expired batch from stock?')) return;
         
@@ -1360,27 +1491,10 @@ body {
                 },
                 body: JSON.stringify({ batch_id: batchId })
             });
-            const result = await response.json();
-            if (result.success) {
-                const row = document.getElementById('exp-row-' + batchId);
-                if (row) {
-                    row.style.transition = 'all 0.3s ease';
-                    row.style.opacity = '0';
-                    setTimeout(() => row.remove(), 300);
-                }
-            } else {
-                const row = document.getElementById('exp-row-' + batchId);
-                if (row) {
-                    row.style.transition = 'all 0.3s ease';
-                    row.style.opacity = '0';
-                    setTimeout(() => row.remove(), 300);
-                }
-            }
+            await response.json();
+            removeExpiredBatchRows(batchId);
         } catch (e) {
-            const row = document.getElementById('exp-row-' + batchId);
-            if (row) {
-                row.remove();
-            }
+            removeExpiredBatchRows(batchId);
         }
     }
 

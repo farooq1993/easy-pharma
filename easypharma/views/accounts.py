@@ -604,13 +604,13 @@ def activity_logs(request):
 
 @login_required
 def home_view(request):
-    period = request.GET.get('period', '30days')
+    period = request.GET.get('period', 'today')
     today = date.today()
     if not request.tenant:
         messages.warning(request, "No pharmacy linked to your account. Please assign one in Admin.")
     
     tenant_id = request.tenant.id if request.tenant else 0
-    cache_key = f"dashboard_dynamic_context_v5:{tenant_id}:{period}"
+    cache_key = f"dashboard_dynamic_context_v6:{tenant_id}:{period}"
     
     context = cache.get(cache_key)
     if context is None:
@@ -624,9 +624,13 @@ def home_view(request):
             period_label = 'This Year'
             period_days = (today - start_date).days + 1
         elif period == '7days':
-            start_date = today - timedelta(days=7)
+            start_date = today - timedelta(days=6)
             period_label = 'Last 7 Days'
             period_days = 7
+        elif period == '30days':
+            start_date = today - timedelta(days=29)
+            period_label = 'Last 30 Days'
+            period_days = 30
         elif period == 'yesterday':
             start_date = today - timedelta(days=1)
             period_label = 'Yesterday'
@@ -639,11 +643,11 @@ def home_view(request):
             start_date = date(2020, 1, 1)
             period_label = 'All Time'
             period_days = 365
-        else: # '30days'
-            period = '30days'
-            start_date = today - timedelta(days=30)
-            period_label = 'Last 30 Days'
-            period_days = 30
+        else:
+            period = 'today'
+            start_date = today
+            period_label = 'Today'
+            period_days = 1
 
         # Dynamic Sales Revenue & Invoices for active tenant
         sales_qs = SaleInvoice.objects.filter(tenant=request.tenant) if request.tenant else SaleInvoice.objects.none()
@@ -857,16 +861,44 @@ def home_view(request):
             current_quantity__lte=25
         ).select_related('product').order_by('current_quantity')[:4] if request.tenant else []
 
+        from easypharma.models.purchase_invoice import PurchaseItem
+
         icons = ['bi-capsule', 'bi-capsule-pill', 'bi-prescription2', 'bi-droplet-half']
         bg_classes = ['ai-box-blue', 'ai-box-orange', 'ai-box-purple', 'ai-box-blue']
 
         ai_purchase_suggestions = []
         for idx, b in enumerate(low_stock_qs):
             suggested_buy = max(50, 100 - b.current_quantity)
+            supplier_items = PurchaseItem.objects.filter(
+                tenant=request.tenant,
+                product_id=b.product_id,
+                purchase_invoice__tenant=request.tenant,
+                purchase_invoice__supplier__isnull=False,
+                purchase_invoice__supplier__tenant=request.tenant,
+            ).select_related(
+                'purchase_invoice__supplier'
+            ).order_by('-purchase_invoice__created_at', '-id')
+
+            seen_supplier_ids = set()
+            best_supplier_name = None
+            best_unit_profit = None
+            for purchase_item in supplier_items:
+                supplier = purchase_item.purchase_invoice.supplier
+                if supplier.id in seen_supplier_ids:
+                    continue
+                seen_supplier_ids.add(supplier.id)
+
+                unit_profit = purchase_item.sale_price - purchase_item.purchase_price
+                if best_unit_profit is None or unit_profit > best_unit_profit:
+                    best_supplier_name = supplier.name
+                    best_unit_profit = unit_profit
+
             ai_purchase_suggestions.append({
                 'name': b.product.product_name if b.product else 'Medicine',
                 'stock': b.current_quantity,
                 'buy_qty': suggested_buy,
+                'supplier_name': best_supplier_name or 'Not available',
+                'unit_profit': float(best_unit_profit) if best_unit_profit is not None else None,
                 'bg_class': bg_classes[idx % len(bg_classes)],
                 'icon': icons[idx % len(icons)],
             })
