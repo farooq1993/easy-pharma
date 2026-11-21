@@ -821,6 +821,7 @@ class ProductSearchAPI(LoginRequiredMixin,View):
 
     def get(self, request):
         query = request.GET.get('q', '').strip()
+        tenant_batches_only = request.GET.get('tenant_batches') == '1'
         limit_str = request.GET.get('limit')
         limit = None
         if limit_str:
@@ -831,17 +832,18 @@ class ProductSearchAPI(LoginRequiredMixin,View):
         
         # Enforce safe default limit to prevent server overload and tablet freeze
         if limit is None:
-            limit = 35 if query else 25
+            limit = 35 if query else (50000 if tenant_batches_only else 25)
         elif query:
             limit = min(limit, 50)
         else:
-            limit = min(limit, 10000)
+            limit = min(limit, 50000)
 
         tenant_id = request.tenant.id
         
         # Include limit in cache key if limiting
         lim_part = f":lim{limit}"
-        cache_key = f"{self._cache_key(tenant_id, query)}{lim_part}"
+        tb_part = ":tb1" if tenant_batches_only else ""
+        cache_key = f"{self._cache_key(tenant_id, query)}{lim_part}{tb_part}"
 
         setup = GeneralSetup.objects.filter(tenant_id=tenant_id).first()
         sale_type = setup.sale_type if setup else 'unit'
@@ -854,45 +856,67 @@ class ProductSearchAPI(LoginRequiredMixin,View):
 
         from easypharma.models.stock import StockBatch
         from django.db.models import Exists, OuterRef, Prefetch
-        
-        active_batches = StockBatch.objects.filter(
-            tenant=request.tenant,
-            product=OuterRef('pk'),
-            current_quantity__gt=0
-        )
-        
-        tenant_filter = Q(tenant=request.tenant) | Q(tenant__isnull=True)
-        qs = Products.objects.filter(tenant_filter)
 
-        if query:
-            qs = qs.filter(
-                Q(product_name__icontains=query) |
-                Q(product_content__content_name__icontains=query) |
-                Q(compny_name__company_name__icontains=query)
-            )
+        if tenant_batches_only or (not query and limit >= 500):
+            # Fast-path for offline POS & localstorage catalog preload:
+            # Fetch ALL active batch products for this tenant directly
+            batch_pids = StockBatch.objects.filter(
+                tenant=request.tenant,
+                current_quantity__gt=0
+            ).values_list('product_id', flat=True).distinct()
+
+            products_qs = Products.objects.filter(id__in=batch_pids).select_related(
+                'product_tax', 'product_content', 'compny_name', 'product_schedule'
+            ).prefetch_related(
+                Prefetch(
+                    'batches',
+                    queryset=StockBatch.objects.filter(
+                        tenant=request.tenant,
+                        current_quantity__gt=0
+                    ).only(
+                        'id', 'product_id', 'batch_number', 'expiry_date', 'current_quantity', 'sale_price', 'mrp'
+                    ).order_by('expiry_date')
+                )
+            ).order_by('product_name')
         else:
-            # If no search query, load all products with active batch-wise stock for the tenant
-            qs = qs.filter(Exists(active_batches))
-
-        products_qs = qs.annotate(
-            has_stock=Exists(active_batches)
-        ).order_by('-has_stock', 'product_name').select_related(
-            'product_tax', 'product_content', 'compny_name', 'product_schedule'
-        ).prefetch_related(
-            Prefetch(
-                'batches',
-                queryset=StockBatch.objects.filter(
-                    tenant=request.tenant,
-                    current_quantity__gt=0
-                ).only(
-                    'id', 'product_id', 'batch_number', 'expiry_date', 'current_quantity', 'sale_price', 'mrp'
-                ).order_by('expiry_date')
+            active_batches = StockBatch.objects.filter(
+                tenant=request.tenant,
+                product=OuterRef('pk'),
+                current_quantity__gt=0
             )
-        ).only(
-            'id', 'product_name', 'product_packing', 'conversion_factor',
-            'product_content__content_name', 'product_schedule__schedule_name',
-            'compny_name__company_name', 'product_tax__tax_rate'
-        )
+            
+            tenant_filter = Q(tenant=request.tenant) | Q(tenant__isnull=True)
+            qs = Products.objects.filter(tenant_filter)
+
+            if query:
+                qs = qs.filter(
+                    Q(product_name__icontains=query) |
+                    Q(product_content__content_name__icontains=query) |
+                    Q(compny_name__company_name__icontains=query)
+                )
+            else:
+                # If no search query, load products with active batch-wise stock for the tenant
+                qs = qs.filter(Exists(active_batches))
+
+            products_qs = qs.annotate(
+                has_stock=Exists(active_batches)
+            ).order_by('-has_stock', 'product_name').select_related(
+                'product_tax', 'product_content', 'compny_name', 'product_schedule'
+            ).prefetch_related(
+                Prefetch(
+                    'batches',
+                    queryset=StockBatch.objects.filter(
+                        tenant=request.tenant,
+                        current_quantity__gt=0
+                    ).only(
+                        'id', 'product_id', 'batch_number', 'expiry_date', 'current_quantity', 'sale_price', 'mrp'
+                    ).order_by('expiry_date')
+                )
+            ).only(
+                'id', 'product_name', 'product_packing', 'conversion_factor',
+                'product_content__content_name', 'product_schedule__schedule_name',
+                'compny_name__company_name', 'product_tax__tax_rate'
+            )
 
         products = products_qs[:limit]
         data = []

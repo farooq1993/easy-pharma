@@ -797,9 +797,9 @@
     </div>
 </div>
 
-<script src="{% static 'js/localforage.min.js' %}"></script>
 <script>
     window.POS_CONFIG = {
+        tenantId: "{{ request.tenant.id }}",
         pharmacyInfo: {
             name: "{{ request.tenant.pharmacy_name|escapejs }}",
             address: "{{ request.tenant.address|escapejs }}",
@@ -825,6 +825,5 @@
         csrfToken: '{{ csrf_token }}'
     };
 </script>
-<script src="{% static 'js/localforage.min.js' %}"></script>
-<script src="{% static 'js/sales/pos.js' %}?v=2.0.3"></script>
+<script src="{% static 'js/sales/pos.js' %}?v=2.2.0"></script>
 {% endblock %}
