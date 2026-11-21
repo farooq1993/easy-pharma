@@ -123,6 +123,69 @@ const OfflineSync = {
         } catch (e) {}
     },
 
+    getTenantId() {
+        return window.POS_CONFIG?.tenantId ||
+               window.CURRENT_TENANT_ID ||
+               document.querySelector('meta[name="tenant-id"]')?.getAttribute('content') ||
+               '';
+    },
+
+    getTenantKey(baseKey) {
+        const tId = this.getTenantId();
+        return tId ? `${baseKey}_${tId}` : baseKey;
+    },
+
+    compactProducts(products) {
+        if (!Array.isArray(products)) return [];
+        return products.map(p => {
+            const batches = Array.isArray(p.batches) ? p.batches.map(b => ({
+                batch_id: b.batch_id || b.id,
+                batch_no: b.batch_no || b.batch_number || '',
+                expiry: b.expiry || b.expiry_date || '',
+                stock: Number(b.stock !== undefined ? b.stock : b.current_quantity) || 0,
+                price: Number(b.price || b.unit_price) || 0,
+                mrp_pack: Number(b.mrp_pack || b.mrp) || 0
+            })) : [];
+
+            return {
+                id: p.id,
+                name: p.name || p.product_name || '',
+                packing: p.packing || p.product_packing || '',
+                content: p.content || p.salt || '',
+                schedule: p.schedule || p.schedule_name || '',
+                company: p.company || p.company_name || '',
+                tax_rate: Number(p.tax_rate) || 0,
+                conversion_factor: Number(p.conversion_factor) || 1,
+                out_of_stock: Boolean(p.out_of_stock),
+                batches: batches
+            };
+        });
+    },
+
+    saveProductsToLocalStorage(products) {
+        if (!Array.isArray(products) || products.length === 0) return;
+        const tenantKey = this.getTenantKey('ep_pos_products_cache');
+        const compacted = this.compactProducts(products);
+        try {
+            const jsonStr = JSON.stringify(compacted);
+            localStorage.setItem(tenantKey, jsonStr);
+            if (tenantKey !== 'ep_pos_products_cache') {
+                localStorage.setItem('ep_pos_products_cache', jsonStr);
+            }
+            localStorage.setItem(this.getTenantKey('ep_pos_last_sync'), String(Date.now()));
+        } catch (e) {
+            console.warn('[OfflineSync] LocalStorage quota reached. Saving top items in localStorage:', e);
+            try {
+                const sliced = compacted.slice(0, 3500);
+                localStorage.setItem(tenantKey, JSON.stringify(sliced));
+            } catch (e2) {
+                try {
+                    localStorage.setItem(tenantKey, JSON.stringify(compacted.slice(0, 1800)));
+                } catch(e3) {}
+            }
+        }
+    },
+
     // ─── CSRF Token ──────────────────────────────────────────────────
     async getCSRFToken() {
         let token = document.querySelector('input[name="csrfmiddlewaretoken"]')?.value;
@@ -157,37 +220,41 @@ const OfflineSync = {
     async preloadProductCache() {
         if (!navigator.onLine) return;
         try {
-            const lastSync = await this.productCache.getItem('last_product_sync_time');
+            const tenantKey = this.getTenantKey('ep_pos_products_cache');
             const now = Date.now();
-            const cacheDuration = 15 * 60 * 1000; // 15 minutes
+            const lastSync = await this.productCache.getItem('last_product_sync_time');
+            const cacheDuration = 10 * 60 * 1000; // 10 minutes
 
-            // Check if pos_products exists in localforage and localStorage
+            // Ensure localStorage has the tenant's batchwise products immediately
             const existing = await this.productCache.getItem('pos_products');
-            if (existing && Array.isArray(existing) && existing.length > 50 && lastSync && (now - lastSync < cacheDuration)) {
-                // Ensure localStorage also has a copy
+            if (existing && Array.isArray(existing) && existing.length > 0) {
                 try {
-                    if (!localStorage.getItem('ep_pos_products_cache')) {
-                        localStorage.setItem('ep_pos_products_cache', JSON.stringify(existing.slice(0, 2000)));
+                    if (!localStorage.getItem(tenantKey)) {
+                        this.saveProductsToLocalStorage(existing);
+                    }
+                    if (typeof window.setPosProductMemoryStore === 'function') {
+                        window.setPosProductMemoryStore(existing);
                     }
                 } catch(e) {}
-                return;
             }
 
-            // Fetch all products for POS (with all batch-wise stock up to 10000)
-            const posResponse = await fetch('/api/products/search/?limit=10000&nocache=1');
+            // Fetch ALL products with active batch-wise stock for this tenant
+            const posResponse = await fetch('/api/products/search/?limit=50000&nocache=1&tenant_batches=1');
             if (posResponse.ok) {
                 const products = await posResponse.json();
                 if (Array.isArray(products) && products.length > 0) {
                     await this.productCache.setItem('pos_products', products);
                     await this.productCache.setItem('all_products', products);
-                    // Also save to localStorage for instant synchronous fallback
-                    try {
-                        localStorage.setItem('ep_pos_products_cache', JSON.stringify(products.slice(0, 2000)));
-                        localStorage.setItem('ep_pos_last_sync', String(now));
-                    } catch(e) {
-                        console.warn('[OfflineSync] localStorage quota, IndexedDB holds full catalog');
+                    
+                    // Save all tenant batchwise products to localStorage
+                    this.saveProductsToLocalStorage(products);
+
+                    // Update live in-memory POS store if available
+                    if (typeof window.setPosProductMemoryStore === 'function') {
+                        window.setPosProductMemoryStore(products);
                     }
-                    console.log(`[OfflineSync] Cached ${products.length} products with batch-wise stock for offline billing.`);
+
+                    console.log(`[OfflineSync] Cached ${products.length} batch-wise products for tenant ${this.getTenantId()} into localStorage & IndexedDB.`);
                 }
             }
 
@@ -198,8 +265,12 @@ const OfflineSync = {
                 if (Array.isArray(products) && products.length > 0) {
                     await this.productCache.setItem('master_products', products);
                     try {
-                        localStorage.setItem('ep_master_products_cache', JSON.stringify(products.slice(0, 1500)));
+                        localStorage.setItem(this.getTenantKey('ep_master_products_cache'), JSON.stringify(products.slice(0, 2500)));
+                        localStorage.setItem('ep_master_products_cache', JSON.stringify(products.slice(0, 2500)));
                     } catch(e) {}
+                    if (typeof window.setPurchaseMasterMemoryStore === 'function') {
+                        window.setPurchaseMasterMemoryStore(products);
+                    }
                 }
             }
 
@@ -236,6 +307,12 @@ const OfflineSync = {
                     if (res.ok) {
                         const data = await res.json();
                         await this.masterData.setItem(ep.key, data);
+                        if (ep.key === 'suppliers' && Array.isArray(data)) {
+                            try {
+                                localStorage.setItem(this.getTenantKey('ep_suppliers_cache'), JSON.stringify(data));
+                                localStorage.setItem('ep_suppliers_cache', JSON.stringify(data));
+                            } catch (e) {}
+                        }
                     }
                 } catch (e) {
                     // Silently skip unavailable endpoints
@@ -256,24 +333,27 @@ const OfflineSync = {
      * @param {string} type - 'pos' (with batches) or 'master' (without batches)
      * @returns {Array} matching products
      */
-    /**
-     * Searches locally cached products when offline.
-     * Called by POS and Purchase Entry when navigator.onLine is false.
-     * @param {string} query - search term
-     * @param {string} type - 'pos' (with batches) or 'master' (without batches)
-     * @returns {Array} matching products
-     */
     async searchOfflineProducts(query, type = 'pos') {
         try {
-            const cacheKey = type === 'pos' ? 'pos_products' : 'master_products';
-            let products = await this.productCache.getItem(cacheKey);
-            
-            // Fallback to localStorage if IndexedDB is empty
+            // Fast in-memory check for POS
+            if (type === 'pos' && typeof window.searchInMemoryProducts === 'function' && Array.isArray(window._posProductMemoryStore) && window._posProductMemoryStore.length > 0) {
+                return window.searchInMemoryProducts(query, 35);
+            }
+
+            const tenantKey = type === 'pos' ? this.getTenantKey('ep_pos_products_cache') : this.getTenantKey('ep_master_products_cache');
+            const fallbackKey = type === 'pos' ? 'ep_pos_products_cache' : 'ep_master_products_cache';
+
+            // 1. Check localStorage first (fast synchronous lookup)
+            let products = null;
+            try {
+                const localStr = localStorage.getItem(tenantKey) || localStorage.getItem(fallbackKey);
+                if (localStr) products = JSON.parse(localStr);
+            } catch (e) {}
+
+            // 2. Fallback to IndexedDB if localStorage empty
             if (!Array.isArray(products) || products.length === 0) {
-                try {
-                    const localData = localStorage.getItem(type === 'pos' ? 'ep_pos_products_cache' : 'ep_master_products_cache');
-                    if (localData) products = JSON.parse(localData);
-                } catch (e) {}
+                const cacheKey = type === 'pos' ? 'pos_products' : 'master_products';
+                products = await this.productCache.getItem(cacheKey);
             }
             if (!Array.isArray(products)) products = [];
             
@@ -289,18 +369,18 @@ const OfflineSync = {
             const lowerQuery = (query || '').toLowerCase().trim();
             if (!lowerQuery) {
                 // Return top items with active batches first
-                return combined.sort((a, b) => (b.batches?.length || 0) - (a.batches?.length || 0)).slice(0, 30);
+                return combined.sort((a, b) => (b.batches?.length || 0) - (a.batches?.length || 0)).slice(0, 35);
             }
 
+            const terms = lowerQuery.split(/\s+/).filter(Boolean);
             return combined.filter(p => {
                 const name = (p.name || p.product_name || '').toLowerCase();
                 const content = (p.content || p.salt || '').toLowerCase();
                 const company = (p.company || p.company_name || '').toLowerCase();
-                const hasMatchingBatch = Array.isArray(p.batches) && p.batches.some(b => 
-                    (b.batch_no || b.batch_number || '').toLowerCase().includes(lowerQuery)
-                );
-                return name.includes(lowerQuery) || content.includes(lowerQuery) || company.includes(lowerQuery) || hasMatchingBatch;
-            }).slice(0, 30);
+                const batchNos = Array.isArray(p.batches) ? p.batches.map(b => (b.batch_no || b.batch_number || '').toLowerCase()).join(' ') : '';
+                const combinedText = `${name} ${content} ${company} ${batchNos}`;
+                return terms.every(t => combinedText.includes(t));
+            }).slice(0, 35);
         } catch (e) {
             console.error('[OfflineSync] searchOfflineProducts error:', e);
             return [];
@@ -345,25 +425,21 @@ const OfflineSync = {
                 } else {
                     list.unshift(formatted);
                 }
-                await this.productCache.setItem(key, list.slice(0, 5000));
+                await this.productCache.setItem(key, list);
+                return list;
             };
 
-            await updateCacheStore('pos_products');
+            const updatedPosList = await updateCacheStore('pos_products');
             await updateCacheStore('master_products');
             await updateCacheStore('all_products');
 
-            // Also update localStorage
-            try {
-                const localStr = localStorage.getItem('ep_pos_products_cache');
-                let localList = localStr ? JSON.parse(localStr) : [];
-                const fIdx = localList.findIndex(p => p.id === formatted.id || (p.name && p.name.toLowerCase() === formatted.name.toLowerCase()));
-                if (fIdx >= 0) {
-                    localList[fIdx] = { ...localList[fIdx], ...formatted };
-                } else {
-                    localList.unshift(formatted);
-                }
-                localStorage.setItem('ep_pos_products_cache', JSON.stringify(localList.slice(0, 2000)));
-            } catch(e) {}
+            // Save to localStorage
+            this.saveProductsToLocalStorage(updatedPosList);
+
+            // Update live memory store if loaded
+            if (typeof window.setPosProductMemoryStore === 'function') {
+                window.setPosProductMemoryStore(updatedPosList);
+            }
         } catch (e) {
             console.warn('[OfflineSync] Failed to cache new product', e);
         }

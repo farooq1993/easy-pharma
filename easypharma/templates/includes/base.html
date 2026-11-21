@@ -10,6 +10,10 @@
     <meta name="description" content="{% block meta_description %}Pharmacy management system - Easy Pharma{% endblock %}">
     <meta name="keywords" content="pharmacy, medicine, inventory, billing, hospital">
     <meta name="author" content="Your Company">
+    <meta name="tenant-id" content="{{ request.tenant.id|default:'' }}">
+    <script>
+        window.CURRENT_TENANT_ID = "{{ request.tenant.id|default:'' }}";
+    </script>
 
     <!-- PWA Configuration -->
     <link rel="manifest" href="{% static 'manifest.json' %}">
@@ -153,7 +157,7 @@
     <!-- localForage -->
     <script src="{% static 'js/localforage.min.js' %}"></script>
     <!-- Offline Sync JS -->
-    <script src="{% static 'js/offline_sync.js' %}?v=3.0.1"></script>
+    <script src="{% static 'js/offline_sync.js' %}?v=3.1.0"></script>
 
     <!-- Global Universal Loader Controls & Request Interceptor -->
     <script>

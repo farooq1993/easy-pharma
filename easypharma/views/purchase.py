@@ -159,10 +159,31 @@ class PurchaseEntryView(LoginRequiredMixin,View):
                 else:
                     invoice = PurchaseInvoice(tenant=request.tenant, user=request.user)
 
+                # Resolve supplier (handles both online ID and offline-created supplier)
+                supplier = None
+                raw_supp_id = data.get('supplier_id')
+                if raw_supp_id:
+                    try:
+                        supplier = Supplier.objects.filter(id=int(raw_supp_id), tenant=request.tenant).first()
+                    except (ValueError, TypeError):
+                        supplier = None
+                if not supplier and data.get('supplier_name'):
+                    supplier = Supplier.objects.filter(name__iexact=str(data['supplier_name']).strip(), tenant=request.tenant).first()
+                    if not supplier:
+                        supplier = Supplier.objects.create(
+                            tenant=request.tenant,
+                            name=str(data['supplier_name']).strip()
+                        )
+                if not supplier:
+                    # Fallback to first tenant supplier if somehow unspecified
+                    supplier = Supplier.objects.filter(tenant=request.tenant).first()
+                    if not supplier:
+                        supplier = Supplier.objects.create(tenant=request.tenant, name="General Supplier")
+
                 # Prevent duplicate invoice numbers for the same supplier
                 existing_qs = PurchaseInvoice.objects.filter(
                     tenant=request.tenant,
-                    supplier_id=data['supplier_id'],
+                    supplier=supplier,
                     invoice_number__iexact=str(data['invoice_number']).strip()
                 )
                 if invoice_id:
@@ -177,7 +198,6 @@ class PurchaseEntryView(LoginRequiredMixin,View):
                         'error': f"Invoice #{data['invoice_number']} already exists for '{supp_name}' (Voucher: {v_num}, Date: {p_dt}, Amount: ₹{tot:,.2f}). Duplicate invoices are not allowed."
                     }, status=400)
 
-                supplier = Supplier.objects.get(id=data['supplier_id'], tenant=request.tenant)
                 invoice.supplier = supplier
                 invoice.invoice_number = data['invoice_number']
                 invoice.purchase_date = data['purchase_date']
@@ -207,6 +227,17 @@ class PurchaseEntryView(LoginRequiredMixin,View):
                             product = None
                     if not product and item.get('name'):
                         product = Products.objects.filter(product_name__iexact=str(item['name']).strip(), tenant=request.tenant).first()
+                    if not product and item.get('name'):
+                        # Auto-create product for offline-entered items so sync never crashes
+                        default_type = ProductType.objects.filter(Q(tenant=request.tenant) | Q(tenant__isnull=True)).first()
+                        conv_factor = int(item.get('conversion_factor') or 1)
+                        product = Products.objects.create(
+                            tenant=request.tenant,
+                            product_name=str(item['name']).strip(),
+                            product_packing=str(item.get('packing', '1')),
+                            product_type=default_type,
+                            conversion_factor=conv_factor
+                        )
                     if not product:
                         raise Products.DoesNotExist(f"Product '{item.get('name') or prod_id}' not found.")
                     total_units = (int(item['quantity']) + int(item.get('free_quantity', 0))) * product.conversion_factor
@@ -304,23 +335,23 @@ class PurchaseEntryView(LoginRequiredMixin,View):
                     credit=invoice.total_amount,
                     remarks="Purchase Invoice"
                 )
+                # ── Invalidate caches after successful purchase save ──
+                try:
+                    from easypharma.views.reports import invalidate_stock_cache
+                    from easypharma.views.sales import invalidate_pos_cache
+                    invalidate_stock_cache(request.tenant.id)
+                    invalidate_pos_cache(request.tenant.id)
+                except Exception:
+                    pass
+
                 return JsonResponse({
-                        'success': True,
-                        'invoice_id': invoice.id,
-                        'voucher_number': invoice.voucher_number,
-                    })
+                    'success': True,
+                    'invoice_id': invoice.id,
+                    'voucher_number': invoice.voucher_number,
+                })
 
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)}, status=400)
-
-        # ── Invalidate caches after successful purchase save ──
-        try:
-            from easypharma.views.reports import invalidate_stock_cache
-            from easypharma.views.sales import invalidate_pos_cache
-            invalidate_stock_cache(request.tenant.id)
-            invalidate_pos_cache(request.tenant.id)
-        except Exception:
-            pass  # Cache invalidation failure must not block the response
 
 class PurchaseImportCSVView(View):
     def post(self, request):

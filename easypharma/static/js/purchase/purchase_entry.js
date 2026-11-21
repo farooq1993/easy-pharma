@@ -1212,11 +1212,111 @@ function debouncedCheckDuplicateInvoice(showToastNotification = true) {
  * 9. SAVE PURCHASE & ONLINE/OFFLINE ENGINE
  * ══════════════════════════════════════════════════════════════════════
  */
+// Helper: Inject newly purchased batches directly into local POS memory & storage so they are immediately sellable offline!
+function injectPurchasedBatchesIntoLocalPosCache(purchaseItems) {
+    if (!Array.isArray(purchaseItems) || purchaseItems.length === 0) return;
+    try {
+        const tenantKey = (window.POS_CONFIG?.tenantId || window.CURRENT_TENANT_ID) 
+            ? `ep_pos_products_cache_${window.POS_CONFIG?.tenantId || window.CURRENT_TENANT_ID}` 
+            : 'ep_pos_products_cache';
+        
+        let posList = [];
+        const raw = localStorage.getItem(tenantKey) || localStorage.getItem('ep_pos_products_cache');
+        if (raw) {
+            try { posList = JSON.parse(raw); } catch(e) {}
+        }
+        if (!Array.isArray(posList)) posList = [];
+
+        const map = new Map();
+        posList.forEach(p => map.set(String(p.id), p));
+
+        purchaseItems.forEach(item => {
+            const pId = String(item.product_id || item.id || ('offline_prod_' + Date.now()));
+            const pName = item.name || item.product_name;
+            const conv = parseInt(item.conversion_factor) || 1;
+            const qty = (parseInt(item.quantity) || 0) + (parseInt(item.free_quantity) || 0);
+            const totalUnits = qty * conv;
+
+            let existing = map.get(pId);
+            if (!existing) {
+                // Try finding by name
+                for (let p of map.values()) {
+                    if (p.name && pName && p.name.toLowerCase() === pName.toLowerCase()) {
+                        existing = p;
+                        break;
+                    }
+                }
+            }
+
+            if (!existing) {
+                existing = {
+                    id: pId,
+                    name: pName,
+                    product_name: pName,
+                    packing: item.packing || '1',
+                    conversion_factor: conv,
+                    tax_rate: parseFloat(item.tax_percentage) || 0,
+                    schedule: item.schedule_name || '',
+                    company: item.company_name || '',
+                    content: item.content || item.salt || '',
+                    out_of_stock: false,
+                    batches: []
+                };
+                map.set(pId, existing);
+            }
+
+            if (!Array.isArray(existing.batches)) existing.batches = [];
+
+            const bNum = item.batch_number || 'OFFLINE';
+            const bIdx = existing.batches.findIndex(b => (b.batch_no || b.batch_number) === bNum);
+            const expiryStr = item.expiry_date ? item.expiry_date.replace(/^(\d{4})-(\d{2})$/, '$2/$1').slice(-5) : 'N/A';
+            const salePrice = parseFloat(item.sale_price) || parseFloat(item.mrp) || 0;
+            const mrp = parseFloat(item.mrp) || 0;
+
+            if (bIdx >= 0) {
+                existing.batches[bIdx].stock = (parseInt(existing.batches[bIdx].stock) || 0) + totalUnits;
+                existing.batches[bIdx].price = salePrice;
+                existing.batches[bIdx].mrp_pack = mrp;
+                if (expiryStr !== 'N/A') existing.batches[bIdx].expiry = expiryStr;
+            } else {
+                existing.batches.push({
+                    batch_id: 'offline_b_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                    batch_no: bNum,
+                    expiry: expiryStr,
+                    stock: totalUnits,
+                    price: salePrice,
+                    mrp_pack: mrp
+                });
+            }
+            existing.out_of_stock = false;
+        });
+
+        const merged = Array.from(map.values());
+        localStorage.setItem(tenantKey, JSON.stringify(merged));
+        if (tenantKey !== 'ep_pos_products_cache') {
+            localStorage.setItem('ep_pos_products_cache', JSON.stringify(merged));
+        }
+        if (typeof window.setPosProductMemoryStore === 'function') {
+            window.setPosProductMemoryStore(merged);
+        }
+        if (typeof localforage !== 'undefined') {
+            const store = localforage.createInstance({ name: 'ep_product_cache' });
+            store.setItem('pos_products', merged).catch(() => {});
+            store.setItem('all_products', merged).catch(() => {});
+        }
+    } catch(e) {
+        console.warn('[Purchase] Failed to inject purchased stock into local POS cache:', e);
+    }
+}
+window.injectPurchasedBatchesIntoLocalPosCache = injectPurchasedBatchesIntoLocalPosCache;
+
 async function savePurchase() {
     const supplier = document.getElementById('supplierSelect').value;
+    const suppInput = document.getElementById('supplierSearchInput');
+    const supplierName = suppInput ? suppInput.value.trim() : '';
     const invNo = document.getElementById('invoiceNumber').value.trim();
 
-    if (!supplier) return showToast('Select supplier', 'error');
+    if (!supplier && !supplierName) return showToast('Select or enter supplier', 'error');
     if (!invNo) return showToast('Enter invoice number', 'error');
 
     // Prevent saving duplicate invoice
@@ -1254,8 +1354,10 @@ async function savePurchase() {
         }
     });
 
+    const parsedSupplierId = (supplier && !isNaN(parseInt(supplier))) ? parseInt(supplier) : supplier;
     const data = {
-        supplier_id: parseInt(supplier),
+        supplier_id: parsedSupplierId,
+        supplier_name: supplierName,
         invoice_number: invNo,
         purchase_date: document.getElementById('purchaseDate').value,
         items: items,
@@ -1281,6 +1383,8 @@ async function savePurchase() {
                 data, 
                 'Purchase saved offline! Will sync when online.'
             );
+            // Immediately make these purchased batches available in POS offline
+            injectPurchasedBatchesIntoLocalPosCache(data.items);
             showPurchaseConfirm({ success: true, purchase_number: 'OFF-' + Date.now() });
         } else {
             const response = await fetch(endpoint, {
@@ -1296,11 +1400,14 @@ async function savePurchase() {
             const result = await response.json().catch(() => ({}));
 
             if (response.ok && (result.success || result.status === 'success')) {
+                // Update local POS cache with newly purchased batches
+                injectPurchasedBatchesIntoLocalPosCache(data.items);
                 if (typeof OfflineSync !== 'undefined') {
                     OfflineSync.preloadProductCache();
                 }
                 showPurchaseConfirm(result);
             } else if (result.queued) {
+                injectPurchasedBatchesIntoLocalPosCache(data.items);
                 showPurchaseConfirm({ success: true, purchase_number: 'SW-OFF-' + Date.now() });
             } else {
                 showToast(result.error || 'Server error occurred', 'error');
@@ -1309,6 +1416,7 @@ async function savePurchase() {
     } catch (err) {
         if (typeof OfflineSync !== 'undefined') {
             await OfflineSync.queueRequest(OfflineSync.purchaseStore, endpoint, data, 'Purchase saved offline!');
+            injectPurchasedBatchesIntoLocalPosCache(data.items);
             showPurchaseConfirm({ success: true, purchase_number: 'OFF-' + Date.now() });
         } else {
             showToast('Network error: ' + err.message, 'error');
@@ -1642,14 +1750,70 @@ window.saveSupplier = async function() {
     const name = document.getElementById('supplierName').value.trim();
     if (!name) return showToast('Supplier name is required', 'error');
 
-    const payload = new URLSearchParams();
-    payload.append('name', name);
-    payload.append('phone', document.getElementById('supplierPhone').value.trim());
-    payload.append('dl_number', document.getElementById('supplierDl').value.trim());
-    payload.append('gst_number', document.getElementById('supplierGst').value.trim());
-    payload.append('address', document.getElementById('supplierAddress').value.trim());
+    const phone = document.getElementById('supplierPhone').value.trim();
+    const dl_number = document.getElementById('supplierDl').value.trim();
+    const gst_number = document.getElementById('supplierGst').value.trim();
+    const address = document.getElementById('supplierAddress').value.trim();
+
+    const handleOfflineSupplier = async () => {
+        const offlineId = 'offline_supp_' + Date.now();
+        const suppObj = {
+            id: offlineId,
+            name: name,
+            phone: phone,
+            dl_number: dl_number,
+            gst_number: gst_number,
+            address: address,
+            is_offline: true
+        };
+
+        if (typeof OfflineSync !== 'undefined') {
+            await OfflineSync.queueRequest(
+                OfflineSync.masterStore,
+                '/type/drug-supplier/',
+                suppObj,
+                `Supplier "${name}" saved locally (Offline mode ✓)`
+            );
+        }
+
+        const supplierSelect = document.getElementById('supplierSelect');
+        if (supplierSelect) {
+            const option = document.createElement('option');
+            option.value = offlineId;
+            option.text = name + (address ? ' | ' + address : '');
+            supplierSelect.appendChild(option);
+            supplierSelect.value = offlineId;
+            supplierSelect.dispatchEvent(new Event('change'));
+        }
+
+        const si = document.getElementById('supplierSearchInput');
+        if (si) si.value = name;
+
+        try {
+            const raw = localStorage.getItem('ep_suppliers_cache');
+            let list = raw ? JSON.parse(raw) : [];
+            list.push(suppObj);
+            localStorage.setItem('ep_suppliers_cache', JSON.stringify(list));
+        } catch(e) {}
+
+        ['supplierName', 'supplierPhone', 'supplierAddress', 'supplierGst', 'supplierDl'].forEach(id => document.getElementById(id).value = '');
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('supplierModal')).hide();
+        showToast(`Supplier "${name}" added locally (Offline ✓)`);
+    };
+
+    if (!navigator.onLine) {
+        await handleOfflineSupplier();
+        return;
+    }
 
     try {
+        const payload = new URLSearchParams();
+        payload.append('name', name);
+        payload.append('phone', phone);
+        payload.append('dl_number', dl_number);
+        payload.append('gst_number', gst_number);
+        payload.append('address', address);
+
         const resp = await fetch('/type/drug-supplier/', {
             method: 'POST',
             headers: {
@@ -1659,26 +1823,37 @@ window.saveSupplier = async function() {
             },
             body: payload.toString()
         });
-        const res = await resp.json();
+        const res = await resp.json().catch(() => ({}));
         if (!res.success) {
             return showToast('Error: ' + (res.error || 'Could not save supplier'), 'error');
         }
 
         const supplierSelect = document.getElementById('supplierSelect');
-        const option = document.createElement('option');
-        option.value = res.id;
-        option.text = res.name;
-        supplierSelect.appendChild(option);
-        supplierSelect.value = res.id;
+        if (supplierSelect) {
+            const option = document.createElement('option');
+            option.value = res.id;
+            option.text = res.name + (address ? ' | ' + address : '');
+            supplierSelect.appendChild(option);
+            supplierSelect.value = res.id;
+            supplierSelect.dispatchEvent(new Event('change'));
+        }
         
         const si = document.getElementById('supplierSearchInput');
         if (si) si.value = res.name;
+
+        try {
+            const raw = localStorage.getItem('ep_suppliers_cache');
+            let list = raw ? JSON.parse(raw) : [];
+            list.push({ id: res.id, name: res.name, address: address });
+            localStorage.setItem('ep_suppliers_cache', JSON.stringify(list));
+        } catch(e) {}
 
         ['supplierName', 'supplierPhone', 'supplierAddress', 'supplierGst', 'supplierDl'].forEach(id => document.getElementById(id).value = '');
         bootstrap.Modal.getOrCreateInstance(document.getElementById('supplierModal')).hide();
         showToast(`Supplier "${res.name}" added`);
     } catch (err) {
-        showToast('Error: ' + err.message, 'error');
+        console.warn('Network error saving supplier, using offline fallback:', err);
+        await handleOfflineSupplier();
     }
 };
 
@@ -1805,6 +1980,10 @@ window.saveQuickProduct = async function(isOcrMode) {
             );
         }
 
+        if (typeof addProductToPurchaseMemoryStore === 'function') {
+            addProductToPurchaseMemoryStore(offlineProd);
+        }
+
         clearQuickAddForm();
         showToast(`Medicine "${name}" added locally (Offline ✓)`);
 
@@ -1857,6 +2036,10 @@ window.saveQuickProduct = async function(isOcrMode) {
 
             if (typeof OfflineSync !== 'undefined') {
                 OfflineSync.cacheNewProduct(onlineProd);
+            }
+
+            if (typeof addProductToPurchaseMemoryStore === 'function') {
+                addProductToPurchaseMemoryStore(onlineProd);
             }
 
             clearQuickAddForm();
@@ -1920,9 +2103,28 @@ document.addEventListener('DOMContentLoaded', function() {
         let filteredOptions = [];
 
         function getSupplierOptions() {
-            return Array.from(supplierSelect.options)
+            const selectOptions = Array.from(supplierSelect.options)
                 .filter(o => o.value !== '')
                 .map(o => ({ value: o.value, text: o.text }));
+
+            // Also load any offline cached suppliers from localStorage
+            try {
+                const raw = localStorage.getItem('ep_suppliers_cache');
+                if (raw) {
+                    const localSupps = JSON.parse(raw);
+                    if (Array.isArray(localSupps)) {
+                        localSupps.forEach(ls => {
+                            if (!selectOptions.some(so => String(so.value) === String(ls.id) || so.text.toLowerCase().startsWith(ls.name.toLowerCase()))) {
+                                selectOptions.push({
+                                    value: ls.id,
+                                    text: ls.name + (ls.address ? ' | ' + ls.address : '')
+                                });
+                            }
+                        });
+                    }
+                }
+            } catch (e) {}
+            return selectOptions;
         }
 
         function selectSupplier(opt) {
@@ -1936,6 +2138,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
                 bootstrap.Modal.getOrCreateInstance(document.getElementById('supplierModal')).show();
                 return;
+            }
+            // Ensure option exists in hidden select
+            let optExists = Array.from(supplierSelect.options).some(o => String(o.value) === String(opt.value));
+            if (!optExists) {
+                const newOpt = document.createElement('option');
+                newOpt.value = opt.value;
+                newOpt.text = opt.text;
+                supplierSelect.appendChild(newOpt);
             }
             supplierSelect.value = opt.value;
             supplierSelect.dispatchEvent(new Event('change'));
@@ -2168,47 +2378,173 @@ document.addEventListener('DOMContentLoaded', function() {
         searchResultsDiv.style.display = 'block';
     }
 
-    async function showDefaultProductsPurchase() {
+    // In-memory Master Products Store for 0ms Instant Offline & Online Search
+    let _purchaseMasterMemoryStore = [];
+    let _purchaseSearchDebounceTimer = null;
+
+    function getTenantKey(baseKey) {
+        const tId = window.CURRENT_TENANT_ID || document.querySelector('meta[name="tenant-id"]')?.getAttribute('content') || '';
+        return tId ? `${baseKey}_${tId}` : baseKey;
+    }
+
+    function setPurchaseMasterMemoryStore(products) {
+        if (!Array.isArray(products)) return;
+        _purchaseMasterMemoryStore = products.map(p => {
+            const item = { ...p };
+            item._searchIndex = `${item.name || item.product_name || ''} ${item.salt || item.content || ''} ${item.company_name || item.company || ''} ${item.hsn_code || ''}`.toLowerCase();
+            return item;
+        });
+        window._purchaseMasterMemoryStore = _purchaseMasterMemoryStore;
+    }
+    window.setPurchaseMasterMemoryStore = setPurchaseMasterMemoryStore;
+
+    function addProductToPurchaseMemoryStore(p) {
+        if (!p) return;
+        const item = { ...p };
+        item._searchIndex = `${item.name || item.product_name || ''} ${item.salt || item.content || ''} ${item.company_name || item.company || ''} ${item.hsn_code || ''}`.toLowerCase();
+        _purchaseMasterMemoryStore.unshift(item);
+    }
+    window.addProductToPurchaseMemoryStore = addProductToPurchaseMemoryStore;
+
+    function loadPurchaseMasterMemoryStoreFromStorage() {
         try {
-            let products = [];
-            if (navigator.onLine) {
-                const response = await fetch('/api/products/master-search/?limit=50');
-                if (response.ok) products = await response.json();
-            }
-            if (!products || products.length === 0) {
-                if (typeof OfflineSync !== 'undefined') {
-                    const store = localforage.createInstance({ name: 'ep_product_cache' });
-                    products = await store.getItem('master_products') || [];
+            const key = getTenantKey('ep_master_products_cache');
+            let raw = localStorage.getItem(key) || localStorage.getItem('ep_master_products_cache');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    setPurchaseMasterMemoryStore(parsed);
+                    return true;
                 }
             }
-            if (products && products.length > 0) {
-                renderPurchaseSearchResults(products);
+        } catch(e) {}
+        return false;
+    }
+    loadPurchaseMasterMemoryStoreFromStorage();
+
+    function searchInMemoryMasterProducts(query, maxLimit = 40) {
+        if (!_purchaseMasterMemoryStore || _purchaseMasterMemoryStore.length === 0) return [];
+        const clean = (query || '').toLowerCase().trim();
+        if (!clean) return _purchaseMasterMemoryStore.slice(0, maxLimit);
+
+        const terms = clean.split(/\s+/).filter(Boolean);
+        const matches = [];
+
+        for (let i = 0; i < _purchaseMasterMemoryStore.length; i++) {
+            const prod = _purchaseMasterMemoryStore[i];
+            const idx = prod._searchIndex;
+            let allMatch = true;
+            for (let t = 0; t < terms.length; t++) {
+                if (idx.indexOf(terms[t]) === -1) {
+                    allMatch = false;
+                    break;
+                }
+            }
+            if (allMatch) {
+                matches.push(prod);
+                if (matches.length >= maxLimit * 2) break;
+            }
+        }
+
+        matches.sort((a, b) => {
+            const aName = (a.name || a.product_name || '').toLowerCase();
+            const bName = (b.name || b.product_name || '').toLowerCase();
+            const aStarts = aName.startsWith(clean) ? 1 : 0;
+            const bStarts = bName.startsWith(clean) ? 1 : 0;
+            if (aStarts !== bStarts) return bStarts - aStarts;
+            return aName.localeCompare(bName);
+        });
+
+        return matches.slice(0, maxLimit);
+    }
+
+    async function showDefaultProductsPurchase() {
+        try {
+            if (_purchaseMasterMemoryStore && _purchaseMasterMemoryStore.length > 0) {
+                renderPurchaseSearchResults(_purchaseMasterMemoryStore.slice(0, 40));
+            } else {
+                if (typeof OfflineSync !== 'undefined') {
+                    const store = localforage.createInstance({ name: 'ep_product_cache' });
+                    const products = await store.getItem('master_products') || [];
+                    if (products.length > 0) {
+                        setPurchaseMasterMemoryStore(products);
+                        renderPurchaseSearchResults(_purchaseMasterMemoryStore.slice(0, 40));
+                    }
+                }
+            }
+
+            // Sync master products in background if online
+            if (navigator.onLine) {
+                fetch('/api/products/master-search/?limit=5000&nocache=1')
+                    .then(r => r.json())
+                    .then(products => {
+                        if (Array.isArray(products) && products.length > 0) {
+                            setPurchaseMasterMemoryStore(products);
+                            try {
+                                localStorage.setItem(getTenantKey('ep_master_products_cache'), JSON.stringify(products.slice(0, 2500)));
+                                localStorage.setItem('ep_master_products_cache', JSON.stringify(products.slice(0, 2500)));
+                            } catch(e) {}
+                            if (searchInput.value.trim().length === 0) {
+                                renderPurchaseSearchResults(_purchaseMasterMemoryStore.slice(0, 40));
+                            }
+                        }
+                    }).catch(() => {});
             }
         } catch (err) {}
     }
 
-    searchInput.addEventListener('input', async (e) => {
+    searchInput.addEventListener('input', (e) => {
         const query = e.target.value.trim();
-        if (query.length < 1) { showDefaultProductsPurchase(); return; }
+        if (query.length < 1) { 
+            clearTimeout(_purchaseSearchDebounceTimer);
+            showDefaultProductsPurchase(); 
+            return; 
+        }
 
-        if (!navigator.onLine && typeof OfflineSync !== 'undefined') {
-            const offlineResults = await OfflineSync.searchOfflineProducts(query, 'master');
-            renderPurchaseSearchResults(offlineResults);
+        const lowerQuery = query.toLowerCase();
+
+        // 1. INSTANT LOCAL SEARCH (0ms - Sub-millisecond response from RAM/LocalStorage)
+        const localMatches = searchInMemoryMasterProducts(query, 40);
+        if (localMatches && localMatches.length > 0) {
+            renderPurchaseSearchResults(localMatches);
+        }
+
+        // 2. Offline Mode: in-memory search is final
+        if (!navigator.onLine) {
+            clearTimeout(_purchaseSearchDebounceTimer);
+            if (!localMatches || localMatches.length === 0) {
+                if (typeof OfflineSync !== 'undefined') {
+                    OfflineSync.searchOfflineProducts(query, 'master').then(res => {
+                        if (res && res.length > 0) renderPurchaseSearchResults(res);
+                        else {
+                            searchResultsDiv.innerHTML = `<div class="search-item p-3 text-muted text-center"><i class="fas fa-search me-1"></i> No matching medicines found offline</div>`;
+                            searchResultsDiv.classList.add('open');
+                            searchResultsDiv.style.display = 'block';
+                        }
+                    }).catch(() => {});
+                }
+            }
             return;
         }
 
-        try {
-            const resp = await fetch(`/api/products/master-search/?q=${encodeURIComponent(query)}`);
-            if (resp.ok) {
-                const data = await resp.json();
-                renderPurchaseSearchResults(data);
+        // 3. Online Mode: Background debounce (200ms) to check server for any newly created products
+        clearTimeout(_purchaseSearchDebounceTimer);
+        _purchaseSearchDebounceTimer = setTimeout(async () => {
+            try {
+                const resp = await fetch(`/api/products/master-search/?q=${encodeURIComponent(query)}&limit=40`);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    if (Array.isArray(data) && data.length > 0) {
+                        data.forEach(p => addProductToPurchaseMemoryStore(p));
+                    }
+                    if (searchInput.value.trim().toLowerCase() === lowerQuery) {
+                        renderPurchaseSearchResults(data);
+                    }
+                }
+            } catch (err) {
+                console.warn('[Purchase] Background search fetch error, keeping local store:', err);
             }
-        } catch (err) {
-            if (typeof OfflineSync !== 'undefined') {
-                const offlineResults = await OfflineSync.searchOfflineProducts(query, 'master');
-                renderPurchaseSearchResults(offlineResults);
-            }
-        }
+        }, 200);
     });
 
     searchInput.addEventListener('focus', () => {
