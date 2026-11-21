@@ -14,7 +14,7 @@
  *   • Proper Cache-Control header respect on API responses
  */
 
-const SW_VERSION = 'v2.0.6';
+const SW_VERSION = 'v2.0.7';
 const CACHE_STATIC = `ep-static-${SW_VERSION}`;
 const CACHE_PAGES  = `ep-pages-${SW_VERSION}`;
 const CACHE_API    = `ep-api-${SW_VERSION}`;
@@ -89,9 +89,13 @@ self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_STATIC).then(cache => {
-      return cache.addAll(PRECACHE_ASSETS).catch(err => {
-        console.warn('[SW v2] Pre-cache partial failure:', err);
-      });
+      return Promise.all(
+        PRECACHE_ASSETS.map(asset =>
+          cache.add(asset).catch(err => {
+            console.warn('[SW v2] Pre-cache failed:', asset, err);
+          })
+        )
+      );
     })
   );
 });
@@ -151,7 +155,7 @@ self.addEventListener('fetch', event => {
   // 1. Network-Only for auth pages
   if (NETWORK_ONLY_PATTERNS.some(p => p.test(url.pathname + url.search))) {
     event.respondWith(
-      fetch(request).catch(() => caches.match('/offline/'))
+      fetch(request).catch(() => offlineFallback(request))
     );
     return;
   }
@@ -192,7 +196,7 @@ self.addEventListener('fetch', event => {
 
   // 5. Default: network with cache fallback
   event.respondWith(
-    fetch(request).catch(() => caches.match(request))
+    fetch(request).catch(() => offlineFallback(request))
   );
 });
 
@@ -345,6 +349,26 @@ async function cacheFirst(request, cacheName) {
   }
 }
 
+async function offlineFallback(request) {
+  const cachedRequest = await caches.match(request);
+  if (cachedRequest) return cachedRequest;
+
+  const offline = await caches.match('/offline/');
+  if (offline) return offline;
+
+  if (request.headers.get('Accept')?.includes('text/html')) {
+    return new Response('<h1>You are offline</h1>', {
+      status: 503,
+      headers: { 'Content-Type': 'text/html' }
+    });
+  }
+
+  return new Response(JSON.stringify({ error: 'offline', cached: false }), {
+    status: 503,
+    headers: { 'Content-Type': 'application/json' }
+  });
+}
+
 /**
  * Stale-While-Revalidate:
  * Returns cached version INSTANTLY if available (making page feel instant),
@@ -393,7 +417,7 @@ async function networkFirstWithTimeout(request, cacheName, timeout) {
     }
     return response;
   } catch {
-    const cached = await cache.match(request);
+    const cached = await cache.match(request) || await caches.match(request);
     if (cached) return cached;
     
     // Return offline HTML if request expects HTML
