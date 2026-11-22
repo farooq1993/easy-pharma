@@ -10,9 +10,11 @@ from django.utils import timezone
 import json
 from easypharma.models.Items import Products
 from easypharma.models.general_setup import GeneralSetup
+from easypharma.models.purchase_invoice import OpeningStock
 from easypharma.models.sales import SaleInvoice, SaleItem, SalesReturn, SalesReturnItem
 from easypharma.models.stock import StockBatch
 from easypharma.views.reports import DailySaleReportView
+from easypharma.views.purchase import OpeningStockEntryView
 from easypharma.views.sales import (SalesReturnView, SalesReturnListView, SalesReturnDeleteView,
                                    SalesReturnDetailAPIView, CustomerInvoicesAPIView,
                                    InvoiceItemsAPIView, ProductSalesHistoryAPIView, calculate_sale_summary)
@@ -154,6 +156,39 @@ class SalesReturnFlowTests(TestCase):
         request.session.save()
         request._messages = FallbackStorage(request)
         return SalesReturnView().post(request)
+
+    def test_opening_stock_updates_batch_once_in_physical_units(self):
+        data = {
+            'opening_stock_date': timezone.localdate().isoformat(),
+            'sub_total': 260.80,
+            'tax_amount': 13.04,
+            'total_amount': 273.84,
+            'items': [{
+                'product_id': self.product.id,
+                'batch_number': self.batch.batch_number,
+                'expiry_date': '2028-01',
+                'quantity': 5,
+                'purchase_price': 52.16,
+                'mrp': 65.20,
+                'tax_percentage': 5,
+                'total': 273.84,
+            }],
+        }
+        request = self.factory.post(
+            '/opening/stock/entry/',
+            json.dumps(data),
+            content_type='application/json',
+        )
+        request.tenant = self.tenant
+        request.user = self.user
+
+        response = OpeningStockEntryView().post(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.batch.refresh_from_db()
+        self.assertEqual(self.batch.current_quantity, 15)
+        self.assertEqual(self.batch.initial_quantity, 35)
+        self.assertEqual(OpeningStock.objects.filter(tenant=self.tenant).count(), 1)
 
     def test_invoice_return_enforces_remaining_quantity_and_converts_strip_stock(self):
         response = self.post_return({

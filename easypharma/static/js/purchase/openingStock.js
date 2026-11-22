@@ -742,7 +742,7 @@ function hideLoader() {
 }
 
 // Immediately update the POS offline/online product cache after opening stock is saved.
-function injectOpeningStockIntoLocalPosCache(openingItems) {
+function injectOpeningStockIntoLocalPosCache(openingItems, previousItems = []) {
     if (!Array.isArray(openingItems) || openingItems.length === 0) return;
 
     try {
@@ -763,10 +763,36 @@ function injectOpeningStockIntoLocalPosCache(openingItems) {
         const posMap = new Map();
         posList.forEach(product => posMap.set(String(product.id), product));
 
-        openingItems.forEach(item => {
-            const productId = String(item.product_id || '');
-            const productName = item.name || item.product_name || '';
-            if (!productId || productId === 'null') return;
+        const batchDeltas = new Map();
+        const collectDeltas = (items, direction) => {
+            items.forEach(item => {
+                const productId = String(item.product_id || '');
+                if (!productId || productId === 'null') return;
+                const batchNumber = item.batch_number || 'OPENING';
+                const key = `${productId}:${batchNumber}`;
+                const delta = batchDeltas.get(key) || {
+                    productId,
+                    productName: item.name || item.product_name || '',
+                    batchNumber,
+                    quantity: 0,
+                    item
+                };
+                delta.quantity += direction * (parseInt(item.quantity) || 0);
+                if (direction > 0) {
+                    delta.item = item;
+                    delta.productName = item.name || item.product_name || delta.productName;
+                }
+                batchDeltas.set(key, delta);
+            });
+        };
+        collectDeltas(previousItems, -1);
+        collectDeltas(openingItems, 1);
+
+        batchDeltas.forEach(delta => {
+            if (delta.quantity === 0) return;
+            const item = delta.item;
+            const productId = delta.productId;
+            const productName = delta.productName;
 
             let existing = posMap.get(productId);
             if (!existing && productName) {
@@ -774,6 +800,7 @@ function injectOpeningStockIntoLocalPosCache(openingItems) {
                     (product.name || product.product_name || '').toLowerCase() === productName.toLowerCase()
                 );
             }
+            if (!existing && delta.quantity < 0) return;
 
             if (!existing) {
                 existing = {
@@ -793,12 +820,11 @@ function injectOpeningStockIntoLocalPosCache(openingItems) {
             }
 
             if (!Array.isArray(existing.batches)) existing.batches = [];
-            const batchNumber = item.batch_number || 'OPENING';
+            const batchNumber = delta.batchNumber;
             const batchIndex = existing.batches.findIndex(batch =>
                 (batch.batch_no || batch.batch_number) === batchNumber
             );
-            const conversionFactor = parseInt(existing.conversion_factor) || parseInt(item.conversion_factor) || 1;
-            const openingQuantity = (parseInt(item.quantity) || 0) * conversionFactor;
+            const openingQuantity = delta.quantity;
             const mrp = parseFloat(item.mrp) || 0;
             let expiry = 'N/A';
             if (item.expiry_date) {
@@ -815,23 +841,23 @@ function injectOpeningStockIntoLocalPosCache(openingItems) {
                 }
             }
 
-            const batchData = {
-                batch_id: batchIndex >= 0
-                    ? existing.batches[batchIndex].batch_id
-                    : `opening_${productId}_${batchNumber}_${Date.now()}`,
-                batch_no: batchNumber,
-                expiry: expiry,
-                stock: openingQuantity,
-                price: mrp,
-                mrp_pack: mrp
-            };
-
             if (batchIndex >= 0) {
-                existing.batches[batchIndex] = batchData;
-            } else {
-                existing.batches.push(batchData);
+                const batch = existing.batches[batchIndex];
+                batch.stock = Math.max(0, (parseInt(batch.stock) || 0) + openingQuantity);
+                batch.expiry = expiry;
+                batch.price = mrp;
+                batch.mrp_pack = mrp;
+            } else if (openingQuantity > 0) {
+                existing.batches.push({
+                    batch_id: `opening_${productId}_${batchNumber}_${Date.now()}`,
+                    batch_no: batchNumber,
+                    expiry: expiry,
+                    stock: openingQuantity,
+                    price: mrp,
+                    mrp_pack: mrp
+                });
             }
-            existing.out_of_stock = false;
+            existing.out_of_stock = !existing.batches.some(batch => (parseInt(batch.stock) || 0) > 0);
         });
 
         const merged = Array.from(posMap.values());
@@ -900,7 +926,15 @@ async function saveOpeningStock() {
 
         if (result.success) {
             window.__isOpeningStockSubmitting = true;
-            injectOpeningStockIntoLocalPosCache(openingItems);
+            let previousItems = [];
+            if (isOpeningStockEditMode() && window.__initialOpeningItemsJSON) {
+                try {
+                    previousItems = JSON.parse(window.__initialOpeningItemsJSON);
+                } catch (e) {
+                    console.warn('[Opening Stock] Could not read original items for POS cache update:', e);
+                }
+            }
+            injectOpeningStockIntoLocalPosCache(openingItems, previousItems);
             if (typeof OfflineSync !== 'undefined') {
                 OfflineSync.preloadProductCache();
             }

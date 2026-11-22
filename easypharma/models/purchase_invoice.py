@@ -194,6 +194,7 @@ class OpeningStockItem(TenantAwareModel):
             )
             if not created:
                 batch.current_quantity += total_units
+                batch.initial_quantity += total_units
                 batch.purchase_price = self.purchase_price * conversion_factor
                 batch.mrp = self.mrp * conversion_factor
                 batch.sale_price = self.mrp
