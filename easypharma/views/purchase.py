@@ -1080,7 +1080,7 @@ class OpeningStockListView(LoginRequiredMixin, View):
     ITEMS_PER_PAGE = 20
 
     def get(self, request):
-        qs = OpeningStock.objects.filter(tenant=request.tenant).order_by('-opening_stock_date')
+        qs = OpeningStock.objects.filter(tenant=request.tenant).order_by('-voucher_number')
 
         search_query = request.GET.get('q', '').strip()
         if search_query:
@@ -1243,6 +1243,54 @@ class OpeningStockEntryView(LoginRequiredMixin, View):
                         tax_percentage=item.get('tax_percentage', 0),
                         total_amount=item['total']
                     )
+
+                    conversion_factor = int(product.conversion_factor or 1)
+                    total_units = int(item['quantity']) * conversion_factor
+                    batch, created = StockBatch.objects.get_or_create(
+                        tenant=request.tenant,
+                        product=product,
+                        batch_number=item['batch_number'],
+                        defaults={
+                            'expiry_date': expiry_date,
+                            'purchase_price': item['purchase_price'],
+                            'mrp': item['mrp'],
+                            'sale_price': item['mrp'],
+                            'initial_quantity': total_units,
+                            'current_quantity': total_units,
+                        }
+                    )
+                    if not created:
+                        batch.initial_quantity += total_units
+                        batch.current_quantity += total_units
+                        batch.purchase_price = item['purchase_price']
+                        batch.mrp = item['mrp']
+                        batch.sale_price = item['mrp']
+                        batch.expiry_date = expiry_date
+                        batch.save()
+
+                    conversion_factor = int(product.conversion_factor or 1)
+                    total_units = int(item['quantity']) * conversion_factor
+                    batch, created = StockBatch.objects.get_or_create(
+                        tenant=request.tenant,
+                        product=product,
+                        batch_number=item['batch_number'],
+                        defaults={
+                            'expiry_date': expiry_date,
+                            'purchase_price': item['purchase_price'],
+                            'mrp': item['mrp'],
+                            'sale_price': item['mrp'],
+                            'initial_quantity': total_units,
+                            'current_quantity': total_units,
+                        }
+                    )
+                    if not created:
+                        batch.initial_quantity += total_units
+                        batch.current_quantity += total_units
+                        batch.purchase_price = item['purchase_price']
+                        batch.mrp = item['mrp']
+                        batch.sale_price = item['mrp']
+                        batch.expiry_date = expiry_date
+                        batch.save()
                 # Invalidate caches after successful save
                 try:
                     from easypharma.views.reports import invalidate_stock_cache, invalidate_product_history_cache
@@ -1343,8 +1391,9 @@ class OpeningStockEditView(LoginRequiredMixin, View):
                                     'error': f"Cannot remove item '{old_item.product.product_name}' (Batch {old_item.batch_number}) because some quantity has already been sold."
                                 }, status=400)
                             
-                            old_total_units = old_item.quantity
-                            new_total_units = int(new_item['quantity'])
+                            conversion_factor = int(old_item.product.conversion_factor or 1)
+                            old_total_units = int(old_item.quantity) * conversion_factor
+                            new_total_units = int(new_item['quantity']) * conversion_factor
                             
                             if new_total_units < old_total_units:
                                 return JsonResponse({
@@ -1358,9 +1407,13 @@ class OpeningStockEditView(LoginRequiredMixin, View):
                             batch_number=item.batch_number
                         ).first()
                         if batch:
-                            batch.current_quantity -= item.quantity
+                            conversion_factor = int(item.product.conversion_factor or 1)
+                            batch.current_quantity -= int(item.quantity) * conversion_factor
+                            batch.initial_quantity -= int(item.quantity) * conversion_factor
                             if batch.current_quantity < 0:
                                 batch.current_quantity = 0
+                            if batch.initial_quantity < 0:
+                                batch.initial_quantity = 0
                             batch.save()
                     stock.items.all().delete()
                 else:

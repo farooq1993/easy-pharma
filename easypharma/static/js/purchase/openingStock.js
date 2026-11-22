@@ -1,31 +1,97 @@
 // ==================== QUICK SELECT WIDGET ====================
 (function() {
+    function closeAllQuickSelectDropdowns() {
+        document.querySelectorAll('.qs-dropdown').forEach(dropdown => {
+            dropdown.style.display = 'none';
+        });
+    }
+
+    window.closeAllQuickSelectDropdowns = closeAllQuickSelectDropdowns;
+
+    function restoreOpenModalStack() {
+        const openModals = Array.from(document.querySelectorAll('.modal.show'));
+        if (openModals.length === 0) {
+            document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('padding-right');
+            return;
+        }
+
+        const backdrops = Array.from(document.querySelectorAll('.modal-backdrop'));
+        backdrops.forEach((backdrop, index) => {
+            if (index < backdrops.length - 1) backdrop.remove();
+        });
+
+        const remainingBackdrop = document.querySelector('.modal-backdrop');
+        if (remainingBackdrop) {
+            remainingBackdrop.style.zIndex = '1040';
+        }
+
+        openModals.forEach(modal => {
+            if (modal.id === 'quickAddModal') {
+                modal.style.zIndex = '1050';
+            }
+        });
+
+        document.body.classList.add('modal-open');
+    }
+
+    window.restoreOpenModalStack = restoreOpenModalStack;
+
     function initQuickSelect(selectId) {
         const sel = document.getElementById(selectId);
         const input = document.getElementById('qs-input-' + selectId);
         const drop = document.getElementById('qs-drop-' + selectId);
         const clearBtn = document.getElementById('qs-clear-' + selectId);
         if (!sel || !input) return;
+        let activeIndex = -1;
+        let visibleOptions = [];
 
         function getOptions() {
             return Array.from(sel.options).filter(o => o.value).map(o => ({value: o.value, text: o.text.trim()}));
         }
 
         function renderDrop(opts) {
+            visibleOptions = opts;
+            activeIndex = -1;
             drop.innerHTML = '';
-            opts.forEach(opt => {
+            opts.forEach((opt, index) => {
                 const div = document.createElement('div');
                 div.className = 'qs-item';
                 div.textContent = opt.text;
+                div.dataset.index = String(index);
                 div.onclick = () => {
                     sel.value = opt.value;
                     input.value = opt.text;
                     drop.style.display = 'none';
                     if (clearBtn) clearBtn.style.display = 'inline-block';
+                    activeIndex = -1;
                 };
                 drop.appendChild(div);
             });
             drop.style.display = 'block';
+        }
+
+        function updateActiveItem() {
+            const items = Array.from(drop.querySelectorAll('.qs-item'));
+            items.forEach((item, index) => {
+                item.classList.toggle('qs-active', index === activeIndex);
+            });
+            if (activeIndex >= 0) {
+                items[activeIndex]?.scrollIntoView({block: 'nearest'});
+            }
+        }
+
+        function selectActiveItem() {
+            if (activeIndex < 0 || !visibleOptions[activeIndex]) return false;
+            const opt = visibleOptions[activeIndex];
+            sel.value = opt.value;
+            input.value = opt.text;
+            drop.style.display = 'none';
+            if (clearBtn) clearBtn.style.display = 'inline-block';
+            activeIndex = -1;
+            return true;
         }
 
         input.addEventListener('focus', () => renderDrop(getOptions()));
@@ -35,17 +101,59 @@
             renderDrop(filtered);
         });
 
+        input.addEventListener('keydown', event => {
+            if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                if (drop.style.display === 'none') {
+                    renderDrop(getOptions());
+                }
+                if (visibleOptions.length > 0) {
+                    activeIndex = Math.min(activeIndex + 1, visibleOptions.length - 1);
+                    updateActiveItem();
+                }
+            } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                if (visibleOptions.length > 0) {
+                    activeIndex = activeIndex <= 0 ? visibleOptions.length - 1 : activeIndex - 1;
+                    updateActiveItem();
+                }
+            } else if (event.key === 'Enter') {
+                if (drop.style.display !== 'none' && visibleOptions.length > 0) {
+                    event.preventDefault();
+                    if (activeIndex < 0) activeIndex = 0;
+                    selectActiveItem();
+                }
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
+                drop.style.display = 'none';
+                activeIndex = -1;
+            }
+        });
+
+        document.addEventListener('pointerdown', event => {
+            const wrap = document.getElementById('qs-wrap-' + selectId);
+            if (wrap && !wrap.contains(event.target)) {
+                drop.style.display = 'none';
+            }
+        });
+
         window.qsClear = function(id) {
             document.getElementById(id).value = '';
             const inp = document.getElementById('qs-input-' + id);
             if (inp) inp.value = '';
             const btn = document.getElementById('qs-clear-' + id);
             if (btn) btn.style.display = 'none';
+            const activeDrop = document.getElementById('qs-drop-' + id);
+            if (activeDrop) activeDrop.style.display = 'none';
         };
     }
 
     document.addEventListener('DOMContentLoaded', () => {
         ['quickTax', 'quickSchedule', 'quickContent', 'quickCompany', 'quickType'].forEach(initQuickSelect);
+
+        document.querySelectorAll('.qs-dropdown').forEach(dropdown => {
+            dropdown.style.display = 'none';
+        });
 
         const quickAddModal = document.getElementById('quickAddModal');
         if (quickAddModal) {
@@ -188,6 +296,7 @@ async function handleSaveQuickProduct() {
     try {
         const res = await fetch("/api/products/quick-add/", {
             method: 'POST',
+            silent: true,
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': csrfToken,
@@ -455,21 +564,52 @@ function updateSummary() {
 
 // ── Opening Stock Draft Auto-Save & Recovery ──
 function isOpeningStockEditMode() {
-    return Boolean(window.openingStockSaveUrl || window.openingStockId || document.getElementById('editVoucherNumber') || document.getElementById('editVoucherBadge'));
+    return Boolean(
+        window.openingStockId ||
+        document.getElementById('editVoucherNumber') ||
+        document.getElementById('editVoucherBadge')
+    );
+}
+
+function getOpeningStockDraftKey() {
+    const tenantId =
+        window.CURRENT_TENANT_ID ||
+        document.querySelector('meta[name="tenant-id"]')?.getAttribute('content') ||
+        '';
+    return tenantId
+        ? `easypharma_opening_stock_draft_v1_${tenantId}`
+        : 'easypharma_opening_stock_draft_v1';
 }
 
 function saveOpeningStockDraft() {
     if (isOpeningStockEditMode()) return;
     try {
-        if (openingItems && openingItems.length > 0) {
+        const hasDraftRow = [
+            'newProductSearch',
+            'newBatch',
+            'newExpiry',
+            'newMrp',
+            'newPrice'
+        ].some(id => document.getElementById(id)?.value?.toString().trim());
+
+        if ((openingItems && openingItems.length > 0) || hasDraftRow) {
             const draft = {
                 opening_date: document.getElementById('opening_date')?.value || '',
                 items: openingItems,
+                add_row: {
+                    product_name: document.getElementById('newProductSearch')?.value || '',
+                    batch_number: document.getElementById('newBatch')?.value || '',
+                    expiry_date: document.getElementById('newExpiry')?.value || '',
+                    quantity: document.getElementById('newQty')?.value || '1',
+                    mrp: document.getElementById('newMrp')?.value || '',
+                    purchase_price: document.getElementById('newPrice')?.value || '',
+                    tax_percentage: document.getElementById('newTax')?.value || '5'
+                },
                 timestamp: Date.now()
             };
-            localStorage.setItem('easypharma_opening_stock_draft_v1', JSON.stringify(draft));
+            localStorage.setItem(getOpeningStockDraftKey(), JSON.stringify(draft));
         } else {
-            localStorage.removeItem('easypharma_opening_stock_draft_v1');
+            localStorage.removeItem(getOpeningStockDraftKey());
         }
     } catch (e) {
         console.warn('Failed to save opening stock draft', e);
@@ -478,24 +618,39 @@ function saveOpeningStockDraft() {
 
 function clearOpeningStockDraft() {
     try {
-        localStorage.removeItem('easypharma_opening_stock_draft_v1');
+        localStorage.removeItem(getOpeningStockDraftKey());
     } catch (e) {}
 }
 
 function restoreOpeningStockDraft() {
     if (isOpeningStockEditMode()) return;
     try {
-        const raw = localStorage.getItem('easypharma_opening_stock_draft_v1');
+        const raw = localStorage.getItem(getOpeningStockDraftKey());
         if (!raw) return;
         const draft = JSON.parse(raw);
-        if (draft && Array.isArray(draft.items) && draft.items.length > 0) {
+        if (draft && Array.isArray(draft.items)) {
+            if (draft.items.length > 0) {
             openingItems = draft.items;
+            }
             if (draft.opening_date && document.getElementById('opening_date')) {
                 document.getElementById('opening_date').value = draft.opening_date;
             }
+            if (draft.add_row) {
+                const row = draft.add_row;
+                if (document.getElementById('newProductSearch')) document.getElementById('newProductSearch').value = row.product_name || '';
+                if (document.getElementById('newBatch')) document.getElementById('newBatch').value = row.batch_number || '';
+                if (document.getElementById('newExpiry')) document.getElementById('newExpiry').value = row.expiry_date || '';
+                if (document.getElementById('newQty')) document.getElementById('newQty').value = row.quantity || '1';
+                if (document.getElementById('newMrp')) document.getElementById('newMrp').value = row.mrp || '';
+                if (document.getElementById('newPrice')) document.getElementById('newPrice').value = row.purchase_price || '';
+                if (document.getElementById('newTax')) document.getElementById('newTax').value = row.tax_percentage || '5';
+                updateNewItemTotal();
+            }
             renderOpeningTable();
             updateSummary();
-            showToast('⚡ Restored unsaved opening stock draft! <button type="button" class="btn btn-sm btn-outline-light ms-2" onclick="clearOpeningStockDraftAndReset()" style="padding:1px 6px;font-size:11px;">Clear Draft</button>', 'success');
+            if (draft.items.length > 0 || draft.add_row) {
+                showToast('⚡ Restored unsaved opening stock draft! <button type="button" class="btn btn-sm btn-outline-light ms-2" onclick="clearOpeningStockDraftAndReset()" style="padding:1px 6px;font-size:11px;">Clear Draft</button>', 'success');
+            }
         }
     } catch (e) {
         console.warn('Failed to restore opening stock draft', e);
@@ -505,6 +660,8 @@ function restoreOpeningStockDraft() {
 window.clearOpeningStockDraftAndReset = function() {
     clearOpeningStockDraft();
     openingItems = [];
+    if (typeof clearAddRow === 'function') clearAddRow();
+    selectedProductForAdd = null;
     renderOpeningTable();
     updateSummary();
     showToast('Draft cleared', 'warning');
@@ -516,6 +673,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (dateEl) {
         dateEl.addEventListener('change', saveOpeningStockDraft);
     }
+    let draftSaveTimer = null;
+    ['newProductSearch', 'newBatch', 'newExpiry', 'newQty', 'newMrp', 'newPrice', 'newTax'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', () => {
+            clearTimeout(draftSaveTimer);
+            draftSaveTimer = setTimeout(saveOpeningStockDraft, 250);
+        });
+    });
     // Delay slightly to let editData load if in edit mode
     setTimeout(() => {
         if (!isOpeningStockEditMode() && openingItems.length === 0) {
@@ -575,6 +741,118 @@ function hideLoader() {
     loader.setAttribute('aria-busy', 'false');
 }
 
+// Immediately update the POS offline/online product cache after opening stock is saved.
+function injectOpeningStockIntoLocalPosCache(openingItems) {
+    if (!Array.isArray(openingItems) || openingItems.length === 0) return;
+
+    try {
+        const tenantId =
+            window.POS_CONFIG?.tenantId ||
+            window.CURRENT_TENANT_ID ||
+            document.querySelector('meta[name="tenant-id"]')?.getAttribute('content') ||
+            '';
+        const tenantKey = tenantId ? `ep_pos_products_cache_${tenantId}` : 'ep_pos_products_cache';
+
+        let posList = [];
+        const raw = localStorage.getItem(tenantKey) || localStorage.getItem('ep_pos_products_cache');
+        if (raw) {
+            try { posList = JSON.parse(raw); } catch (e) {}
+        }
+        if (!Array.isArray(posList)) posList = [];
+
+        const posMap = new Map();
+        posList.forEach(product => posMap.set(String(product.id), product));
+
+        openingItems.forEach(item => {
+            const productId = String(item.product_id || '');
+            const productName = item.name || item.product_name || '';
+            if (!productId || productId === 'null') return;
+
+            let existing = posMap.get(productId);
+            if (!existing && productName) {
+                existing = Array.from(posMap.values()).find(product =>
+                    (product.name || product.product_name || '').toLowerCase() === productName.toLowerCase()
+                );
+            }
+
+            if (!existing) {
+                existing = {
+                    id: productId,
+                    name: productName,
+                    product_name: productName,
+                    packing: item.packing || '1',
+                    conversion_factor: parseInt(item.conversion_factor) || 1,
+                    tax_rate: parseFloat(item.tax_percentage) || 0,
+                    schedule: item.schedule_name || '',
+                    company: item.company_name || '',
+                    content: item.content || item.salt || '',
+                    out_of_stock: false,
+                    batches: []
+                };
+                posMap.set(productId, existing);
+            }
+
+            if (!Array.isArray(existing.batches)) existing.batches = [];
+            const batchNumber = item.batch_number || 'OPENING';
+            const batchIndex = existing.batches.findIndex(batch =>
+                (batch.batch_no || batch.batch_number) === batchNumber
+            );
+            const conversionFactor = parseInt(existing.conversion_factor) || parseInt(item.conversion_factor) || 1;
+            const openingQuantity = (parseInt(item.quantity) || 0) * conversionFactor;
+            const mrp = parseFloat(item.mrp) || 0;
+            let expiry = 'N/A';
+            if (item.expiry_date) {
+                const expiryText = String(item.expiry_date).trim();
+                const parts = expiryText.split('-');
+                if (parts.length === 2) {
+                    if (parts[0].length === 4) {
+                        expiry = `${parts[1]}/${parts[0].slice(-2)}`;
+                    } else {
+                        const month = parts[0].padStart(2, '0');
+                        const year = parts[1].length === 2 ? parts[1] : parts[1].slice(-2);
+                        expiry = `${month}/${year}`;
+                    }
+                }
+            }
+
+            const batchData = {
+                batch_id: batchIndex >= 0
+                    ? existing.batches[batchIndex].batch_id
+                    : `opening_${productId}_${batchNumber}_${Date.now()}`,
+                batch_no: batchNumber,
+                expiry: expiry,
+                stock: openingQuantity,
+                price: mrp,
+                mrp_pack: mrp
+            };
+
+            if (batchIndex >= 0) {
+                existing.batches[batchIndex] = batchData;
+            } else {
+                existing.batches.push(batchData);
+            }
+            existing.out_of_stock = false;
+        });
+
+        const merged = Array.from(posMap.values());
+        localStorage.setItem(tenantKey, JSON.stringify(merged));
+        if (tenantKey !== 'ep_pos_products_cache') {
+            localStorage.setItem('ep_pos_products_cache', JSON.stringify(merged));
+        }
+        if (typeof window.setPosProductMemoryStore === 'function') {
+            window.setPosProductMemoryStore(merged);
+        }
+        if (typeof localforage !== 'undefined') {
+            const store = localforage.createInstance({ name: 'ep_product_cache' });
+            store.setItem('pos_products', merged).catch(() => {});
+            store.setItem('all_products', merged).catch(() => {});
+        }
+    } catch (e) {
+        console.warn('[Opening Stock] Failed to update local POS cache:', e);
+    }
+}
+window.injectOpeningStockIntoLocalPosCache = injectOpeningStockIntoLocalPosCache;
+
 // Save Function
 async function saveOpeningStock() {
     if (openingItems.length === 0) {
@@ -610,6 +888,7 @@ async function saveOpeningStock() {
     try {
         const resp = await fetch(url, {
             method: 'POST',
+            silent: true,
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': csrfToken
@@ -621,7 +900,12 @@ async function saveOpeningStock() {
 
         if (result.success) {
             window.__isOpeningStockSubmitting = true;
+            injectOpeningStockIntoLocalPosCache(openingItems);
+            if (typeof OfflineSync !== 'undefined') {
+                OfflineSync.preloadProductCache();
+            }
             clearOpeningStockDraft();
+            hideLoader();
             showToast(`✅ Saved! Voucher: ${result.voucher_number}`, 'success');
             setTimeout(() => window.location.href = "/opening/stock/list/", 1500);
         } else {
@@ -870,6 +1154,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         masterAddModalEl.addEventListener('hidden.bs.modal', function () {
+            if (typeof closeAllQuickSelectDropdowns === 'function') {
+                closeAllQuickSelectDropdowns();
+            }
+            setTimeout(() => {
+                if (typeof restoreOpenModalStack === 'function') {
+                    restoreOpenModalStack();
+                }
+            }, 50);
             // Restore overflow on body if quickAddModal is still open
             if (document.getElementById('quickAddModal').classList.contains('show')) {
                 setTimeout(() => {
@@ -996,6 +1288,10 @@ infoText.innerHTML = `<i class="fas fa-info-circle"></i> ${packing || 'Standard'
 
 // ==================== MASTER ADD MODAL LOGIC ====================
 window.openMasterAddModal = function(masterType, selectId, title, fieldName) {
+    if (typeof closeAllQuickSelectDropdowns === 'function') {
+        closeAllQuickSelectDropdowns();
+    }
+
     document.getElementById('masterAddType').value = masterType;
     document.getElementById('masterSelectId').value = selectId;
     document.getElementById('masterFieldName').value = fieldName;
@@ -1054,6 +1350,7 @@ window.submitMasterAdd = async function() {
     try {
         const response = await fetch(`/type/${masterType}/`, {
             method: 'POST',
+            silent: true,
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
             body: formData
         });
@@ -1092,6 +1389,9 @@ window.submitMasterAdd = async function() {
         }
 
         if (masterAddModal) masterAddModal.hide();
+        if (typeof closeAllQuickSelectDropdowns === 'function') {
+            closeAllQuickSelectDropdowns();
+        }
         showToast(`${data.name} added successfully`);
     } catch (err) {
         showToast(err.message || 'Save failed', 'error');

@@ -19,7 +19,7 @@
                         </button>
                     </label>
                     <div class="position-relative">
-                        <input type="text" id="quickName" class="ep-input" placeholder="e.g. Zerodol SP or Calpol 650">
+                        <input type="text" id="quickName" class="ep-input" placeholder="e.g. Zerodol SP or Calpol 650" autocomplete="off">
                         <div id="aiAutoFillStatus" class="mt-1 d-none" style="font-size:0.78rem; font-weight:600; color:#0d9488;">
                             <span class="spinner-border spinner-border-sm me-1" role="status"></span> AI is fetching medicine details & matching masters...
                         </div>
@@ -29,11 +29,11 @@
                 <div class="row g-3 mb-3">
                     <div class="col-md-6 col-12">
                         <label class="ep-label">Packing</label>
-                        <input type="text" id="quickPacking" class="ep-input" placeholder="e.g. 10 tablets / strip">
+                        <input type="text" id="quickPacking" class="ep-input" placeholder="e.g. 10 tablets / strip" autocomplete="off">
                     </div>
                     <div class="col-md-6 col-12">
                         <label class="ep-label">Conversion Factor</label>
-                        <input type="number" id="quickConv" class="ep-input" value="1" min="1">
+                        <input type="number" id="quickConv" class="ep-input" value="1" min="1" autocomplete="off">
                     </div>
                 </div>
 
@@ -52,7 +52,7 @@
                         <div class="qs-wrap" id="qs-wrap-quickType">
                             <div class="qs-input-row">
                                 <input type="text" class="ep-input qs-input" id="qs-input-quickType" 
-                                    placeholder="Search type (Tablet, Capsule, Syrup...)">
+                                    placeholder="Search type (Tablet, Capsule, Syrup...)" autocomplete="off">
                                 <button type="button" class="qs-clear-btn" id="qs-clear-quickType" 
                                         onclick="qsClear('quickType')" style="display:none;">✕</button>
                             </div>
@@ -71,7 +71,7 @@
                         </select>
                         <div class="qs-wrap" id="qs-wrap-quickTax">
                             <div class="qs-input-row">
-                                <input type="text" class="ep-input qs-input" id="qs-input-quickTax" placeholder="Search tax rate...">
+                                <input type="text" class="ep-input qs-input" id="qs-input-quickTax" placeholder="Search tax rate..." autocomplete="off">
                                 <button type="button" class="qs-clear-btn" id="qs-clear-quickTax" onclick="qsClear('quickTax')" style="display:none;">✕</button>
                             </div>
                             <div class="qs-dropdown" id="qs-drop-quickTax" style="display:none;"></div>
@@ -92,7 +92,7 @@
                         </select>
                         <div class="qs-wrap" id="qs-wrap-quickSchedule">
                             <div class="qs-input-row">
-                                <input type="text" class="ep-input qs-input" id="qs-input-quickSchedule" placeholder="Search schedule...">
+                                <input type="text" class="ep-input qs-input" id="qs-input-quickSchedule" placeholder="Search schedule..." autocomplete="off">
                                 <button type="button" class="qs-clear-btn" id="qs-clear-quickSchedule" onclick="qsClear('quickSchedule')" style="display:none;">✕</button>
                             </div>
                             <div class="qs-dropdown" id="qs-drop-quickSchedule" style="display:none;"></div>
@@ -112,7 +112,7 @@
                         </select>
                         <div class="qs-wrap" id="qs-wrap-quickContent">
                             <div class="qs-input-row">
-                                <input type="text" class="ep-input qs-input" id="qs-input-quickContent" placeholder="Search salt / generic composition (e.g. Paracetamol 325mg + Aceclofenac 100mg)..." style="font-size:0.88rem;">
+                                <input type="text" class="ep-input qs-input" id="qs-input-quickContent" placeholder="Search salt / generic composition (e.g. Paracetamol 325mg + Aceclofenac 100mg)..." style="font-size:0.88rem;" autocomplete="off">
                                 <button type="button" class="qs-clear-btn" id="qs-clear-quickContent" onclick="qsClear('quickContent')" style="display:none;">✕</button>
                             </div>
                             <div class="qs-dropdown" id="qs-drop-quickContent" style="display:none;"></div>
@@ -134,7 +134,7 @@
                         </select>
                         <div class="qs-wrap" id="qs-wrap-quickCompany">
                             <div class="qs-input-row">
-                                <input type="text" class="ep-input qs-input" id="qs-input-quickCompany" placeholder="Search company...">
+                                <input type="text" class="ep-input qs-input" id="qs-input-quickCompany" placeholder="Search company..." autocomplete="off">
                                 <button type="button" class="qs-clear-btn" id="qs-clear-quickCompany" onclick="qsClear('quickCompany')" style="display:none;">✕</button>
                             </div>
                             <div class="qs-dropdown" id="qs-drop-quickCompany" style="display:none;"></div>
@@ -142,7 +142,7 @@
                     </div>
                     <div class="col-lg-4 col-md-5 col-12">
                         <label class="ep-label">HSN Code</label>
-                        <input type="text" id="quickHsn" class="ep-input" placeholder="e.g. 30049099" maxlength="8">
+                        <input type="text" id="quickHsn" class="ep-input" placeholder="e.g. 30049099" maxlength="8" autocomplete="off">
                     </div>
                 </div>
             </div>
